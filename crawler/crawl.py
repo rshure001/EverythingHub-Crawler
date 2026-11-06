@@ -90,8 +90,8 @@ def fetch_page(url):
         if kind != "text/html": return None
         parser = MetaParser()
         parser.feed(raw.decode("utf-8", errors="replace"))
-        title = re.sub(r"\\s+", " ", " ".join(parser.title_text)).strip()
-        text = re.sub(r"\\s+", " ", " ".join(parser.text)).strip()[:1200]
+        title = re.sub(r"\s+", " ", " ".join(parser.title_text)).strip()
+        text = re.sub(r"\s+", " ", " ".join(parser.text)).strip()[:1200]
         return {"url": final_url, "title": title, "description": parser.description[:500], "text": text, "fetched_at": int(time.time())}
     except Exception as exc:
         print(f"page skipped: {url}: {exc}")
@@ -114,7 +114,7 @@ def main():
         for item in pool.map(fetch_page, urls):
             if item: records[item["url"]] = item
     result = {"version": 1, "updated_at": int(time.time()), "pages_crawled_this_run": len(urls), "pages": list(records.values())}
-    OUTPUT.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\\n")
+    OUTPUT.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
     print(f"Fetched {len(urls)} candidate pages; {len(records)} indexed records total.")
 
 if __name__ == "__main__":
