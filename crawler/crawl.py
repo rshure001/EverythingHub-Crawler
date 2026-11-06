@@ -117,44 +117,16 @@ def main():
     seen = set(frontier.get("seen", []))
     queue = deque()
     for item in frontier.get("queue", []):
-        if isinstance(item, dict) and item.get("url") and item["url"] not in set():
+        if isinstance(item, dict) and item.get("url"):
             queue.append((item["url"], int(item.get("depth", 0))))
     for seed in seeds:
         if seed not in seen and len(seen) < QUEUE_LIMIT:
             seen.add(seed)
             queue.append((seed, 0))
 
-    # Discover sitemap URLs for newly seeded hosts. Keep sitemap work bounded.
-    seeded_hosts = {origin(s) for s in seeds}
-    for seed in seeds:
-        site = origin(seed)
-        if not allowed(site + "/robots.txt"):
-            continue
-        sitemap_urls = [site + "/sitemap.xml"]
-        try:
-            _, _, body = request(site + "/robots.txt")
-            for line in body.decode("utf-8", "ignore").splitlines():
-                if line.lower().startswith("sitemap:"):
-                    sitemap_urls.insert(0, line.split(":", 1)[1].strip())
-        except Exception:
-            pass
-        for sitemap in dict.fromkeys(sitemap_urls):
-            if not allowed(sitemap):
-                continue
-            try:
-                _, content_type, body = request(sitemap)
-                if "xml" not in content_type and not body.lstrip().startswith(b"<?xml"):
-                    continue
-                root = ET.fromstring(body)
-                ns = {"s": "http://www.sitemaps.org/schemas/sitemap/0.9"}
-                for loc in root.findall(".//s:loc", ns):
-                    candidate = clean(loc.text.strip()) if loc.text else None
-                    if candidate and origin(candidate) == site and candidate not in seen and len(seen) < QUEUE_LIMIT:
-                        seen.add(candidate)
-                        queue.append((candidate, 1))
-            except Exception:
-                continue
-
+    # Do not flood the frontier with sitemap XML. The first crawl showed that
+    # sitemap URLs consumed the 80-fetch budget before discovered HTML links
+    # could be followed. Prioritize real same-host HTML links from fetched pages.
     records = {}
     fetched = 0
     depth_counts = {}
