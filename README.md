@@ -6,9 +6,9 @@ Independent crawler for the Everything Hub search project.
 - 49 curated public starting sites in `crawler/seeds.txt` (these are a newly assembled set, not a recovered historical list).
 - 8 concurrent workers.
 - Maximum 80 fetched pages per run.
-- Maximum discovered URL queue: 500.
+- Maximum discovered URL queue: 50,000 (persistent between runs).
 - Maximum link depth: 3.
-- Reads sitemap locations and follows same-host links.
+- Prioritizes same-host HTML links discovered from fetched pages; sitemap XML is not preloaded because it previously consumed the run budget without producing searchable pages.
 - Checks each site's `robots.txt` before fetching.
 - Stores normalized page records in `data/index.json`.
 
