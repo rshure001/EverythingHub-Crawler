@@ -132,10 +132,30 @@ def main():
     depth_counts = {}
     while queue and fetched < MAX_FETCH_PER_RUN:
         batch = []
-        while queue and len(batch) < WORKERS and fetched + len(batch) < MAX_FETCH_PER_RUN:
+        # Drain the frontier into depth buckets, then take one URL per depth
+        # per pass (deepest first). This prevents a large shallow backlog from
+        # blocking depth-2/depth-3 discovery for dozens of scheduled runs.
+        pending = {}
+        while queue:
             url, depth = queue.popleft()
-            if depth <= MAX_DEPTH and allowed(url):
-                batch.append((url, depth))
+            pending.setdefault(depth, deque()).append((url, depth))
+        depth_order = sorted(pending, reverse=True)
+        while depth_order and len(batch) < WORKERS and fetched + len(batch) < MAX_FETCH_PER_RUN:
+            remaining_depths = []
+            for depth in depth_order:
+                if len(batch) >= WORKERS or fetched + len(batch) >= MAX_FETCH_PER_RUN:
+                    break
+                items = pending[depth]
+                if items:
+                    url, item_depth = items.popleft()
+                    if item_depth <= MAX_DEPTH and allowed(url):
+                        batch.append((url, item_depth))
+                if items:
+                    remaining_depths.append(depth)
+            depth_order = remaining_depths
+        # Keep unselected URLs persistent; preserve FIFO order within each depth.
+        for depth in sorted(pending):
+            queue.extend(pending[depth])
         if not batch:
             break
 
