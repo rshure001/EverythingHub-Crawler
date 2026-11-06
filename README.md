@@ -1,21 +1,22 @@
 # Everything Hub Crawler
 
-Independent, free-tier crawler for the Everything Hub search project.
+Independent crawler for the Everything Hub search project.
 
-The scheduled GitHub Actions workflow discovers pages from configured XML sitemaps, fetches a bounded batch politely, and stores normalized records in `data/index.json` as a versioned repository artifact.
-
-## Status
-
-Initial crawler scaffold. Search-index API publishing is deliberately not enabled until its supported ingestion endpoint and authentication requirements are verified.
-
-## Configuration
-
-Edit `crawler/seeds.txt` to add sitemap URLs. The crawler uses a maximum of 80 pages per run (8 workers × 10 pages), applies request timeouts, and identifies itself with a descriptive user agent.
+## Current configuration
+- 49 curated public starting sites in `crawler/seeds.txt` (these are a newly assembled set, not a recovered historical list).
+- 8 concurrent workers.
+- Maximum 80 fetched pages per run.
+- Maximum discovered URL queue: 500.
+- Maximum link depth: 3.
+- Reads sitemap locations and follows same-host links.
+- Checks each site's `robots.txt` before fetching.
+- Stores normalized page records in `data/index.json`.
 
 ## Run locally
-
 `python crawler/crawl.py`
 
-## Schedule
+## Automation
+GitHub Actions is configured for a five-minute schedule and manual dispatch. GitHub may delay scheduled runs, so the schedule is not a guarantee of 1,000 pages per hour.
 
-GitHub Actions runs every five minutes when GitHub honors the schedule. GitHub may delay scheduled runs, so this does not guarantee 1,000 pages per hour.
+## Search integration
+The crawler currently writes its own repository index. Publishing to Everything Hub's production search index is not enabled until the production ingestion endpoint and authentication requirements are verified.
