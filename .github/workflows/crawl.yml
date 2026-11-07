@@ -23,6 +23,8 @@ jobs:
         run: |
           python -m py_compile crawler/crawl.py
           test "$(grep -c '^https://' crawler/seeds.txt)" -eq 49
+      - name: Run crawler unit tests
+        run: python -m unittest discover -s tests -v
       - name: Crawl configured sites
         run: python crawler/crawl.py
       - name: Commit updated index and frontier
