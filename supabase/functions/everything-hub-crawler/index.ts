@@ -169,8 +169,9 @@ async function readHtmlLimited(response: Response, maxBytes = MAX_HTML_BYTES): P
   return new TextDecoder("utf-8").decode(bytes);
 }
 async function updateQueue(id: string, patch: Record<string, unknown>, context: string) {
-  const result = await db.from("eh_crawl_queue").update(patch).eq("id", id);
+  const result = await db.from("eh_crawl_queue").update(patch).eq("id", id).select("id").maybeSingle();
   if (result.error) throw new Error("Queue update failed (" + context + "): " + result.error.message);
+  if (!result.data) throw new Error("Queue update matched no row (" + context + "): " + id);
 }
 
 async function retryOrFail(item:any,message:string){
