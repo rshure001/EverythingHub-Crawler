@@ -186,7 +186,9 @@ async function retryOrFail(item:any,message:string){
 }
 async function process(item:any){
   try{
-    let url=await safeUrl(item.url);if(!url){await updateQueue(item.id,{status:"blocked",locked_at:null,last_error:"URL rejected by public-network safety filter",updated_at:now()},"invalid URL");return {blocked:1,fetched:0,added:0,discovered:0,errors:0};}
+    const initialUrl = await safeUrl(item.url);
+    if (initialUrl === null) { await updateQueue(item.id,{status:"blocked",locked_at:null,last_error:"URL rejected by public-network safety filter",updated_at:now()},"invalid URL"); return {blocked:1,fetched:0,added:0,discovered:0,errors:0}; }
+    let url: URL = initialUrl;
     if(!await robotsAllowed(url)){await updateQueue(item.id,{status:"blocked",locked_at:null,last_error:"robots.txt disallows crawling or could not be read",updated_at:now()},"robots denied");return {blocked:1,fetched:0,added:0,discovered:0,errors:0};}
     const visited=new Set<string>();let response:Response|undefined;
     // Follow a short, safety-checked redirect chain instead of failing on a second hop.
@@ -195,10 +197,11 @@ async function process(item:any){
       visited.add(url.toString());
       response=await fetch(url,{headers:{"User-Agent":UA,"Accept":"text/html,application/xhtml+xml;q=0.9"},redirect:"manual",signal:AbortSignal.timeout(15000)});
       if(response.status<300||response.status>=400)break;
-      const loc=response.headers.get("location");const next=loc?await safeUrl(loc,url.toString()):null;
-      if(!next){await updateQueue(item.id,{status:"blocked",locked_at:null,last_error:"Redirect rejected by public-network safety policy",updated_at:now()},"redirect rejected");return {blocked:1,fetched:0,added:0,discovered:0,errors:0};}
-      if(!await robotsAllowed(next)){await updateQueue(item.id,{status:"blocked",locked_at:null,last_error:"Redirect destination disallows crawling or robots.txt could not be read",updated_at:now()},"redirect robots denied");return {blocked:1,fetched:0,added:0,discovered:0,errors:0};}
-      url=next;
+      const loc: string | null = response.headers.get("location");
+      const nextUrl: URL | null = loc === null ? null : await safeUrl(loc,url.toString());
+      if(nextUrl === null){await updateQueue(item.id,{status:"blocked",locked_at:null,last_error:"Redirect rejected by public-network safety policy",updated_at:now()},"redirect rejected");return {blocked:1,fetched:0,added:0,discovered:0,errors:0};}
+      if(!await robotsAllowed(nextUrl)){await updateQueue(item.id,{status:"blocked",locked_at:null,last_error:"Redirect destination disallows crawling or robots.txt could not be read",updated_at:now()},"redirect robots denied");return {blocked:1,fetched:0,added:0,discovered:0,errors:0};}
+      url=nextUrl;
     }
     if(!response|| (response.status>=300&&response.status<400))throw new Error("Redirect chain exceeded safe limit");
     if(!response.ok||!/text\/html|application\/xhtml\+xml/i.test(response.headers.get("content-type")||""))throw new Error("Non-HTML response or HTTP "+response.status);
