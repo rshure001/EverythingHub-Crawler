@@ -1,7 +1,10 @@
 name: Everything Hub crawler
 on:
   push:
-    branches: [main]
+    branches: [main, scale/one-million-readiness]
+    paths-ignore:
+      - data/index.json
+      - data/frontier.json
   schedule:
     - cron: "*/5 * * * *"
   workflow_dispatch:
@@ -23,14 +26,51 @@ jobs:
         run: |
           python -m py_compile crawler/crawl.py
           test "$(grep -c '^https://' crawler/seeds.txt)" -eq 49
+      - name: Run crawler unit tests
+        run: python -m unittest discover -s tests -v
+      - name: Set up Deno for Edge Function type-check
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Type-check isolated Supabase crawler repair
+        run: deno check --no-lock supabase/functions/everything-hub-crawler/index.ts
       - name: Crawl configured sites
         run: python crawler/crawl.py
-      - name: Commit updated index and frontier
+      - name: Merge and commit crawler state without losing concurrent work
+        shell: bash
         run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/index.json data/frontier.json
-          if ! git diff --cached --quiet; then
+          LOCAL_INDEX="data/index.json"
+          LOCAL_FRONTIER="data/frontier.json"
+          for attempt in 1 2 3; do
+            git fetch origin "$GITHUB_REF_NAME"
+            git show "origin/$GITHUB_REF_NAME:data/index.json" > "$RUNNER_TEMP/remote-index.json"
+            git show "origin/$GITHUB_REF_NAME:data/frontier.json" > "$RUNNER_TEMP/remote-frontier.json"
+            python scripts/merge_crawl_state.py \
+              --local-index "$LOCAL_INDEX" \
+              --remote-index "$RUNNER_TEMP/remote-index.json" \
+              --local-frontier "$LOCAL_FRONTIER" \
+              --remote-frontier "$RUNNER_TEMP/remote-frontier.json" \
+              --output-dir "$RUNNER_TEMP/merged"
+            cp "$RUNNER_TEMP/merged/index.json" "$RUNNER_TEMP/local-index.json"
+            cp "$RUNNER_TEMP/merged/frontier.json" "$RUNNER_TEMP/local-frontier.json"
+            git reset --hard "origin/$GITHUB_REF_NAME"
+            cp "$RUNNER_TEMP/merged/index.json" data/index.json
+            cp "$RUNNER_TEMP/merged/frontier.json" data/frontier.json
+            git add data/index.json data/frontier.json
+            if git diff --cached --quiet; then
+              echo "No crawler state changes to commit."
+              exit 0
+            fi
             git commit -m "Update crawler index and persistent frontier"
-            git push
-          fi
+            if git push origin "HEAD:$GITHUB_REF_NAME"; then
+              exit 0
+            fi
+            echo "Push raced with another update; fetching and merging again (attempt $attempt)."
+            LOCAL_INDEX="$RUNNER_TEMP/local-index.json"
+            LOCAL_FRONTIER="$RUNNER_TEMP/local-frontier.json"
+          done
+          echo "Could not publish merged crawler state after three attempts." >&2
+          exit 1
