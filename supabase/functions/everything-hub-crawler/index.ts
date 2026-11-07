@@ -241,7 +241,7 @@ Deno.serve(async(req:Request)=>{
   if(claimed.error)return Response.json({error:claimed.error.message},{status:500});
   const items=claimed.data||[];let cursor=0;const totals={blocked:0,fetched:0,new_pages:0,discovered:0,errors:0};
   const workers=Array.from({length:Math.min(2,items.length)},async()=>{
-    while(true){const i=cursor++;if(i>=items.length)return;const r=await process(items[i]);totals.blocked+=r.blocked;totals.fetched+=r.fetched;totals.new_pages+=r.added;totals.discovered+=r.discovered;totals.errors+=r.errors;}
+    while(true){const i=cursor++;if(i>=items.length)return;const r=await process(items[i]).catch(e=>{console.error("Worker failed",items[i].id,String(e));return {blocked:0,fetched:0,added:0,discovered:0,errors:1};});totals.blocked+=r.blocked;totals.fetched+=r.fetched;totals.new_pages+=r.added;totals.discovered+=r.discovered;totals.errors+=r.errors;}
   });
   await Promise.all(workers);
   const duration=Math.round((Date.now()-Date.parse(started))/1000);
