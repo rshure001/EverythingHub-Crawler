@@ -2,6 +2,9 @@ name: Everything Hub crawler
 on:
   push:
     branches: [main, scale/one-million-readiness]
+    paths-ignore:
+      - data/index.json
+      - data/frontier.json
   schedule:
     - cron: "*/5 * * * *"
   workflow_dispatch:
@@ -40,5 +43,6 @@ jobs:
           git add data/index.json data/frontier.json
           if ! git diff --cached --quiet; then
             git commit -m "Update crawler index and persistent frontier"
+            git pull --rebase origin "$GITHUB_REF_NAME"
             git push
           fi
