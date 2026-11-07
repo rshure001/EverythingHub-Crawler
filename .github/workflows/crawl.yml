@@ -25,6 +25,12 @@ jobs:
           test "$(grep -c '^https://' crawler/seeds.txt)" -eq 49
       - name: Run crawler unit tests
         run: python -m unittest discover -s tests -v
+      - name: Set up Deno for Edge Function type-check
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Type-check isolated Supabase crawler repair
+        run: deno check --no-lock supabase/functions/everything-hub-crawler/index.ts
       - name: Crawl configured sites
         run: python crawler/crawl.py
       - name: Commit updated index and frontier
