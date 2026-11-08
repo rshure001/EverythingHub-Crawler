@@ -166,9 +166,7 @@ def run(source_path, input_path, output_path, fmt, checkpoint_path=None, chunk_s
                     next_row = row_number
                     db.execute("INSERT OR REPLACE INTO import_state VALUES ('input_fingerprint', ?)", (input_fingerprint,))
                     db.execute("INSERT OR REPLACE INTO import_state VALUES ('source_fingerprint', ?)", (source_fingerprint,))
-                    db.execute("INSERT OR REPLACE INTO import_state VALUES ('input_fingerprint', ?)", (input_fingerprint,))
-                db.execute("INSERT OR REPLACE INTO import_state VALUES ('source_fingerprint', ?)", (source_fingerprint,))
-                db.execute("INSERT OR REPLACE INTO import_state VALUES ('next_row', ?)", (str(next_row),))
+                    db.execute("INSERT OR REPLACE INTO import_state VALUES ('next_row', ?)", (str(next_row),))
                     db.execute("INSERT OR REPLACE INTO import_state VALUES ('output_bytes', ?)", (str(new_bytes),))
                     db.execute("INSERT OR REPLACE INTO import_state VALUES ('accepted', ?)", (str(accepted_total),))
                     db.execute("INSERT OR REPLACE INTO import_state VALUES ('rejected', ?)", (str(rejected_total),))
@@ -181,6 +179,8 @@ def run(source_path, input_path, output_path, fmt, checkpoint_path=None, chunk_s
                 accepted_total += accepted_chunk
                 rejected_total += rejected_chunk
                 next_row = row_number
+                db.execute("INSERT OR REPLACE INTO import_state VALUES ('input_fingerprint', ?)", (input_fingerprint,))
+                db.execute("INSERT OR REPLACE INTO import_state VALUES ('source_fingerprint', ?)", (source_fingerprint,))
                 db.execute("INSERT OR REPLACE INTO import_state VALUES ('next_row', ?)", (str(next_row),))
                 db.execute("INSERT OR REPLACE INTO import_state VALUES ('output_bytes', ?)", (str(new_bytes),))
                 db.execute("INSERT OR REPLACE INTO import_state VALUES ('accepted', ?)", (str(accepted_total),))
