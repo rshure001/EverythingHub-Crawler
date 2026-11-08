@@ -116,6 +116,20 @@ class BulkIngestTests(unittest.TestCase):
             self.assertEqual(staged["source_record_id"], "1")
             self.assertEqual(staged["title"], "CSV record")
 
+    def test_checkpoint_rejects_changed_input(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source_path = root / "source.json"
+            input_path = root / "input.jsonl"
+            output_path = root / "out.jsonl"
+            checkpoint = root / "checkpoint.sqlite3"
+            source_path.write_text(json.dumps(self.source()), encoding="utf-8")
+            input_path.write_text(json.dumps({"id": "one", "title": "First"}) + "\n", encoding="utf-8")
+            bulk.run(source_path, input_path, output_path, "jsonl", checkpoint, 1)
+            input_path.write_text(json.dumps({"id": "two", "title": "Changed"}) + "\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "fingerprint mismatch"):
+                bulk.run(source_path, input_path, output_path, "jsonl", checkpoint, 1)
+
     def test_deduplicates_source_identifiers(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
