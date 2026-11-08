@@ -257,9 +257,18 @@
         "cursor_increment": 300,
         "page_size_param": "limit",
         "page_size": 300,
-        "has_more_is_end": true
+        "has_more_is_end": true,
+        "require_record_license": true,
+        "allowed_licenses": [
+          "CC0_1_0",
+          "CC_BY_4_0"
+        ],
+        "required_record_fields": [
+          "key",
+          "datasetKey"
+        ]
       },
-      "record_rights_review": "Per-occurrence license and dataset citation must be retained; exclude records without acceptable reuse rights before publication.",
+      "record_rights_review": "Only CC0_1_0 and CC_BY_4_0 records are eligible for staging; exclude CC_BY_NC_4_0, unknown, and missing licenses. Preserve dataset citation and source identifiers.",
       "attribution_text": "GBIF occurrence data; preserve datasetKey, publishing organization, occurrence license and citation metadata."
     }
   ],
