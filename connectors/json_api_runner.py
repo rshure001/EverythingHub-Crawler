@@ -100,7 +100,14 @@ def acquire(config_path, source_id, output_path, max_pages):
                 }, ensure_ascii=False) + "\n")
                 count += 1
             next_url = nested(payload, api.get("next_url_path")) if api.get("next_url_path") else None
-            cursor = nested(payload, api.get("next_cursor_path", "next_cursor")) if not api.get("next_url_path") else None
+            if api.get("next_url_path"):
+                cursor = None
+            elif api.get("has_more_path"):
+                has_more = nested(payload, api["has_more_path"])
+                current_cursor = cursor if cursor is not None else int(api.get("initial_cursor", 0))
+                cursor = current_cursor + int(api.get("cursor_increment", page_size)) if has_more else None
+            else:
+                cursor = nested(payload, api.get("next_cursor_path", "next_cursor"))
             pages += 1
             out.flush()
             checkpoint = {
