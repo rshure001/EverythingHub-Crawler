@@ -1,0 +1,22 @@
+name: Fleet foundation tests
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile crawler and fleet modules
+        run: python -m py_compile crawler/crawl.py crawler/fleet.py
+      - name: Run fleet regression tests
+        run: python -m unittest discover -s tests -v
