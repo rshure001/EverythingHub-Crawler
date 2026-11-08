@@ -1,0 +1,276 @@
+{
+  "version": 1,
+  "connectors": [
+    {
+      "source_id": "wikidata-dump",
+      "name": "Wikidata",
+      "lane": "general",
+      "access_method": "bulk_dataset",
+      "terms_url": "https://www.wikidata.org/wiki/Wikidata:Database_download",
+      "review_status": "not_reviewed",
+      "source_status": "proposed",
+      "enabled": false,
+      "request_policy": {
+        "max_requests_per_minute": 10,
+        "concurrency": 1
+      },
+      "attribution_required": true,
+      "counts": {
+        "discovered": 0,
+        "fetched": 0,
+        "staged": 0,
+        "indexed": 0,
+        "searchable": 0,
+        "rejected": 0
+      }
+    },
+    {
+      "source_id": "loc-api",
+      "name": "Library of Congress",
+      "lane": "general",
+      "access_method": "open_api",
+      "terms_url": "https://www.loc.gov/apis/",
+      "review_status": "not_reviewed",
+      "source_status": "proposed",
+      "enabled": false,
+      "request_policy": {
+        "max_requests_per_minute": 10,
+        "concurrency": 1
+      },
+      "attribution_required": true,
+      "counts": {
+        "discovered": 0,
+        "fetched": 0,
+        "staged": 0,
+        "indexed": 0,
+        "searchable": 0,
+        "rejected": 0
+      },
+      "api": {
+        "endpoint": "https://www.loc.gov/search/",
+        "fixed_params": {
+          "fo": "json",
+          "q": "United States history"
+        },
+        "records_path": "results",
+        "next_url_path": "pagination.next",
+        "allowed_next_hosts": [
+          "www.loc.gov"
+        ],
+        "page_size_param": "c",
+        "page_size": 100
+      },
+      "record_rights_review": "Required per record before publication; source metadata and item rights vary."
+    },
+    {
+      "source_id": "nasa-open",
+      "name": "NASA Open Data",
+      "lane": "science",
+      "access_method": "open_api",
+      "terms_url": "https://api.nasa.gov/",
+      "review_status": "not_reviewed",
+      "source_status": "proposed",
+      "enabled": false,
+      "request_policy": {
+        "max_requests_per_minute": 10,
+        "concurrency": 1
+      },
+      "attribution_required": true,
+      "counts": {
+        "discovered": 0,
+        "fetched": 0,
+        "staged": 0,
+        "indexed": 0,
+        "searchable": 0,
+        "rejected": 0
+      }
+    },
+    {
+      "source_id": "usgs-data",
+      "name": "USGS Data",
+      "lane": "science",
+      "access_method": "bulk_dataset",
+      "terms_url": "https://www.usgs.gov/products/data-and-tools",
+      "review_status": "not_reviewed",
+      "source_status": "proposed",
+      "enabled": false,
+      "request_policy": {
+        "max_requests_per_minute": 10,
+        "concurrency": 1
+      },
+      "attribution_required": true,
+      "counts": {
+        "discovered": 0,
+        "fetched": 0,
+        "staged": 0,
+        "indexed": 0,
+        "searchable": 0,
+        "rejected": 0
+      }
+    },
+    {
+      "source_id": "noaa-data",
+      "name": "NOAA NCEI",
+      "lane": "science",
+      "access_method": "open_api",
+      "terms_url": "https://www.ncei.noaa.gov/support/access-data-service-api-user-documentation",
+      "review_status": "not_reviewed",
+      "source_status": "proposed",
+      "enabled": false,
+      "request_policy": {
+        "max_requests_per_minute": 10,
+        "concurrency": 1
+      },
+      "attribution_required": true,
+      "counts": {
+        "discovered": 0,
+        "fetched": 0,
+        "staged": 0,
+        "indexed": 0,
+        "searchable": 0,
+        "rejected": 0
+      }
+    },
+    {
+      "source_id": "census-api",
+      "name": "U.S. Census Bureau",
+      "lane": "business",
+      "access_method": "open_api",
+      "terms_url": "https://www.census.gov/data/developers.html",
+      "review_status": "not_reviewed",
+      "source_status": "proposed",
+      "enabled": false,
+      "request_policy": {
+        "max_requests_per_minute": 10,
+        "concurrency": 1
+      },
+      "attribution_required": true,
+      "counts": {
+        "discovered": 0,
+        "fetched": 0,
+        "staged": 0,
+        "indexed": 0,
+        "searchable": 0,
+        "rejected": 0
+      }
+    },
+    {
+      "source_id": "sec-edgar",
+      "name": "SEC EDGAR",
+      "lane": "business",
+      "access_method": "bulk_dataset",
+      "terms_url": "https://www.sec.gov/edgar/sec-api-documentation",
+      "review_status": "not_reviewed",
+      "source_status": "proposed",
+      "enabled": false,
+      "request_policy": {
+        "max_requests_per_minute": 10,
+        "concurrency": 1
+      },
+      "attribution_required": true,
+      "counts": {
+        "discovered": 0,
+        "fetched": 0,
+        "staged": 0,
+        "indexed": 0,
+        "searchable": 0,
+        "rejected": 0
+      }
+    },
+    {
+      "source_id": "congress-api",
+      "name": "Congress.gov",
+      "lane": "government",
+      "access_method": "open_api",
+      "terms_url": "https://api.congress.gov/",
+      "review_status": "not_reviewed",
+      "source_status": "proposed",
+      "enabled": false,
+      "request_policy": {
+        "max_requests_per_minute": 10,
+        "concurrency": 1
+      },
+      "attribution_required": true,
+      "counts": {
+        "discovered": 0,
+        "fetched": 0,
+        "staged": 0,
+        "indexed": 0,
+        "searchable": 0,
+        "rejected": 0
+      }
+    },
+    {
+      "source_id": "smithsonian-open",
+      "name": "Smithsonian Open Access",
+      "lane": "culture",
+      "access_method": "open_api",
+      "terms_url": "https://www.si.edu/openaccess",
+      "review_status": "not_reviewed",
+      "source_status": "proposed",
+      "enabled": false,
+      "request_policy": {
+        "max_requests_per_minute": 10,
+        "concurrency": 1
+      },
+      "attribution_required": true,
+      "counts": {
+        "discovered": 0,
+        "fetched": 0,
+        "staged": 0,
+        "indexed": 0,
+        "searchable": 0,
+        "rejected": 0
+      }
+    },
+    {
+      "source_id": "gbif-occurrences",
+      "name": "GBIF",
+      "lane": "nature",
+      "access_method": "open_api",
+      "terms_url": "https://www.gbif.org/developer/summary",
+      "review_status": "not_reviewed",
+      "source_status": "proposed",
+      "enabled": false,
+      "request_policy": {
+        "max_requests_per_minute": 10,
+        "concurrency": 1
+      },
+      "attribution_required": true,
+      "counts": {
+        "discovered": 0,
+        "fetched": 0,
+        "staged": 0,
+        "indexed": 0,
+        "searchable": 0,
+        "rejected": 0
+      },
+      "api": {
+        "endpoint": "https://api.gbif.org/v1/occurrence/search",
+        "fixed_params": {
+          "country": "US"
+        },
+        "records_path": "results",
+        "has_more_path": "endOfRecords",
+        "cursor_param": "offset",
+        "initial_cursor": 0,
+        "cursor_increment": 300,
+        "page_size_param": "limit",
+        "page_size": 300,
+        "has_more_is_end": true,
+        "require_record_license": true,
+        "allowed_licenses": [
+          "CC0_1_0",
+          "CC_BY_4_0"
+        ],
+        "required_record_fields": [
+          "key",
+          "datasetKey"
+        ]
+      },
+      "record_rights_review": "Only CC0_1_0 and CC_BY_4_0 records are eligible for staging; exclude CC_BY_NC_4_0, unknown, and missing licenses. Preserve dataset citation and source identifiers.",
+      "attribution_text": "GBIF occurrence data; preserve datasetKey, publishing organization, occurrence license and citation metadata."
+    }
+  ],
+  "production_publishing": false
+}
