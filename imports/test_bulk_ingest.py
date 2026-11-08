@@ -75,7 +75,7 @@ class BulkIngestTests(unittest.TestCase):
             checkpoint_path = root / "checkpoint.sqlite3"
             source_path.write_text(json.dumps(self.source()), encoding="utf-8")
             input_path.write_text(
-                json.dumps({"id": "one", "title": "First"}) + "\\n" + "{bad json\\n",
+                json.dumps({"id": "one", "title": "First"}) + "\n" + "{bad json\n",
                 encoding="utf-8",
             )
             with self.assertRaisesRegex(ValueError, "invalid JSON"):
@@ -83,7 +83,7 @@ class BulkIngestTests(unittest.TestCase):
 
             # Correct the interrupted source and resume from the durable first-row checkpoint.
             input_path.write_text(
-                "".join(json.dumps(row) + "\\n" for row in [
+                "".join(json.dumps(row) + "\n" for row in [
                     {"id": "one", "title": "First"},
                     {"id": "two", "title": "Second"},
                 ]),
