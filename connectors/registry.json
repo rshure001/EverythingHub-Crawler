@@ -256,7 +256,8 @@
         "initial_cursor": 0,
         "cursor_increment": 300,
         "page_size_param": "limit",
-        "page_size": 300
+        "page_size": 300,
+        "has_more_is_end": true
       },
       "record_rights_review": "Per-occurrence license and dataset citation must be retained; exclude records without acceptable reuse rights before publication.",
       "attribution_text": "GBIF occurrence data; preserve datasetKey, publishing organization, occurrence license and citation metadata."
