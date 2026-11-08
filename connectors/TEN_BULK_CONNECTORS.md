@@ -26,6 +26,10 @@ license, attribution, privacy, and rate-limit review before it can download or p
 
 These adapters are implementation work, not permission to activate sources. The registry keeps them disabled until review is recorded.
 
+## Acquisition scorecard
+
+Run `python connectors/acquisition_report.py --registry connectors/registry.json --staging-dir staging/connectors` to produce a source-by-source JSON report. It reads local staging JSONL and checkpoint files only; it does not contact sources. It reports pages, accepted staged records, rejected records, license breakdowns, completion state, and separately registered indexed/searchable counts. Staged records are never counted as indexed or searchable.
+
 ## Common connector contract
 
 Every connector must implement the same lifecycle:
