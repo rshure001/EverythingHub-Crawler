@@ -83,7 +83,7 @@ def iter_records(path, fmt):
         raise ValueError("format must be jsonl or csv")
 
 
-def run(source_path, input_path, output_path, fmt):
+def run(source_path, input_path, output_path, fmt, checkpoint_path=None, chunk_size=5000):
     source = json.loads(source_path.read_text(encoding="utf-8"))
     if source.get("review_status") != REQUIRED_REVIEW:
         raise ValueError("source is not approved: review_status must be reviewed_allowed")
@@ -95,43 +95,90 @@ def run(source_path, input_path, output_path, fmt):
         raise ValueError("source must document a license or terms URL")
     if not source.get("source_id") or not source.get("canonical_host"):
         raise ValueError("source_id and canonical_host are required")
+    if chunk_size < 1:
+        raise ValueError("chunk_size must be at least 1")
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    temp = output_path.with_suffix(output_path.suffix + ".tmp")
-    accepted = rejected = 0
-    # Disk-backed uniqueness avoids retaining millions of identifiers in Python memory.
-    with tempfile.TemporaryDirectory(prefix="eh-import-") as workdir:
-        db = sqlite3.connect(str(Path(workdir) / "seen.sqlite3"))
-        db.execute("CREATE TABLE seen_ids (record_id TEXT PRIMARY KEY)")
-        try:
-            with temp.open("w", encoding="utf-8") as out:
-                for row_number, record in enumerate(iter_records(input_path, fmt), 1):
-                    try:
-                        normalized = normalize(record, source)
-                        key = normalized["source_record_id"]
-                        cursor = db.execute(
-                            "INSERT OR IGNORE INTO seen_ids(record_id) VALUES (?)", (key,)
-                        )
-                        if cursor.rowcount == 0:
-                            rejected += 1
-                            continue
-                        out.write(json.dumps(normalized, ensure_ascii=False) + "\n")
-                        accepted += 1
-                    except (ValueError, TypeError) as exc:
-                        print(f"reject row {row_number}: {exc}", file=sys.stderr)
-                        rejected += 1
+    checkpoint_path = checkpoint_path or output_path.with_suffix(output_path.suffix + ".checkpoint.sqlite3")
+    checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+    db = sqlite3.connect(str(checkpoint_path))
+    db.execute("CREATE TABLE IF NOT EXISTS seen_ids (record_id TEXT PRIMARY KEY)")
+    db.execute("CREATE TABLE IF NOT EXISTS import_state (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+    state = dict(db.execute("SELECT key, value FROM import_state"))
+    next_row = int(state.get("next_row", "0"))
+    committed_bytes = int(state.get("output_bytes", "0"))
+    accepted_total = int(state.get("accepted", "0"))
+    rejected_total = int(state.get("rejected", "0"))
+
+    # Recover safely if a process stopped after appending a chunk but before checkpoint commit.
+    if output_path.exists():
+        with output_path.open("r+b") as out:
+            out.truncate(committed_bytes)
+    elif committed_bytes:
+        raise ValueError("checkpoint refers to a missing staged output file")
+    else:
+        output_path.touch()
+
+    accepted_chunk = rejected_chunk = 0
+    chunk_rows = 0
+    row_number = 0
+    try:
+        with output_path.open("a", encoding="utf-8") as out:
+            for row_number, record in enumerate(iter_records(input_path, fmt), 1):
+                if row_number <= next_row:
+                    continue
+                try:
+                    normalized = normalize(record, source)
+                    key = normalized["source_record_id"]
+                    cursor = db.execute(
+                        "INSERT OR IGNORE INTO seen_ids(record_id) VALUES (?)", (key,)
+                    )
+                    if cursor.rowcount == 0:
+                        rejected_chunk += 1
+                    else:
+                        out.write(json.dumps(normalized, ensure_ascii=False) + "\\n")
+                        accepted_chunk += 1
+                except (ValueError, TypeError) as exc:
+                    print(f"reject row {row_number}: {exc}", file=sys.stderr)
+                    rejected_chunk += 1
+                chunk_rows += 1
+                if chunk_rows >= chunk_size:
+                    out.flush()
+                    new_bytes = out.tell()
+                    accepted_total += accepted_chunk
+                    rejected_total += rejected_chunk
+                    next_row = row_number
+                    db.execute("INSERT OR REPLACE INTO import_state VALUES ('next_row', ?)", (str(next_row),))
+                    db.execute("INSERT OR REPLACE INTO import_state VALUES ('output_bytes', ?)", (str(new_bytes),))
+                    db.execute("INSERT OR REPLACE INTO import_state VALUES ('accepted', ?)", (str(accepted_total),))
+                    db.execute("INSERT OR REPLACE INTO import_state VALUES ('rejected', ?)", (str(rejected_total),))
+                    db.commit()
+                    accepted_chunk = rejected_chunk = chunk_rows = 0
+
+            if chunk_rows:
+                out.flush()
+                new_bytes = out.tell()
+                accepted_total += accepted_chunk
+                rejected_total += rejected_chunk
+                next_row = row_number
+                db.execute("INSERT OR REPLACE INTO import_state VALUES ('next_row', ?)", (str(next_row),))
+                db.execute("INSERT OR REPLACE INTO import_state VALUES ('output_bytes', ?)", (str(new_bytes),))
+                db.execute("INSERT OR REPLACE INTO import_state VALUES ('accepted', ?)", (str(accepted_total),))
+                db.execute("INSERT OR REPLACE INTO import_state VALUES ('rejected', ?)", (str(rejected_total),))
                 db.commit()
-        finally:
-            db.close()
-    temp.replace(output_path)
+    finally:
+        db.close()
+
     print(json.dumps({
         "source_id": source["source_id"],
-        "accepted": accepted,
-        "rejected_or_duplicate": rejected,
+        "accepted": accepted_total,
+        "rejected_or_duplicate": rejected_total,
+        "rows_committed": next_row,
+        "checkpoint_file": str(checkpoint_path),
         "staged_file": str(output_path),
         "published_to_production": False
     }, indent=2))
-    return accepted, rejected
+    return accepted_total, rejected_total
 
 
 def main():
@@ -140,8 +187,10 @@ def main():
     parser.add_argument("--input", required=True, type=Path, help="bulk JSONL or CSV file")
     parser.add_argument("--output", required=True, type=Path, help="staging JSONL destination")
     parser.add_argument("--format", choices=("jsonl", "csv"), required=True)
+    parser.add_argument("--checkpoint", type=Path, help="persistent SQLite resume checkpoint")
+    parser.add_argument("--chunk-size", type=int, default=5000, help="rows per committed checkpoint")
     args = parser.parse_args()
-    run(args.source, args.input, args.output, args.format)
+    run(args.source, args.input, args.output, args.format, args.checkpoint, args.chunk_size)
 
 
 if __name__ == "__main__":
