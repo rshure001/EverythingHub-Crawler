@@ -68,6 +68,7 @@ def acquire(config_path, source_id, output_path, max_pages):
                           "complete": True, "published_to_production": False}, indent=2))
         return 0
     count = 0
+    rejected = 0
     pages = 0
     delay = max(float(source.get("request_policy", {}).get("min_delay_ms", 1000)) / 1000, 0.1)
     with output_path.open("a", encoding="utf-8") as out:
@@ -90,12 +91,26 @@ def acquire(config_path, source_id, output_path, max_pages):
                 raise ValueError("configured records_path did not resolve to a list")
             for record in records:
                 if not isinstance(record, dict):
+                    rejected += 1
+                    continue
+                license_value = record.get(api.get("license_field", "license")) or source.get("license")
+                if api.get("require_record_license") and not license_value:
+                    rejected += 1
+                    continue
+                allowed_licenses = set(api.get("allowed_licenses", []))
+                if allowed_licenses and license_value not in allowed_licenses:
+                    rejected += 1
+                    continue
+                missing_fields = [field for field in api.get("required_record_fields", [])
+                                  if not nested(record, field)]
+                if missing_fields:
+                    rejected += 1
                     continue
                 out.write(json.dumps({
                     "source_id": source_id,
                     "source_record": record,
                     "retrieved_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                    "license": record.get("license") or source.get("license"),
+                    "license": license_value,
                     "attribution": source.get("attribution_text", source["name"]),
                     "dataset_key": record.get("datasetKey"),
                     "source_record_id": record.get("key") or record.get("id"),
@@ -128,7 +143,7 @@ def acquire(config_path, source_id, output_path, max_pages):
             if checkpoint["complete"]:
                 break
             time.sleep(delay)
-    print(json.dumps({"source_id": source_id, "pages": pages, "records_staged": count,
+    print(json.dumps({"source_id": source_id, "pages": pages, "records_staged": count, "records_rejected": rejected,
                       "next_cursor": cursor, "next_url": next_url, "checkpoint": str(checkpoint_path),
                       "output": str(output_path), "published_to_production": False}, indent=2))
     return count
