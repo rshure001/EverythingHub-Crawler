@@ -60,6 +60,22 @@ class ConnectorRunnerTests(unittest.TestCase):
             self.assertTrue(all(row["source_id"] == "test-source" for row in rows))
             self.assertTrue(all(row["attribution"] == "Test source" for row in rows))
 
+    def test_resumes_from_durable_page_checkpoint(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config = self.config(root)
+            output = root / "staged.jsonl"
+            first = {"data": {"items": [{"id": "first"}]}, "meta": {"next": "cursor-2"}}
+            second = {"data": {"items": [{"id": "second"}]}, "meta": {"next": None}}
+            with patch.object(runner, "fetch_page", return_value=first) as fetch:
+                self.assertEqual(runner.acquire(config, "test-source", output, 1), 1)
+                fetch.assert_called_once()
+            with patch.object(runner, "fetch_page", return_value=second) as fetch:
+                self.assertEqual(runner.acquire(config, "test-source", output, 1), 1)
+                self.assertIn("cursor=cursor-2", fetch.call_args.args[0])
+            rows = [json.loads(line) for line in output.read_text(encoding="utf-8").splitlines()]
+            self.assertEqual([row["source_record"]["id"] for row in rows], ["first", "second"])
+
     def test_unknown_source_is_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
