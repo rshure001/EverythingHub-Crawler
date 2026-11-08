@@ -104,7 +104,7 @@ class BulkIngestTests(unittest.TestCase):
             output_path = root / "out.jsonl"
             source_path.write_text(json.dumps(self.source()), encoding="utf-8")
             input_path.write_text(
-                "id,title,description\\n1,CSV record,Searchable summary\\n",
+                "id,title,description\n1,CSV record,Searchable summary\n",
                 encoding="utf-8",
             )
             accepted, rejected = bulk.run(
