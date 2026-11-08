@@ -187,9 +187,10 @@ def main():
                 return {"status": "error"}
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=WORKERS) as pool:
-            results = list(pool.map(fetch, batch))
+            batch_results = list(pool.map(fetch, batch))
+        results.extend(batch_results)
         fetched += len(batch)
-        for result in results:
+        for result in batch_results:
             if not result or result.get("status") != "parsed":
                 continue
             record, links = result["record"], result["links"]
