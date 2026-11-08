@@ -41,7 +41,7 @@ def main():
                     "title": f"Benchmark record {number}",
                     "description": "Synthetic content used only to measure importer throughput",
                     "text": f"Record {number} contains searchable benchmark text.",
-                }) + "\\n")
+                }) + "\n")
 
         started = time.perf_counter()
         accepted, rejected = run(
