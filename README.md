@@ -16,7 +16,7 @@ Independent crawler for the Everything Hub search project.
 `python crawler/crawl.py`
 
 ## Automation
-GitHub Actions is configured for a five-minute schedule and manual dispatch. GitHub may delay scheduled runs, so the schedule is not a guarantee of 1,000 pages per hour.
+GitHub Actions is configured for a 15-minute schedule and manual dispatch. The workflow does not trigger on pushes, preventing crawler data commits from recursively launching more crawls. GitHub may delay scheduled runs. Each run attempts at most 80 fetches; actual indexed pages can be lower due to robots rules, errors, and non-HTML responses.
 
 ## Search integration
-The crawler currently writes its own repository index. Publishing to Everything Hub's production search index is not enabled until the production ingestion endpoint and authentication requirements are verified.
+The crawler currently writes its own repository index. It is not yet connected to Everything Hub's production search index. Do not publish or expose crawler records as production search results until the production ingestion endpoint, authentication, and indexing format are verified.
