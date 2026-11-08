@@ -104,6 +104,8 @@ def acquire(config_path, source_id, output_path, max_pages):
                 cursor = None
             elif api.get("has_more_path"):
                 has_more = nested(payload, api["has_more_path"])
+                if api.get("has_more_is_end"):
+                    has_more = not has_more
                 current_cursor = cursor if cursor is not None else int(api.get("initial_cursor", 0))
                 cursor = current_cursor + int(api.get("cursor_increment", page_size)) if has_more else None
             else:
