@@ -45,7 +45,22 @@
         "indexed": 0,
         "searchable": 0,
         "rejected": 0
-      }
+      },
+      "api": {
+        "endpoint": "https://www.loc.gov/search/",
+        "fixed_params": {
+          "fo": "json",
+          "q": "United States history"
+        },
+        "records_path": "results",
+        "next_url_path": "pagination.next",
+        "allowed_next_hosts": [
+          "www.loc.gov"
+        ],
+        "page_size_param": "c",
+        "page_size": 100
+      },
+      "record_rights_review": "Required per record before publication; source metadata and item rights vary."
     },
     {
       "source_id": "nasa-open",
