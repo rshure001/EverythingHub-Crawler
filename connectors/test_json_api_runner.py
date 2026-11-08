@@ -111,6 +111,32 @@ class ConnectorRunnerTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "allowlist"):
                     runner.acquire(config, "test-source", output, 2)
 
+    def test_offset_pagination_uses_end_of_records_flag(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config = self.config(root)
+            registry = json.loads(config.read_text(encoding="utf-8"))
+            api = registry["connectors"][0]["api"]
+            api.update({
+                "has_more_path": "endOfRecords",
+                "has_more_is_end": True,
+                "cursor_param": "offset",
+                "initial_cursor": 0,
+                "cursor_increment": 2,
+                "page_size_param": "limit",
+                "page_size": 2
+            })
+            api.pop("next_cursor_path")
+            config.write_text(json.dumps(registry), encoding="utf-8")
+            pages = [
+                {"data": {"items": [{"id": "1"}, {"id": "2"}]}, "endOfRecords": False},
+                {"data": {"items": [{"id": "3"}]}, "endOfRecords": True}
+            ]
+            with patch.object(runner, "fetch_page", side_effect=pages) as fetch:
+                self.assertEqual(runner.acquire(config, "test-source", root / "data.jsonl", 3), 3)
+            self.assertIn("offset=0", fetch.call_args_list[0].args[0])
+            self.assertIn("offset=2", fetch.call_args_list[1].args[0])
+
     def test_unknown_source_is_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
