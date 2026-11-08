@@ -136,7 +136,7 @@ def run(source_path, input_path, output_path, fmt, checkpoint_path=None, chunk_s
                     if cursor.rowcount == 0:
                         rejected_chunk += 1
                     else:
-                        out.write(json.dumps(normalized, ensure_ascii=False) + "\\n")
+                        out.write(json.dumps(normalized, ensure_ascii=False) + "\n")
                         accepted_chunk += 1
                 except (ValueError, TypeError) as exc:
                     print(f"reject row {row_number}: {exc}", file=sys.stderr)
