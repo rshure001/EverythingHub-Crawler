@@ -1,5 +1,5 @@
 # Curated public starting sites for Everything Hub (not the unrecovered historical 49).
-# The crawler stays on each seed's own host, honors robots.txt, max depth 3, queue 500.
+# The crawler stays on each seed's own host, honors robots.txt, max depth 3, queue limit 50,000.
 https://www.wikipedia.org/
 https://www.britannica.com/
 https://www.loc.gov/
