@@ -93,6 +93,11 @@ def save_json(path, payload):
     temp.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     temp.replace(path)
 
+def classify_records(previous, records):
+    """Merge fetched records and count only new or materially changed content."""
+    merged, new_count, updated_count, unchanged_count = classify_records(previous, records)
+    return merged, new_count, updated_count, unchanged_count
+
 def main():
     seeds = [clean(x.strip()) for x in SEEDS.read_text(encoding="utf-8").splitlines()
              if x.strip() and not x.startswith("#")]
