@@ -87,13 +87,16 @@ class ConnectorRunnerTests(unittest.TestCase):
             source["api"].pop("next_cursor_path")
             config.write_text(json.dumps(registry), encoding="utf-8")
             output = root / "loc.jsonl"
-            first = {"data": {"items": [{"id": "one"}]}, "pagination": {
+            first = {"data": {"items": [{"id": "one", "license": "CC0", "datasetKey": "dataset-1"}]}, "pagination": {
                 "next": "https://api.example.org/items?page=2"}}
             second = {"data": {"items": [{"id": "two"}]}, "pagination": {"next": None}}
             with patch.object(runner, "fetch_page", side_effect=[first, second]) as fetch:
                 self.assertEqual(runner.acquire(config, "test-source", output, 2), 2)
             self.assertEqual(fetch.call_args_list[1].args[0], "https://api.example.org/items?page=2")
             self.assertTrue(output.with_suffix(".jsonl.checkpoint.json").exists())
+            staged = json.loads(output.read_text(encoding="utf-8").splitlines()[0])
+            self.assertEqual(staged["license"], "CC0")
+            self.assertEqual(staged["dataset_key"], "dataset-1")
 
     def test_rejects_untrusted_pagination_host(self):
         with tempfile.TemporaryDirectory() as tmp:
