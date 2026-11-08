@@ -17,12 +17,15 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Validate crawler configuration
+      - name: Validate crawler configuration and tests
         run: |
-          python -m py_compile crawler/crawl.py
+          python -m py_compile crawler/crawl.py crawler/report.py
           test "$(grep -c '^https://' crawler/seeds.txt)" -eq 49
+          python -m unittest discover -s crawler -p 'test_*.py' -v
       - name: Crawl configured sites
         run: python crawler/crawl.py
+      - name: Publish crawler health summary
+        run: python crawler/report.py
       - name: Commit updated index and frontier
         run: |
           git config user.name "github-actions[bot]"
