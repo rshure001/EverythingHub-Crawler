@@ -95,7 +95,19 @@ def save_json(path, payload):
 
 def classify_records(previous, records):
     """Merge fetched records and count only new or materially changed content."""
-    merged, new_count, updated_count, unchanged_count = classify_records(previous, records)
+    merged = dict(previous)
+    new_count = updated_count = unchanged_count = 0
+    for url, record in records.items():
+        prior = previous.get(url)
+        if prior is None:
+            new_count += 1
+        elif any(prior.get(field) != record.get(field)
+                 for field in ("title", "description", "text")):
+            updated_count += 1
+        else:
+            unchanged_count += 1
+        # Keep the latest fetch timestamp even when searchable content is unchanged.
+        merged[url] = record
     return merged, new_count, updated_count, unchanged_count
 
 def main():
