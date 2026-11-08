@@ -13,7 +13,7 @@ permissions:
 jobs:
   unit-tests:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -25,5 +25,5 @@ jobs:
         run: python -m unittest discover -s imports -p 'test_*.py' -v
       - name: Crawler unit tests (offline)
         run: python -m unittest discover -s crawler -p 'test_*.py' -v
-      - name: Synthetic 1,000,000-record importer benchmark
-        run: python imports/benchmark_bulk_ingest.py --records 1000000 --chunk-size 25000
+      - name: Synthetic 10,000,000-record importer benchmark
+        run: python imports/benchmark_bulk_ingest.py --records 10000000 --chunk-size 50000
