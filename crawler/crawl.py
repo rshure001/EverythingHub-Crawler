@@ -164,7 +164,7 @@ def main():
             try:
                 final, content_type, body = request(url)
                 if content_type != "text/html":
-                    return None
+                    return {"status": "non_html"}
                 parser = PageParser()
                 parser.feed(body.decode("utf-8", "replace"))
                 title = re.sub(r"\s+", " ", " ".join(parser.title)).strip()
@@ -176,22 +176,22 @@ def main():
                         candidate = clean(urllib.parse.urljoin(final, href))
                         if candidate and urllib.parse.urlsplit(candidate).netloc == host:
                             links.append(candidate)
-                return ({
+                return {"status": "parsed", "record": {
                     "url": final, "title": title,
                     "description": parser.description[:500],
                     "text": text, "depth": depth, "fetched_at": int(time.time())
-                }, links)
+                }, "links": links}
             except Exception as error:
                 print(f"skip {url}: {error}")
-                return None
+                return {"status": "error"}
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=WORKERS) as pool:
             results = list(pool.map(fetch, batch))
         fetched += len(batch)
         for result in results:
-            if not result:
+            if not result or result.get("status") != "parsed":
                 continue
-            record, links = result
+            record, links = result["record"], result["links"]
             records[record["url"]] = record
             depth_counts[str(record["depth"])] = depth_counts.get(str(record["depth"]), 0) + 1
             for candidate in links:
@@ -200,12 +200,36 @@ def main():
                     queue.append((candidate, record["depth"] + 1))
 
     old = load_json(OUTPUT, {"version": 1, "pages": []})
-    merged = {p["url"]: p for p in old.get("pages", []) if p.get("url")}
-    merged.update(records)
+    previous = {p["url"]: p for p in old.get("pages", []) if p.get("url")}
+    merged = dict(previous)
+    new_count = updated_count = unchanged_count = 0
+    for url, record in records.items():
+        prior = previous.get(url)
+        if prior is None:
+            new_count += 1
+        elif any(prior.get(field) != record.get(field)
+                 for field in ("title", "description", "text")):
+            updated_count += 1
+        else:
+            unchanged_count += 1
+        merged[url] = record
+    parsed_count = len(records)
+    error_count = sum(1 for result in results if result and result.get("status") == "error")
+    non_html_count = sum(1 for result in results if result and result.get("status") == "non_html")
+    indexed_success_count = new_count + updated_count
+    run_metrics = {
+        "fetch_attempts": fetched, "parsed_html_pages": parsed_count,
+        "newly_indexed_records": new_count,
+        "meaningfully_updated_records": updated_count,
+        "unchanged_records": unchanged_count, "fetch_errors": error_count,
+        "non_html_responses": non_html_count,
+        "successful_indexed_records": indexed_success_count,
+        "run_completed_at": int(time.time())
+    }
     save_json(OUTPUT, {
-        "version": 1, "updated_at": int(time.time()),
+        "version": 1, "updated_at": int(time.time()), "run_metrics": run_metrics,
         "pages_crawled_this_run": fetched,
-        "pages_indexed_this_run": len(records),
+        "pages_indexed_this_run": parsed_count,
         "depth_counts_this_run": depth_counts,
         "queue_remaining": len(queue),
         "urls_discovered_total": len(seen),
@@ -217,9 +241,10 @@ def main():
         "queue": [{"url": url, "depth": depth} for url, depth in queue],
         "seen": sorted(seen)
     })
-    print(f"Fetched {fetched}; indexed {len(records)}; depth counts {depth_counts}; "
-          f"frontier remaining {len(queue)}; discovered {len(seen)} URLs; "
-          f"total index {len(merged)}.")
+    print(f"Attempts {fetched}; parsed {parsed_count}; new {new_count}; "
+          f"updated {updated_count}; unchanged {unchanged_count}; errors {error_count}; "
+          f"non-HTML {non_html_count}; successful indexed {indexed_success_count}; "
+          f"frontier remaining {len(queue)}; total index {len(merged)}.")
 
 if __name__ == "__main__":
     main()
