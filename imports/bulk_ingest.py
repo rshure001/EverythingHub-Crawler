@@ -36,7 +36,7 @@ def normalize(record, source):
     body = str(record.get("body_text") or record.get("text") or record.get("content") or "").strip()
     if not title and not description and not body:
         raise ValueError("record has no searchable text")
-    digest_input = "\\n".join((title, description, body)).encode("utf-8")
+    digest_input = "\n".join((title, description, body)).encode("utf-8")
     content_hash = hashlib.sha256(digest_input).hexdigest()
     parts = urlsplit(identifier)
     host = parts.netloc.lower() if parts.scheme in ("http", "https") else source["canonical_host"].lower()
@@ -101,7 +101,7 @@ def run(source_path, input_path, output_path, fmt):
                     rejected += 1
                     continue
                 seen.add(key)
-                out.write(json.dumps(normalized, ensure_ascii=False) + "\\n")
+                out.write(json.dumps(normalized, ensure_ascii=False) + "\n")
                 accepted += 1
             except (ValueError, TypeError) as exc:
                 print(f"reject row {row_number}: {exc}", file=sys.stderr)
