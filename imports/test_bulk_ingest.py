@@ -31,7 +31,27 @@ class BulkIngestTests(unittest.TestCase):
         )
         self.assertEqual(normalized["lane"], "science")
         self.assertEqual(normalized["source_record_id"], "rec-1")
+        self.assertEqual(
+            normalized["canonical_url"],
+            "urn:everythinghub:source:sample.dataset:rec-1",
+        )
+        self.assertEqual(normalized["source_host"], "data.example.org")
         self.assertEqual(len(normalized["content_hash"]), 64)
+
+    def test_preserves_real_canonical_url_and_host(self):
+        normalized = bulk.normalize(
+            {
+                "id": "record-2",
+                "url": "https://catalog.example.org/items/2",
+                "title": "Catalog item",
+            },
+            self.source(),
+        )
+        self.assertEqual(
+            normalized["canonical_url"],
+            "https://catalog.example.org/items/2",
+        )
+        self.assertEqual(normalized["source_host"], "catalog.example.org")
 
     def test_requires_reviewed_source(self):
         source = self.source()
