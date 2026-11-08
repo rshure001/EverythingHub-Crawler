@@ -17,6 +17,15 @@ license, attribution, privacy, and rate-limit review before it can download or p
 | smithsonian-open | culture | Smithsonian Open Access | API / bulk media metadata | https://www.si.edu/openaccess | CC0 collection records and permitted media |
 | gbif-occurrences | nature | GBIF | API / download service | https://www.gbif.org/developer/summary | Biodiversity occurrence records with dataset attribution |
 
+## Current adapter implementation
+
+- `loc-api`: configured for the official `/search/` JSON endpoint, `results` records, and `pagination.next` URLs. It remains disabled pending item-level rights review.
+- `gbif-occurrences`: configured for the documented `/v1/occurrence/search` endpoint with bounded 300-record offset pages. It preserves each record's license and dataset identifiers; it remains disabled pending dataset/license review. GBIF search has a 100,000-result ceiling; larger collections require its asynchronous download workflow and separate adapter.
+- `json_api_runner.py`: supports cursor, offset, and allowlisted next-URL pagination; checkpoints staged byte offsets and cursor state; refuses changed connector configurations on resume; stages only and never publishes to production.
+- `test_json_api_runner.py`: all network calls mocked; covers approval gates, provenance, checkpoint resume, allowlisted next URLs, rejected hosts, and offset pagination.
+
+These adapters are implementation work, not permission to activate sources. The registry keeps them disabled until review is recorded.
+
 ## Common connector contract
 
 Every connector must implement the same lifecycle:
