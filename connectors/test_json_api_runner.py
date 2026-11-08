@@ -140,6 +140,30 @@ class ConnectorRunnerTests(unittest.TestCase):
             self.assertIn("offset=0", fetch.call_args_list[0].args[0])
             self.assertIn("offset=2", fetch.call_args_list[1].args[0])
 
+    def test_record_license_allowlist_rejects_nc_and_missing_rights(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config = self.config(root)
+            registry = json.loads(config.read_text(encoding="utf-8"))
+            api = registry["connectors"][0]["api"]
+            api.update({
+                "require_record_license": True,
+                "allowed_licenses": ["CC0_1_0", "CC_BY_4_0"],
+                "required_record_fields": ["key", "datasetKey"]
+            })
+            config.write_text(json.dumps(registry), encoding="utf-8")
+            payload = {"data": {"items": [
+                {"key": "ok", "datasetKey": "d1", "license": "CC0_1_0"},
+                {"key": "nc", "datasetKey": "d2", "license": "CC_BY_NC_4_0"},
+                {"key": "unknown", "datasetKey": "d3"},
+                {"datasetKey": "d4", "license": "CC_BY_4_0"}
+            ]}, "meta": {"next": None}}
+            output = root / "rights.jsonl"
+            with patch.object(runner, "fetch_page", return_value=payload):
+                self.assertEqual(runner.acquire(config, "test-source", output, 1), 1)
+            rows = [json.loads(line) for line in output.read_text(encoding="utf-8").splitlines()]
+            self.assertEqual([row["source_record"]["key"] for row in rows], ["ok"])
+
     def test_unknown_source_is_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
