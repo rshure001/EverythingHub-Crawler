@@ -20,10 +20,12 @@ jobs:
         with:
           python-version: '3.11'
       - name: Syntax check
-        run: python -m compileall -q crawler imports
+        run: python -m compileall -q crawler imports connectors
       - name: Bulk importer tests (offline)
         run: python -m unittest discover -s imports -p 'test_*.py' -v
       - name: Crawler unit tests (offline)
         run: python -m unittest discover -s crawler -p 'test_*.py' -v
+      - name: Connector acquisition tests (offline)
+        run: python -m unittest discover -s connectors -p 'test_*.py' -v
       - name: Synthetic 10,000,000-record importer benchmark
         run: python imports/benchmark_bulk_ingest.py --records 10000000 --chunk-size 50000
