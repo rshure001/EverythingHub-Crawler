@@ -95,8 +95,11 @@ def acquire(config_path, source_id, output_path, max_pages):
                     "source_id": source_id,
                     "source_record": record,
                     "retrieved_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                    "license": source.get("license"),
+                    "license": record.get("license") or source.get("license"),
                     "attribution": source.get("attribution_text", source["name"]),
+                    "dataset_key": record.get("datasetKey"),
+                    "source_record_id": record.get("key") or record.get("id"),
+                    "source_citation": record.get("datasetName") or record.get("publishingOrganizationKey"),
                 }, ensure_ascii=False) + "\n")
                 count += 1
             next_url = nested(payload, api.get("next_url_path")) if api.get("next_url_path") else None
