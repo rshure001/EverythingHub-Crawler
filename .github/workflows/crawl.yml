@@ -11,7 +11,7 @@ concurrency:
 jobs:
   crawl:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 8
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -19,12 +19,9 @@ jobs:
           python-version: "3.12"
       - name: Validate crawler configuration and tests
         run: |
-          python -m py_compile crawler/crawl.py crawler/report.py crawler/connectors.py
+          python -m py_compile crawler/crawl.py crawler/report.py
           test "$(grep -c '^https://' crawler/seeds.txt)" -eq 49
-          test "$(grep -c '"enabled": true' crawler/connectors.json)" -eq 10
           python -m unittest discover -s crawler -p 'test_*.py' -v
-      - name: Discover bulk URLs from ten public sitemap connectors
-        run: python crawler/connectors.py
       - name: Crawl configured sites
         run: python crawler/crawl.py
       - name: Publish crawler health summary
