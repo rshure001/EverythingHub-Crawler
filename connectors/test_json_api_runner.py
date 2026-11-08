@@ -76,6 +76,41 @@ class ConnectorRunnerTests(unittest.TestCase):
             rows = [json.loads(line) for line in output.read_text(encoding="utf-8").splitlines()]
             self.assertEqual([row["source_record"]["id"] for row in rows], ["first", "second"])
 
+    def test_allowlisted_next_url_is_followed_and_checkpointed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config = self.config(root)
+            registry = json.loads(config.read_text(encoding="utf-8"))
+            source = registry["connectors"][0]
+            source["api"]["next_url_path"] = "pagination.next"
+            source["api"]["allowed_next_hosts"] = ["api.example.org"]
+            source["api"].pop("next_cursor_path")
+            config.write_text(json.dumps(registry), encoding="utf-8")
+            output = root / "loc.jsonl"
+            first = {"data": {"items": [{"id": "one"}]}, "pagination": {
+                "next": "https://api.example.org/items?page=2"}}
+            second = {"data": {"items": [{"id": "two"}]}, "pagination": {"next": None}}
+            with patch.object(runner, "fetch_page", side_effect=[first, second]) as fetch:
+                self.assertEqual(runner.acquire(config, "test-source", output, 2), 2)
+            self.assertEqual(fetch.call_args_list[1].args[0], "https://api.example.org/items?page=2")
+            self.assertTrue(output.with_suffix(".jsonl.checkpoint.json").exists())
+
+    def test_rejects_untrusted_pagination_host(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config = self.config(root)
+            registry = json.loads(config.read_text(encoding="utf-8"))
+            source = registry["connectors"][0]
+            source["api"]["next_url_path"] = "pagination.next"
+            source["api"]["allowed_next_hosts"] = ["api.example.org"]
+            config.write_text(json.dumps(registry), encoding="utf-8")
+            output = root / "loc.jsonl"
+            payload = {"data": {"items": [{"id": "one"}]}, "pagination": {
+                "next": "https://evil.example.net/steal"}}
+            with patch.object(runner, "fetch_page", return_value=payload):
+                with self.assertRaisesRegex(ValueError, "allowlist"):
+                    runner.acquire(config, "test-source", output, 2)
+
     def test_unknown_source_is_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
