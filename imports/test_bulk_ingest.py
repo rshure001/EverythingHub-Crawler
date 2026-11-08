@@ -42,7 +42,7 @@ class BulkIngestTests(unittest.TestCase):
             input_path = root / "input.jsonl"
             output_path = root / "out.jsonl"
             source_path.write_text(json.dumps(source), encoding="utf-8")
-            input_path.write_text('{"id":"1","title":"A"}\\n', encoding="utf-8")
+            input_path.write_text('{"id":"1","title":"A"}\n', encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "not approved"):
                 bulk.run(source_path, input_path, output_path, "jsonl")
 
@@ -58,7 +58,7 @@ class BulkIngestTests(unittest.TestCase):
                 {"id": "same", "title": "Duplicate"},
                 {"id": "second", "title": "Second"},
             ]
-            input_path.write_text("".join(json.dumps(row) + "\\n" for row in rows), encoding="utf-8")
+            input_path.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
             accepted, rejected = bulk.run(source_path, input_path, output_path, "jsonl")
             self.assertEqual((accepted, rejected), (2, 1))
             staged = [json.loads(line) for line in output_path.read_text(encoding="utf-8").splitlines()]
