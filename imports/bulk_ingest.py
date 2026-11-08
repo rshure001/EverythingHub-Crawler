@@ -7,7 +7,8 @@ import argparse
 import csv
 import hashlib
 import json
-import re
+import sqlite3
+import tempfile
 import sys
 from pathlib import Path
 from urllib.parse import quote, urlsplit
@@ -98,21 +99,30 @@ def run(source_path, input_path, output_path, fmt):
     output_path.parent.mkdir(parents=True, exist_ok=True)
     temp = output_path.with_suffix(output_path.suffix + ".tmp")
     accepted = rejected = 0
-    seen = set()
-    with temp.open("w", encoding="utf-8") as out:
-        for row_number, record in enumerate(iter_records(input_path, fmt), 1):
-            try:
-                normalized = normalize(record, source)
-                key = normalized["source_record_id"]
-                if key in seen:
-                    rejected += 1
-                    continue
-                seen.add(key)
-                out.write(json.dumps(normalized, ensure_ascii=False) + "\n")
-                accepted += 1
-            except (ValueError, TypeError) as exc:
-                print(f"reject row {row_number}: {exc}", file=sys.stderr)
-                rejected += 1
+    # Disk-backed uniqueness avoids retaining millions of identifiers in Python memory.
+    with tempfile.TemporaryDirectory(prefix="eh-import-") as workdir:
+        db = sqlite3.connect(str(Path(workdir) / "seen.sqlite3"))
+        db.execute("CREATE TABLE seen_ids (record_id TEXT PRIMARY KEY)")
+        try:
+            with temp.open("w", encoding="utf-8") as out:
+                for row_number, record in enumerate(iter_records(input_path, fmt), 1):
+                    try:
+                        normalized = normalize(record, source)
+                        key = normalized["source_record_id"]
+                        cursor = db.execute(
+                            "INSERT OR IGNORE INTO seen_ids(record_id) VALUES (?)", (key,)
+                        )
+                        if cursor.rowcount == 0:
+                            rejected += 1
+                            continue
+                        out.write(json.dumps(normalized, ensure_ascii=False) + "\n")
+                        accepted += 1
+                    except (ValueError, TypeError) as exc:
+                        print(f"reject row {row_number}: {exc}", file=sys.stderr)
+                        rejected += 1
+                db.commit()
+        finally:
+            db.close()
     temp.replace(output_path)
     print(json.dumps({
         "source_id": source["source_id"],
