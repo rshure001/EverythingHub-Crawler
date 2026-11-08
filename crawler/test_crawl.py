@@ -18,6 +18,38 @@ class CrawlerTests(unittest.TestCase):
         self.assertIsNone(crawl.clean("javascript:alert(1)"))
         self.assertIsNone(crawl.clean("mailto:test@example.com"))
 
+    def test_classify_records_counts_only_new_and_material_changes(self):
+        previous = {
+            "https://example.com/a": {
+                "title": "A", "description": "old", "text": "body",
+                "fetched_at": 10
+            },
+            "https://example.com/b": {
+                "title": "B", "description": "same", "text": "body",
+                "fetched_at": 10
+            },
+        }
+        fetched = {
+            "https://example.com/a": {
+                "title": "A", "description": "old", "text": "body",
+                "fetched_at": 20
+            },
+            "https://example.com/b": {
+                "title": "B", "description": "same", "text": "changed",
+                "fetched_at": 20
+            },
+            "https://example.com/c": {
+                "title": "C", "description": "new", "text": "new page",
+                "fetched_at": 20
+            },
+        }
+        merged, new_count, updated_count, unchanged_count = crawl.classify_records(
+            previous, fetched
+        )
+        self.assertEqual((new_count, updated_count, unchanged_count), (1, 1, 1))
+        self.assertEqual(len(merged), 3)
+        self.assertEqual(merged["https://example.com/a"]["fetched_at"], 20)
+
     def test_parser_extracts_title_description_text_and_links(self):
         parser = crawl.PageParser()
         parser.feed(
