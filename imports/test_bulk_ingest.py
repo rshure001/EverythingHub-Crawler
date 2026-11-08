@@ -66,6 +66,36 @@ class BulkIngestTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "not approved"):
                 bulk.run(source_path, input_path, output_path, "jsonl")
 
+    def test_resumes_from_committed_chunk_checkpoint(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source_path = root / "source.json"
+            input_path = root / "input.jsonl"
+            output_path = root / "out.jsonl"
+            checkpoint_path = root / "checkpoint.sqlite3"
+            source_path.write_text(json.dumps(self.source()), encoding="utf-8")
+            input_path.write_text(
+                json.dumps({"id": "one", "title": "First"}) + "\\n" + "{bad json\\n",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "invalid JSON"):
+                bulk.run(source_path, input_path, output_path, "jsonl", checkpoint_path, 1)
+
+            # Correct the interrupted source and resume from the durable first-row checkpoint.
+            input_path.write_text(
+                "".join(json.dumps(row) + "\\n" for row in [
+                    {"id": "one", "title": "First"},
+                    {"id": "two", "title": "Second"},
+                ]),
+                encoding="utf-8",
+            )
+            accepted, rejected = bulk.run(
+                source_path, input_path, output_path, "jsonl", checkpoint_path, 1
+            )
+            staged = [json.loads(line) for line in output_path.read_text(encoding="utf-8").splitlines()]
+            self.assertEqual((accepted, rejected), (2, 0))
+            self.assertEqual([row["source_record_id"] for row in staged], ["one", "two"])
+
     def test_deduplicates_source_identifiers(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
