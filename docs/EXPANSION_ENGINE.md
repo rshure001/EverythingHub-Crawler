@@ -23,6 +23,19 @@ policy, worker pool, and health counters:
 Lane separation is a scheduling and product boundary. It does not override source terms,
 robots directives, API licenses, or access restrictions.
 
+## Throughput ambition
+
+The first operating milestone is **60,000 successfully indexed new or meaningfully updated
+records per day**. That is 2,500 per hour or about 41.7 per minute across the system. At an
+even planning split, each of eight lanes would average 7,500 per day (312.5 per hour, about
+5.2 per minute). These are planning targets, not measured output or rigid per-lane quotas.
+
+The scale-up path is 1 million, 10 million, then 100 million useful records per day. These
+are engineering ambitions, not current capabilities or promises. Increase throughput only
+when source permissions, queue health, database capacity, indexing correctness, and search
+quality all pass their gates. Prefer bulk datasets, APIs, and incremental feeds; raw fetch
+attempts are not a success metric.
+
 ## Island onboarding contract
 
 Every candidate source gets a registry record with:
@@ -81,8 +94,8 @@ not production scale.
 
 The production Supabase project has shown substantial statement timeouts and worker timeouts.
 Do not increase production concurrency until queue claims, database writes, and search have
-measured headroom. The 10,000 successfully indexed pages/minute goal is a target, not a current
-measured rate.
+measured headroom. The actual production rate is not yet established from available telemetry;
+do not confuse attempted requests with successfully indexed records.
 
 A separate bounded-claim SQL proposal exists on branch
 `repair/bounded-lane-queue-claims`. It targets only the independent self-hosted schema and is
