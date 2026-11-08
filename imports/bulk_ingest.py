@@ -83,8 +83,20 @@ def iter_records(path, fmt):
         raise ValueError("format must be jsonl or csv")
 
 
+def file_fingerprint(path):
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
 def run(source_path, input_path, output_path, fmt, checkpoint_path=None, chunk_size=5000):
     source = json.loads(source_path.read_text(encoding="utf-8"))
+    input_fingerprint = file_fingerprint(input_path)
+    source_fingerprint = hashlib.sha256(
+        json.dumps(source, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
     if source.get("review_status") != REQUIRED_REVIEW:
         raise ValueError("source is not approved: review_status must be reviewed_allowed")
     if source.get("source_status") not in ("proposed", "active"):
@@ -107,6 +119,10 @@ def run(source_path, input_path, output_path, fmt, checkpoint_path=None, chunk_s
     state = dict(db.execute("SELECT key, value FROM import_state"))
     next_row = int(state.get("next_row", "0"))
     committed_bytes = int(state.get("output_bytes", "0"))
+    if state and (state.get("input_fingerprint") != input_fingerprint or
+                  state.get("source_fingerprint") != source_fingerprint):
+        db.close()
+        raise ValueError("checkpoint input/source fingerprint mismatch; use a fresh checkpoint")
     accepted_total = int(state.get("accepted", "0"))
     rejected_total = int(state.get("rejected", "0"))
 
@@ -148,7 +164,11 @@ def run(source_path, input_path, output_path, fmt, checkpoint_path=None, chunk_s
                     accepted_total += accepted_chunk
                     rejected_total += rejected_chunk
                     next_row = row_number
-                    db.execute("INSERT OR REPLACE INTO import_state VALUES ('next_row', ?)", (str(next_row),))
+                    db.execute("INSERT OR REPLACE INTO import_state VALUES ('input_fingerprint', ?)", (input_fingerprint,))
+                    db.execute("INSERT OR REPLACE INTO import_state VALUES ('source_fingerprint', ?)", (source_fingerprint,))
+                    db.execute("INSERT OR REPLACE INTO import_state VALUES ('input_fingerprint', ?)", (input_fingerprint,))
+                db.execute("INSERT OR REPLACE INTO import_state VALUES ('source_fingerprint', ?)", (source_fingerprint,))
+                db.execute("INSERT OR REPLACE INTO import_state VALUES ('next_row', ?)", (str(next_row),))
                     db.execute("INSERT OR REPLACE INTO import_state VALUES ('output_bytes', ?)", (str(new_bytes),))
                     db.execute("INSERT OR REPLACE INTO import_state VALUES ('accepted', ?)", (str(accepted_total),))
                     db.execute("INSERT OR REPLACE INTO import_state VALUES ('rejected', ?)", (str(rejected_total),))
