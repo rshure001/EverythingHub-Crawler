@@ -25,3 +25,5 @@ jobs:
         run: python -m unittest discover -s imports -p 'test_*.py' -v
       - name: Crawler unit tests (offline)
         run: python -m unittest discover -s crawler -p 'test_*.py' -v
+      - name: Synthetic 25,000-record importer benchmark
+        run: python imports/benchmark_bulk_ingest.py --records 25000 --chunk-size 5000
