@@ -110,7 +110,7 @@ def acquire(config_path, source_id, output_path, max_pages):
                 "config_fingerprint": fingerprint,
                 "output_bytes": out.tell(),
                 "pages_committed": int(checkpoint.get("pages_committed", 0)) + 1,
-                "complete": not cursor or not records,
+                "complete": (not next_url if api.get("next_url_path") else not cursor) or not records,
             }
             checkpoint_path.write_text(json.dumps(checkpoint, indent=2), encoding="utf-8")
             if checkpoint["complete"]:
