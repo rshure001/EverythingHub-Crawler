@@ -130,6 +130,7 @@ def main():
     records = {}
     fetched = 0
     depth_counts = {}
+    results = []
     while queue and fetched < MAX_FETCH_PER_RUN:
         batch = []
         # Drain the frontier into depth buckets, then take one URL per depth
