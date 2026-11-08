@@ -244,7 +244,22 @@
         "indexed": 0,
         "searchable": 0,
         "rejected": 0
-      }
+      },
+      "api": {
+        "endpoint": "https://api.gbif.org/v1/occurrence/search",
+        "fixed_params": {
+          "country": "US"
+        },
+        "records_path": "results",
+        "has_more_path": "endOfRecords",
+        "cursor_param": "offset",
+        "initial_cursor": 0,
+        "cursor_increment": 300,
+        "page_size_param": "limit",
+        "page_size": 300
+      },
+      "record_rights_review": "Per-occurrence license and dataset citation must be retained; exclude records without acceptable reuse rights before publication.",
+      "attribution_text": "GBIF occurrence data; preserve datasetKey, publishing organization, occurrence license and citation metadata."
     }
   ],
   "production_publishing": false
