@@ -15,6 +15,7 @@ Independent, polite crawler for the Everything Hub search project.
 ```bash
 python -m py_compile crawler/crawl.py crawler/report.py
 python -m unittest discover -s crawler -p 'test_*.py' -v
+python -m unittest discover -s imports -p 'test_*.py' -v
 python crawler/crawl.py
 python crawler/report.py
 ```
@@ -29,3 +30,20 @@ The crawler currently writes its own repository index. It is **not yet connected
 
 ## Scale and safety
 This GitHub Actions worker is a prototype runner, not a distributed crawl fleet. Respect robots rules and host-level limits. Do not bypass logins, paywalls, CAPTCHAs, access controls, or site restrictions. Do not create paid infrastructure or buy credits without the owner's explicit approval.
+
+## Bulk dataset staging
+
+A safe, offline-first bulk importer is available at `imports/bulk_ingest.py`. It accepts JSONL
+or CSV files, requires a source registry record marked `reviewed_allowed`, requires a documented
+license or terms URL, normalizes records, deduplicates source identifiers, and writes JSONL
+staging output. It does not publish to production.
+
+Example:
+
+```bash
+python imports/bulk_ingest.py --source source.json --input dataset.jsonl --output staging/dataset.jsonl --format jsonl
+```
+
+The source registry record must include `source_id`, `name`, `canonical_host`, `lane`,
+`review_status`, `source_status`, and a `license` or `terms_url`. Review and verify reuse
+rights before marking any source approved. Bulk importer tests run separately from crawler tests.
