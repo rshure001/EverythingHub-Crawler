@@ -82,7 +82,7 @@ def acquire(config_path, source_id, output_path, max_pages):
             else:
                 params = dict(api.get("fixed_params", {}))
                 params[api.get("page_size_param", "limit")] = page_size
-                if cursor:
+                if cursor is not None:
                     params[cursor_param] = cursor
                 url = api["endpoint"] + ("&" if "?" in api["endpoint"] else "?") + urllib.parse.urlencode(params)
             payload = fetch_page(url)
@@ -137,6 +137,8 @@ def acquire(config_path, source_id, output_path, max_pages):
                 "config_fingerprint": fingerprint,
                 "output_bytes": out.tell(),
                 "pages_committed": int(checkpoint.get("pages_committed", 0)) + 1,
+                "records_staged": int(checkpoint.get("records_staged", 0)) + count,
+                "records_rejected": int(checkpoint.get("records_rejected", 0)) + rejected,
                 "complete": (not next_url if api.get("next_url_path") else not cursor) or not records,
             }
             checkpoint_path.write_text(json.dumps(checkpoint, indent=2), encoding="utf-8")
