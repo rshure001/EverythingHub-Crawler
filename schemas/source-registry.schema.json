@@ -1,0 +1,171 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://everythinghub.example/schemas/source-registry.schema.json",
+  "title": "EverythingHub source registry record",
+  "type": "object",
+  "required": [
+    "source_id",
+    "name",
+    "canonical_host",
+    "lane",
+    "access_method",
+    "review_status",
+    "source_status",
+    "attribution_required",
+    "request_policy"
+  ],
+  "properties": {
+    "source_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{2,79}$"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "canonical_host": {
+      "type": "string",
+      "minLength": 3
+    },
+    "lane": {
+      "enum": [
+        "general",
+        "science",
+        "news",
+        "technology",
+        "business",
+        "government",
+        "culture",
+        "nature"
+      ]
+    },
+    "access_method": {
+      "enum": [
+        "open_api",
+        "rss",
+        "atom",
+        "sitemap",
+        "public_crawl",
+        "bulk_dataset"
+      ]
+    },
+    "endpoint_url": {
+      "type": "string",
+      "format": "uri"
+    },
+    "terms_url": {
+      "type": "string",
+      "format": "uri"
+    },
+    "robots_url": {
+      "type": "string",
+      "format": "uri"
+    },
+    "review_status": {
+      "enum": [
+        "not_reviewed",
+        "reviewed_allowed",
+        "reviewed_limited",
+        "not_allowed"
+      ]
+    },
+    "source_status": {
+      "enum": [
+        "proposed",
+        "active",
+        "paused",
+        "retired"
+      ]
+    },
+    "allowed_fields": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "attribution_required": {
+      "type": "boolean"
+    },
+    "attribution_text": {
+      "type": "string"
+    },
+    "license": {
+      "type": "string"
+    },
+    "request_policy": {
+      "type": "object",
+      "required": [
+        "max_requests_per_minute",
+        "concurrency"
+      ],
+      "properties": {
+        "max_requests_per_minute": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 600
+        },
+        "concurrency": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 32
+        },
+        "min_delay_ms": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "refresh_interval_minutes": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "discovery_cursor": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "last_success_at": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "last_error": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "counts": {
+      "type": "object",
+      "properties": {
+        "discovered": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "imported": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "updated": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "duplicates": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "rejected": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
