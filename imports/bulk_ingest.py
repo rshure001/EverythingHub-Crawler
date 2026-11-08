@@ -10,7 +10,7 @@ import json
 import re
 import sys
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import quote, urlsplit
 
 LANES = {"general", "science", "news", "technology", "business",
          "government", "culture", "nature"}
@@ -38,12 +38,19 @@ def normalize(record, source):
         raise ValueError("record has no searchable text")
     digest_input = "\n".join((title, description, body)).encode("utf-8")
     content_hash = hashlib.sha256(digest_input).hexdigest()
-    parts = urlsplit(identifier)
-    host = parts.netloc.lower() if parts.scheme in ("http", "https") else source["canonical_host"].lower()
+    explicit_url = str(record.get("canonical_url") or record.get("url") or "").strip()
+    parts = urlsplit(explicit_url)
+    if parts.scheme in ("http", "https") and parts.netloc:
+        canonical_url = explicit_url
+        host = parts.netloc.lower()
+    else:
+        # Stable source-scoped URN: never mislabel a dataset's numeric/string ID as a URL.
+        canonical_url = "urn:everythinghub:source:" + quote(source_id, safe="._-") + ":" + quote(identifier, safe="")
+        host = source["canonical_host"].lower()
     return {
         "source_id": source_id,
         "source_record_id": identifier,
-        "canonical_url": identifier,
+        "canonical_url": canonical_url,
         "source_host": host,
         "lane": lane,
         "title": title[:1000],
