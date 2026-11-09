@@ -79,7 +79,7 @@ def main():
         return
 
     statement = """
-      insert into eh_import_test.eh_documents
+      insert into eh_import_test.eh_documents as target
         (canonical_url, source_host, lane, title, description, body_text,
          language_code, http_status, content_type, content_hash, fetched_at,
          published_at, robots_allowed)
@@ -90,9 +90,9 @@ def main():
         description = excluded.description,
         body_text = excluded.body_text,
         content_hash = excluded.content_hash,
-        fetched_at = greatest(eh_documents.fetched_at, excluded.fetched_at),
+        fetched_at = greatest(target.fetched_at, excluded.fetched_at),
         updated_at = now()
-      where eh_import_test.eh_documents.content_hash is distinct from excluded.content_hash
+      where target.content_hash is distinct from excluded.content_hash
     """
 
     imported = 0
