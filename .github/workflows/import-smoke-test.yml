@@ -28,6 +28,7 @@ jobs:
           --health-retries 10
     env:
       DATABASE_URL: postgresql://eh_test:test-only-password@localhost:5432/everythinghub_test
+      EH_DB_SCHEMA: eh_import_test
     steps:
       - name: Check out crawler repository
         uses: actions/checkout@v4
