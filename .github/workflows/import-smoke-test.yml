@@ -54,6 +54,10 @@ jobs:
           echo "Imported records: $count"
           test "$count" -gt 0
 
+      - name: Verify database-native crawler end to end
+        run: |
+          python -m py_compile database/crawl_worker.py database/smoke_db_worker.py
+          python database/smoke_db_worker.py
       - name: Verify authenticated search API
         env:
           EH_SEARCH_API_TOKEN: isolated-test-token
