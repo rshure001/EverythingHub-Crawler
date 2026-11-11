@@ -20,5 +20,29 @@ services:
     security_opt:
       - no-new-privileges:true
 
+  everythinghub-search:
+    build:
+      context: ..
+      dockerfile: database/Dockerfile
+    container_name: everythinghub-search
+    restart: unless-stopped
+    depends_on:
+      everythinghub-db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://everythinghub:${EH_DB_PASSWORD}@everythinghub-db:5432/everythinghub
+      EH_SEARCH_API_TOKEN: ${EH_SEARCH_API_TOKEN:?Set EH_SEARCH_API_TOKEN in your environment}
+      EH_SEARCH_HOST: 0.0.0.0
+      EH_SEARCH_PORT: "8080"
+    ports:
+      - "127.0.0.1:58080:8080"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=3).read()"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    security_opt:
+      - no-new-privileges:true
+
 volumes:
   everythinghub_pgdata:
