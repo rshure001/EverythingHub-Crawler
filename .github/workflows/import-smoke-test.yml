@@ -53,3 +53,23 @@ jobs:
           count=$(psql "$DATABASE_URL" -tA -c "SELECT count(*) FROM eh_import_test.eh_documents;")
           echo "Imported records: $count"
           test "$count" -gt 0
+
+      - name: Verify authenticated search API
+        env:
+          EH_SEARCH_API_TOKEN: isolated-test-token
+          EH_SEARCH_HOST: 127.0.0.1
+          EH_SEARCH_PORT: "8080"
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "INSERT INTO eh_import_test.eh_documents (canonical_url, source_host, lane, title, description, body_text, content_hash) VALUES ('https://everythinghub.test/search-smoke-fixture', 'everythinghub.test', 'general', 'EverythingHub search smoke fixture', 'authenticated search verification', 'quartz lantern integration test', 'smoke-fixture-v1') ON CONFLICT (canonical_url) DO NOTHING;"
+          python database/search_api.py > /tmp/eh-search-api.log 2>&1 &
+          api_pid=$!
+          trap 'kill "$api_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 20); do
+            if curl --silent --fail http://127.0.0.1:8080/healthz > /tmp/eh-health.json; then break; fi
+            sleep 1
+          done
+          grep -q '"status": "ok"' /tmp/eh-health.json
+          unauthorized=$(curl --silent --output /tmp/eh-unauthorized.json --write-out '%{http_code}' 'http://127.0.0.1:8080/search?q=quartz')
+          test "$unauthorized" = "401"
+          curl --silent --fail -H "Authorization: Bearer isolated-test-token" 'http://127.0.0.1:8080/search?q=quartz%20lantern' > /tmp/eh-search.json
+          python -c "import json; d=json.load(open('/tmp/eh-search.json')); assert d['total'] >= 1 and any(x['url']=='https://everythinghub.test/search-smoke-fixture' for x in d['results']); print('Authenticated search returned fixture; total matches:', d['total'])"
