@@ -1,6 +1,10 @@
 name: EverythingHub isolated importer smoke test
 
 on:
+  push:
+    paths:
+      - "database/**"
+      - ".github/workflows/import-smoke-test.yml"
   schedule:
     - cron: "7,22,37,52 * * * *"
   workflow_dispatch:
