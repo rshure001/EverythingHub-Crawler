@@ -15,13 +15,19 @@ authenticated API. Dog Tag Day is not part of this stack.
 set -a
 . ./.env
 set +a
-EH_DB_PASSWORD="$EH_DB_PASSWORD" docker compose up -d
+EH_DB_PASSWORD="$EH_DB_PASSWORD" EH_SEARCH_API_TOKEN="$EH_SEARCH_API_TOKEN" docker compose up -d
 docker compose ps
 docker compose logs --tail=50 everythinghub-db
 ```
 
-The first initialization applies `001_everythinghub_core.sql` automatically.
-The named Docker volume persists database data across container restarts.
+The first initialization applies `001_everythinghub_core.sql` automatically. The compose stack starts both PostgreSQL and the authenticated search API. The named Docker volume persists database data across container restarts. The API is published only on localhost port 58080; `/healthz` checks readiness and `/search?q=...` requires an `Authorization: Bearer <token>` header.
+
+Example local search request (use your private token; never put it in browser code):
+
+```sh
+curl -H "Authorization: Bearer $EH_SEARCH_API_TOKEN" \
+  "http://127.0.0.1:58080/search?q=NASA&limit=10"
+```
 
 ## Backups
 
