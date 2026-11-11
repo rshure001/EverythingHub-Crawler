@@ -164,7 +164,7 @@ def record_page(conn, item, page):
     lane = item[2] if item[2] in LANES else lane_for_url(page["url"])
     with conn.cursor() as cur:
         cur.execute(
-            f"""insert into "{SCHEMA}".eh_documents
+            f"""insert into "{SCHEMA}".eh_documents as target
                 (canonical_url, source_host, lane, title, description, body_text,
                  content_type, content_hash, fetched_at, robots_allowed)
                 values (%s,%s,%s,%s,%s,%s,%s,md5(%s),now(),true)
@@ -173,7 +173,7 @@ def record_page(conn, item, page):
                   title=excluded.title, description=excluded.description,
                   body_text=excluded.body_text, content_type=excluded.content_type,
                   content_hash=excluded.content_hash, fetched_at=now(), updated_at=now()
-                where "{SCHEMA}".eh_documents.content_hash is distinct from excluded.content_hash""",
+                where target.content_hash is distinct from excluded.content_hash""",
             (page["url"], page["host"], lane, page["title"], page["description"],
              page["text"], page["content_type"], page["title"] + "\n" + page["description"] + "\n" + page["text"]),
         )
