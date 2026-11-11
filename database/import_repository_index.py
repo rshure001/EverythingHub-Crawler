@@ -9,6 +9,7 @@ The import is additive/upsert-only. It never deletes destination records.
 import hashlib
 import json
 import os
+import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -33,6 +34,9 @@ def iso_timestamp(value):
 
 def main():
     database_url = os.environ.get("DATABASE_URL")
+    schema = os.environ.get("EH_DB_SCHEMA", "public")
+    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", schema):
+        raise SystemExit("EH_DB_SCHEMA must be a simple PostgreSQL schema name.")
     if not database_url:
         raise SystemExit("DATABASE_URL is required; no destination was modified.")
     if not INDEX.exists():
@@ -79,7 +83,7 @@ def main():
         return
 
     statement = """
-      insert into eh_import_test.eh_documents as target
+      insert into "{schema}".eh_documents as target
         (canonical_url, source_host, lane, title, description, body_text,
          language_code, http_status, content_type, content_hash, fetched_at,
          published_at, robots_allowed)
@@ -93,7 +97,7 @@ def main():
         fetched_at = greatest(target.fetched_at, excluded.fetched_at),
         updated_at = now()
       where target.content_hash is distinct from excluded.content_hash
-    """
+    """.format(schema=schema)
 
     imported = 0
     with psycopg.connect(database_url, connect_timeout=10) as connection:
