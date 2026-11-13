@@ -1,0 +1,36 @@
+name: Repair EverythingHub DNS
+
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: "Apply the single EverythingHub CNAME after reviewing the dry-run"
+        required: true
+        type: boolean
+        default: false
+
+jobs:
+  dns:
+    # Runs on the owner's own machine/network so Namecheap IP authorization can remain fixed.
+    runs-on: [self-hosted, linux]
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify Python
+        run: python3 --version
+      - name: Dry-run and backup
+        env:
+          NAMECHEAP_API_USER: ${{ secrets.NAMECHEAP_API_USER }}
+          NAMECHEAP_API_KEY: ${{ secrets.NAMECHEAP_API_KEY }}
+          NAMECHEAP_USERNAME: ${{ secrets.NAMECHEAP_USERNAME }}
+          NAMECHEAP_CLIENT_IP: ${{ secrets.NAMECHEAP_CLIENT_IP }}
+        run: python3 tools/namecheap-dns/repair_everythinghub.py
+      - name: Apply CNAME only when explicitly selected
+        if: ${{ inputs.apply }}
+        env:
+          NAMECHEAP_API_USER: ${{ secrets.NAMECHEAP_API_USER }}
+          NAMECHEAP_API_KEY: ${{ secrets.NAMECHEAP_API_KEY }}
+          NAMECHEAP_USERNAME: ${{ secrets.NAMECHEAP_USERNAME }}
+          NAMECHEAP_CLIENT_IP: ${{ secrets.NAMECHEAP_CLIENT_IP }}
+        run: python3 tools/namecheap-dns/repair_everythinghub.py --apply
