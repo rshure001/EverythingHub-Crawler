@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#050b08"><title>EverythingHub — Everything within reach</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:#050b08;color:#eef7eb;font-family:Arial,sans-serif}main{width:min(100%,1180px);margin:auto;padding:8px 8px 24px}
+.art{position:relative;width:100%;line-height:0}.art img{display:block;width:100%;height:auto}
+.search{position:absolute;left:29.5%;top:43.1%;width:42%;height:7.3%;display:flex;line-height:normal}
+.search input{width:76%;min-width:0;border:0;outline:0;background:rgba(255,255,255,.97);color:#17251a;border-radius:30px 0 0 30px;padding:0 12px;font-size:clamp(10px,2.2vw,18px)}
+.search button{width:24%;border:0;border-radius:0 30px 30px 0;background:#a8d987;color:#14351b;font-weight:700;font-size:clamp(9px,1.8vw,16px);padding:0 3px}
+.hotspot{position:absolute;display:block;line-height:normal;background:transparent;border:0;cursor:pointer}
+.left1{left:3%;top:22%;width:24%;height:8%}.left2{left:3%;top:31%;width:24%;height:8%}.left3{left:3%;top:40%;width:24%;height:8%}.left4{left:3%;top:49%;width:24%;height:8%}
+.right1{right:3%;top:22%;width:24%;height:8%}.right2{right:3%;top:31%;width:24%;height:8%}.right3{right:3%;top:40%;width:24%;height:8%}.right4{right:3%;top:49%;width:24%;height:8%}
+#status{font-size:14px;line-height:1.4;color:#b9d5b6;margin:10px 4px}.results{display:grid;gap:8px;margin:10px 4px}.result{display:block;padding:12px;border:1px solid #416844;border-radius:12px;background:#102018;color:#eaf4e8;text-decoration:none;line-height:1.35}.result strong{display:block;color:#c6e78d;margin-bottom:4px}
+@media(min-width:800px){main{padding-top:14px}.search input{padding-left:20px}}
+</style></head><body><main>
+<div class="art">
+<img src="https://d2jqrm6oza8nb6.cloudfront.net/datasets/9d2d9438-9bd3-4e8e-a092-301ce42d93dc.png?_jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJrZXlIYXNoIjoiYWRjMTMzMmZlMjgzZGVhYiIsImJ1Y2tldCI6InJ1bndheS1kYXRhc2V0cyIsInN0YWdlIjoicHJvZCIsImV4cCI6MTc5NDY4NDcxOX0.Qq4t-dshpTgL58Qj8s_RjKcl2Ly3irZzNlb9tePpFb0" alt="EverythingHub approved homepage artwork">
+<form class="search" id="searchForm"><input id="q" type="search" aria-label="Search EverythingHub" placeholder="Search Everything…" required><button type="submit">Search</button></form>
+<button class="hotspot left1" data-query="web search" aria-label="Web Search"></button><button class="hotspot left2" data-query="videos" aria-label="Video Hub"></button><button class="hotspot left3" data-query="images" aria-label="Images"></button><button class="hotspot left4" data-query="news" aria-label="News"></button>
+<button class="hotspot right1" data-query="shopping products" aria-label="Shopping"></button><button class="hotspot right2" data-query="learning education" aria-label="Learning"></button><button class="hotspot right3" data-query="resources services" aria-label="Resources"></button><button class="hotspot right4" data-query="local travel places" aria-label="Local and Travel"></button>
+</div><div id="status" aria-live="polite"></div><section id="results" class="results"></section>
+</main><script>
+const API="https://everythinghub-homepage-fixed-qeg6honkg-rshure001-8053.vercel.app/api/search";const form=document.getElementById("searchForm"),q=document.getElementById("q"),status=document.getElementById("status"),results=document.getElementById("results");
+async function runSearch(term){term=term.trim();if(!term)return;status.textContent="Searching…";results.replaceChildren();try{const response=await fetch(API+"?q="+encodeURIComponent(term));if(!response.ok)throw Error("Search service returned "+response.status);const data=await response.json();status.textContent=(data.total??data.results?.length??0)+" matches · "+(data.indexedPages??"")+" indexed pages";for(const item of(data.results||[])){const a=document.createElement("a");a.className="result";a.href=item.url;a.target="_blank";a.rel="noopener";const title=document.createElement("strong");title.textContent=item.title||item.url;const desc=document.createElement("span");desc.textContent=item.description||item.url;a.append(title,desc);results.append(a)}if(!results.children.length)status.textContent="No matches found in the current index."}catch(error){status.textContent="Search unavailable: "+error.message}}
+form.addEventListener("submit",e=>{e.preventDefault();runSearch(q.value)});document.querySelectorAll(".hotspot").forEach(button=>button.addEventListener("click",()=>{q.value=button.dataset.query;runSearch(q.value)}));
+</script></body></html>
