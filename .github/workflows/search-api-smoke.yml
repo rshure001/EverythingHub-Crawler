@@ -15,13 +15,13 @@ jobs:
         run: |
           python - <<'PY'
           import json, urllib.request
-          url = "https://everythinghub-homepage-fixed-9hoz2l2yn-rshure001-8053.vercel.app/api/search?q=the"
+          url = "https://everythinghub-homepage-fixed-qeg6honkg-rshure001-8053.vercel.app/api/search?q=NASA"
           req = urllib.request.Request(url, headers={"Accept": "application/json"})
           with urllib.request.urlopen(req, timeout=45) as response:
               assert response.status == 200, response.status
               data = json.load(response)
           assert data.get("indexedPages", 0) >= 1700, data
-          assert data.get("total", 0) > 0, data
+          assert data.get("total", 0) >= 5, data
           assert data.get("results"), data
           for result in data["results"]:
               assert result.get("url", "").startswith(("https://", "http://")), result
