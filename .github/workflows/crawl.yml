@@ -19,7 +19,7 @@ jobs:
           python-version: "3.12"
       - name: Validate crawler configuration and tests
         run: |
-          python -m py_compile crawler/crawl.py crawler/report.py
+          python -m py_compile crawler/crawl.py crawler/report.py crawler/build_search_shards.py
           test "$(grep -c '^https://' crawler/seeds.txt)" -eq 49
           python -m unittest discover -s crawler -p 'test_*.py' -v
       - name: Crawl configured sites
