@@ -55,7 +55,6 @@ def get_hosts():
             "Address": node.attrib.get("Address", ""),
             "MXPref": node.attrib.get("MXPref", "10"),
             "TTL": node.attrib.get("TTL", "1800"),
-            " in": node.attrib.get("IsDDNSEnabled", "false"),
         })
     if not hosts:
         raise RuntimeError("Namecheap returned no host records; refusing to update an empty zone.")
@@ -87,7 +86,6 @@ def main():
     else:
         sys.exit("Safety stop: multiple 'everything' records found. Manual review required.")
 
-    # Confirm root A records remain byte-for-byte represented in the submitted set.
     after_apex = {h["Address"] for h in hosts if h["HostName"] in ("@", "") and h["RecordType"] == "A"}
     if not ROOT_A.issubset(after_apex):
         sys.exit("Safety stop: apex A records would change.")
