@@ -1,0 +1,47 @@
+name: Recover live EverythingHub homepage source
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/recover-live-homepage.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch the current public production homepage without changing it
+        run: |
+          python - <<'PY'
+          import urllib.request
+          url = "https://everything.dogtagday.org/"
+          req = urllib.request.Request(url, headers={"User-Agent": "EverythingHub-source-recovery/1.0"})
+          with urllib.request.urlopen(req, timeout=30) as response:
+              data = response.read()
+              print("HTTP:", response.status)
+              print("Content-Type:", response.headers.get("Content-Type"))
+              print("Bytes:", len(data))
+              if response.status != 200 or len(data) < 500:
+                  raise SystemExit("Homepage response was not a usable HTML document")
+              if b"<html" not in data[:4096].lower() and b"<!doctype html" not in data[:4096].lower():
+                  raise SystemExit("Response does not look like HTML")
+              import os
+              os.makedirs("recovered-production", exist_ok=True)
+              with open("recovered-production/index.html", "wb") as f:
+                  f.write(data)
+          PY
+      - name: Record the recovered source in this repository
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add recovered-production/index.html
+          if git diff --cached --quiet; then
+            echo "Homepage source is unchanged."
+          else
+            git commit -m "Recover public production homepage source for safe preview integration"
+            git push
+          fi
