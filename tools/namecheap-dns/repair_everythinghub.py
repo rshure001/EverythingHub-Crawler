@@ -55,6 +55,8 @@ def get_hosts():
             "Address": node.attrib.get("Address", ""),
             "MXPref": node.attrib.get("MXPref", "10"),
             "TTL": node.attrib.get("TTL", "1800"),
+            **({"Flag": node.attrib["Flag"]} if "Flag" in node.attrib else {}),
+            **({"Tag": node.attrib["Tag"]} if "Tag" in node.attrib else {}),
         })
     if not hosts:
         raise RuntimeError("Namecheap returned no host records; refusing to update an empty zone.")
@@ -108,8 +110,9 @@ def main():
 
     params = {}
     for i, h in enumerate(hosts, 1):
-        for key in ("HostName", "RecordType", "Address", "MXPref", "TTL"):
-            params[f"{key}{i}"] = h[key]
+        for key in ("HostName", "RecordType", "Address", "MXPref", "TTL", "Flag", "Tag"):
+            if key in h:
+                params[f"{key}{i}"] = h[key]
     result = api_call("namecheap.domains.dns.setHosts", **params)
     status = result.find(".//{*}DomainDNSSetHostsResult")
     if status is None or status.attrib.get("IsSuccess", "").lower() != "true":
