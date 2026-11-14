@@ -1,6 +1,10 @@
 name: EverythingHub Publisher
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - "site/**"
+      - ".github/workflows/publish-site.yml"
 permissions:
   contents: read
   pages: write
