@@ -15,7 +15,9 @@ jobs:
         id: publish
         run: |
           set -euo pipefail
-          curl -fsS "https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-static-publisher" -o /tmp/publish.json
+          curl -sS "https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-static-publisher" -o /tmp/publish.json -w "HTTP %{http_code}\\n"
+          cat /tmp/publish.json
+          test "$(head -c 1 /tmp/publish.json)" = "{"
           cat /tmp/publish.json
           node --input-type=module <<'NODE'
           import fs from "node:fs";
