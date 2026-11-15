@@ -22,6 +22,14 @@ jobs:
           for needle in '<!doctype html' 'Everything Hub' 'searchForm' 'data-mode="web"' 'data-mode="news"' 'data-mode="images"' 'data-mode="videos"' 'data-mode="shopping"' 'data-mode="places"' 'data-mode="business"' 'data-mode="research' 'everything-hub-media-search'; do
             if grep -Fq "$needle" /tmp/home.html; then echo "PASS homepage contains: $needle"; else echo "FAIL homepage missing: $needle"; exit 1; fi
           done
+          echo "=== CUSTOM EVERYTHING HUB BROWSER ==="
+          curl -sS -D /tmp/browser-headers.txt "$BASE/everything-hub-browser" -o /tmp/browser.html
+          head -n 1 /tmp/browser-headers.txt
+          grep -i '^content-type:' /tmp/browser-headers.txt | tail -1
+          printf 'browser_bytes='; wc -c < /tmp/browser.html
+          for needle in 'Everything Hub Browser' 'id="address"' 'id="back"' 'id="forward"' 'id="reload"' 'id="home"' 'data-mode="images"'; do
+            if grep -Fq "$needle" /tmp/browser.html; then echo "PASS browser contains: $needle"; else echo "FAIL browser missing: $needle"; exit 1; fi
+          done
           echo "=== SEARCH API: ROLEX ==="
           curl -sS -G "$BASE/everything-hub-web-search" -H "apikey: $KEY" -H "accept: application/json" --data-urlencode "q=Rolex" --data-urlencode "limit=10" -o /tmp/search.json
           node -e '
