@@ -1,66 +1,79 @@
-name: Publish and verify Everything Hub — in-house route
+name: Publish and verify Everything Hub — in-house Supabase route
 on:
   workflow_dispatch:
   push:
     paths:
       - ".github/workflows/everything-hub-publish-and-verify.yml"
-      - "site/**"
+      - "site/index.html"
 permissions:
   contents: read
 jobs:
   publish-and-verify:
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger the in-house Everything Hub Publishing system
+      - name: Publish the approved homepage through the existing in-house publisher
+        id: publish
         run: |
+          set -euo pipefail
+          curl -fsS "https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-static-publisher" -o /tmp/publish.json
+          cat /tmp/publish.json
           node --input-type=module <<'NODE'
-          const endpoint = "https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-site";
-          const response = await fetch(endpoint, { redirect: "follow", headers: { "cache-control": "no-cache" } });
-          const html = await response.text();
-          const type = response.headers.get("content-type") || "";
-          console.log("Final URL:", response.url);
-          console.log("HTTP:", response.status);
-          console.log("Content-Type:", type);
-          console.log("HTML bytes:", Buffer.byteLength(html));
-          const checks = {
-            html: /<!doctype html/i.test(html),
-            title: /<title>Everything Hub/i.test(html),
-            approvedArtwork: /everythinghub-approved\.png/i.test(html),
-            searchForm: /id="searchForm"/i.test(html),
-            webSearch: /everything-hub-web-search/i.test(html),
-            imageVideoSearch: /everything-hub-media-search/i.test(html),
-            eightCategories: ["Web","News","Images","Videos","Shopping","Places","Business","Research"].every(x => html.includes(x))
-          };
-          console.log("Checks:", JSON.stringify(checks));
-          if (!response.ok || !type.includes("text/html") || Object.values(checks).some(v => !v)) process.exit(1);
+          import fs from "node:fs";
+          const d = JSON.parse(fs.readFileSync("/tmp/publish.json","utf8"));
+          if (d.status !== "published" || !d.url) throw new Error("Publisher did not confirm publication");
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, "url=" + d.url + "\\n");
           NODE
-      - name: Install browser test dependencies
+      - name: Verify published response headers and approved homepage content
+        env:
+          SITE_URL: ${{ steps.publish.outputs.url }}
+          KEY: sb_publishable_XlIsACWhtVS1jVODWYGTpg_GMs8v3vJ
+        run: |
+          set -euo pipefail
+          curl -fsS -D /tmp/site-headers.txt "$SITE_URL" -o /tmp/site.html
+          cat /tmp/site-headers.txt
+          grep -Eiq '^content-type: *text/html' /tmp/site-headers.txt
+          for needle in '<!doctype html' 'Everything Hub — Everything within reach' 'everythinghub-approved.png' 'id="searchForm"' 'data-mode="web"' 'data-mode="news"' 'data-mode="images"' 'data-mode="videos"' 'data-mode="shopping"' 'data-mode="places"' 'data-mode="business"' 'data-mode="research"' 'everything-hub-media-search'; do
+            grep -Fqi "$needle" /tmp/site.html || { echo "Missing: $needle"; exit 1; }
+          done
+          echo "PASS: published homepage has text/html MIME type and all eight categories."
+          echo "=== Live Rolex search API ==="
+          curl -fsS -G "https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-web-search" -H "apikey: $KEY" -H "accept: application/json" --data-urlencode "q=Rolex" --data-urlencode "limit=10" -o /tmp/search.json
+          node -e 'const d=require("/tmp/search.json"); if(!d.results?.length)process.exit(1); console.log(JSON.stringify({count:d.count,resultCount:d.results.length,first:d.results[0]?.title},null,2))'
+      - name: Install browser verification
         run: |
           npm init -y
           npm install --no-save playwright
           npx playwright install --with-deps chromium
-      - name: Verify the live homepage renders
+      - name: Verify the published site visually and exercise search
+        env:
+          SITE_URL: ${{ steps.publish.outputs.url }}
         run: |
           node --input-type=module <<'NODE'
           import { chromium } from "playwright";
-          const browser = await chromium.launch({ headless: true });
-          const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
-          const errors = [];
-          page.on("pageerror", e => errors.push(e.message));
-          const response = await page.goto("https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-site", { waitUntil: "networkidle", timeout: 60000 });
-          await page.locator("#q").waitFor({ state: "visible", timeout: 20000 });
-          const title = await page.title();
-          const categories = await page.locator("[data-mode]").count();
-          const artwork = await page.locator(".art img").evaluate(img => ({ complete: img.complete, naturalWidth: img.naturalWidth }));
-          console.log(JSON.stringify({ status: response?.status(), title, categories, artwork, errors }, null, 2));
-          if (!response?.ok() || !title.includes("Everything Hub") || categories !== 8 || artwork.naturalWidth < 100 || errors.length) process.exitCode = 1;
-          await page.screenshot({ path: "everything-hub-live-homepage.png", fullPage: true });
+          const browser = await chromium.launch({headless:true});
+          const page = await browser.newPage({viewport:{width:1440,height:1000}});
+          const errors=[];
+          page.on("pageerror",e=>errors.push(e.message));
+          const response=await page.goto(process.env.SITE_URL,{waitUntil:"networkidle",timeout:60000});
+          await page.locator("#q").waitFor({state:"visible",timeout:20000});
+          const title=await page.title();
+          const categories=await page.locator("[data-mode]").count();
+          const art=await page.locator(".art img").evaluate(i=>({complete:i.complete,width:i.naturalWidth}));
+          if(!response?.ok()||!title.includes("Everything Hub")||categories!==8||art.width<100) throw new Error("Homepage render check failed: "+JSON.stringify({status:response?.status(),title,categories,art}));
+          await page.locator("#q").fill("Rolex");
+          await page.locator("#q").press("Enter");
+          await page.waitForFunction(()=>document.querySelector("#status")?.textContent?.includes("results for"),null,{timeout:30000});
+          const resultCount=await page.locator(".result").count();
+          if(!resultCount) throw new Error("Rolex search returned no rendered results");
+          await page.screenshot({path:"everything-hub-published.png",fullPage:true});
+          console.log(JSON.stringify({http:response.status(),title,categories,artwork:art,renderedSearchResults:resultCount,pageErrors:errors},null,2));
+          if(errors.length) throw new Error("Browser page errors: "+errors.join("; "));
           await browser.close();
           NODE
-      - name: Save live homepage screenshot
+      - name: Save verified homepage screenshot
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: everything-hub-live-homepage
-          path: everything-hub-live-homepage.png
+          name: everything-hub-published-homepage
+          path: everything-hub-published.png
           if-no-files-found: ignore
