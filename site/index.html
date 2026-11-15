@@ -7,8 +7,8 @@
 <title>Everything Hub — Everything within reach</title>
 <style>
 *{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(ellipse at 50% 0,#0b3526,#061710 40%,#020806);color:#effff4;font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif}
-main{width:min(1180px,100%);margin:auto;padding:14px 14px 44px}.topline{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:8px 4px 14px;color:#a7d6b6;font-size:12px}.brand{font-size:19px;font-weight:900;color:#f5fff7}.brand span{color:#b7ff53}.live{display:flex;align-items:center;gap:7px}.dot{width:7px;height:7px;border-radius:50%;background:#6cff76;box-shadow:0 0 10px #6cff76}
-.art{position:relative;width:100%;line-height:0;border:1px solid #37ff8c;border-radius:20px;overflow:hidden;box-shadow:0 0 22px #00ff8740,0 22px 60px #0008;background:#04130d}.art>img{display:block;width:100%;height:auto}
+main{width:100%;max-width:1180px;margin:0 auto;padding:0 0 28px}.topline{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:8px 4px 14px;color:#a7d6b6;font-size:12px}.brand{font-size:19px;font-weight:900;color:#f5fff7}.brand span{color:#b7ff53}.live{display:flex;align-items:center;gap:7px}.dot{width:7px;height:7px;border-radius:50%;background:#6cff76;box-shadow:0 0 10px #6cff76}
+.art{position:relative;width:100%;line-height:0;border:0;border-radius:0;overflow:hidden;box-shadow:none;background:#000}.art>img{display:block;width:100%;height:auto}
 .search{position:absolute;left:29.5%;top:43.1%;width:42%;height:7.3%;display:flex;line-height:normal}.search input{width:76%;min-width:0;border:0;outline:0;background:#fff;color:#17251a;border-radius:30px 0 0 30px;padding:0 14px;font-size:clamp(10px,2.2vw,18px)}.search button{width:24%;border:0;border-radius:0 30px 30px 0;background:linear-gradient(135deg,#a8d987,#d4ef83);color:#14351b;font-weight:850;font-size:clamp(9px,1.8vw,16px);cursor:pointer}
 .hotspot{position:absolute;display:block;background:transparent;border:0;cursor:pointer;border-radius:12px}.hotspot:focus-visible{outline:3px solid #baff55;outline-offset:2px}
 .left1{left:3%;top:22%;width:24%;height:8%}.left2{left:3%;top:31%;width:24%;height:8%}.left3{left:3%;top:40%;width:24%;height:8%}.left4{left:3%;top:49%;width:24%;height:8%}.right1{right:3%;top:22%;width:24%;height:8%}.right2{right:3%;top:31%;width:24%;height:8%}.right3{right:3%;top:40%;width:24%;height:8%}.right4{right:3%;top:49%;width:24%;height:8%}
@@ -17,12 +17,11 @@ main{width:min(1180px,100%);margin:auto;padding:14px 14px 44px}.topline{display:
 .empty{padding:24px;text-align:center;border:1px dashed #387451;border-radius:14px;color:#b9d5c1;background:#06150e}.more{display:block;margin:14px auto 28px;padding:12px 24px;border:1px solid #83d957;border-radius:999px;background:#0b6a3d;color:white;font-weight:800;cursor:pointer}
 .discover{margin:28px 3px 0}.section-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:12px}.section-head h2{margin:0;color:#f0fff3;font-size:21px}.section-head small{color:#8fbd9c;font-size:11px}.discover-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:11px}.discover-card{display:flex;align-items:center;gap:12px;min-height:82px;padding:13px;border:1px solid #236744;border-radius:14px;background:linear-gradient(145deg,#0b2b1d,#06130d);color:#effff4;cursor:pointer;text-align:left}.discover-card:hover{border-color:#a6ef63}.discover-icon{display:grid;place-items:center;flex:0 0 36px;height:36px;border-radius:11px;background:#10462b;color:#c2ff77;font-size:18px}.discover-card strong{display:block;font-size:13px}.discover-card small{display:block;margin-top:4px;color:#91bba0;font-size:10px}
 footer{margin:28px 3px 0;padding:17px 0 0;border-top:1px solid #1f5238;color:#7eaa8e;text-align:center;font-size:11px}
-@media(max-width:760px){main{padding:8px 8px 30px}.topline{padding:7px 5px 11px}.art{border-radius:12px}.search input{padding:0 8px}.discover-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.discover-card{min-height:68px;padding:9px;gap:8px}.discover-icon{flex-basis:32px;height:32px}.discover-card strong{font-size:12px}.discover-card small{font-size:9px}.result{grid-template-columns:minmax(0,104px) minmax(0,1fr);gap:10px;padding:10px}.result.no-thumb{grid-template-columns:minmax(0,1fr)}.thumb{height:78px}.copy a{font-size:14px}.copy p{font-size:11px}}
+@media(max-width:760px){main{padding:0 0 24px}.art{border-radius:0}.search input{padding:0 8px}.discover-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.discover-card{min-height:68px;padding:9px;gap:8px}.discover-icon{flex-basis:32px;height:32px}.discover-card strong{font-size:12px}.discover-card small{font-size:9px}.result{grid-template-columns:minmax(0,104px) minmax(0,1fr);gap:10px;padding:10px}.result.no-thumb{grid-template-columns:minmax(0,1fr)}.thumb{height:78px}.copy a{font-size:14px}.copy p{font-size:11px}}
 @media(max-width:420px){.brand{font-size:17px}.live{font-size:10px}.status{font-size:11px}.section-head h2{font-size:18px}.discover-card small{display:none}}
 </style>
 </head>
 <body><main>
-<div class="topline"><div class="brand">Everything<span>Hub</span></div><div class="live"><span class="dot"></span> Independent search · Everything within reach</div></div>
 <section class="art" aria-label="Everything Hub approved octopus homepage artwork and search">
 <img src="https://raw.githubusercontent.com/rshure001/EverythingHub-Crawler/main/assets/everythinghub-approved.png" alt="Approved Everything Hub artwork: emerald octopus, glowing brain, gold accents and eight search categories">
 <form class="search" id="searchForm"><input id="q" type="search" aria-label="Search Everything Hub" placeholder="Search Everything…" autocomplete="off" required><button type="submit">Search</button></form>
@@ -31,13 +30,7 @@ footer{margin:28px 3px 0;padding:17px 0 0;border-top:1px solid #1f5238;color:#7e
 </section>
 <div id="status" class="status" aria-live="polite"><span>Search the web or choose one of the eight categories.</span><strong id="modeLabel">WEB SEARCH</strong></div>
 <section id="results" class="results" aria-label="Search results"></section><button id="more" class="more" type="button" hidden>More results</button>
-<section class="discover"><div class="section-head"><h2>Discover on Everything Hub</h2><small>Eight ways to explore</small></div><div class="discover-grid">
-<button class="discover-card" data-mode="news"><span class="discover-icon">▤</span><span><strong>News</strong><small>World and local updates</small></span></button>
-<button class="discover-card" data-mode="images"><span class="discover-icon">▧</span><span><strong>Images</strong><small>Photos and visuals</small></span></button>
-<button class="discover-card" data-mode="videos"><span class="discover-icon">▶</span><span><strong>Videos</strong><small>Watch and discover</small></span></button>
-<button class="discover-card" data-mode="research"><span class="discover-icon">⌕</span><span><strong>Research</strong><small>Knowledge and learning</small></span></button>
-</div></section>
-<footer>Everything Hub · Everything within reach · Independent search and discovery</footer>
+
 </main>
 <script>
 const BASE="https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1",KEY="sb_publishable_XlIsACWhtVS1jVODWYGTpg_GMs8v3vJ";
