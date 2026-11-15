@@ -1,0 +1,65 @@
+name: Publish and verify Everything Hub
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/everything-hub-publish-and-verify.yml"
+permissions:
+  contents: read
+jobs:
+  publish-and-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger the in-house Everything Hub Publishing system
+        run: |
+          node --input-type=module <<'NODE'
+          const endpoint = "https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-site";
+          const response = await fetch(endpoint, { redirect: "follow", headers: { "cache-control": "no-cache" } });
+          const html = await response.text();
+          const type = response.headers.get("content-type") || "";
+          console.log("Final URL:", response.url);
+          console.log("HTTP:", response.status);
+          console.log("Content-Type:", type);
+          console.log("HTML bytes:", Buffer.byteLength(html));
+          const checks = {
+            html: /<!doctype html/i.test(html),
+            title: /<title>Everything Hub/i.test(html),
+            approvedArtwork: /everythinghub-approved\.png/i.test(html),
+            searchForm: /id="searchForm"/i.test(html),
+            webSearch: /everything-hub-web-search/i.test(html),
+            imageVideoSearch: /everything-hub-media-search/i.test(html),
+            eightCategories: ["Web","News","Images","Videos","Shopping","Places","Business","Research"].every(x => html.includes(x))
+          };
+          console.log("Checks:", JSON.stringify(checks));
+          if (!response.ok || !type.includes("text/html") || Object.values(checks).some(v => !v)) process.exit(1);
+          NODE
+      - name: Install browser test dependencies
+        run: |
+          npm init -y
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+      - name: Verify the live homepage renders
+        run: |
+          node --input-type=module <<'NODE'
+          import { chromium } from "playwright";
+          const browser = await chromium.launch({ headless: true });
+          const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+          const errors = [];
+          page.on("pageerror", e => errors.push(e.message));
+          const response = await page.goto("https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-site", { waitUntil: "networkidle", timeout: 60000 });
+          await page.locator("#q").waitFor({ state: "visible", timeout: 20000 });
+          const title = await page.title();
+          const categories = await page.locator("[data-mode]").count();
+          const artwork = await page.locator(".art img").evaluate(img => ({ complete: img.complete, naturalWidth: img.naturalWidth }));
+          console.log(JSON.stringify({ status: response?.status(), title, categories, artwork, errors }, null, 2));
+          if (!response?.ok() || !title.includes("Everything Hub") || categories !== 8 || artwork.naturalWidth < 100 || errors.length) process.exitCode = 1;
+          await page.screenshot({ path: "everything-hub-live-homepage.png", fullPage: true });
+          await browser.close();
+          NODE
+      - name: Save live homepage screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: everything-hub-live-homepage
+          path: everything-hub-live-homepage.png
+          if-no-files-found: ignore
