@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - ".github/workflows/everything-hub-publish-and-verify.yml"
+      - "site/**"
 permissions:
   contents: read
 jobs:
