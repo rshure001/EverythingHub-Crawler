@@ -4,12 +4,12 @@
 Build toward a **23,000,000-page searchable index**. This is a total-index target, not a promise of 23 million fetches per hour. Throughput targets must be set from measured benchmarks and available compute.
 
 ## Current verified baseline
-- The first GitHub Actions crawl completed successfully.
-- It attempted 80 fetches and persisted 27 page records.
-- The current crawler has 8 workers, an 80-fetch run cap, a 500-URL in-memory queue, and maximum link depth 3.
-- The first index contained 27 records, all at depth 0. Deeper discovery is not yet proven.
-- The crawler writes its own repository JSON index. Production Everything Hub search ingestion is not connected.
-- GitHub Actions is a prototype runner, not a suitable long-term distributed crawl fleet.
+- Latest verified GitHub Actions crawl: run 74, completed successfully on 2026-11-15 at 23:41 UTC.
+- That run attempted 80 fetches and indexed 52 pages; the repository index contained 2,353 page records across 30 hosts.
+- The frontier held 28,803 discovered URLs, with 25,477 waiting at the end of that run.
+- Verified depth distribution: depth 0 = 25, depth 1 = 800, depth 2 = 768, depth 3 = 760.
+- The crawler writes its own repository JSON index and 13 public-search shards. Production Everything Hub database ingestion is still separate and is currently blocked by database recovery.
+- GitHub Actions remains a polite prototype runner, not a distributed crawl fleet or a measured 100-pages/minute service.
 
 ## Target architecture
 
@@ -21,7 +21,7 @@ Build toward a **23,000,000-page searchable index**. This is a total-index targe
 
 2. **Polite fetch workers**
    - Run multiple independently scalable worker processes.
-   - Enforce robots.txt, per-host concurrency and delay, timeouts, response-size limits, content-type checks, and retry/backoff.
+   - Enforce robots.txt, one request per host per batch, persisted host pacing, crawl-delay/request-rate directives, timeouts, response-size limits, content-type checks, and retry/backoff.
    - Identify the crawler clearly and provide a contact/policy URL.
    - Do not bypass logins, paywalls, CAPTCHAs, access controls, or site restrictions.
 
@@ -50,7 +50,7 @@ Build toward a **23,000,000-page searchable index**. This is a total-index targe
 ## Phased implementation
 
 ### Phase 1 — Make the prototype trustworthy
-- Fix and test depth-1 link discovery; verify real depth distribution in output.
+- Depth 1–3 discovery is now verified in the repository index; continue checking depth distribution and host coverage.
 - Persist frontier state between runs rather than rebuilding it each time.
 - Improve extraction and URL canonicalization.
 - Record run metrics and prove a sustained baseline over multiple runs.
