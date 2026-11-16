@@ -35,6 +35,12 @@ class SchemaIsolationTests(unittest.TestCase):
         self.assertNotIn("auth.", sql)
         self.assertNotIn("storage.", sql)
 
+    def test_search_api_defaults_to_and_enforces_eh_quad(self):
+        source = (HERE / "search_api.py").read_text(encoding="utf-8")
+        self.assertIn('os.environ.get("EH_DB_SCHEMA", "eh_quad")', source)
+        self.assertIn('if SCHEMA != "eh_quad":', source)
+        self.assertNotIn('os.environ.get("EH_DB_SCHEMA", "public")', source)
+
 
 if __name__ == "__main__":
     unittest.main()
