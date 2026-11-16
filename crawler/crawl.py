@@ -15,6 +15,8 @@ from datetime import datetime, timezone
 from html.parser import HTMLParser
 from pathlib import Path
 
+from lane_classifier import VALID_LANES, classify_lane
+
 ROOT = Path(__file__).resolve().parents[1]
 SEEDS = ROOT / "crawler" / "seeds.txt"
 OUTPUT = ROOT / "data" / "index.json"
@@ -465,7 +467,7 @@ def main():
                         if candidate and urllib.parse.urlsplit(candidate).netloc == host:
                             links.append(candidate)
                 return ({
-                    "url": final, "title": title,
+                    "url": final, "title": title, "lane": classify_lane(final),
                     "description": parser.description[:500],
                     "text": text, "depth": depth, "fetched_at": int(time.time())
                 }, links, delay, False)
@@ -519,6 +521,11 @@ def main():
     run_duration = round(time.monotonic() - run_started, 2)
     old = load_json(OUTPUT, {"version": 1, "pages": []})
     merged = {p["url"]: p for p in old.get("pages", []) if p.get("url")}
+    # Backfill deterministic lanes for the existing catalog as well as new pages.
+    for page in merged.values():
+        lane = page.get("lane")
+        if not isinstance(lane, str) or lane not in VALID_LANES:
+            page["lane"] = classify_lane(page.get("url", ""))
     merged.update(records)
     save_json(OUTPUT, {
         "version": 1, "updated_at": int(time.time()),

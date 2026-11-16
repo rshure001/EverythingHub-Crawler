@@ -25,6 +25,22 @@ class SchemaIsolationTests(unittest.TestCase):
         self.assertNotIn('"public".', sql)
         self.assertNotIn("public.eh_documents", sql)
 
+    def test_upsert_refreshes_lane_without_requiring_content_change(self):
+        sql = IMPORTER.build_upsert_statement()
+        self.assertIn("lane = excluded.lane", sql)
+        self.assertIn("target.lane is distinct from excluded.lane", sql)
+
+    def test_importer_classifies_unlabeled_pages(self):
+        self.assertEqual(IMPORTER.page_lane({}, "https://www.nasa.gov/"), "science")
+        self.assertEqual(IMPORTER.page_lane({}, "https://www.reuters.com/"), "news")
+        self.assertEqual(IMPORTER.page_lane({}, "https://www.investopedia.com/"), "business")
+
+    def test_importer_preserves_a_valid_existing_lane(self):
+        self.assertEqual(
+            IMPORTER.page_lane({"lane": "news"}, "https://www.nasa.gov/"),
+            "news",
+        )
+
     def test_migration_is_confined_to_eh_quad(self):
         sql = (HERE / "002_eh_quad_schema.sql").read_text(encoding="utf-8").lower()
         self.assertIn("create schema if not exists eh_quad", sql)

@@ -7,6 +7,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlsplit
 
+from lane_classifier import VALID_LANES, classify_lane
+
 ROOT = Path(__file__).resolve().parents[1]
 INDEX = ROOT / "data" / "index.json"
 FRONTIER = ROOT / "data" / "frontier.json"
@@ -21,6 +23,11 @@ def main():
     pages = [p for p in index.get("pages", []) if isinstance(p, dict) and p.get("url")]
     hosts = Counter(urlsplit(p["url"]).netloc.lower() for p in pages)
     depths = Counter(str(p.get("depth", "unknown")) for p in pages)
+    lanes = Counter(
+        p.get("lane") if isinstance(p.get("lane"), str) and p.get("lane") in VALID_LANES
+        else classify_lane(p.get("url", ""))
+        for p in pages
+    )
     updated = index.get("updated_at")
     updated_text = datetime.fromtimestamp(updated, timezone.utc).isoformat() if updated else "unknown"
     duration = float(index.get("run_duration_seconds", 0) or 0)
@@ -60,6 +67,8 @@ def main():
         "",
     ]
     lines.extend(f"- Depth {depth}: {count:,}" for depth, count in sorted(depths.items()))
+    lines += ["", "### Indexed records by search lane", ""]
+    lines.extend(f"- {lane}: {count:,}" for lane, count in sorted(lanes.items()))
     lines += ["", "### Requests by host this run", ""]
     lines.extend(f"- {host}: {count:,}" for host, count in sorted(host_requests.items(), key=lambda item: (-item[1], item[0]))[:10])
     lines += ["", "### Largest indexed hosts", ""]
