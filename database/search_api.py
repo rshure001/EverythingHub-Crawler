@@ -7,18 +7,17 @@ requires Authorization: Bearer <EH_SEARCH_API_TOKEN>.
 """
 import json
 import os
-import re
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 
-SCHEMA = os.environ.get("EH_DB_SCHEMA", "public")
+SCHEMA = os.environ.get("EH_DB_SCHEMA", "eh_quad")
 TOKEN = os.environ.get("EH_SEARCH_API_TOKEN", "")
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 HOST = os.environ.get("EH_SEARCH_HOST", "127.0.0.1")
 PORT = int(os.environ.get("EH_SEARCH_PORT", "8080"))
 
-if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", SCHEMA):
-    raise SystemExit("EH_DB_SCHEMA must be a simple PostgreSQL schema name.")
+if SCHEMA != "eh_quad":
+    raise SystemExit("This search API is locked to eh_quad; no other schema is permitted.")
 if not DATABASE_URL:
     raise SystemExit("DATABASE_URL is required.")
 if not TOKEN:
