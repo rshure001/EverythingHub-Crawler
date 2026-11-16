@@ -1,0 +1,66 @@
+name: Everything Hub crawler schedule watchdog
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/crawl-watchdog.yml"
+      - "crawler/schedule_watchdog.py"
+      - "crawler/test_schedule_watchdog.py"
+  schedule:
+    # Check after the crawler's normal hourly trigger and recover a missed run.
+    - cron: "37 * * * *"
+  workflow_dispatch:
+permissions:
+  actions: write
+  contents: read
+concurrency:
+  group: eh-crawler-schedule-watchdog
+  cancel-in-progress: false
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Test watchdog decision logic
+        run: python -m unittest crawler.test_schedule_watchdog -v
+      - name: Check recent crawler runs and recover missed schedules
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/crawl.yml/runs?per_page=20" > /tmp/crawl-runs.json
+          python crawler/schedule_watchdog.py /tmp/crawl-runs.json > /tmp/decision.json
+          cat /tmp/decision.json
+
+          action="$(python -c 'import json; print(json.load(open("/tmp/decision.json"))["action"])')"
+          reason="$(python -c 'import json; print(json.load(open("/tmp/decision.json"))["reason"])')"
+          age="$(python -c 'import json; print(json.load(open("/tmp/decision.json")).get("age_seconds"))')"
+
+          {
+            echo "### Everything Hub crawler schedule watchdog"
+            echo "- Decision: $action"
+            echo "- Reason: $reason"
+            echo "- Last-success age (seconds): $age"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          case "$action" in
+            dispatch)
+              gh workflow run crawl.yml --ref main
+              echo "Dispatched one recovery crawl through workflow_dispatch."
+              ;;
+            wait)
+              echo "An existing crawler run is queued or active; no duplicate dispatch."
+              ;;
+            healthy)
+              echo "The most recent successful crawler run is within the 75-minute window."
+              ;;
+            *)
+              echo "Unexpected watchdog decision: $action" >&2
+              exit 1
+              ;;
+          esac
