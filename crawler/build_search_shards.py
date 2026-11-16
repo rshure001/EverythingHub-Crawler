@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Build small, public, read-only search data shards from the crawler index."""
+import hashlib
 import json
 from pathlib import Path
 
@@ -27,6 +28,7 @@ def main():
     shards = []
     batch = []
     number = 0
+
     def write_batch(items):
         nonlocal number
         if not items:
@@ -35,9 +37,15 @@ def main():
         name = f"shard-{number:04d}.json"
         payload = json.dumps({"version": 1, "pages": items}, ensure_ascii=False,
                              separators=(",", ":")) + "\n"
-        (OUT / name).write_text(payload, encoding="utf-8")
-        shards.append({"file": name, "pages": len(items),
-                       "bytes": len(payload.encode("utf-8"))})
+        raw = payload.encode("utf-8")
+        (OUT / name).write_bytes(raw)
+        shards.append({
+            "file": name,
+            "pages": len(items),
+            "bytes": len(raw),
+            "sha256": hashlib.sha256(raw).hexdigest(),
+        })
+
     for page in pages:
         trial = batch + [page]
         encoded = json.dumps({"version": 1, "pages": trial}, ensure_ascii=False,
@@ -50,6 +58,7 @@ def main():
     write_batch(batch)
     manifest = {
         "version": 1,
+        "integrity": "sha256",
         "updated_at": source.get("updated_at"),
         "total_pages": len(pages),
         "shard_count": len(shards),
@@ -61,7 +70,7 @@ def main():
         json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(f"Built {len(shards)} shards for {len(pages)} pages.")
     for shard in shards:
-        print(f'{shard["file"]}: {shard["pages"]} pages, {shard["bytes"]} bytes')
+        print(f'{shard["file"]}: {shard["pages"]} pages, {shard["bytes"]} bytes, sha256 {shard["sha256"]}')
 
 if __name__ == "__main__":
     main()
