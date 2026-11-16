@@ -51,7 +51,20 @@ jobs:
               const manifestResponse = await page.request.get(new URL("search-index/manifest.json", report.url).href);
               if (!manifestResponse.ok()) throw new Error("Manifest HTTP " + manifestResponse.status());
               const manifest = await manifestResponse.json();
-              report.catalog = { totalPages: manifest.total_pages, shardCount: manifest.shard_count, shards: [] };
+              const repositoryManifest = JSON.parse(fs.readFileSync("public-search/manifest.json", "utf8"));
+              report.catalog = {
+                totalPages: manifest.total_pages,
+                shardCount: manifest.shard_count,
+                repositoryTotalPages: repositoryManifest.total_pages,
+                repositoryShardCount: repositoryManifest.shard_count,
+                matchesMainBranch: Number(manifest.total_pages) === Number(repositoryManifest.total_pages) &&
+                  Number(manifest.shard_count) === Number(repositoryManifest.shard_count),
+                shards: []
+              };
+              if (!report.catalog.matchesMainBranch) {
+                console.warn("Production catalog is behind the current GitHub crawler index: " +
+                  manifest.total_pages + " production pages vs " + repositoryManifest.total_pages + " repository pages.");
+              }
               if (!Array.isArray(manifest.shards) || manifest.shards.length !== manifest.shard_count) {
                 throw new Error("Invalid manifest shard metadata");
               }
