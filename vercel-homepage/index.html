@@ -1,0 +1,692 @@
+<!doctype html>
+<!-- Publisher v4 retry trigger; approved homepage artwork and layout unchanged. -->
+<!-- Everything Hub publishing bridge enabled; homepage markup unchanged. -->
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Everything Hub — Everything within reach</title>
+<meta name="description" content="Search the web, explore people, places, resources, knowledge, news, videos, images and solutions.">
+<style>
+:root{color-scheme:light;--ink:#1c302c;--gold:#d5a052;--paper:#f5f0e5;--teal:#173a35}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(ellipse at 50% 0,#fffaf0,var(--paper) 70%);font:16px system-ui,sans-serif;color:var(--ink)}
+header{height:68px;display:flex;align-items:center;justify-content:space-between;padding:0 max(20px,calc((100vw - 1120px)/2));border-bottom:1px solid #e4dac8;background:#fcf9f2}
+.brand{font-weight:850;font-size:21px;letter-spacing:-.7px}.brand span{color:#a66d2d}.status{font-size:12px;color:#60766b}
+main{width:min(1080px,calc(100% - 32px));margin:46px auto 70px}
+.hero{text-align:center;padding:34px 22px 30px;border:1px solid #24423b;border-radius:25px;background:radial-gradient(ellipse at 50% 100%,#28564d,#183a35 65%,#132a28);color:#fff8eb;box-shadow:0 22px 50px #203b3022}
+.kicker{color:#f0c77e;font-size:11px;font-weight:800;letter-spacing:2px;text-transform:uppercase}
+h1{font-size:clamp(42px,7vw,70px);letter-spacing:-3px;margin:13px 0 7px}h1 span{color:#f2bf68;font-family:Georgia,serif;font-style:italic}
+.sub{margin:0;color:#dbe6dc;font-size:15px}
+.mascot{position:relative;z-index:1;width:min(460px,90%);height:210px;margin:18px auto 0;display:grid;place-items:center}.octopus{display:block;width:100%;height:100%;overflow:visible;filter:drop-shadow(0 13px 18px #071b1870)}.arm[data-mode]{cursor:pointer;pointer-events:stroke}.arm[data-mode]:focus{stroke-width:23;outline:none}.arm{animation:armwave 3.8s ease-in-out infinite;transform-box:fill-box;transform-origin:50% 20%}.a2,.a6{animation-delay:.3s}.a3,.a7{animation-delay:.6s}.a4,.a8{animation-delay:.9s}.pupil{animation:lookdown 5.5s ease-in-out infinite;transform-box:fill-box}.eyes{transform-box:fill-box;transform-origin:50% 50%;animation:blink 5.5s ease-in-out infinite}
+@keyframes armwave{0%,100%{transform:rotate(0)}50%{transform:rotate(5deg)}}@keyframes lookdown{0%,38%,100%{transform:translate(0,0)}48%,70%{transform:translate(3px,5px)}}@keyframes blink{0%,44%,49%,100%{transform:scaleY(1)}46.5%,47.5%{transform:scaleY(.07)}}
+.search{position:relative;z-index:2;display:flex;align-items:center;gap:8px;width:min(760px,100%);height:62px;margin:10px auto 8px;padding:7px 8px 7px 20px;border:1px solid #e5d4b4;border-radius:15px;background:#fffdf8;box-shadow:0 10px 28px #071b1833}
+.search input{min-width:0;flex:1;border:0;outline:0;background:transparent;font-size:16px;color:#243b34}
+button{border:0;cursor:pointer}.search button{height:46px;padding:0 25px;border-radius:10px;background:linear-gradient(135deg,#b87938,#d7a251);color:#fff;font-weight:800}
+.tagline{color:#f4d49c;font-size:13px;font-weight:800;letter-spacing:1.5px;margin:16px 0 0}
+.divisions{margin:34px 0 0}.heading{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}.heading h2{font-size:20px;margin:0}.heading small{color:#7b8278}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.tile{display:flex;gap:12px;align-items:center;text-decoration:none;color:inherit;padding:17px 14px;border:1px solid #e1d7c7;border-radius:13px;background:#fffdf8;box-shadow:0 6px 16px #3028190a;transition:.18s}.tile:hover{transform:translateY(-2px);border-color:#c89b5e}.ico{width:38px;height:38px;display:grid;place-items:center;border-radius:11px;background:#edf3e9;color:#285c50;font-size:18px}.tile strong{display:block;font-size:13px}.tile small{display:block;color:#828679;font-size:10px;margin-top:3px}
+#results{margin:28px auto;max-width:850px} .result{padding:16px 2px;border-bottom:1px solid #e2d9ca}.result a{color:#235d79;font-size:18px;text-decoration:none}.result a:hover{text-decoration:underline}.result p{margin:7px 0;color:#66746a;font-size:13px;line-height:1.55}.source{font-size:10px;color:#7a877b}
+footer{text-align:center;color:#898675;font-size:11px;padding:20px;border-top:1px solid #e4dac8}
+@media(max-width:680px){main{margin:24px auto 48px}.hero{padding:27px 14px 23px;border-radius:19px}h1{font-size:46px}.mascot{height:165px}.octopus{transform:scale(.92)}.search{height:56px;padding-left:13px}.search input{font-size:13px}.search button{height:42px;padding:0 16px}.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.tile{padding:12px 9px;gap:8px}.ico{width:32px;height:32px;font-size:15px}.tile strong{font-size:11px}.tile small{font-size:9px}.heading small{display:none}}
+
+:root{color-scheme:dark;--ink:#effff6;--gold:#b6ff43;--paper:#020a12;--teal:#041c22}
+body{background:radial-gradient(ellipse at 50% 8%,#092a36 0,#020811 58%,#010408 100%);color:#f3fff8}
+header{height:72px;background:#02080eea;border-bottom:1px solid #1aff9a55;color:#fff;box-shadow:0 0 22px #00ff9940}
+.brand{font-size:clamp(20px,3vw,29px);color:#f6fff9;text-shadow:0 0 16px #25ff9a}.brand span{color:#39ff28}
+.status{color:#9cefc1}
+main{width:min(1440px,calc(100% - 24px));margin:20px auto 54px}
+.hero{position:relative;overflow:hidden;text-align:center;padding:18px clamp(12px,2vw,28px) 22px;border:1px solid #24ff9b;border-radius:24px;background:radial-gradient(ellipse at 50% 48%,#073f3c 0,#031c27 43%,#010710 78%);color:#fff;box-shadow:0 0 16px #00ff9a88,inset 0 0 40px #00aaff22}
+.hero:before{content:"";position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at 50% 38%,transparent 20%,#00101caa 85%),repeating-linear-gradient(0deg,transparent 0 34px,#1bff9a08 35px 36px)}
+.hero>*{position:relative;z-index:1}
+.kicker{color:#a9ff53}.hero h1{font-size:clamp(35px,6vw,64px);color:#f7fff9;text-shadow:0 0 16px #23ff9c;letter-spacing:-2px}.hero h1 span{color:#43ff25}
+.sub{color:#d4fff0}
+.mascot{height:clamp(150px,21vw,245px);margin:4px auto 0;width:min(570px,94%)}
+.octopus{filter:drop-shadow(0 0 16px #00ff9a) drop-shadow(0 0 28px #00aaff)}
+.search{border:2px solid #40ff5d;border-radius:999px;box-shadow:0 0 18px #19ff66a6;background:#f9fffb;height:60px}
+.search input{color:#071b16}.search button{border-radius:999px;background:linear-gradient(135deg,#008c51,#43ef29);color:#00150b}
+.tagline{color:#b7ff69}
+.divisions{margin:24px 0 0}.heading h2{color:#eafff5}.heading small{color:#8dcdb2}
+.tile{background:linear-gradient(145deg,#09232c,#030c14);border:1px solid #1effa0aa;color:#f4fff8;box-shadow:0 0 12px #00ff9925;min-height:76px}.tile:hover{border-color:#8dff38;box-shadow:0 0 18px #00ff9970}.ico{background:#063d35;color:#5dffb2}
+footer{color:#8bb8a5;border-top:1px solid #1aff9a55}
+.ticker{display:grid;grid-template-columns:1.15fr repeat(3,1fr) 1.35fr;gap:0;align-items:center;margin:0 auto 12px;padding:9px 8px;border:1px solid #39ff65;border-radius:999px;background:linear-gradient(90deg,#00130f,#041b29,#00130f);box-shadow:0 0 14px #1eff5c8c;text-align:left}
+.ticker-cell{min-width:0;padding:3px 13px;border-right:1px solid #2aff9b55}.ticker-cell:last-child{border:0}.ticker-label{font-size:10px;letter-spacing:1.3px;color:#9bffb8;font-weight:800;text-transform:uppercase}.ticker-value{font-size:clamp(12px,1.5vw,17px);font-weight:800;white-space:nowrap}.ticker-detail{font-size:10px;color:#a5d8c2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.up{color:#67ff58}.down{color:#ff8585}
+.news-strip{overflow:hidden}
+.news-headlines{font-size:11px;line-height:1.4;color:#e8fff3;white-space:normal}
+.gallery{margin:28px 0 0}.gallery-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+.media-card{position:relative;overflow:hidden;min-height:190px;border:1px solid #39ff79;border-radius:16px;background:#04131d;box-shadow:0 0 13px #00ff9940}
+.media-card img{display:block;width:100%;height:155px;object-fit:cover;filter:saturate(1.08);transition:transform .35s}
+.media-card:hover img{transform:scale(1.045)}
+.media-card .caption{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;color:#f3fff7;font-weight:750;font-size:13px}
+.media-card .caption small{color:#9ee7c2;font-weight:500}
+.play{position:absolute;top:55px;left:50%;transform:translate(-50%,-50%);width:46px;height:46px;display:grid;place-items:center;border-radius:50%;background:#00150dcc;border:1px solid #6aff8d;color:#fff;font-size:20px;box-shadow:0 0 15px #00ff9a}
+@media(max-width:760px){.ticker{grid-template-columns:repeat(2,minmax(0,1fr));border-radius:18px}.ticker-cell:nth-child(2){border-right:0}.ticker-cell:nth-child(3){border-top:1px solid #2aff9b55}.ticker-cell:nth-child(4){border-top:1px solid #2aff9b55;border-right:0}.ticker-cell:nth-child(5){grid-column:1/-1;border-top:1px solid #2aff9b55}.gallery-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.media-card{min-height:150px}.media-card img{height:112px}.play{top:48px}.hero{border-radius:18px}.mascot{height:160px}}
+@media(max-width:390px){.ticker-value{font-size:12px}.ticker-cell{padding:3px 8px}.media-card .caption{font-size:11px;padding:8px}}
+
+.baby-mascot{width:190px;height:116px;margin:2px auto 0;position:relative;filter:drop-shadow(0 0 12px #20ff8b88);animation:babyFloat 3.6s ease-in-out infinite}
+.baby-mascot svg{width:100%;height:100%;overflow:visible}
+.baby-arms{transform-box:fill-box;transform-origin:50% 15%;animation:babyWave 2.8s ease-in-out infinite}
+.baby-eyes{transform-box:fill-box;transform-origin:50% 50%;animation:babyBlink 5.2s infinite}
+.baby-pupil{transform-box:fill-box;animation:babyLook 5.2s ease-in-out infinite}
+.baby-lashes{fill:none;stroke:#eaffd9;stroke-width:3.2;stroke-linecap:round}
+@keyframes babyFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+@keyframes babyWave{0%,100%{transform:rotate(-2deg)}50%{transform:rotate(4deg)}}
+@keyframes babyBlink{0%,40%,46%,76%,82%,100%{transform:scaleY(1)}43%,45%,79%,81%{transform:scaleY(.08)}}
+@keyframes babyLook{0%,18%,100%{transform:translate(0,0)}25%,43%{transform:translate(4px,-1px)}53%,72%{transform:translate(2px,7px)}}
+@media(max-width:680px){.baby-mascot{width:164px;height:100px;margin-top:0}}
+.result{display:flex;gap:15px;align-items:flex-start}.preview{display:block;flex:0 0 148px;width:148px;height:96px;border-radius:10px;overflow:hidden;background:#10202a}.preview img{width:100%;height:100%;object-fit:cover;display:block}.result-copy{min-width:0;flex:1}.media-tag{display:inline-block;margin-left:8px;padding:3px 7px;border-radius:5px;background:#b6ff43;color:#07120e;font-size:9px;font-weight:800;vertical-align:middle}@media(max-width:560px){.preview{flex-basis:104px;width:104px;height:78px}.result{gap:10px}.result a{font-size:15px}}
+/* Mobile search-result repair: constrain thumbnails and prevent horizontal overflow. */
+#results{width:100%;max-width:850px;min-width:0;overflow:hidden}
+.result{display:grid;grid-template-columns:minmax(0,148px) minmax(0,1fr);gap:12px;min-width:0;align-items:start}
+.result-copy{min-width:0;overflow-wrap:anywhere}
+.result a{overflow-wrap:anywhere}
+.preview{display:block;width:100%;max-width:148px;min-width:0;height:96px;overflow:hidden}
+.preview img{display:block;width:100%;height:100%;max-width:100%;object-fit:cover}
+@media(max-width:560px){
+ #results{width:100%;padding:0 3px}
+ .result{grid-template-columns:minmax(0,104px) minmax(0,1fr);gap:10px}
+ .preview{width:100%;max-width:104px;height:78px}
+ .result-copy{font-size:13px}
+ .result a{font-size:15px;line-height:1.3;overflow-wrap:anywhere}
+ .result p{font-size:12px;overflow-wrap:anywhere}
+}
+@media(max-width:360px){
+ .result{grid-template-columns:minmax(0,88px) minmax(0,1fr);gap:8px}
+ .preview{max-width:88px;height:70px}
+}
+
+/* Compact global header: weather, brand, and markets share one quiet row. */
+.topbar{height:auto;min-height:82px;display:grid;grid-template-columns:minmax(220px,1fr) auto minmax(390px,1.35fr);gap:18px;align-items:center;padding:10px max(18px,calc((100vw - 1440px)/2));background:linear-gradient(90deg,#020b11f5,#03131bf5,#020b11f5);border-bottom:1px solid #25ff9a66;box-shadow:0 0 18px #00ff9928}
+.weather-chip{display:flex;align-items:center;gap:10px;min-width:0;padding:8px 12px;border:1px solid #27ff8b80;border-radius:13px;background:#031a20;box-shadow:inset 0 0 12px #00ff9915}
+.weather-icon{font-size:25px;color:#ffe45c;text-shadow:0 0 12px #ffe45c}
+.weather-copy{display:grid;gap:2px;min-width:0}.weather-copy strong,.market-heading{font-size:9px;letter-spacing:1.2px;color:#aaff75;font-weight:850}.weather-copy>span{font-size:16px;font-weight:850;color:#fff;white-space:nowrap}.weather-copy small{font-size:10px;color:#a8d8c3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.top-brand{text-align:center;white-space:nowrap}.top-brand .brand{font-size:clamp(21px,2.3vw,31px);line-height:1.05}.top-brand .status{font-size:10px;letter-spacing:1.2px;color:#c2f7d7;margin-top:4px;text-transform:uppercase}
+.market-chip{display:flex;align-items:center;justify-content:flex-end;gap:15px;min-width:0;padding:8px 12px;border:1px solid #27ff8b80;border-radius:13px;background:#031a20;box-shadow:inset 0 0 12px #00ff9915}
+.market-heading{white-space:nowrap}.market-index{display:grid;gap:1px;min-width:0}.market-index b{font-size:9px;color:#b8d9c9;letter-spacing:.4px}.market-index strong{font-size:13px;color:#fff;white-space:nowrap}.market-index small{font-size:9px;color:#72ff79;white-space:nowrap}
+@media(max-width:900px){.topbar{grid-template-columns:1fr auto;gap:8px 12px}.top-brand{grid-column:1/-1;grid-row:1}.weather-chip{grid-column:1;grid-row:2}.market-chip{grid-column:2;grid-row:2;gap:9px}.market-heading{display:none}}
+@media(max-width:560px){.topbar{padding:9px 10px;grid-template-columns:1fr;gap:7px}.top-brand{grid-column:1;grid-row:1}.weather-chip{grid-column:1;grid-row:2;justify-content:center}.market-chip{grid-column:1;grid-row:3;justify-content:space-around;padding:7px 8px}.weather-copy{display:flex;align-items:baseline;gap:7px;flex-wrap:wrap}.weather-copy strong{font-size:8px}.weather-copy>span{font-size:14px}.weather-copy small{font-size:9px}.market-index strong{font-size:12px}.market-index b{font-size:8px}}
+
+/* Final focused landing screen: compact info, mascot, search, and partner link only. */
+body{min-height:100vh;background:radial-gradient(ellipse at 50% 0,#062b34 0,#020811 62%,#010408 100%)}
+.topbar{min-height:54px;height:auto;grid-template-columns:1fr auto 1fr;gap:10px;padding:6px 16px;background:#02080eea}
+.weather-chip,.market-chip{min-height:34px;padding:4px 9px;border-radius:999px;box-shadow:0 0 8px #00ff9930}
+.weather-chip{justify-self:start;gap:6px}.weather-icon{font-size:15px}
+.weather-copy{display:flex;align-items:center;gap:7px}.weather-copy strong,.market-heading{font-size:8px;letter-spacing:.7px}
+.weather-copy>span{font-size:12px}.weather-copy small{font-size:8px}
+.market-chip{justify-self:end;gap:9px}.market-heading{font-size:8px}.market-index{display:flex;align-items:baseline;gap:3px}.market-index b{font-size:8px}.market-index strong{font-size:10px}.market-index small{font-size:8px}
+.top-brand .brand{font-size:clamp(18px,2vw,24px)}.top-brand .status{font-size:8px;margin-top:1px}
+main{width:min(1080px,calc(100% - 20px));margin:14px auto 24px}
+.hero{padding:8px 14px 12px;border-radius:22px}
+.kicker,.hero h1,.hero .sub,.tagline{display:none}
+.mascot{height:clamp(190px,27vw,270px);width:min(610px,96%);margin:4px auto 0}
+.search{height:54px;margin:5px auto 0;max-width:780px}
+.baby-mascot{width:150px;height:92px;margin:0 auto}
+#results{margin:18px auto;max-width:850px}
+.dogtag-link{display:flex;align-items:center;gap:7px;width:max-content;margin:12px 0 0 4px;padding:6px 13px;border:1px solid #42ff67;border-radius:999px;background:linear-gradient(135deg,#003e31,#071b20);color:#fff;text-decoration:none;font-size:12px;font-weight:850;box-shadow:0 0 10px #20ff6a70}
+.dogtag-link:hover{box-shadow:0 0 16px #20ff6a}.dogtag-link .tag-icon{font-size:15px;color:#aaff76}
+footer{display:none}
+@media(max-width:700px){.topbar{grid-template-columns:1fr 1fr;gap:5px;padding:6px 8px}.top-brand{grid-column:1/-1;grid-row:1}.weather-chip{grid-column:1;grid-row:2;justify-self:stretch;justify-content:center}.market-chip{grid-column:2;grid-row:2;justify-self:stretch;justify-content:center;gap:6px}.market-heading{display:none}.weather-copy{gap:4px}.weather-copy strong{font-size:7px}.weather-copy>span{font-size:11px}.weather-copy small{display:none}.market-index{gap:2px}.market-index b,.market-index small{font-size:7px}.market-index strong{font-size:9px}.hero{padding:8px 8px 10px}.mascot{height:190px}.search{height:50px}.baby-mascot{height:84px;width:138px}}
+@media(max-width:380px){.weather-copy strong{font-size:6px}.market-index b{font-size:6px}.market-index strong{font-size:8px}}
+
+/* Final mobile overrides: keep the thumbnail and copy in one phone-width row. */
+#results{box-sizing:border-box;width:100%;max-width:850px;min-width:0;overflow-x:hidden}
+#results .result{box-sizing:border-box;display:grid!important;grid-template-columns:minmax(0,104px) minmax(0,1fr)!important;gap:10px!important;width:100%;min-width:0;max-width:100%;align-items:start}
+#results .result-copy{box-sizing:border-box;min-width:0;width:100%;overflow-wrap:anywhere}
+#results .preview{box-sizing:border-box;display:block;width:100%;max-width:104px;min-width:0;height:78px;overflow:hidden}
+#results .preview img{display:block;width:100%;height:100%;max-width:100%;object-fit:cover}
+#results .result-copy a,#results .result-copy p{overflow-wrap:anywhere;word-break:break-word}
+@media(max-width:360px){#results .result{grid-template-columns:minmax(0,88px) minmax(0,1fr)!important;gap:8px!important}#results .preview{max-width:88px;height:70px}}
+
+/* Search type tabs and visual result cards */
+.search-tabs{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0 10px}.search-tab{padding:9px 17px;border:1px solid #25ff9a88;border-radius:999px;background:#041b20;color:#dffff0;font-weight:800;font-size:13px}.search-tab[aria-pressed="true"]{background:#b6ff43;color:#06140c;border-color:#b6ff43;box-shadow:0 0 12px #b6ff4366}
+#results.image-mode{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}#results.image-mode>.search-tabs,#results.image-mode>.result-count,#results.image-mode>#moreResults{grid-column:1/-1}#results.image-mode .result{display:block!important;border:1px solid #25ff9a66;border-radius:13px;overflow:hidden;background:#04131d;padding:0}#results.image-mode .preview{width:100%;max-width:none;height:190px;border-radius:0}#results.image-mode .result-copy{padding:10px}#results.image-mode .result-copy p{display:none}#results.video-mode .result{border:1px solid #25ff9a44;border-radius:12px;padding:12px;margin:10px 0;background:#04131d}#results.video-mode .preview{height:112px}
+@media(max-width:620px){#results.image-mode{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}#results.image-mode .preview{height:125px}}
+
+.preview video{display:block;width:100%;height:100%;object-fit:cover;background:#000}.video-link{display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;color:#b6ff43;text-decoration:none;font-size:10px;font-weight:850;letter-spacing:1px}
+
+/* Approved master artwork with one live search bar layered over its printed search slot. */
+.hero{padding:10px clamp(8px,1.5vw,18px) 14px!important}
+.hero-art-wrap{position:relative;width:100%;max-width:1120px;margin:0 auto;line-height:0;overflow:hidden;border-radius:16px}
+.approved-master-art{display:block;width:100%;height:auto;aspect-ratio:670/379;object-fit:contain;border:1px solid #2cff9b;border-radius:14px}
+.hero-live-search{position:relative!important;left:auto;top:auto;transform:none;width:min(94%,790px)!important;height:clamp(48px,7vw,68px)!important;margin:14px auto 0!important;padding:5px 7px 5px 8px!important;display:flex;align-items:center;gap:10px;border:2px solid #9cff72!important;border-radius:999px!important;background:linear-gradient(100deg,#fafffb,#f2fff4)!important;box-shadow:0 0 0 4px #49ff6a38,0 0 24px #38ff63b8!important;z-index:5}
+.hero-live-search input{flex:1;min-width:0;height:100%;font-size:clamp(13px,2vw,19px)!important;color:#12351f!important;padding:0 8px!important}
+.hero-live-search input::placeholder{color:#8b9990}
+.hero-live-search button{height:100%!important;min-width:104px;padding:0 22px!important;border-radius:999px!important;background:linear-gradient(135deg,#078d4d,#19c95a)!important;color:white!important;font-size:clamp(13px,1.6vw,17px)!important;box-shadow:inset 0 1px 0 #ffffff55}
+.baby-avatar{position:relative;flex:0 0 clamp(38px,6vw,56px);width:clamp(38px,6vw,56px);height:clamp(38px,6vw,56px);display:block;border-radius:50%;overflow:hidden;background-image:url('https://everythinghub-search-engine-4x25f8.v2.appdeploy.ai/resources/everythinghub-approved-green-octopus.png');background-repeat:no-repeat;background-size:min(640px,calc(100vw - 20px)) auto;background-position:49% 57%;box-shadow:0 0 0 2px #c8ff9d,0 0 17px #4cff6b}
+.baby-avatar i{position:absolute;top:42%;width:22%;height:0;left:26%;border-radius:50%;background:#45bd5e;animation:approvedBabyBlink 4.1s infinite;z-index:2}
+.baby-avatar i+ i{left:62%;animation-delay:.04s}
+@keyframes approvedBabyBlink{0%,44%,48%,91%,95%,100%{height:0}45%,47%,92%,94%{height:19%;transform:translateY(0)}}
+.tagline{margin:10px 0 0!important;color:#c8ff7a!important;text-align:center;letter-spacing:1.1px;font-weight:850}
+.divisions{margin:20px 0 0!important}
+.divisions .tile{cursor:pointer}
+@media(max-width:680px){.hero{padding:6px 0 10px!important}.hero-art-wrap{border-radius:10px}.hero-live-search{width:91%!important;height:46px!important;gap:5px;padding:4px 5px!important;top:46.5%}.hero-live-search button{min-width:68px;padding:0 12px!important}.hero-live-search input{font-size:12px!important;padding:0 3px!important}.baby-avatar{flex-basis:36px;width:36px;height:36px;background-size:calc(100vw - 20px) auto}.tagline{font-size:10px!important}.divisions{margin-top:14px!important}}
+
+/* Live discovery panels below the eight search categories. */
+.dashboard{margin:26px 0 0}.dashboard .heading h2{font-family:Georgia,serif;color:#f0cf78;font-size:clamp(21px,3vw,28px)}.dashboard .heading small{color:#9bd8b8}
+.dashboard-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.dashboard-card{min-width:0;padding:17px 18px;border:1px solid #36ff8a70;border-radius:16px;background:linear-gradient(145deg,#09251d,#04131a);box-shadow:0 0 14px #00ff9920}
+.dashboard-card h3{margin:0 0 12px;color:#e9cb74;font-size:13px;letter-spacing:1px}.dashboard-card>strong{display:block;font-size:clamp(22px,4vw,32px);color:#f6fff9}.dashboard-card p{margin:6px 0 0;color:#a8d9c1;font-size:13px;line-height:1.45}
+.dashboard-card.news-card{grid-column:1/-1}.news-card ul{list-style:none;margin:0;padding:0}.news-card li{padding:9px 0;border-top:1px solid #2bff8a33;display:grid;gap:4px}.news-card li:first-child{border-top:0}.news-card a{color:#c9f4d5;text-decoration:none;font-weight:700;font-size:14px;line-height:1.4}.news-card a:hover{text-decoration:underline}.news-card small{color:#8dc5a7;font-size:10px}
+.tile.selected{border-color:#caff78;box-shadow:0 0 15px #7cff5c70;background:linear-gradient(145deg,#123d28,#061c18)}
+@media(max-width:600px){.dashboard{margin-top:18px}.dashboard-grid{gap:8px}.dashboard-card{padding:13px 12px;border-radius:13px}.dashboard-card h3{font-size:10px;margin-bottom:8px}.dashboard-card p{font-size:11px}.dashboard-card>strong{font-size:22px}.news-card a{font-size:12px}}
+\n/* Keep the hero artwork crisp and self-contained; no screenshot-as-art asset. */\n.approved-master-art{display:block;width:100%;height:auto;aspect-ratio:709/425;object-fit:cover;background:#020b12}\n.baby-avatar{background-image:none!important;background:radial-gradient(circle at 50% 35%,#baff75,#13b96b 55%,#034d43)!important;display:grid!important;place-items:center;color:#eaffc5;font-size:24px;text-shadow:0 0 10px #aaff83}\n.baby-avatar:before{content:"🐙"}\n
+/* Reference-matched emerald octopus hero and clean responsive information strip. */
+.approved-master-art{display:block;width:100%;height:auto;aspect-ratio:709/425;object-fit:cover;background:#020a12}
+.baby-avatar{flex:0 0 42px!important;width:42px!important;height:42px!important;border:2px solid #caff89!important;background:radial-gradient(circle at 50% 35%,#d4ff92,#27ce77 48%,#05604d)!important;box-shadow:0 0 0 2px #5dff9b,0 0 16px #35ff7d!important;display:grid!important;place-items:center!important}
+.baby-avatar:before{content:"🐙";font-size:24px;line-height:1}
+.baby-avatar i{display:none!important}
+.market-chip{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr));align-items:center!important;justify-content:stretch!important;gap:3px!important;min-width:0}
+.market-heading{display:none!important}
+.market-index{display:grid!important;grid-template-columns:1fr;justify-items:center;align-items:center;gap:1px!important;min-width:0;text-align:center;white-space:normal}
+.market-index b,.market-index small{font-size:clamp(6px,1vw,9px)!important;line-height:1.15}
+.market-index strong{font-size:clamp(8px,1.3vw,12px)!important;white-space:normal!important;line-height:1.1;text-align:center}
+@media(max-width:700px){
+ .topbar{grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;grid-template-rows:auto auto!important;gap:6px!important;padding:7px 9px!important}
+ .top-brand{grid-column:1/-1!important;grid-row:1!important}
+ .weather-chip{grid-column:1!important;grid-row:2!important;min-width:0!important;justify-self:stretch!important;justify-content:flex-start!important}
+ .market-chip{grid-column:2!important;grid-row:2!important;justify-self:stretch!important;min-width:0!important;padding:4px 5px!important}
+ .weather-copy{display:grid!important;gap:1px!important;min-width:0}
+ .weather-copy strong{font-size:7px!important}
+ .weather-copy>span{font-size:11px!important}
+ .weather-copy small{display:none!important}
+ .market-index b{font-size:6px!important}
+ .market-index strong{font-size:8px!important}
+ .market-index small{font-size:6px!important}
+ .hero-art-wrap{border:1px solid #43ffad;border-radius:18px;box-shadow:0 0 22px #14ff9b38}
+ .hero-live-search{top:68%!important;width:91%!important;height:48px!important}
+ .baby-avatar{flex-basis:35px!important;width:35px!important;height:35px!important}
+}
+
+/* Final phone QA: never let long feed errors collide or use a pink emoji mascot. */
+.market-chip{overflow:hidden!important}
+.market-index{min-width:0!important;overflow:hidden!important}
+.market-index b,.market-index strong,.market-index small{display:block!important;max-width:100%!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important}
+.market-index small{font-size:7px!important;color:#83cfa8!important}
+.baby-avatar{position:relative!important;overflow:hidden!important;display:grid!important;place-items:center!important;background:radial-gradient(circle at 50% 30%,#d8ff9b,#29d978 55%,#05634c)!important}
+.baby-avatar svg{display:block;width:100%;height:100%;filter:drop-shadow(0 0 4px #aaff75)}
+.baby-avatar:before{content:none!important}
+@media(max-width:700px){.market-chip{grid-template-columns:repeat(3,minmax(0,1fr))!important}.market-index small{font-size:6px!important}.hero-live-search{top:70%!important}}
+
+/* Use the saved approved master banner asset, not a recreated illustration. */
+.approved-master-art{display:block;width:100%;height:auto;aspect-ratio:709/425;object-fit:contain;background:#020a12}
+/* Align the live search control with the real search slot in the approved wide banner. */\n.hero-live-search{top:50%!important}\n@media(max-width:680px){.hero-live-search{top:50%!important}}\n
+/* One functional search control sits directly over the search slot in the approved artwork. */
+.hero-art-wrap{overflow:hidden!important}
+.hero-live-search{position:absolute!important;left:50%!important;top:46.5%!important;transform:translate(-50%,-50%)!important;width:41%!important;height:7.5%!important;min-height:24px!important;margin:0!important;padding:2px 4px!important;gap:3px!important;border:1px solid #a8ff83!important;border-radius:999px!important;background:linear-gradient(100deg,#fafffb,#f2fff4)!important;box-shadow:0 0 0 2px #49ff6a38,0 0 12px #38ff6380!important;z-index:5!important}
+.hero-live-search input{font-size:clamp(7px,1.25vw,13px)!important;padding:0 3px!important}
+.hero-live-search button{min-width:24%!important;padding:0 4px!important;font-size:clamp(7px,1.1vw,12px)!important}
+@media(max-width:680px){.hero-live-search{width:41%!important;height:7.5%!important;min-height:17px!important;padding:1px 2px!important;gap:1px!important}.hero-live-search input{font-size:clamp(6px,1.7vw,9px)!important;padding:0 1px!important}.hero-live-search button{min-width:23%!important;padding:0 2px!important;font-size:clamp(6px,1.5vw,8px)!important}}
+
+/* Restore the native eight-arm octopus artwork. Keep the real search control below it. */
+.hero{padding:12px clamp(8px,1.5vw,18px) 16px!important}
+.hero-art-wrap{position:relative!important;width:100%!important;max-width:850px!important;margin:0 auto!important;line-height:normal!important;overflow:visible!important;border-radius:16px!important}
+.approved-master-art{display:block!important;width:100%!important;max-width:850px!important;height:auto!important;aspect-ratio:709/425!important;object-fit:contain!important;background:transparent!important}
+.hero-live-search{position:relative!important;left:auto!important;top:auto!important;right:auto!important;bottom:auto!important;transform:none!important;display:flex!important;width:min(760px,94%)!important;height:58px!important;min-height:58px!important;margin:12px auto 0!important;padding:6px 8px 6px 18px!important;gap:8px!important;border:2px solid #40ff5d!important;border-radius:999px!important;background:#f9fffb!important;box-shadow:0 0 18px #19ff66a6!important;z-index:2!important}
+.hero-live-search input{min-width:0!important;flex:1!important;font-size:16px!important;padding:0 5px!important;color:#071b16!important}
+.hero-live-search button{height:44px!important;min-width:96px!important;padding:0 22px!important;border-radius:999px!important;background:linear-gradient(135deg,#008c51,#43ef29)!important;color:#00150b!important;font-size:15px!important;font-weight:850!important}
+@media(max-width:680px){.hero{padding:8px 7px 12px!important}.hero-art-wrap{max-width:100%!important}.hero-live-search{width:96%!important;height:52px!important;min-height:52px!important;margin-top:8px!important;padding:5px 6px 5px 13px!important}.hero-live-search input{font-size:14px!important}.hero-live-search button{height:40px!important;min-width:78px!important;padding:0 14px!important;font-size:13px!important}}
+
+
+/* iPhone Safari clearance: let the final category row scroll above floating browser controls. */
+html{scroll-padding-bottom:calc(120px + env(safe-area-inset-bottom))}
+body{padding-bottom:calc(120px + env(safe-area-inset-bottom))!important}
+main{padding-bottom:24px!important}
+@media(max-width:700px){
+  body{padding-bottom:calc(150px + env(safe-area-inset-bottom))!important}
+  main{margin-bottom:12px!important;padding-bottom:36px!important}
+}
+
+/* Mobile viewport redesign: make the hero compact so all eight discovery choices clear Safari's floating controls. */
+@media(max-width:700px){
+  .topbar{padding:6px 8px!important;gap:5px!important}
+  .top-brand{padding:2px 0!important}
+  .brand{font-size:19px!important}
+  .status{font-size:9px!important;letter-spacing:1px!important}
+  .weather-chip,.market-chip{min-height:44px!important}
+  .hero{padding:4px 6px 2px!important}
+  .hero-art-wrap{max-width:100%!important;border-radius:14px!important}
+  .approved-master-art{height:245px!important;max-height:245px!important;width:100%!important;aspect-ratio:auto!important;object-fit:contain!important}
+  .hero-live-search{height:48px!important;min-height:48px!important;margin:6px auto 0!important;width:96%!important}
+  .hero-live-search button{height:36px!important}
+  .tagline{margin:4px 0 0!important;font-size:8px!important}
+  .divisions{margin:8px 0 0!important}
+  .divisions .heading{margin-bottom:7px!important}
+  .divisions .heading h2{font-size:18px!important}
+  .grid{gap:6px!important}
+  .tile{height:54px!important;min-height:54px!important;padding:5px 7px!important;gap:6px!important;border-radius:11px!important}
+  .ico{width:26px!important;height:26px!important;flex:0 0 26px!important;font-size:12px!important}
+  .tile strong{font-size:10px!important;line-height:1.1!important}
+  .tile small{font-size:8px!important;line-height:1.1!important;margin-top:1px!important}
+}
+
+/* Google-simple landing layout: one prominent search bar, octopus above it. */
+.topbar{min-height:58px!important;height:58px!important;display:flex!important;justify-content:center!important;padding:8px 16px!important;background:#02080e!important;box-shadow:none!important}
+.weather-chip,.market-chip{display:none!important}
+.top-brand{margin:auto!important}
+.top-brand .brand{font-size:25px!important}
+.top-brand .status{font-size:9px!important}
+main{width:min(900px,calc(100% - 28px))!important;margin:22px auto 40px!important}
+.hero{padding:10px 10px 18px!important;border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important;overflow:visible!important}
+.hero:before{display:none!important}
+.hero-art-wrap{max-width:600px!important;margin:0 auto!important;border:0!important;border-radius:0!important;box-shadow:none!important;background:transparent!important}
+.approved-master-art{width:100%!important;max-width:600px!important;height:clamp(170px,36vw,270px)!important;aspect-ratio:auto!important;object-fit:contain!important;border:0!important;border-radius:0!important;background:transparent!important}
+.hero-live-search{position:relative!important;inset:auto!important;transform:none!important;width:min(680px,96%)!important;height:58px!important;min-height:58px!important;margin:14px auto 0!important;padding:6px 8px 6px 20px!important;gap:8px!important;border:1px solid #dfe3e7!important;border-radius:999px!important;background:#fff!important;box-shadow:0 2px 8px #0003!important}
+.hero-live-search input{font-size:16px!important;color:#202124!important}
+.hero-live-search input::placeholder{color:#777!important}
+.hero-live-search button{display:none!important}
+.baby-avatar{display:none!important}
+.tagline{display:none!important}
+.divisions{margin:18px auto 0!important;max-width:760px!important}
+.divisions .heading{justify-content:center!important}
+.divisions .heading h2{font-size:15px!important;color:#d8eee2!important}
+.divisions .heading small{display:none!important}
+.tile{min-height:54px!important}
+.dashboard,.gallery,.dogtag-link{display:none!important}
+#results{margin:22px auto!important}
+@media(max-width:680px){
+ .topbar{height:54px!important;min-height:54px!important}
+ main{margin:12px auto 28px!important}
+ .hero{padding:4px 2px 12px!important}
+ .hero-art-wrap{max-width:100%!important}
+ .approved-master-art{height:190px!important;max-height:190px!important}
+ .hero-live-search{width:100%!important;height:54px!important;min-height:54px!important;margin-top:12px!important;padding-left:18px!important}
+ .hero-live-search input{font-size:16px!important}
+ .divisions{margin-top:16px!important}
+ .grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:7px!important}
+ .tile{height:50px!important;min-height:50px!important;padding:5px 8px!important}
+}
+
+/* Replace the cartoon banner with the approved realistic octopus artwork. */
+.hero-art-wrap{max-width:620px!important;margin:0 auto!important;overflow:visible!important;border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important}
+.approved-master-art{display:block!important;width:100%!important;height:auto!important;max-height:none!important;aspect-ratio:auto!important;object-fit:contain!important;border:0!important;border-radius:0!important;background:transparent!important}
+.baby-avatar{display:none!important}
+.hero-live-search{margin-top:12px!important}
+@media(max-width:680px){.hero-art-wrap{width:100%!important;max-width:460px!important}.approved-master-art{width:100%!important;height:auto!important;max-height:none!important}}
+
+/* Strict single-search-bar mobile and desktop layout. */
+.topbar .weather-chip,.topbar .market-chip{display:none!important}
+.topbar{display:flex!important;justify-content:center!important;min-height:54px!important;height:54px!important}
+.hero .search-tabs{display:none!important}
+.hero-live-search{display:flex!important}
+
+/* Artwork contains a printed mock search and category icons; crop to the octopus only. */
+.topbar{display:none!important}
+.hero-art-wrap{width:100%!important;max-width:1120px!important;aspect-ratio:1.7!important;height:auto!important;overflow:hidden!important;border:0!important;border-radius:0!important;box-shadow:none!important}
+.approved-master-art{display:block!important;width:100%!important;height:100%!important;aspect-ratio:auto!important;object-fit:cover!important;object-position:center top!important;border:0!important;border-radius:0!important}
+.hero-live-search{display:flex!important;margin:12px auto 0!important}
+
+
+/* Single live search control: overlay the printed search field inside the approved artwork. */
+.hero-art-wrap{position:relative!important;aspect-ratio:auto!important;height:auto!important;overflow:visible!important}
+.hero-live-search{position:absolute!important;left:5%!important;top:54.5%!important;transform:none!important;display:flex!important;visibility:visible!important;opacity:1!important;z-index:6!important;width:90%!important;height:8%!important;min-height:48px!important;margin:0!important;padding:5px 7px 5px 17px!important;gap:7px!important;background:#fff!important;border:2px solid #42e99a!important;border-radius:999px!important;box-shadow:0 0 16px #00ff9955!important}
+.hero-live-search input{display:block!important;visibility:visible!important;opacity:1!important;min-width:0!important;color:#17251f!important;font-size:clamp(12px,2.4vw,17px)!important}
+.hero-live-search input::placeholder{color:#68736d!important}
+.hero-live-search button{display:block!important;flex:0 0 auto!important;height:100%!important;min-height:38px!important;padding:0 18px!important;border-radius:999px!important;background:linear-gradient(135deg,#158b58,#31c879)!important;color:#fff!important;font-weight:800!important}
+.hero-live-search .baby-avatar{display:none!important}
+@media(max-width:680px){.hero-live-search{left:5%!important;top:54.5%!important;width:90%!important;height:8%!important;min-height:40px!important;padding:4px 6px 4px 13px!important}.hero-live-search button{min-height:32px!important;padding:0 14px!important}}
+
+
+/* Live homepage picture and video discovery feed */
+.live-media{max-width:1120px;margin:26px auto 0!important}
+.live-media .heading h2{color:#edfff5}
+.live-media-block{margin:18px 0 24px}
+.live-media-title{display:flex;align-items:baseline;gap:12px;margin:0 0 11px;color:#effff6}
+.live-media-title strong{font-size:17px}
+.live-media-title span{font-size:11px;color:#9bcdb6}
+.live-media-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.live-media-card{display:block;min-width:0;overflow:hidden;border:1px solid #26ff9b88;border-radius:14px;background:#03131d;color:#effff6;text-decoration:none;box-shadow:0 0 12px #00ff9920}
+.live-media-card .live-thumb{position:relative;height:142px;background:linear-gradient(135deg,#073c38,#071522);overflow:hidden}
+.live-media-card img{display:block;width:100%;height:100%;object-fit:cover}
+.live-media-card .live-play{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:#00170fdc;border:1px solid #b6ff43;color:#b6ff43;font-size:19px}
+.live-media-card .live-copy{padding:10px 11px 12px}
+.live-media-card .live-copy strong{display:block;font-size:12px;line-height:1.35}
+.live-media-card .live-copy small{display:block;margin-top:5px;color:#9bcdb6;font-size:10px}
+.live-loading{grid-column:1/-1;padding:18px;border:1px solid #1eff9a44;border-radius:12px;color:#9bcdb6;background:#04131d;font-size:12px}
+@media(max-width:760px){.live-media-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.live-media-card .live-thumb{height:116px}.live-media{margin-top:20px!important}}
+/* Everything Hub discovery shelves — artwork above remains untouched. */
+.dashboard,.gallery,.dogtag-link{display:block!important}
+.dashboard{margin:30px auto 0!important;max-width:1120px!important}
+.dashboard-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.dashboard-card{min-width:0;padding:17px;border:1px solid #1effa077;border-radius:15px;background:linear-gradient(145deg,#09232c,#030c14);box-shadow:0 0 13px #00ff9925;color:#f3fff8}
+.dashboard-card h3{margin:0 0 9px;font-size:10px;letter-spacing:1.2px;color:#aaff75}
+.dashboard-card>strong{font-size:19px}.dashboard-card p,.dashboard-card li{color:#a8d8c3;font-size:12px;line-height:1.5}
+.dashboard-card ul{margin:8px 0 0;padding-left:17px}
+.gallery{max-width:1120px;margin:34px auto 0!important}
+.gallery .heading h2,.dashboard .heading h2{color:#edfff5}
+.gallery-grid{grid-template-columns:repeat(4,minmax(0,1fr))!important}
+.media-card{min-height:190px!important;text-decoration:none!important}
+.media-card img{height:155px!important}
+.media-card .caption{min-height:44px}
+.video-shelf{max-width:1120px;margin:34px auto 0}
+.video-shelf .shelf-intro{margin:-4px 0 16px;color:#9bcdb6;font-size:13px}
+.video-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+.video-discovery{display:block;min-width:0;overflow:hidden;border:1px solid #25ff9a77;border-radius:15px;background:#04131d;color:#f4fff8;text-decoration:none;box-shadow:0 0 13px #00ff9930;transition:transform .18s,border-color .18s}
+.video-discovery:hover{transform:translateY(-3px);border-color:#b6ff43}
+.video-thumb{position:relative;height:150px;overflow:hidden;background:#061b20}
+.video-thumb img{display:block;width:100%;height:100%;object-fit:cover;transition:transform .3s}
+.video-discovery:hover .video-thumb img{transform:scale(1.04)}
+.video-thumb:after{content:"▶";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:grid;place-items:center;width:48px;height:48px;border:1px solid #aaff75;border-radius:50%;background:#00150dcc;color:#b6ff43;font-size:20px;box-shadow:0 0 18px #00ff9a}
+.video-meta{padding:11px 12px 13px}
+.video-meta strong{display:block;font-size:13px;line-height:1.35}
+.video-meta small{display:block;margin-top:5px;color:#9bcdb6;font-size:10px}
+.section-kicker{font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#aaff75;font-weight:850}
+@media(max-width:760px){.dashboard-grid{grid-template-columns:1fr 1fr}.dashboard-card:last-child{grid-column:1/-1}.gallery-grid,.video-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:9px}.media-card{min-height:150px!important}.media-card img{height:112px!important}.video-thumb{height:112px}}
+@media(max-width:390px){.video-meta{padding:9px}.video-meta strong{font-size:11px}.dashboard-card{padding:12px}.dashboard-card>strong{font-size:16px}}
+
+</style><link rel="canonical" href="https://everything.dogtagday.org/"><meta name="robots" content="index,follow,max-image-preview:large"><meta property="og:type" content="website"><meta property="og:title" content="Everything Hub — Everything within reach"><meta property="og:description" content="Search the web, discover pictures and videos, explore places, businesses, news, shopping and research."><meta property="og:url" content="https://everything.dogtagday.org/"><script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","name":"Everything Hub","url":"https://everything.dogtagday.org/","description":"A broad search and discovery engine for web pages, images, videos, news, places, businesses, shopping and research.","potentialAction":{"@type":"SearchAction","target":{"@type":"EntryPoint","urlTemplate":"https://everything.dogtagday.org/?q={search_term_string}"},"query-input":"required name=search_term_string"}}</script></head>
+<body>
+<header class="topbar">
+  <div class="weather-chip" aria-label="Las Vegas weather">
+    <span class="weather-icon" aria-hidden="true">☀</span>
+    <span class="weather-copy"><strong>LAS VEGAS WEATHER</strong><span id="weatherValue">Loading…</span><small id="weatherDetail">Live conditions</small></span>
+  </div>
+  <div class="top-brand"><div class="brand">Everything<span>Hub</span></div><div class="status">Everything Within Reach</div></div>
+  <div class="market-chip" aria-label="Global stock market indexes">
+    <span class="market-heading">GLOBAL MARKETS</span>
+    <span class="market-index"><b>NASDAQ</b><strong id="nasdaqValue">—</strong><small id="nasdaqDetail">Live</small></span>
+    <span class="market-index"><b>S&amp;P 500</b><strong id="spValue">—</strong><small id="spDetail">Live</small></span>
+    <span class="market-index"><b>DOW</b><strong id="dowValue">—</strong><small id="dowDetail">Live</small></span>
+  </div>
+</header>
+<main>
+<section class="hero">
+  <div class="hero-art-wrap">
+    <img class="approved-master-art" src="https://raw.githubusercontent.com/rshure001/EverythingHub-Crawler/main/assets/everythinghub-approved.png" alt="Realistic emerald octopus with a glowing gold brain and eight detailed tentacles" />
+    <form class="search hero-live-search" id="search">
+      
+      <input id="q" type="search" aria-label="Search Everything Hub" placeholder="Search Everything within reach…" autocomplete="off" />
+      <button type="submit">Search</button>
+    </form>
+  </div>
+<div class="tagline">EVERYTHING HUB · EVERYTHING WITHIN REACH</div>
+</section>
+<section class="gallery"><div class="heading"><h2>Discover more</h2><small>Fresh visuals · stories · ideas</small></div><div class="gallery-grid">
+<a class="media-card" href="?mode=people"><img loading="lazy" src="https://images.unsplash.com/photo-1521737711867-e3b97375f902?w=900&auto=format&fit=crop&q=82" alt="People collaborating"><div class="caption">People <small>Profiles & communities</small></div></a>
+<a class="media-card" href="?mode=places"><img loading="lazy" src="https://images.unsplash.com/photo-1519608487953-e999c86e7455?w=900&auto=format&fit=crop&q=82" alt="Night skyline"><div class="caption">Places <small>Explore destinations</small></div></a>
+<a class="media-card" href="?mode=videos"><img loading="lazy" src="https://images.unsplash.com/photo-1492619375914-88005aa9e8fb?w=900&auto=format&fit=crop&q=82" alt="Video production camera"><span class="play">▶</span><div class="caption">Videos <small>Watch & discover</small></div></a>
+<a class="media-card" href="?mode=images"><img loading="lazy" src="https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=900&auto=format&fit=crop&q=82" alt="Camera and photography"><div class="caption">Images <small>Photo discovery</small></div></a>
+<a class="media-card" href="?mode=markets"><img loading="lazy" src="https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=900&auto=format&fit=crop&q=82" alt="Financial market chart"><div class="caption">Markets <small>Stocks & indexes</small></div></a>
+<a class="media-card" href="?mode=weather"><img loading="lazy" src="https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=900&auto=format&fit=crop&q=82" alt="Sunlit landscape"><div class="caption">Weather <small>Forecasts & conditions</small></div></a>
+<a class="media-card" href="?mode=knowledge"><img loading="lazy" src="https://images.unsplash.com/photo-1481627834876-b7833e8f5570?w=900&auto=format&fit=crop&q=82" alt="Library shelves"><div class="caption">Knowledge <small>Learn & research</small></div></a>
+<a class="media-card" href="?mode=news"><img loading="lazy" src="https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=900&auto=format&fit=crop&q=82" alt="News desk and newspaper"><div class="caption">News <small>World & technology</small></div></a>
+
+</div></section>
+<section class="live-media" aria-label="Live pictures and videos">
+ <div class="heading"><h2>Live Pictures &amp; Videos</h2><small>Fresh discoveries from across the web</small></div>
+ <div class="live-media-block"><div class="live-media-title"><strong>Pictures</strong><span>Explore images</span></div><div id="homeLiveImages" class="live-media-grid"><div class="live-loading">Loading fresh pictures…</div></div></div>
+ <div class="live-media-block"><div class="live-media-title"><strong>Videos</strong><span>Watch and explore</span></div><div id="homeLiveVideos" class="live-media-grid"><div class="live-loading">Loading videos…</div></div></div>
+</section>
+
+<section class="video-shelf" aria-label="Video discovery">
+ <div class="heading"><h2>Watch &amp; Discover</h2><small>Video discovery across the web</small></div>
+ <p class="shelf-intro">Explore explainers, documentaries, technology, travel and ideas from video publishers across the web.</p>
+ <div class="video-grid">
+  <a class="video-discovery" href="https://www.youtube.com/results?search_query=technology+explained+documentary" target="_blank" rel="noopener noreferrer"><div class="video-thumb"><img loading="lazy" src="https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=900&auto=format&fit=crop&q=82" alt="Technology team collaborating"></div><div class="video-meta"><strong>Technology &amp; Innovation</strong><small>Videos from across the web · Explore results ↗</small></div></a>
+  <a class="video-discovery" href="https://www.youtube.com/results?search_query=world+travel+cinematic+documentary" target="_blank" rel="noopener noreferrer"><div class="video-thumb"><img loading="lazy" src="https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=900&auto=format&fit=crop&q=82" alt="Mountain lake travel destination"></div><div class="video-meta"><strong>Travel &amp; Places</strong><small>Films, guides &amp; destinations · Explore results ↗</small></div></a>
+  <a class="video-discovery" href="https://www.youtube.com/results?search_query=science+nature+documentary" target="_blank" rel="noopener noreferrer"><div class="video-thumb"><img loading="lazy" src="https://images.unsplash.com/photo-1532094349884-543bc11b234d?w=900&auto=format&fit=crop&q=82" alt="Scientific research laboratory"></div><div class="video-meta"><strong>Science &amp; Discovery</strong><small>Research, nature &amp; explainers · Explore results ↗</small></div></a>
+  <a class="video-discovery" href="https://www.youtube.com/results?search_query=business+entrepreneurship+stories" target="_blank" rel="noopener noreferrer"><div class="video-thumb"><img loading="lazy" src="https://images.unsplash.com/photo-1521737711867-e3b97375f902?w=900&auto=format&fit=crop&q=82" alt="People working together"></div><div class="video-meta"><strong>Business &amp; People</strong><small>Ideas, interviews &amp; stories · Explore results ↗</small></div></a>
+ </div>
+</section>
+<section class="divisions"><div class="heading"><h2>Explore Everything Hub</h2><small>Eight ways to discover</small></div><div class="grid">
+<a class="tile" href="?mode=web"><span class="ico">◎</span><span><strong>Web Search</strong><small>Find anything</small></span></a>
+<a class="tile" href="?mode=news"><span class="ico">▥</span><span><strong>News</strong><small>World & local updates</small></span></a>
+<a class="tile" href="?mode=images"><span class="ico">▧</span><span><strong>Images</strong><small>Photos & visuals</small></span></a>
+<a class="tile" href="?mode=videos"><span class="ico">▶</span><span><strong>Videos</strong><small>Watch & explore</small></span></a>
+<a class="tile" href="?mode=shopping"><span class="ico">🛒</span><span><strong>Shopping</strong><small>Products & deals</small></span></a>
+<a class="tile" href="?mode=places"><span class="ico">⌖</span><span><strong>Places</strong><small>Maps & destinations</small></span></a>
+<a class="tile" href="?mode=business"><span class="ico">▣</span><span><strong>Business</strong><small>Companies & services</small></span></a>
+<a class="tile" href="?mode=research"><span class="ico">▤</span><span><strong>Research</strong><small>Knowledge & learning</small></span></a>
+</div></section>
+<section class="dashboard"><div class="heading"><h2>Discover on Everything Hub</h2><small>Live information</small></div><div class="dashboard-grid">
+<article class="dashboard-card"><h3>LAS VEGAS WEATHER</h3><strong id="dashboardWeather">Loading…</strong><p id="dashboardWeatherDetail">Current conditions</p></article>
+<article class="dashboard-card"><h3>MARKET WATCH</h3><strong id="dashboardMarkets">Markets</strong><p id="dashboardMarketsDetail">NASDAQ · S&amp;P 500 · DOW</p></article>
+<article class="dashboard-card news-card"><h3>TOP NEWS</h3><ul id="topNewsItems"><li>Loading current headlines…</li></ul></article>
+</div></section>
+
+<section class="video-shelf" aria-label="Video discovery">
+ <div class="heading"><h2>Watch &amp; Discover</h2><small>Video discovery across the web</small></div>
+ <p class="shelf-intro">Explore explainers, documentaries, technology, travel and ideas from video publishers across the web.</p>
+ <div class="video-grid">
+  <a class="video-discovery" href="https://www.youtube.com/results?search_query=technology+explained+documentary" target="_blank" rel="noopener noreferrer"><div class="video-thumb"><img loading="lazy" src="https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=900&auto=format&fit=crop&q=82" alt="Technology team collaborating"></div><div class="video-meta"><strong>Technology &amp; Innovation</strong><small>Videos from across the web · Explore results ↗</small></div></a>
+  <a class="video-discovery" href="https://www.youtube.com/results?search_query=world+travel+cinematic+documentary" target="_blank" rel="noopener noreferrer"><div class="video-thumb"><img loading="lazy" src="https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=900&auto=format&fit=crop&q=82" alt="Mountain lake travel destination"></div><div class="video-meta"><strong>Travel &amp; Places</strong><small>Films, guides &amp; destinations · Explore results ↗</small></div></a>
+  <a class="video-discovery" href="https://www.youtube.com/results?search_query=science+nature+documentary" target="_blank" rel="noopener noreferrer"><div class="video-thumb"><img loading="lazy" src="https://images.unsplash.com/photo-1532094349884-543bc11b234d?w=900&auto=format&fit=crop&q=82" alt="Scientific research laboratory"></div><div class="video-meta"><strong>Science &amp; Discovery</strong><small>Research, nature &amp; explainers · Explore results ↗</small></div></a>
+  <a class="video-discovery" href="https://www.youtube.com/results?search_query=business+entrepreneurship+stories" target="_blank" rel="noopener noreferrer"><div class="video-thumb"><img loading="lazy" src="https://images.unsplash.com/photo-1521737711867-e3b97375f902?w=900&auto=format&fit=crop&q=82" alt="People working together"></div><div class="video-meta"><strong>Business &amp; People</strong><small>Ideas, interviews &amp; stories · Explore results ↗</small></div></a>
+ </div>
+</section>
+<a class="dogtag-link" href="pages/" aria-label="Explore Everything Hub pages">Explore Pages</a><a class="dogtag-link" href="catalogs/" aria-label="Browse source catalogs">Source Catalogs</a><a class="dogtag-link" href="https://DogTagDay.org" target="_blank" rel="noopener noreferrer"><span class="tag-icon" aria-hidden="true">▱</span>DogTagDay.org</a><section id="results" aria-live="polite"></section>
+</main><footer>EverythingHub · Independent search and discovery · <a href="catalogs/">Browse source catalogs</a><nav class="seo-directory" aria-label="Explore Everything Hub" style="max-width:1120px;margin:24px auto;padding:18px;border:1px solid #1eff9a55;border-radius:14px;background:#04131d;color:#eafff5"><strong style="display:block;margin-bottom:10px">Explore Everything Hub</strong><div style="display:flex;flex-wrap:wrap;gap:10px 16px;font-size:12px"><a style="color:#aaff75" href="/discover/web/">Web Search</a><a style="color:#aaff75" href="/discover/news/">News</a><a style="color:#aaff75" href="/discover/images/">Images</a><a style="color:#aaff75" href="/discover/videos/">Videos</a><a style="color:#aaff75" href="/discover/shopping/">Shopping</a><a style="color:#aaff75" href="/discover/places/">Places</a><a style="color:#aaff75" href="/discover/business/">Business</a><a style="color:#aaff75" href="/discover/research/">Research</a></div></nav></footer>
+<script>
+const form=document.querySelector('#search'),input=document.querySelector('#q'),out=document.querySelector('#results');
+const EH_SUPABASE_URL='https://vdceayvfgkwpgwixrhwi.supabase.co';
+const EH_PUBLIC_KEY='sb_publishable_XlIsACWhtVS1jVODWYGTpg_GMs8v3vJ';
+const modeNames={web:'the web',news:'News',images:'Images',videos:'Videos',shopping:'Shopping',places:'Places',business:'Business',research:'Research'};
+let selectedMode=new URLSearchParams(location.search).get('mode')||'web';
+function setSelectedMode(mode){selectedMode=modeNames[mode]?mode:'web';input.placeholder='Search '+modeNames[selectedMode]+'…';document.querySelectorAll('.tile').forEach(tile=>tile.classList.toggle('selected',new URL(tile.href).searchParams.get('mode')===selectedMode));}
+document.querySelectorAll('.tile').forEach(tile=>tile.addEventListener('click',event=>{event.preventDefault();setSelectedMode(new URL(tile.href).searchParams.get('mode')||'web');input.focus();}));
+setSelectedMode(selectedMode);
+document.querySelectorAll('.arm[data-mode]').forEach(arm=>{
+ const openMode=()=>{const mode=arm.dataset.mode;location.href='?mode='+encodeURIComponent(mode)};
+ arm.addEventListener('click',openMode);
+ arm.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();openMode()}});
+});
+
+
+async function loadHomepageMedia(type, query, targetId){
+ const target=document.getElementById(targetId);if(!target)return;
+ try{
+  const url=new URL(EH_SUPABASE_URL+'/functions/v1/everything-hub-media-search');
+  url.searchParams.set('q',query);url.searchParams.set('type',type);
+  const response=await fetch(url,{headers:{apikey:EH_PUBLIC_KEY,accept:'application/json'}});
+  if(!response.ok)throw Error('Media feed '+response.status);
+  const data=await response.json();
+  const results=(data.results||[]).slice(0,8);
+  if(!results.length){target.innerHTML='<div class="live-loading">No fresh '+(type==='video'?'videos':'pictures')+' returned just now. Search above to explore this topic.</div>';return;}
+  target.innerHTML=results.map(item=>{
+   const href=safe(item.pageUrl||item.videoUrl||item.imageUrl);
+   const image=safe(item.imageUrl||item.thumbnailUrl);
+   const title=esc(item.title||'Explore media');
+   const mediaLabel=type==='video'?'Video · '+esc(data.provider||'Web source'):esc(data.provider||'Image source');
+   return '<a class="live-media-card" href="'+href+'" target="_blank" rel="noopener noreferrer"><div class="live-thumb">'+(image!=='#'?'<img loading="lazy" src="'+image+'" alt="'+title+'" referrerpolicy="no-referrer">':'')+(type==='video'?'<span class="live-play">▶</span>':'')+'</div><div class="live-copy"><strong>'+title+'</strong><small>'+mediaLabel+'</small></div></a>';
+  }).join('');
+ }catch(error){target.innerHTML='<div class="live-loading">Live media is temporarily unavailable. Use the Images or Videos search above.</div>';}
+}
+function loadHomepageDiscovery(){
+ loadHomepageMedia('image','featured photography technology nature travel','homeLiveImages');
+ loadHomepageMedia('video','technology science travel documentary','homeLiveVideos');
+}
+loadHomepageDiscovery();
+
+async function loadDashboard(){
+ const weather=document.querySelector('#weatherValue'),weatherDetail=document.querySelector('#weatherDetail');
+ try{
+  const r=await fetch('https://api.open-meteo.com/v1/forecast?latitude=36.1699&longitude=-115.1398&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m&timezone=America%2FLos_Angeles&temperature_unit=fahrenheit&wind_speed_unit=mph');
+  if(!r.ok)throw Error('weather');const d=await r.json(),c=d.current;
+  const labels={0:'Clear',1:'Mostly clear',2:'Partly cloudy',3:'Overcast',45:'Fog',48:'Fog',51:'Drizzle',53:'Drizzle',55:'Drizzle',61:'Rain',63:'Rain',65:'Heavy rain',71:'Snow',80:'Showers',95:'Thunderstorms'};
+  weather.textContent=Math.round(c.temperature_2m)+'°F · '+(labels[c.weather_code]||'Current');
+  weatherDetail.textContent='Feels '+Math.round(c.apparent_temperature)+'°F · Wind '+Math.round(c.wind_speed_10m)+' mph · Las Vegas';
+  const dw=document.getElementById('dashboardWeather'),dd=document.getElementById('dashboardWeatherDetail');if(dw)dw.textContent=Math.round(c.temperature_2m)+'°F · '+(labels[c.weather_code]||'Current');if(dd)dd.textContent='Feels '+Math.round(c.apparent_temperature)+'°F · Wind '+Math.round(c.wind_speed_10m)+' mph';
+ }catch{weather.textContent='Weather feed unavailable';weatherDetail.textContent='Live conditions will retry on refresh'}
+ try{
+  const marketUrl=EH_SUPABASE_URL+'/functions/v1/everything-hub-markets';
+  const marketResponse=await fetch(marketUrl,{headers:{apikey:EH_PUBLIC_KEY,accept:'application/json'}});
+  if(!marketResponse.ok)throw Error('Market feed '+marketResponse.status);
+  const marketData=await marketResponse.json();
+  const quoteByKey=Object.fromEntries((marketData.quotes||[]).map(q=>[q.key,q]));
+  const marketTargets=[['NASDAQ','nasdaqValue','nasdaqDetail'],['S&P 500','spValue','spDetail'],['DOW','dowValue','dowDetail']];
+  for(const [key,valueId,detailId] of marketTargets){
+   const q=quoteByKey[key];
+   if(!q)throw Error('Missing '+key+' quote');
+   document.getElementById(valueId).textContent=Number(q.price).toLocaleString('en-US',{maximumFractionDigits:2});
+   const sign=q.change>=0?'+':'−';
+   document.getElementById(detailId).innerHTML='<span class="'+(q.change>=0?'up':'down')+'">'+sign+Math.abs(q.change).toFixed(2)+' ('+sign+Math.abs(q.percent).toFixed(2)+'%)</span>';
+  }
+ }catch(error){
+  for(const [valueId,detailId] of [['nasdaqValue','nasdaqDetail'],['spValue','spDetail'],['dowValue','dowDetail']]){
+   document.getElementById(valueId).textContent='—';
+   document.getElementById(detailId).textContent='Quote feed unavailable';
+  }
+ }
+ const dm=document.getElementById('dashboardMarkets'),dmd=document.getElementById('dashboardMarketsDetail');if(dm)dm.textContent='Live market indexes';if(dmd)dmd.textContent=['NASDAQ','S&P 500','DOW'].map((x,i)=>x+' '+document.getElementById(['nasdaqValue','spValue','dowValue'][i]).textContent).join(' · ');
+ try{const u=new URL('https://api.gdeltproject.org/api/v2/doc/doc');u.searchParams.set('query','world OR technology OR business');u.searchParams.set('mode','ArtList');u.searchParams.set('format','json');u.searchParams.set('maxrecords','5');u.searchParams.set('sort','HybridRel');const nr=await fetch(u);if(!nr.ok)throw Error('news');const nd=await nr.json();const list=document.getElementById('topNewsItems');if(list){const articles=(nd.articles||[]).slice(0,5);list.innerHTML=articles.length?articles.map(a=>'<li><a target="_blank" rel="noopener noreferrer" href="'+safe(a.url)+'">'+esc(a.title||'Latest headline')+'</a><small>'+esc(a.domain||'News source')+'</small></li>').join(''):'<li>Use News search for current headlines.</li>';}}catch{const list=document.getElementById('topNewsItems');if(list)list.innerHTML='<li>News feed temporarily unavailable. Select News to search current coverage.</li>';}
+}
+loadDashboard();
+
+let crawlerCatalogPromise;
+async function loadCrawlerCatalog(){
+ if(!crawlerCatalogPromise){
+  crawlerCatalogPromise=(async()=>{
+   const response=await fetch('./search-index/manifest.json',{cache:'force-cache'});
+   if(!response.ok)throw Error('Crawler catalog manifest is not published on this host');
+   const manifest=await response.json();
+   if(!Array.isArray(manifest.shards))return [];
+   const shards=await Promise.all(manifest.shards.map(async entry=>{
+    const r=await fetch('./search-index/'+encodeURIComponent(entry.file),{cache:'force-cache'});
+    if(!r.ok)throw Error('Crawler shard unavailable: '+entry.file);
+    const data=await r.json();
+    return Array.isArray(data.pages)?data.pages:[];
+   }));
+   const pages=shards.flat();
+   if(manifest.total_pages&&pages.length!==manifest.total_pages)throw Error('Crawler catalog page count mismatch');
+   return pages.map(p=>({t:p.title||'',d:p.description||'',s:p.text||'',u:p.url||'',i:'',v:'',m:'web'}));
+  })();
+ }
+ return crawlerCatalogPromise;
+}
+async function searchCrawlerCatalog(query){
+ const pages=await loadCrawlerCatalog();
+ const terms=query.toLowerCase().split(/[^a-z0-9]+/).filter(x=>x.length>1);
+ if(!terms.length)return [];
+ const ranked=[];
+ for(const page of pages){
+  const title=String(page.t||'').toLowerCase(),description=String(page.d||'').toLowerCase(),snippet=String(page.s||'').toLowerCase();
+  let score=0;
+  for(const term of terms){
+   if(title.includes(term))score+=5;
+   if(description.includes(term))score+=2;
+   if(snippet.includes(term))score+=1;
+  }
+  if(terms.length>1&&terms.every(term=>(title+' '+description+' '+snippet).includes(term)))score+=4;
+  if(score)ranked.push({title:page.t,url:page.u,snippet:page.d||page.s||'',image:page.i||'',video:page.v||'',mediaType:page.m||'web',score,source:'EverythingHub index'});
+ }
+ ranked.sort((a,b)=>b.score-a.score);
+ return ranked.slice(0,100);
+}
+async function searchPublicSources(query){
+ const jobs=[
+  (async()=>{
+   const u=new URL(EH_SUPABASE_URL+'/functions/v1/everything-hub-media-search');
+   const mediaType=selectedMode==='videos'?'video':'image';
+   u.searchParams.set('q',query);u.searchParams.set('type',mediaType);
+   const r=await fetch(u,{headers:{apikey:EH_PUBLIC_KEY,accept:'application/json'}});
+   if(!r.ok)throw Error('Everything Hub '+mediaType+' search '+r.status);
+   const d=await r.json();
+   return (d.results||[]).map(x=>({title:x.title||mediaType+' result',url:x.pageUrl||x.videoUrl||x.imageUrl,snippet:x.description||'',image:x.imageUrl||x.thumbnailUrl||'',video:x.videoUrl||'',source:d.provider||'Everything Hub '+mediaType+' search',mediaType,score:0}));
+  })(),
+  (async()=>{
+   const u=new URL('https://en.wikipedia.org/w/api.php');
+   Object.entries({action:'query',generator:'search',gsrsearch:query,gsrlimit:'50',prop:'extracts|pageimages',exintro:'1',explaintext:'1',pithumbsize:'320',format:'json',origin:'*'}).forEach(([k,v])=>u.searchParams.set(k,v));
+   const r=await fetch(u);if(!r.ok)throw Error('Wikipedia');const d=await r.json();
+   return Object.values(d.query?.pages||{}).map(p=>({title:p.title,url:'https://en.wikipedia.org/?curid='+p.pageid,snippet:p.extract||'',image:p.thumbnail?.source||'',source:'Wikipedia',score:0}));
+  })(),
+  (async()=>{
+   const u=new URL('https://openlibrary.org/search.json');u.searchParams.set('q',query);u.searchParams.set('limit','40');
+   u.searchParams.set('fields','key,title,author_name,first_publish_year,cover_i');
+   const r=await fetch(u);if(!r.ok)throw Error('Open Library');const d=await r.json();
+   return (d.docs||[]).map(p=>({title:p.title||'Book',url:'https://openlibrary.org'+p.key,snippet:[(p.author_name||[]).slice(0,3).join(', '),p.first_publish_year].filter(Boolean).join(' · '),image:p.cover_i?'https://covers.openlibrary.org/b/id/'+p.cover_i+'-M.jpg':'',source:'Open Library',score:0}));
+  })(),
+  (async()=>{
+   const u=new URL('https://api.crossref.org/works');u.searchParams.set('query',query);u.searchParams.set('rows','40');u.searchParams.set('select','DOI,title,author,published,container-title,URL');
+   const r=await fetch(u);if(!r.ok)throw Error('Crossref');const d=await r.json();
+   return (d.message?.items||[]).map(p=>({title:Array.isArray(p.title)?p.title[0]:'Research publication',url:p.URL||('https://doi.org/'+p.DOI),snippet:[(p.author||[]).slice(0,3).map(a=>[a.given,a.family].filter(Boolean).join(' ')).join(', '),(p['container-title']||[])[0],p.published?.['date-parts']?.[0]?.[0]].filter(Boolean).join(' · '),image:'',source:'Crossref research',score:0}));
+  })(),
+  (async()=>{
+   const u=new URL('https://www.googleapis.com/books/v1/volumes');u.searchParams.set('q',query);u.searchParams.set('maxResults','40');
+   const r=await fetch(u);if(!r.ok)throw Error('Google Books');const d=await r.json();
+   return (d.items||[]).map(p=>{const v=p.volumeInfo||{};return {title:v.title||'Book',url:v.infoLink||('https://books.google.com/books?id='+p.id),snippet:[(v.authors||[]).slice(0,3).join(', '),v.publishedDate,v.description].filter(Boolean).join(' · ').slice(0,360),image:(v.imageLinks&&(v.imageLinks.thumbnail||v.imageLinks.smallThumbnail)||'').replace('http://','https://'),source:'Google Books',score:0};});
+  })(),
+  (async()=>{
+   const u=new URL('https://commons.wikimedia.org/w/api.php');
+   Object.entries({action:'query',generator:'search',gsrsearch:query+' filetype:bitmap',gsrlimit:'50',prop:'imageinfo',iiprop:'url',iiurlwidth:'360',format:'json',origin:'*'}).forEach(([k,v])=>u.searchParams.set(k,v));
+   const r=await fetch(u);if(!r.ok)throw Error('Wikimedia Commons');const d=await r.json();
+   return Object.values(d.query?.pages||{}).map(p=>({title:p.title||'Wikimedia image',url:'https://commons.wikimedia.org/wiki/'+encodeURIComponent(p.title||''),snippet:'Image from Wikimedia Commons',image:p.imageinfo?.[0]?.thumburl||p.imageinfo?.[0]?.url||'',source:'Wikimedia Commons',score:0}));
+  })()
+ ];
+ const settled=await Promise.allSettled(jobs);
+ if(selectedMode==='images'||selectedMode==='videos')return settled[0].status==='fulfilled'?settled[0].value:[];
+ if(selectedMode==='news')return [];
+ if(selectedMode==='research')return settled.slice(2,5).flatMap(x=>x.status==='fulfilled'?x.value:[]);
+ return settled.flatMap(x=>x.status==='fulfilled'?x.value:[]);
+}
+form.addEventListener('submit',async e=>{
+ e.preventDefault();
+ const q=input.value.trim();if(!q)return;
+ out.innerHTML="<p>Searching Everything Hub's own index and connected sources…</p>";
+ let apiPage=1,apiHasMore=false,totalIndexed=0,loadingMore=false,shown=24;
+ let activeType=selectedMode==='images'?'images':selectedMode==='videos'?'videos':'web';
+ const seenUrls=new Set(),items=[];
+ const addItems=(rows)=>{for(const x of rows||[]){const url=safe(x.url);if(url==='#'||seenUrls.has(url))continue;seenUrls.add(url);items.push({...x,url});}};
+ const loadApiPage=async(page)=>{
+  if(page>1){apiHasMore=false;return [];}
+  const u=new URL('https://everythinghub-search-backend.vercel.app/api/search');
+  u.searchParams.set('q',q);
+  const r=await fetch(u,{headers:{accept:'application/json'}});
+  if(!r.ok)throw Error('Independent Everything Hub search '+r.status);
+  const d=await r.json();apiHasMore=false;totalIndexed=Number(d.count)||0;
+  return (d.results||[]).map(x=>({...x,description:x.snippet||x.description||'',source:x.source||d.provider||'Web search',mediaType:'web'}));
+ };
+ const render=()=>{
+  const isVideo=x=>x.mediaType==='video'||/youtube\.com|youtu\.be|vimeo\.com/i.test(String(x.url||''));
+  const matches=items.filter(x=>activeType==='images'?Boolean(safe(x.image)!=='#'):activeType==='videos'?isVideo(x):!isVideo(x));
+  const visible=matches.slice(0,shown);
+  out.className=activeType==='images'?'image-mode':activeType==='videos'?'video-mode':'';
+  const tabs='<nav class="search-tabs" aria-label="Search categories">'+[['web','Web'],['images','Images'],['videos','Videos']].map(([key,label])=>'<button type="button" class="search-tab" data-type="'+key+'" aria-pressed="'+(activeType===key)+'">'+label+'</button>').join('')+'</nav>';
+  const cards=visible.map(x=>{
+   const image=safe(x.image),link=safe(x.url),video=safe(x.video);
+   const directVideo=video!=='#'&&/\.(mp4|webm|ogg)(?:[?#]|$)/i.test(video);
+   const preview=directVideo
+    ? '<div class="preview"><video controls preload="none" '+(image!=='#'?'poster="'+image+'"':'')+'><source src="'+video+'"></video></div>'
+    : image!=='#'
+      ? '<a class="preview" target="_blank" rel="noopener noreferrer" href="'+link+'"><img loading="lazy" src="'+image+'" alt="" referrerpolicy="no-referrer">'+(isVideo(x)?'<span class="play">▶</span>':'')+'</a>'
+      : isVideo(x)?'<a class="preview video-link" target="_blank" rel="noopener noreferrer" href="'+link+'"><span class="play">▶</span><span>WATCH VIDEO</span></a>':'';
+   return '<article class="result">'+preview+'<div class="result-copy"><a target="_blank" rel="noopener noreferrer" href="'+link+'">'+esc(x.title)+'</a>'+(isVideo(x)?'<span class="media-tag">VIDEO</span>':'')+'<p>'+esc(x.snippet||'')+'</p><div class="source">'+esc(x.source||host(x.url))+'</div></div></article>';
+  }).join('');
+  const moreAvailable=shown<matches.length||(activeType==='web'&&apiHasMore);
+  const resultLabel=activeType==='web'&&totalIndexed?'Showing '+matches.length.toLocaleString()+' results · '+totalIndexed.toLocaleString()+' provider matches':matches.length.toLocaleString()+' '+activeType+' results';
+  out.innerHTML=tabs+'<p class="source result-count">'+resultLabel+'</p>'+cards+(moreAvailable?'<button id="moreResults" type="button" style="display:block;margin:22px auto;padding:13px 25px;border:1px solid #39ff79;border-radius:999px;background:#063b2e;color:#fff;font-weight:800">'+(shown<matches.length?'Show 24 more results':'Load next 50 indexed results')+'</button>':'')+(matches.length?'':'<p>No '+activeType+' results found for this search. Try Web or a broader search.</p>');
+  out.querySelectorAll('.search-tab').forEach(tab=>tab.addEventListener('click',()=>{activeType=tab.dataset.type;shown=24;render()}));
+  const more=document.querySelector('#moreResults');
+  if(more)more.addEventListener('click',async()=>{
+   if(loadingMore)return;loadingMore=true;more.disabled=true;more.textContent='Loading more results…';
+   try{
+    if(shown>=items.length&&apiHasMore){apiPage++;addItems(await loadApiPage(apiPage));}
+    shown=Math.min(shown+24,items.length);render();
+   }catch(error){more.disabled=false;more.textContent='Retry loading more results';more.onclick=()=>{apiPage=Math.max(1,apiPage-1);loadingMore=false;render()};}
+   finally{loadingMore=false;}
+  });
+ };
+ try{
+  // Search Everything Hub's own published crawler catalog on every query.
+  // It is the primary index, not a last-resort fallback when outside sources fail.
+  const [catalogResult,apiResult,publicResult]=await Promise.allSettled([
+   searchCrawlerCatalog(q),
+   loadApiPage(1),
+   searchPublicSources(q)
+  ]);
+  // Independent live web search is the primary provider; the published static crawler catalog adds supplemental coverage.
+  if(apiResult.status==='fulfilled')addItems(apiResult.value);
+  if(catalogResult.status==='fulfilled')addItems(catalogResult.value);
+  if(publicResult.status==='fulfilled')addItems(publicResult.value);
+  if(catalogResult.status==='rejected'&&apiResult.status==='rejected'&&publicResult.status==='rejected'){
+   out.innerHTML='<p>Everything Hub search sources are temporarily unavailable. Please try again shortly.</p>';
+   return;
+  }
+  render();
+ }catch(error){out.innerHTML='<p>Everything Hub search is temporarily unavailable. Please try again shortly.</p>';}
+});
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function safe(s){try{const u=new URL(s);return ['https:','http:'].includes(u.protocol)?u.href:'#'}catch{return '#'}}
+function host(s){try{return new URL(s).hostname.replace(/^www\./,'')}catch{return 'Web result'}}
+// Accept searches submitted from dedicated discovery pages.
+const incoming=new URLSearchParams(location.search);
+const incomingQuery=incoming.get('q');
+if(incomingQuery){input.value=incomingQuery;const incomingMode=incoming.get('mode')||'web';setSelectedMode(incomingMode);form.requestSubmit();}
+
+</script></body></html>
