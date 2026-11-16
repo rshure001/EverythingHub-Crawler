@@ -1,0 +1,122 @@
+name: Everything Hub staging catalog browser verification
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/everything-hub-staging-browser-check.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  staging-browser-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      TARGET_URL: https://everythinghub-homepage-fixed-nv16ohr4m-rshure001-8053.vercel.app/
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install Playwright
+        run: |
+          npm init -y
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+      - name: Verify staging homepage, approved art, complete crawler catalog, and search
+        run: |
+          cat > staging-check.cjs <<'JS'
+          const { chromium } = require("playwright");
+          const fs = require("fs");
+          (async () => {
+            const browser = await chromium.launch({ headless: true });
+            const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+            const errors = [];
+            page.on("pageerror", e => errors.push(e.message));
+            const report = { url: process.env.TARGET_URL, startedAt: new Date().toISOString() };
+            try {
+              const response = await page.goto(report.url, { waitUntil: "domcontentloaded", timeout: 45000 });
+              report.httpStatus = response?.status();
+              report.title = await page.title();
+              report.searchInput = await page.locator("#q").count() === 1;
+              report.categoryCount = await page.locator(".tile").count();
+              await page.locator("img.approved-master-art").waitFor({ state: "attached", timeout: 15000 });
+              await page.waitForFunction(() => {
+                const img = document.querySelector("img.approved-master-art");
+                return !!img && img.complete && img.naturalWidth >= 100;
+              }, { timeout: 25000 });
+              report.approvedArtwork = await page.locator("img.approved-master-art").evaluate(img => ({
+                complete: img.complete, naturalWidth: img.naturalWidth, alt: img.alt
+              }));
+              const manifestResponse = await page.request.get(new URL("search-index/manifest.json", report.url).href);
+              if (!manifestResponse.ok()) throw new Error("Manifest HTTP " + manifestResponse.status());
+              const manifest = await manifestResponse.json();
+              report.catalog = { totalPages: manifest.total_pages, shardCount: manifest.shard_count, shards: [] };
+              if (!Array.isArray(manifest.shards) || manifest.shards.length !== manifest.shard_count) {
+                throw new Error("Invalid manifest shard metadata");
+              }
+              for (const shard of manifest.shards) {
+                const shardResponse = await page.request.get(new URL("search-index/" + shard.file, report.url).href);
+                if (!shardResponse.ok()) throw new Error(shard.file + " HTTP " + shardResponse.status());
+                const payload = await shardResponse.json();
+                const count = Array.isArray(payload.pages) ? payload.pages.length : 0;
+                if (count !== shard.pages) throw new Error(shard.file + " page count mismatch");
+                report.catalog.shards.push({ file: shard.file, pages: count });
+              }
+              const total = report.catalog.shards.reduce((n, shard) => n + shard.pages, 0);
+              if (total !== manifest.total_pages || total !== 2654) {
+                throw new Error("Catalog total mismatch: " + total);
+              }
+              if (!response?.ok() || !report.title.includes("Everything Hub") || !report.searchInput ||
+                  report.categoryCount !== 8 || report.approvedArtwork.naturalWidth < 100) {
+                throw new Error("Homepage structure check failed: " + JSON.stringify(report));
+              }
+              await page.screenshot({ path: "everything-hub-staging-homepage.png", fullPage: true });
+              await page.locator("#q").fill("Rolex");
+              await page.locator("#q").press("Enter");
+              await page.locator("#results .result a").first().waitFor({ state: "visible", timeout: 30000 });
+              report.rolexResultCount = await page.locator("#results .result").count();
+              if (!report.rolexResultCount) throw new Error("Rolex search returned no visible results");
+              await page.screenshot({ path: "everything-hub-staging-rolex.png", fullPage: true });
+              await page.setViewportSize({ width: 390, height: 844 });
+              await page.reload({ waitUntil: "domcontentloaded" });
+              report.mobile = await page.evaluate(() => ({
+                viewportWidth: document.documentElement.clientWidth,
+                documentWidth: document.documentElement.scrollWidth,
+                searchVisible: !!document.querySelector("#q")?.getClientRects().length,
+                categoryCount: document.querySelectorAll(".tile").length
+              }));
+              if (report.mobile.documentWidth > report.mobile.viewportWidth + 2 ||
+                  !report.mobile.searchVisible || report.mobile.categoryCount !== 8) {
+                throw new Error("Mobile layout check failed: " + JSON.stringify(report.mobile));
+              }
+              report.pageErrors = errors;
+              report.passed = errors.length === 0;
+              if (errors.length) throw new Error("Browser page errors: " + errors.join("; "));
+            } catch (e) {
+              report.failure = e.stack || e.message;
+              report.pageErrors = errors;
+              report.passed = false;
+              await page.screenshot({ path: "everything-hub-staging-failure.png", fullPage: true }).catch(() => {});
+            } finally {
+              report.finishedAt = new Date().toISOString();
+              fs.writeFileSync("everything-hub-staging-report.json", JSON.stringify(report, null, 2));
+              await browser.close();
+              console.log(JSON.stringify(report, null, 2));
+              if (!report.passed) process.exitCode = 1;
+            }
+          })();
+          JS
+          node staging-check.cjs
+      - name: Save staging screenshots and report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: everything-hub-staging-browser-check
+          path: |
+            everything-hub-staging-homepage.png
+            everything-hub-staging-rolex.png
+            everything-hub-staging-failure.png
+            everything-hub-staging-report.json
+          if-no-files-found: warn
+          retention-days: 3
