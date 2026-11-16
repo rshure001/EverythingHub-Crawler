@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-MAX_SUCCESS_AGE_SECONDS = 75 * 60
+MAX_ATTEMPT_AGE_SECONDS = 75 * 60
 ACTIVE_STATUSES = {"queued", "in_progress", "pending", "waiting", "requested"}
 
 
@@ -20,8 +20,8 @@ def parse_time(value: str) -> datetime:
 
 
 def evaluate(runs: list[dict[str, Any]], now: datetime | None = None,
-             max_age_seconds: int = MAX_SUCCESS_AGE_SECONDS) -> dict[str, Any]:
-    """Return wait, healthy, or dispatch; never dispatch while a run is active."""
+             max_age_seconds: int = MAX_ATTEMPT_AGE_SECONDS) -> dict[str, Any]:
+    """Return wait, healthy, or dispatch; never retry a recent failed attempt."""
     now = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
     active = [run for run in runs if run.get("status") in ACTIVE_STATUSES]
     if active:
@@ -31,31 +31,41 @@ def evaluate(runs: list[dict[str, Any]], now: datetime | None = None,
             "active_runs": len(active),
         }
 
-    successful = [
+    attempts = [
         run for run in runs
-        if run.get("conclusion") == "success" and isinstance(run.get("created_at"), str)
+        if isinstance(run.get("created_at"), str)
     ]
-    if not successful:
+    if not attempts:
         return {
             "action": "dispatch",
-            "reason": "no successful crawler run is present in the recent run history",
+            "reason": "no crawler attempt is present in the recent run history",
             "age_seconds": None,
         }
 
-    latest = max(successful, key=lambda run: parse_time(run["created_at"]))
+    latest = max(attempts, key=lambda run: parse_time(run["created_at"]))
     age = max(0, int((now - parse_time(latest["created_at"])).total_seconds()))
-    if age > max_age_seconds:
+    if age <= max_age_seconds:
+        if latest.get("conclusion") == "success":
+            return {
+                "action": "healthy",
+                "reason": "the latest crawler attempt completed successfully within the recovery window",
+                "age_seconds": age,
+                "last_attempt": latest["created_at"],
+            }
         return {
-            "action": "dispatch",
-            "reason": "last successful crawler run is older than the 75-minute recovery window",
+            "action": "wait",
+            "reason": "the latest crawler attempt did not succeed; wait for the retry window before dispatching again",
             "age_seconds": age,
-            "last_success": latest["created_at"],
+            "last_attempt": latest["created_at"],
+            "last_conclusion": latest.get("conclusion"),
         }
+
     return {
-        "action": "healthy",
-        "reason": "a successful crawler run completed within the recovery window",
+        "action": "dispatch",
+        "reason": "the latest crawler attempt is older than the recovery window",
         "age_seconds": age,
-        "last_success": latest["created_at"],
+        "last_attempt": latest["created_at"],
+        "last_conclusion": latest.get("conclusion"),
     }
 
 
