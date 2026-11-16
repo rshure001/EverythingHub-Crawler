@@ -4,6 +4,8 @@ on:
   push:
     paths:
       - "site/**"
+      - "public-search/**"
+      - "publisher/**"
       - ".github/workflows/publish-site.yml"
 permissions:
   contents: read
@@ -22,6 +24,50 @@ jobs:
           python-version: "3.12"
       - name: Validate immutable release manifest
         run: python publisher/publish.py --check
+      - name: Validate and stage the crawler search catalog
+        run: |
+          python - <<'PY'
+          import hashlib, json, pathlib, re, shutil
+          source = pathlib.Path('public-search')
+          target = pathlib.Path('site/search-index')
+          manifest_path = source / 'manifest.json'
+          manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
+          shards = manifest.get('shards')
+          if manifest.get('integrity') != 'sha256' or not isinstance(shards, list):
+              raise SystemExit('Public search manifest must declare SHA-256 and a shard list')
+          if len(shards) != int(manifest.get('shard_count', -1)):
+              raise SystemExit('Manifest shard_count does not match the shard list')
+          target.mkdir(parents=True, exist_ok=True)
+          seen = set()
+          total = 0
+          for shard in shards:
+              name = shard.get('file', '')
+              if not re.fullmatch(r'shard-\\d{4}\\.json', name):
+                  raise SystemExit(f'Unsafe shard filename: {name!r}')
+              raw = (source / name).read_bytes()
+              if len(raw) != int(shard.get('bytes', -1)):
+                  raise SystemExit(f'{name}: byte length mismatch')
+              digest = hashlib.sha256(raw).hexdigest()
+              if digest != shard.get('sha256'):
+                  raise SystemExit(f'{name}: SHA-256 mismatch')
+              payload = json.loads(raw)
+              pages = payload.get('pages')
+              if not isinstance(pages, list) or len(pages) != int(shard.get('pages', -1)):
+                  raise SystemExit(f'{name}: page count mismatch')
+              for page in pages:
+                  url = page.get('url') if isinstance(page, dict) else None
+                  if not isinstance(url, str) or not url.startswith(('https://', 'http://')):
+                      raise SystemExit(f'{name}: invalid page URL')
+                  if url in seen:
+                      raise SystemExit(f'{name}: duplicate URL across the catalog: {url}')
+                  seen.add(url)
+              total += len(pages)
+              shutil.copyfile(source / name, target / name)
+          if total != int(manifest.get('total_pages', -1)):
+              raise SystemExit(f'Catalog total mismatch: {total} pages')
+          shutil.copyfile(manifest_path, target / 'manifest.json')
+          print(json.dumps({'status':'validated-and-staged','pages':total,'shards':len(shards),'unique_urls':len(seen),'integrity':'sha256'}, indent=2))
+          PY
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
         with:
@@ -40,3 +86,42 @@ jobs:
       - name: Deploy validated release
         id: deployment
         uses: actions/deploy-pages@v4
+      - name: Verify published homepage and complete crawler catalog
+        env:
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          python - <<'PY'
+          import hashlib, json, os, urllib.request
+          base = os.environ['PAGE_URL'].rstrip('/') + '/'
+          def get(path):
+              request = urllib.request.Request(base + path, headers={'User-Agent':'EverythingHub-Pages-Verification/1.0'})
+              with urllib.request.urlopen(request, timeout=25) as response:
+                  if response.status != 200:
+                      raise RuntimeError(f'{path}: HTTP {response.status}')
+                  return response.read()
+          html = get('index.html').decode('utf-8')
+          if 'Everything Hub — Everything within reach' not in html or 'id="q"' not in html:
+              raise SystemExit('Published homepage is missing its approved title or search field')
+          if html.count('data-mode=') != 8 or 'everythinghub-approved.png' not in html:
+              raise SystemExit('Published homepage is missing one or more approved search categories or artwork')
+          manifest = json.loads(get('search-index/manifest.json'))
+          shards = manifest.get('shards')
+          if manifest.get('integrity') != 'sha256' or not isinstance(shards, list) or len(shards) != int(manifest.get('shard_count', -1)):
+              raise SystemExit('Published search manifest is invalid')
+          total = 0
+          for shard in shards:
+              name = shard.get('file', '')
+              if not name.startswith('shard-') or not name.endswith('.json'):
+                  raise SystemExit(f'Invalid published shard name: {name!r}')
+              raw = get('search-index/' + name)
+              if hashlib.sha256(raw).hexdigest() != shard.get('sha256'):
+                  raise SystemExit(f'{name}: published SHA-256 mismatch')
+              payload = json.loads(raw)
+              pages = payload.get('pages')
+              if not isinstance(pages, list) or len(pages) != int(shard.get('pages', -1)):
+                  raise SystemExit(f'{name}: published page count mismatch')
+              total += len(pages)
+          if total != int(manifest.get('total_pages', -1)):
+              raise SystemExit(f'Published total mismatch: {total} pages')
+          print(json.dumps({'status':'published-and-verified','url':base,'pages':total,'shards':len(shards),'integrity':'sha256','homepage_categories':8}, indent=2))
+          PY
