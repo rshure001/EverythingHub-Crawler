@@ -5,7 +5,8 @@ on:
     paths:
       - ".github/workflows/crawl.yml"
   schedule:
-    - cron: "7,22,37,52 * * * *"
+    # Run once per hour away from GitHub's top-of-hour scheduling peak.
+    - cron: "13 * * * *"
   workflow_dispatch:
 permissions:
   contents: write
