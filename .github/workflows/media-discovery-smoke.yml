@@ -31,10 +31,10 @@ jobs:
           for (const type of ["images", "videos"]) {
             const d = JSON.parse(fs.readFileSync("/tmp/" + type + ".json", "utf8"));
             const headers = fs.readFileSync("/tmp/" + type + ".headers", "utf8").toLowerCase();
-            if (!/^content-type:\\s*application\\/json/m.test(headers)) {
+            if (!headers.includes("content-type: application/json")) {
               throw new Error(type + ": missing JSON content type");
             }
-            if (!/^cache-control:\\s*public, max-age=180, s-maxage=180/m.test(headers)) {
+            if (!headers.includes("cache-control: public, max-age=180, s-maxage=180")) {
               throw new Error(type + ": unexpected or missing cache policy");
             }
             if (!Array.isArray(d.results) || d.count !== d.results.length) {
