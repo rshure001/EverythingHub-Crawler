@@ -24,7 +24,8 @@ jobs:
           python-version: "3.12"
       - name: Compile crawler and run unit tests
         run: |
-          python -m py_compile crawler/crawl.py crawler/report.py crawler/build_search_shards.py
+          python -m py_compile crawler/crawl.py crawler/report.py crawler/build_search_shards.py crawler/validate_public_index.py
           python -m unittest discover -s crawler -p 'test_*.py' -v
+          python crawler/validate_public_index.py
       - name: Validate static release manifest
         run: python publisher/publish.py --check
