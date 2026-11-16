@@ -23,13 +23,20 @@ jobs:
         run: |
           set -euo pipefail
           curl --silent --show-error --fail --max-time 20 -G "$BASE" \
-            --data-urlencode "q=octopus" --data-urlencode "type=image" -o /tmp/images.json
+            --data-urlencode "q=octopus" --data-urlencode "type=image" -D /tmp/images.headers -o /tmp/images.json
           curl --silent --show-error --fail --max-time 20 -G "$BASE" \
-            --data-urlencode "q=Apollo 11 NASA" --data-urlencode "type=video" -o /tmp/videos.json
+            --data-urlencode "q=Apollo 11 NASA" --data-urlencode "type=video" -D /tmp/videos.headers -o /tmp/videos.json
           node <<'NODE'
           const fs = require("fs");
           for (const type of ["images", "videos"]) {
             const d = JSON.parse(fs.readFileSync("/tmp/" + type + ".json", "utf8"));
+            const headers = fs.readFileSync("/tmp/" + type + ".headers", "utf8").toLowerCase();
+            if (!/^content-type:\\s*application\\/json/m.test(headers)) {
+              throw new Error(type + ": missing JSON content type");
+            }
+            if (!/^cache-control:\\s*public, max-age=180, s-maxage=180/m.test(headers)) {
+              throw new Error(type + ": unexpected or missing cache policy");
+            }
             if (!Array.isArray(d.results) || d.count !== d.results.length) {
               throw new Error(type + ": invalid results/count response");
             }
