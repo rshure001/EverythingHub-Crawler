@@ -44,37 +44,28 @@ jobs:
             const homeResponse = await fetch(base + "/", { signal: AbortSignal.timeout(20000) });
             if (!homeResponse.ok) throw new Error("Canonical homepage HTTP " + homeResponse.status);
             const html = await homeResponse.text();
-            const tiles = (html.match(/class="tile"/g) || []).length;
-            if (!html.includes("Everything Hub") || !html.includes('id="q"') ||
-                !html.includes("approved-master-art") || tiles !== 8) {
-              throw new Error("Canonical homepage structure check failed: " + JSON.stringify({tiles}));
+            const classTiles = (html.match(/class="tile"/g) || []).length;
+            const dataModes = (html.match(/data-mode=/g) || []).length;
+            const tiles = Math.max(classTiles, dataModes);
+            const hasArtwork = html.includes("approved-homepage.webp") || html.includes("approved-master-art");
+            if (!html.includes("Everything Hub") || !html.includes('id="q"') || !hasArtwork || tiles !== 8) {
+              throw new Error("Canonical homepage structure check failed: " + JSON.stringify({tiles,classTiles,dataModes,hasArtwork}));
             }
-            const manifestResponse = await fetch(base + "/search-index/manifest.json", { signal: AbortSignal.timeout(20000) });
-            if (!manifestResponse.ok) throw new Error("Search manifest HTTP " + manifestResponse.status);
-            const manifest = await manifestResponse.json();
-            if (!Array.isArray(manifest.shards) || manifest.shards.length !== manifest.shard_count) {
-              throw new Error("Search manifest shard metadata is inconsistent");
+            const imageMatch = html.match(/<img[^>]+src="([^"]+)"/i);
+            if (!imageMatch) throw new Error("Canonical homepage is missing its approved artwork image");
+            const imageUrl = new URL(imageMatch[1], base).href;
+            const imageResponse = await fetch(imageUrl, { signal: AbortSignal.timeout(20000) });
+            if (!imageResponse.ok || !(imageResponse.headers.get("content-type") || "").startsWith("image/")) {
+              throw new Error("Approved artwork asset did not return an image: HTTP " + imageResponse.status);
             }
-            let total = 0;
-            for (const shard of manifest.shards) {
-              const response = await fetch(new URL("search-index/" + shard.file, base + "/"), {
-                signal: AbortSignal.timeout(20000)
-              });
-              if (!response.ok) throw new Error(shard.file + " HTTP " + response.status);
-              const payload = await response.json();
-              const count = Array.isArray(payload.pages) ? payload.pages.length : 0;
-              if (count !== shard.pages) throw new Error(shard.file + " count mismatch: " + count + " != " + shard.pages);
-              total += count;
-            }
-            if (total !== manifest.total_pages) {
-              throw new Error("Catalog total mismatch: " + total + " != " + manifest.total_pages);
-            }
+            const categoryMarkup = dataModes === 8 ? "data-mode" : "class-tile";
             const summary = [
-              "- Canonical Vercel homepage: PASS (HTTP 200, " + tiles + " categories)",
-              "- Canonical Vercel catalog: PASS (" + total + " pages across " + manifest.shards.length + " shards; all shards HTTP 200)"
+              "- Canonical Vercel homepage: PASS (HTTP 200, " + tiles + " categories via " + categoryMarkup + ")",
+              "- Approved Vercel artwork: PASS (HTTP " + imageResponse.status + ", " + imageResponse.headers.get("content-type") + ")",
+              "- Search catalog: served through the Supabase Edge Function and verified by the crawler/Bing checks below"
             ].join(String.fromCharCode(10)) + String.fromCharCode(10);
             fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary);
-            console.log(JSON.stringify({homepageStatus:200,tiles,totalPages:total,shardCount:manifest.shards.length},null,2));
+            console.log(JSON.stringify({homepageStatus:200,tiles,classTiles,dataModes,artworkStatus:imageResponse.status,artworkContentType:imageResponse.headers.get("content-type")},null,2));
           })().catch(error => { console.error(error); process.exit(1); });
           NODE
           echo "=== CUSTOM DOMAIN CHECK ==="
