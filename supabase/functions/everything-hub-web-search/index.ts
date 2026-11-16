@@ -164,9 +164,76 @@ Deno.serve(async (req: Request) => {
     error: "Search temporarily unavailable",
   }, 503);
 
+  const independentFallback = async (reason: string, crawlerIndexCount: number | null) => {
+    try {
+      const projectUrl = Deno.env.get("SUPABASE_URL");
+      if (!projectUrl) return null;
+
+      const endpoint = new URL(
+        projectUrl.replace(/\/$/, "") + "/functions/v1/everything-hub-independent-search",
+      );
+      endpoint.searchParams.set("q", query);
+      const response = await fetch(endpoint, {
+        headers: { Accept: "application/json" },
+        signal: AbortSignal.timeout(8500),
+      });
+      if (!response.ok) {
+        throw new Error("Independent web fallback returned HTTP " + response.status);
+      }
+
+      const payload: any = await response.json();
+      const allResults = (Array.isArray(payload?.results) ? payload.results : []).flatMap((item: any) => {
+        const rawUrl = String(item?.url ?? "");
+        try {
+          const parsed = new URL(rawUrl);
+          if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return [];
+          return [{
+            title: String(item?.title || rawUrl),
+            url: parsed.href,
+            snippet: String(item?.snippet || "").replace(/\s+/g, " ").slice(0, 320),
+            source: String(item?.source || parsed.hostname),
+            origin: "Bing RSS",
+            tentacle: "general",
+            relevance: 0,
+          }];
+        } catch {
+          return [];
+        }
+      });
+
+      if (!allResults.length) return null;
+      const pageResults = allResults.slice(offset, offset + limit);
+      return json({
+        results: pageResults,
+        count: allResults.length,
+        query,
+        tentacle: null,
+        requestedTentacle: validLane,
+        laneFallback: Boolean(validLane),
+        source: "Bing RSS independent web fallback",
+        provider: String(payload?.provider || "Bing RSS"),
+        offset,
+        limit,
+        hasMore: offset + pageResults.length < allResults.length,
+        fallback: true,
+        fallbackReason: reason,
+        independentOfDatabase: true,
+        crawlerIndexCount,
+      }, 200, "public, max-age=15, stale-while-revalidate=30");
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      console.error("Independent web fallback unavailable:", detail);
+      return null;
+    }
+  };
+
   const staticFallback = async (reason: string) => {
+    let crawlerIndexCount: number | null = null;
+    let catalogLoaded = false;
+
     try {
       const catalog = await loadStaticCatalog();
+      catalogLoaded = true;
       let found = searchStaticPages(catalog.pages, query, validLane, limit, offset);
       let laneFallback = false;
 
@@ -177,27 +244,53 @@ Deno.serve(async (req: Request) => {
           laneFallback = true;
         }
       }
+      crawlerIndexCount = found.count;
 
-      return json({
-        results: found.results,
-        count: found.count,
-        query,
-        tentacle: laneFallback ? null : validLane,
-        requestedTentacle: validLane,
-        laneFallback,
-        source: "Everything Hub public crawler index",
-        indexUpdatedAt: catalog.updatedAt,
-        offset,
-        limit,
-        hasMore: found.hasMore,
-        fallback: true,
-        fallbackReason: reason,
-      }, 200, "public, max-age=30, stale-while-revalidate=60");
+      if (found.results.length) {
+        return json({
+          results: found.results,
+          count: found.count,
+          query,
+          tentacle: laneFallback ? null : validLane,
+          requestedTentacle: validLane,
+          laneFallback,
+          source: "Everything Hub public crawler index",
+          indexUpdatedAt: catalog.updatedAt,
+          indexIntegrity: "sha256",
+          offset,
+          limit,
+          hasMore: found.hasMore,
+          fallback: true,
+          fallbackReason: reason,
+        }, 200, "public, max-age=30, stale-while-revalidate=60");
+      }
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       console.error("Static crawler index fallback unavailable:", detail);
-      return unavailable();
     }
+
+    const independent = await independentFallback(reason, crawlerIndexCount);
+    if (independent) return independent;
+
+    if (catalogLoaded) {
+      return json({
+        results: [],
+        count: 0,
+        query,
+        tentacle: validLane,
+        requestedTentacle: validLane,
+        laneFallback: false,
+        source: "Everything Hub public crawler index",
+        indexIntegrity: "sha256",
+        offset,
+        limit,
+        hasMore: false,
+        fallback: true,
+        fallbackReason: reason,
+      }, 200, "public, max-age=30, stale-while-revalidate=60");
+    }
+
+    return unavailable();
   };
 
   try {

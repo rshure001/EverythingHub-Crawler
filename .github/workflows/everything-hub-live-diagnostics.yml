@@ -1,6 +1,7 @@
 name: Everything Hub live diagnostics
 on:
   push:
+    branches: [main]
     paths:
       - .github/workflows/everything-hub-live-diagnostics.yml
       - supabase/functions/everything-hub-web-search/**
@@ -99,6 +100,8 @@ jobs:
           db_search_detail="query returned usable results"
           static_index_ok=0
           static_index_count=0
+          independent_fallback_ok=0
+          independent_fallback_count=0
           independent_count=0
           image_count=0
           video_count=0
@@ -111,9 +114,10 @@ jobs:
                 if node -e '
                   const fs=require("fs"); const d=JSON.parse(fs.readFileSync("/tmp/search.json","utf8"));
                   const a=Array.isArray(d.results)?d.results:[];
-                  console.log(JSON.stringify({source:d.source??null,fallback:d.fallback??false,count:d.count??a.length,resultCount:a.length,sample:a.slice(0,3).map(x=>({title:x.title,url:x.url}))},null,2));
+                  console.log(JSON.stringify({source:d.source??null,provider:d.provider??null,fallback:d.fallback??false,independentOfDatabase:d.independentOfDatabase??false,count:d.count??a.length,resultCount:a.length,sample:a.slice(0,3).map(x=>({title:x.title,url:x.url}))},null,2));
                   if(!a.length) process.exit(2);
                   if(d.fallback===true && d.source==="Everything Hub public crawler index") process.exit(3);
+                  if(d.fallback===true && d.source==="Bing RSS independent web fallback" && d.independentOfDatabase===true) process.exit(4);
                 '; then
                   echo "PASS: eh_quad database-backed search returned usable results."
                   db_search_detail="HTTP 200 in $db_search_seconds seconds with database-backed results"
@@ -125,6 +129,12 @@ jobs:
                     db_search_ok=0
                     db_search_detail="HTTP 200 in $db_search_seconds seconds via public crawler fallback; PostgreSQL is still unavailable"
                     echo "PASS: public crawler index fallback returned $static_index_count results; database-backed search remains blocked."
+                  elif [ "$search_exit" -eq 4 ]; then
+                    independent_fallback_ok=1
+                    independent_fallback_count=$(node -p "require('/tmp/search.json').results.length")
+                    db_search_ok=0
+                    db_search_detail="HTTP 200 in $db_search_seconds seconds via Bing RSS after no crawler-index match; PostgreSQL is still unavailable"
+                    echo "PASS: Bing RSS fallback returned $independent_fallback_count results after no crawler-index match."
                   else
                     echo "WARN: search API returned no usable results."
                     db_search_ok=0
@@ -157,6 +167,16 @@ jobs:
             echo "::error::Database-backed search timed out or failed before returning an HTTP response."
             exit 1
           fi
+          echo "=== PUBLIC CRAWLER INDEX: NASA ==="
+          curl --max-time 10 -sS -G "$BASE/everything-hub-web-search" -H "apikey: $KEY" -H "accept: application/json" --data-urlencode "q=NASA" --data-urlencode "limit=10" -o /tmp/static-search.json
+          node -e '
+            const fs=require("fs"); const d=JSON.parse(fs.readFileSync("/tmp/static-search.json","utf8"));
+            const a=Array.isArray(d.results)?d.results:[];
+            console.log(JSON.stringify({source:d.source??null,indexIntegrity:d.indexIntegrity??null,count:d.count??a.length,resultCount:a.length,sample:a.slice(0,3).map(x=>({title:x.title,url:x.url}))},null,2));
+            if(d.source!=="Everything Hub public crawler index" || d.indexIntegrity!=="sha256" || !a.length) process.exit(2);
+          '
+          static_index_ok=1
+          static_index_count=$(node -p "require('/tmp/static-search.json').results.length")
           echo "=== DATABASE-INDEPENDENT SEARCH FALLBACK ==="
           curl -fsS -G "$BASE/everything-hub-independent-search" --data-urlencode "q=Rolex" -o /tmp/independent.json
           node -e '
@@ -199,9 +219,12 @@ jobs:
             echo "- Custom browser endpoint: PASS"
             echo "- Database-backed search: $db_search_status"
             if [ "$static_index_ok" -eq 1 ]; then
-              echo "- Public crawler fallback: PASS ($static_index_count results; SHA-256 verified shards)"
+              echo "- Public crawler fallback: PASS (NASA query returned $static_index_count results; SHA-256 verified shards)"
             fi
-            echo "- Independent search: PASS ($independent_count results)"
+            if [ "$independent_fallback_ok" -eq 1 ]; then
+              echo "- Bing RSS no-match fallback: PASS (Rolex query returned $independent_fallback_count results)"
+            fi
+            echo "- Independent search endpoint: PASS ($independent_count results)"
             echo "- Image discovery: PASS ($image_count results)"
             echo "- Video discovery: PASS ($video_count results)"
             if [ "$db_search_ok" -ne 1 ]; then
