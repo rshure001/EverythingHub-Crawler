@@ -6,6 +6,15 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Everything Hub — Everything within reach</title>
 <meta name="description" content="Search the web, explore people, places, resources, knowledge, news, videos, images and solutions.">
+<link rel="canonical" href="https://everythinghub.ink/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Everything Hub">
+<meta property="og:title" content="Everything Hub — Everything within reach">
+<meta property="og:description" content="Search the web, explore people, places, resources, knowledge, news, videos, images and solutions.">
+<meta property="og:url" content="https://everythinghub.ink/">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Everything Hub — Everything within reach">
+<meta name="twitter:description" content="Search the web, explore people, places, resources, knowledge, news, videos, images and solutions.">
 <style>
 :root{color-scheme:light;--ink:#1c302c;--gold:#d5a052;--paper:#f5f0e5;--teal:#173a35}
 *{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(ellipse at 50% 0,#fffaf0,var(--paper) 70%);font:16px system-ui,sans-serif;color:var(--ink)}
@@ -371,7 +380,7 @@ main{width:min(900px,calc(100% - 28px))!important;margin:22px auto 40px!importan
 @media(max-width:760px){.dashboard-grid{grid-template-columns:1fr 1fr}.dashboard-card:last-child{grid-column:1/-1}.gallery-grid,.video-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:9px}.media-card{min-height:150px!important}.media-card img{height:112px!important}.video-thumb{height:112px}}
 @media(max-width:390px){.video-meta{padding:9px}.video-meta strong{font-size:11px}.dashboard-card{padding:12px}.dashboard-card>strong{font-size:16px}}
 
-</style><link rel="canonical" href="https://everything.dogtagday.org/"><meta name="robots" content="index,follow,max-image-preview:large"><meta property="og:type" content="website"><meta property="og:title" content="Everything Hub — Everything within reach"><meta property="og:description" content="Search the web, discover pictures and videos, explore places, businesses, news, shopping and research."><meta property="og:url" content="https://everything.dogtagday.org/"><script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","name":"Everything Hub","url":"https://everything.dogtagday.org/","description":"A broad search and discovery engine for web pages, images, videos, news, places, businesses, shopping and research.","potentialAction":{"@type":"SearchAction","target":{"@type":"EntryPoint","urlTemplate":"https://everything.dogtagday.org/?q={search_term_string}"},"query-input":"required name=search_term_string"}}</script></head>
+</style><link rel="canonical" href="https://everythinghub.ink/"><meta name="robots" content="index,follow,max-image-preview:large"><meta property="og:type" content="website"><meta property="og:title" content="Everything Hub — Everything within reach"><meta property="og:description" content="Search the web, discover pictures and videos, explore places, businesses, news, shopping and research."><meta property="og:url" content="https://everythinghub.ink/"><script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","name":"Everything Hub","url":"https://everythinghub.ink/","description":"A broad search and discovery engine for web pages, images, videos, news, places, businesses, shopping and research.","potentialAction":{"@type":"SearchAction","target":{"@type":"EntryPoint","urlTemplate":"https://everythinghub.ink/?q={search_term_string}"},"query-input":"required name=search_term_string"}}</script></head>
 <body>
 <header class="topbar">
   <div class="weather-chip" aria-label="Las Vegas weather">
@@ -389,7 +398,7 @@ main{width:min(900px,calc(100% - 28px))!important;margin:22px auto 40px!importan
 <main>
 <section class="hero">
   <div class="hero-art-wrap">
-    <img class="approved-master-art" src="https://raw.githubusercontent.com/rshure001/EverythingHub-Crawler/main/assets/everythinghub-approved.png" alt="Realistic emerald octopus with a glowing gold brain and eight detailed tentacles" />
+    <img class="approved-master-art" src="https://vdceayvfgkwpgwixrhwi.supabase.co/storage/v1/object/public/everything-hub-publishing/assets/approved-master.png" alt="Realistic emerald octopus with a glowing gold brain and eight detailed tentacles" />
     <form class="search hero-live-search" id="search">
       
       <input id="q" type="search" aria-label="Search Everything Hub" placeholder="Search Everything within reach…" autocomplete="off" />
@@ -534,18 +543,26 @@ async function loadCrawlerCatalog(){
  if(!crawlerCatalogPromise){
   crawlerCatalogPromise=(async()=>{
    const response=await fetch('./search-index/manifest.json',{cache:'force-cache'});
-   if(!response.ok)throw Error('Crawler catalog manifest is not published on this host');
+   if(!response.ok)throw Error('Crawler catalog manifest unavailable ('+response.status+')');
    const manifest=await response.json();
-   if(!Array.isArray(manifest.shards))return [];
-   const shards=await Promise.all(manifest.shards.map(async entry=>{
-    const r=await fetch('./search-index/'+encodeURIComponent(entry.file),{cache:'force-cache'});
-    if(!r.ok)throw Error('Crawler shard unavailable: '+entry.file);
+   if(!Array.isArray(manifest.shards)||manifest.shards.length!==Number(manifest.shard_count))throw Error('Crawler catalog manifest is invalid');
+   const batches=await Promise.all(manifest.shards.map(async shard=>{
+    const file=String(shard.file||'');
+    if(!/^shard-\\d{4}\\.json$/.test(file))throw Error('Invalid crawler shard name');
+    const r=await fetch('./search-index/'+file,{cache:'force-cache'});
+    if(!r.ok)throw Error('Crawler catalog shard '+file+' unavailable ('+r.status+')');
     const data=await r.json();
-    return Array.isArray(data.pages)?data.pages:[];
+    if(!Array.isArray(data.pages)||data.pages.length!==Number(shard.pages))throw Error('Crawler catalog shard count mismatch: '+file);
+    return data.pages;
    }));
-   const pages=shards.flat();
-   if(manifest.total_pages&&pages.length!==manifest.total_pages)throw Error('Crawler catalog page count mismatch');
-   return pages.map(p=>({t:p.title||'',d:p.description||'',s:p.text||'',u:p.url||'',i:'',v:'',m:'web'}));
+   const pages=batches.flat();
+   if(pages.length!==Number(manifest.total_pages))throw Error('Crawler catalog total mismatch');
+   const seen=new Set();
+   return pages.filter(page=>{
+    const url=String(page&&page.url||'');
+    if(!/^https?:\\/\\//i.test(url)||seen.has(url))return false;
+    seen.add(url);return true;
+   });
   })();
  }
  return crawlerCatalogPromise;
@@ -556,7 +573,7 @@ async function searchCrawlerCatalog(query){
  if(!terms.length)return [];
  const ranked=[];
  for(const page of pages){
-  const title=String(page.t||'').toLowerCase(),description=String(page.d||'').toLowerCase(),snippet=String(page.s||'').toLowerCase();
+  const title=String(page.title||'').toLowerCase(),description=String(page.description||'').toLowerCase(),snippet=String(page.text||'').toLowerCase();
   let score=0;
   for(const term of terms){
    if(title.includes(term))score+=5;
@@ -564,7 +581,7 @@ async function searchCrawlerCatalog(query){
    if(snippet.includes(term))score+=1;
   }
   if(terms.length>1&&terms.every(term=>(title+' '+description+' '+snippet).includes(term)))score+=4;
-  if(score)ranked.push({title:page.t,url:page.u,snippet:page.d||page.s||'',image:page.i||'',video:page.v||'',mediaType:page.m||'web',score,source:'EverythingHub index'});
+  if(score)ranked.push({title:page.title,url:page.url,snippet:page.description||page.text||'',image:page.image||'',video:page.video||'',mediaType:page.mediaType||'web',score,source:'EverythingHub index'});
  }
  ranked.sort((a,b)=>b.score-a.score);
  return ranked.slice(0,100);
