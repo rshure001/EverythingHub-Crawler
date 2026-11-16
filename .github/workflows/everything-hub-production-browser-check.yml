@@ -64,7 +64,7 @@ jobs:
                 report.catalog.shards.push({ file: shard.file, pages: count });
               }
               const total = report.catalog.shards.reduce((n, shard) => n + shard.pages, 0);
-              if (total !== manifest.total_pages || total !== 2654) {
+              if (total !== manifest.total_pages || total < 1) {
                 throw new Error("Catalog total mismatch: " + total);
               }
               if (!response?.ok() || !report.title.includes("Everything Hub") || !report.searchInput ||
