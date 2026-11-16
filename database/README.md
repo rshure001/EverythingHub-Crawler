@@ -64,3 +64,7 @@ Do not deploy the corrected Edge Function until PostgreSQL accepts connections, 
 
 No migration or import is run against Dog Tag Day. The files alone do not
 publish or switch production traffic.
+
+## Latest repository snapshot and recovery status (2026-11-16 06:12 UTC)
+
+The canonical crawler repository snapshot contains **2,654 pages across 14 public-search shards**. The importer is tested against an ephemeral PostgreSQL service in GitHub Actions; that test database is disposable and is never the production Supabase project. Production `eh_quad` remains unverified because PostgreSQL is still in WAL redo recovery and rejects connections with `57P03`. Do not apply the migration or import to production until direct schema reads succeed.
