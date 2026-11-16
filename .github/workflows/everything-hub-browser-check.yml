@@ -30,7 +30,14 @@ jobs:
             const browser = await chromium.launch({ headless: true });
             const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 1 });
             const errors = [];
+            const catalogResponses = [];
             page.on('pageerror', e => errors.push(e.message));
+            page.on('response', response => {
+              const url = response.url();
+              if (url.includes('/search-index/manifest.json') || url.includes('/search-index/shard-')) {
+                catalogResponses.push({ url, status: response.status() });
+              }
+            });
             const failedRequests = [];
             page.on('requestfailed', r => failedRequests.push({ url: r.url(), error: r.failure()?.errorText }));
             const report = { url: 'https://everythinghub-homepage-fixed.vercel.app/', customDomainUrl: 'https://everythinghub.ink/', startedAt: new Date().toISOString() };
@@ -65,6 +72,23 @@ jobs:
                 throw new Error('Rolex search did not render usable web results.');
               }
               await page.screenshot({ path: 'everything-hub-rolex-search.png', fullPage: true });
+
+              await page.locator('#q').fill('NASA');
+              await page.locator('#q').press('Enter');
+              await page.locator('#results .result .source').filter({ hasText: 'EverythingHub index' }).first().waitFor({ state: 'visible', timeout: 30000 });
+              report.crawlerCatalogResultCount = await page.locator('#results .result .source').filter({ hasText: 'EverythingHub index' }).count();
+              report.catalogManifestStatus = catalogResponses.find(x => x.url.includes('/search-index/manifest.json'))?.status ?? null;
+              report.catalogShardResponseCount = catalogResponses.filter(x => x.url.includes('/search-index/shard-') && x.status === 200).length;
+              report.catalogResponses = catalogResponses;
+              if (report.catalogManifestStatus !== 200 || report.catalogShardResponseCount !== 14 || report.crawlerCatalogResultCount < 1) {
+                throw new Error('Published crawler catalog did not load completely: ' + JSON.stringify({
+                  manifestStatus: report.catalogManifestStatus,
+                  shardResponses: report.catalogShardResponseCount,
+                  indexResults: report.crawlerCatalogResultCount
+                }));
+              }
+              await page.screenshot({ path: 'everything-hub-crawler-index-search.png', fullPage: true });
+
               await page.setViewportSize({ width: 390, height: 844 });
               await page.reload({ waitUntil: 'domcontentloaded' });
               await page.locator('#q').waitFor({ state: 'visible' });
