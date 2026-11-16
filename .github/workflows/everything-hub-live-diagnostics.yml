@@ -168,6 +168,7 @@ jobs:
           '
           static_index_ok=1
           static_index_count=$(node -p "require('/tmp/static-search.json').results.length")
+          static_index_transport=$(node -p "require('/tmp/static-search.json').indexTransport || 'shards'")
           echo "=== DATABASE-INDEPENDENT SEARCH FALLBACK ==="
           curl -fsS -G "$BASE/everything-hub-independent-search" --data-urlencode "q=Rolex" -o /tmp/independent.json
           node -e '
@@ -210,7 +211,7 @@ jobs:
             echo "- Custom browser endpoint: PASS"
             echo "- Database-backed search: $db_search_status"
             if [ "$static_index_ok" -eq 1 ]; then
-              echo "- Public crawler fallback: PASS (NASA query returned $static_index_count results; SHA-256 verified shards)"
+              echo "- Public crawler fallback: PASS (NASA query returned $static_index_count results; SHA-256 verified $static_index_transport catalog)"
             fi
             if [ "$independent_fallback_ok" -eq 1 ]; then
               echo "- Bing RSS no-match fallback: PASS (Rolex query returned $independent_fallback_count results)"
