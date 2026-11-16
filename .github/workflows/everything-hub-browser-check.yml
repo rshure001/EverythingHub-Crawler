@@ -31,6 +31,8 @@ jobs:
             const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 1 });
             const errors = [];
             page.on('pageerror', e => errors.push(e.message));
+            const failedRequests = [];
+            page.on('requestfailed', r => failedRequests.push({ url: r.url(), error: r.failure()?.errorText }));
             const report = { url: 'https://everythinghub-homepage-fixed.vercel.app/', startedAt: new Date().toISOString() };
             try {
               const response = await page.goto(report.url, { waitUntil: 'domcontentloaded', timeout: 45000 });
@@ -38,9 +40,15 @@ jobs:
               report.title = await page.title();
               report.searchInput = await page.locator('#q').count() === 1;
               report.categoryCount = await page.locator('.tile').count();
+              await page.locator('img.approved-master-art').waitFor({ state: 'attached', timeout: 15000 });
+              await page.waitForFunction(() => {
+                const img = document.querySelector('img.approved-master-art');
+                return !!img && (img.complete || img.naturalWidth > 0);
+              }, { timeout: 20000 }).catch(() => {});
               report.approvedArtwork = await page.locator('img.approved-master-art').evaluate(img => ({
-                complete: img.complete, naturalWidth: img.naturalWidth, alt: img.alt
+                complete: img.complete, naturalWidth: img.naturalWidth, alt: img.alt, src: img.currentSrc || img.src
               }));
+              report.failedRequests = failedRequests;
               if (!response?.ok() || !report.title.includes('Everything Hub') || !report.searchInput ||
                   report.categoryCount !== 8 || !report.approvedArtwork.complete || report.approvedArtwork.naturalWidth < 100) {
                 throw new Error('Homepage structure check failed: ' + JSON.stringify(report));
