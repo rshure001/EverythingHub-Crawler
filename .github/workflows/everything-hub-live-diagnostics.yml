@@ -67,8 +67,10 @@ jobs:
             if (total !== manifest.total_pages) {
               throw new Error("Catalog total mismatch: " + total + " != " + manifest.total_pages);
             }
-            const summary = "- Canonical Vercel homepage: PASS (HTTP 200, " + tiles + " categories)\\n" +
-              "- Canonical Vercel catalog: PASS (" + total + " pages across " + manifest.shards.length + " shards; all shards HTTP 200)\\n";
+            const summary = [
+              "- Canonical Vercel homepage: PASS (HTTP 200, " + tiles + " categories)",
+              "- Canonical Vercel catalog: PASS (" + total + " pages across " + manifest.shards.length + " shards; all shards HTTP 200)"
+            ].join(String.fromCharCode(10)) + String.fromCharCode(10);
             fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary);
             console.log(JSON.stringify({homepageStatus:200,tiles,totalPages:total,shardCount:manifest.shards.length},null,2));
           })().catch(error => { console.error(error); process.exit(1); });
