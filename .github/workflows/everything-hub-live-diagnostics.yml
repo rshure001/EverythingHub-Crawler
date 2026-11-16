@@ -101,7 +101,7 @@ jobs:
           image_count=0
           video_count=0
           echo "=== DATABASE-BACKED SEARCH API: ROLEX ==="
-          if curl --max-time 10 -sS -G "$BASE/everything-hub-web-search" -H "apikey: $KEY" -H "accept: application/json" --data-urlencode "q=Rolex" --data-urlencode "limit=10" -o /tmp/search.json -w '%{http_code} %{time_total}' > /tmp/search-metrics.txt; then
+          if curl --max-time 10 -sS -G "$BASE/everything-hub-web-search" -H "apikey: $KEY" -H "accept: application/json" --data-urlencode "q=Rolex" --data-urlencode "limit=10" -o /tmp/search.json -w '%{http_code} %{time_total}\n' > /tmp/search-metrics.txt; then
             read -r db_search_http db_search_seconds < /tmp/search-metrics.txt
             echo "Database search HTTP $db_search_http in $db_search_seconds seconds"
             case "$db_search_http" in
@@ -190,6 +190,6 @@ jobs:
             echo "- Image discovery: PASS ($image_count results)"
             echo "- Video discovery: PASS ($video_count results)"
             if [ "$db_search_ok" -ne 1 ]; then
-              echo "- Next action: restore PostgreSQL availability, then deploy and verify the eh_quad-only search function."
+              echo "- Next action: restore PostgreSQL availability, inspect eh_quad, then run the additive index import and verify database-backed search."
             fi
           } >> "$GITHUB_STEP_SUMMARY"
