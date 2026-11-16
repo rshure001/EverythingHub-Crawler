@@ -1,7 +1,7 @@
 import unittest
 from datetime import datetime, timezone
 
-from schedule_watchdog import evaluate
+from crawler.schedule_watchdog import evaluate
 
 NOW = datetime(2026, 11, 16, 16, 0, tzinfo=timezone.utc)
 
