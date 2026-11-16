@@ -290,10 +290,12 @@ Deno.serve(async (req: Request) => {
   const staticFallback = async (reason: string) => {
     let crawlerIndexCount: number | null = null;
     let catalogLoaded = false;
+    let catalogTransport: "gzip" | "shards" | null = null;
 
     try {
       const catalog = await loadStaticCatalog();
       catalogLoaded = true;
+      catalogTransport = catalog.mode;
       let found = searchStaticPages(catalog.pages, query, validLane, limit, offset);
       let laneFallback = false;
 
@@ -343,7 +345,7 @@ Deno.serve(async (req: Request) => {
         laneFallback: false,
         source: "Everything Hub public crawler index",
         indexIntegrity: "sha256",
-        indexTransport: "shards",
+        indexTransport: catalogTransport ?? "shards",
         offset,
         limit,
         hasMore: false,
