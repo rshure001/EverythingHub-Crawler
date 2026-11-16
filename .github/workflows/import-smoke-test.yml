@@ -65,7 +65,7 @@ jobs:
           echo "Invalid lane rows: $invalid_lanes"
           test "$invalid_lanes" = "0"
           echo "Imported records by search lane:"
-          psql -P pager=off -c "SELECT lane, count(*) AS records FROM eh_quad.eh_documents GROUP BY lane ORDER BY lane;"
+          psql "$DATABASE_URL" -P pager=off -c "SELECT lane, count(*) AS records FROM eh_quad.eh_documents GROUP BY lane ORDER BY lane;"
       - name: Verify authenticated search API
         env:
           EH_SEARCH_API_TOKEN: isolated-test-token
