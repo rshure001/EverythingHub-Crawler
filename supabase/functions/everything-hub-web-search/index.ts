@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.49.1";
+import { boundedInteger, normalizeLane, normalizeQuery } from "./params.mjs";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -22,12 +23,11 @@ Deno.serve(async (req: Request) => {
   if (req.method !== "GET") return json({ error: "GET required" }, 405);
 
   const url = new URL(req.url);
-  const query = (url.searchParams.get("q") || "").trim().slice(0, 160);
-  const lane = (url.searchParams.get("tentacle") || "").trim().toLowerCase();
   const lanes = ["general", "science", "news", "technology", "business", "government", "culture", "nature"];
-  const limit = Math.min(20, Math.max(1, Math.trunc(Number(url.searchParams.get("limit") || 10))));
-  const offset = Math.min(5000, Math.max(0, Math.trunc(Number(url.searchParams.get("offset") || 0))));
-  const validLane = lanes.includes(lane) ? lane : null;
+  const query = normalizeQuery(url.searchParams.get("q"));
+  const validLane = normalizeLane(url.searchParams.get("tentacle"), lanes);
+  const limit = boundedInteger(url.searchParams.get("limit"), 10, 1, 20);
+  const offset = boundedInteger(url.searchParams.get("offset"), 0, 0, 5000);
 
   if (query.length < 2) return json({ results: [], count: 0, query, offset, limit, hasMore: false });
 
