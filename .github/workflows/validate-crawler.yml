@@ -1,9 +1,10 @@
-name: Validate Everything Hub crawler
+name: Validate Everything Hub crawler and schema
 on:
   pull_request:
     paths:
       - "crawler/**"
       - "publisher/**"
+      - "database/**"
       - "README.md"
       - "SCALABLE-ARCHITECTURE.md"
       - ".github/workflows/validate-crawler.yml"
@@ -22,10 +23,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Compile crawler and run unit tests
+      - name: Compile crawler and database tools
         run: |
-          python -m py_compile crawler/crawl.py crawler/report.py crawler/build_search_shards.py crawler/validate_public_index.py
+          python -m py_compile crawler/crawl.py crawler/report.py crawler/build_search_shards.py crawler/validate_public_index.py database/import_repository_index.py
+      - name: Run crawler and schema-isolation tests
+        run: |
           python -m unittest discover -s crawler -p 'test_*.py' -v
+          python -m unittest discover -s database -p 'test_*.py' -v
           python crawler/validate_public_index.py
       - name: Validate static release manifest
         run: python publisher/publish.py --check
