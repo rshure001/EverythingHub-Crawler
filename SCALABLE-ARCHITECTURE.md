@@ -4,14 +4,16 @@
 Build toward a **23,000,000-page searchable index**. This is a total-index target, not a promise of 23 million fetches per hour. Throughput targets must be set from measured benchmarks and available compute.
 
 ## Current verified baseline
-- Latest verified GitHub Actions crawl: run 76, completed successfully on 2026-11-16 at 01:13 UTC.
-- That run attempted 80 page fetches and indexed 63 pages; the repository index contained 2,466 page records across 30 hosts.
-- The frontier held 29,428 discovered URLs, with 24,225 waiting at the end of that run.
-- Verified indexed-record depth distribution: depth 0 = 24, depth 1 = 807, depth 2 = 796, depth 3 = 839.
-- The run recorded 207 robots-blocked URL checks and completed in 36.6 seconds. The repository currently contains 13 validated public-search shards.
-- The crawler writes its own repository JSON index. Production Everything Hub database ingestion remains separate and is blocked while PostgreSQL replays WAL and refuses connections; the Supabase crawler and sitemap Edge Functions remain paused rather than risking partial writes.
-- The independent Bing RSS search route and media-search Edge Function are separate from that database. Browser verification has passed for the canonical Vercel homepage, approved artwork, eight categories, Rolex results, and a 390px mobile viewport; a later custom-domain probe timed out.
-- GitHub Actions remains a polite prototype runner, not a distributed crawl fleet or a measured 100-pages/minute service.
+- Latest committed GitHub Actions crawl: run 77, completed successfully on 2026-11-16 at 03:06 UTC.
+- That run fetched 84 pages and indexed 69; the committed repository index contains 2,533 page records across 30 hosts.
+- The frontier held 29,812 discovered URLs, with 24,516 waiting. The run recorded 9 robots-blocked checks, checked 3 sitemap hosts, requested 4 sitemap files, added 0 URLs from sitemaps, and completed in 60.8 seconds.
+- The committed public search index contains 13 validated shards. A subsequent test run verified the strict 80-page cap and built a 2,592-page/14-shard working index, but its data push was rejected after another commit advanced main; that larger snapshot is not committed.
+- The crawler now has bounded robots-declared sitemap discovery, same-host sitemap parsing, a 1 MB sitemap-response cap, persisted sitemap recheck times, Retry-After handling for 429/503, transient URL requeueing, and a strict 80-page fetch cap. The push-triggered validation workflow passed 23 crawler tests, 6 schema-isolation tests, public-index validation, and static release-manifest validation. Crawls now run on schedule/manual dispatch only; code pushes use validation-only CI to avoid concurrent data commits.
+- Live Supabase PostgreSQL remains unavailable: at 03:05 UTC its logs reported WAL redo in progress for about 49.7 minutes and FATAL 57P03 (“database system is not accepting connections”). The dedicated `eh_quad` schema migration/import has not been applied to production. The Supabase crawler and sitemap Edge Functions are deployed but intentionally return HTTP 503 while database write access is unavailable.
+- Independent Bing RSS search returned 10 Rolex results; Wikimedia Commons media discovery returned 21 images for “octopus” and 2 videos for “Apollo 11 NASA”. The database-backed search probe timed out, so crawler records are not yet connected to production search.
+- The canonical Vercel homepage is READY; browser checks verified the approved octopus artwork (709 px natural width), all 8 categories, 24 Rolex results, and a 390 px mobile layout without horizontal overflow. The custom domain `everythinghub.ink` timed out from external probes despite being marked verified in the Vercel project. Account-level DNS inspection returned 403, so no DNS changes were attempted. The legacy GitHub Pages publisher is blocked by “Resource not accessible by integration”; Vercel remains the working deployment route.
+- All work in this run was limited to Everything Hub code and the dedicated `eh_quad` design; no Dog Tag Day or Story Wall data was modified.
+
 
 ## Target architecture
 
