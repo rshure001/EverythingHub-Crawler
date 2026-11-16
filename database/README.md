@@ -1,49 +1,58 @@
-# EverythingHub independent database
+# Everything Hub dedicated database schema
 
-This directory contains the first versioned schema for a standalone PostgreSQL
-database dedicated to EverythingHub. It is separate from Dog Tag Day.
+Everything Hub's database work is confined to the `eh_quad` schema in the
+separate Supabase project `everything-hub-control`. The Dog Tag Day Story Wall
+project is separate and must never be used for these migrations or imports.
 
-## Components
+## Schema
 
-- `eh_documents`: durable searchable page records; generated weighted English
-  full-text vector with a GIN index.
-- `eh_crawl_queue`: durable, retryable URL work queue partitioned by eight lanes.
-- `eh_host_leases`: per-host leases to prevent concurrent requests to one host.
-- `eh_crawl_runs`: auditable worker-run counters.
-- `eh_media`: media discovered on indexed pages.
-- `eh_lane_state`: independent enablement and worker caps for all eight lanes.
+Use **only** `002_eh_quad_schema.sql` for the current schema. It creates the
+`eh_quad` schema, document/search tables, crawl queue, host leases, run
+metrics, media table, lane state, indexes, and the `eh_quad.eh_search_pages`
+search RPC. It is idempotent and additive.
 
-## Apply schema
+`001_everythinghub_core.sql` is a legacy, unqualified first draft. Do not apply
+it to the live Supabase project; it does not enforce the required schema boundary.
 
-Create a **new, dedicated PostgreSQL database** for EverythingHub. Do not run
-this migration against Dog Tag Day or against the existing production database.
-Apply `001_everythinghub_core.sql` using the database owner's normal migration
-mechanism. The SQL is transactional and uses idempotent table/index creation.
+Apply the 002 migration only after the Everything Hub PostgreSQL service is
+accepting connections and the target project has been positively identified.
+Do not attempt recovery by dropping, resetting, recreating, or restoring the
+project.
 
 ## Import the repository index
 
-The importer is additive and idempotent; it does not delete destination rows.
-It reads `data/index.json`, validates HTTP(S) URLs, hashes content, and upserts
-in batches. The current repository crawler does not yet assign specialist lanes,
-so imported prototype pages enter `general` and can be reclassified later.
+The importer is locked to `eh_quad`; it rejects any other schema value.
+It is additive/upsert-only and never deletes destination rows. It reads
+`data/index.json`, validates HTTP(S) URLs, hashes content, and upserts in
+batches. Prototype crawler pages currently enter the `general` lane.
 
 ```bash
-python -m pip install 'psycopg[binary]>=3.2'
+python -m pip install 'psycopg[binary]>=3.2,<4'
 export DATABASE_URL='postgresql://USER:PASSWORD@HOST:5432/DBNAME?sslmode=require'
+export EH_DB_SCHEMA='eh_quad'
 python database/import_repository_index.py
 ```
 
-Keep `DATABASE_URL` in a private secret store or local environment only.
-Never commit credentials or service-role keys.
+Keep `DATABASE_URL` and `EH_SEARCH_API_TOKEN` in a private secret store or
+local environment only. Never commit credentials or service-role keys.
+
+## Authenticated search API
+
+`database/search_api.py` is also locked to `eh_quad`. It requires
+`DATABASE_URL` and `EH_SEARCH_API_TOKEN`; `/healthz` checks database
+readiness and `/search` requires a bearer token. It does not expose an
+unauthenticated search endpoint.
 
 ## Safe cutover sequence
 
-1. Provision a separate database and apply the schema.
-2. Import a snapshot of repository index data.
-3. Validate document counts, URL uniqueness, sample content, and search results.
-4. Connect one test crawler worker to the new queue and verify robots/host limits.
-5. Run a controlled shadow period and compare indexed-page rates and error rates.
-6. Only after validation, move production search/crawl traffic deliberately.
+1. Wait for PostgreSQL recovery; confirm read/write access in
+   `everything-hub-control`.
+2. Apply `002_eh_quad_schema.sql` and verify the objects exist in `eh_quad`.
+3. Run the isolated importer smoke test and import a snapshot additively.
+4. Validate document counts, URL uniqueness, sample content, and ranked search.
+5. Connect one test crawler worker to the dedicated queue and verify robots and
+   host limits.
+6. Run a controlled shadow period; only then consider switching live traffic.
 
-No production crawler, live search endpoint, existing database, schedule, or
-Dog Tag Day system is changed by these files alone.
+No migration or import is run against Dog Tag Day. The files alone do not
+publish or switch production traffic.
