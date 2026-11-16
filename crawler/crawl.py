@@ -469,7 +469,7 @@ def main():
                 return ({
                     "url": final, "title": title, "lane": classify_lane(final),
                     "description": parser.description[:500],
-                    "text": text, "depth": depth, "fetched_at": int(time.time())
+                    "text": text, "depth": depth, "fetched_at": int(time.time()), "robots_allowed": True
                 }, links, delay, False)
             except Exception as error:
                 status = getattr(error, "code", None)
