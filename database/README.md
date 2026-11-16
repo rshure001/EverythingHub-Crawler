@@ -9,13 +9,13 @@ project is separate and must never be used for these migrations or imports.
 Use **only** `002_eh_quad_schema.sql` for the current schema. It creates the
 `eh_quad` schema, document/search tables, crawl queue, host leases, run
 metrics, media table, lane state, indexes, and the `eh_quad.eh_search_pages`
-search RPC. It is idempotent and additive.
+search RPC. It is idempotent and additive. All tables have RLS enabled; only the server-side service role receives the minimum search privileges.
 
 `001_everythinghub_core.sql` is a legacy, unqualified first draft. Do not apply
 it to the live Supabase project; it does not enforce the required schema boundary.
 
 Apply the 002 migration only after the Everything Hub PostgreSQL service is
-accepting connections and the target project has been positively identified.
+accepting connections and the target project has been positively identified. Before deploying the Edge search function, add `eh_quad` to the project's exposed Data API schemas; keep `anon` and `authenticated` ungranted. The function uses the service role and the migration grants it only schema usage, document reads, and search-RPC execution.
 Do not attempt recovery by dropping, resetting, recreating, or restoring the
 project.
 
@@ -53,6 +53,8 @@ unauthenticated search endpoint.
 5. Connect one test crawler worker to the dedicated queue and verify robots and
    host limits.
 6. Run a controlled shadow period; only then consider switching live traffic.
+
+The staged Edge search source is `supabase/functions/everything-hub-web-search/index.ts`; it explicitly selects `eh_quad` for both the RPC and fallback query. It is not deployed by this pull request. Deployment requires the database migration, exposed-schema configuration, and live search tests to pass.
 
 No migration or import is run against Dog Tag Day. The files alone do not
 publish or switch production traffic.
