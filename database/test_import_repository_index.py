@@ -41,6 +41,14 @@ class SchemaIsolationTests(unittest.TestCase):
         self.assertIn('if SCHEMA != "eh_quad":', source)
         self.assertNotIn('os.environ.get("EH_DB_SCHEMA", "public")', source)
 
+    def test_edge_search_uses_only_eh_quad(self):
+        source = (HERE.parent / "supabase" / "functions" / "everything-hub-web-search" / "index.ts").read_text(encoding="utf-8")
+        self.assertIn('supabase.schema("eh_quad")', source)
+        self.assertIn('db.rpc("eh_search_pages"', source)
+        self.assertIn('.from("eh_documents")', source)
+        self.assertNotIn('.from("eh_pages")', source)
+        self.assertNotIn('supabase.rpc("eh_search_pages"', source)
+
 
 if __name__ == "__main__":
     unittest.main()
