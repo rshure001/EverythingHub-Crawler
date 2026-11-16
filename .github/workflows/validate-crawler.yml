@@ -1,5 +1,16 @@
 name: Validate Everything Hub crawler and schema
 on:
+  push:
+    branches: [main]
+    paths:
+      - "crawler/**"
+      - "database/**"
+      - "publisher/**"
+      - "supabase/functions/**"
+      - "README.md"
+      - "SCALABLE-ARCHITECTURE.md"
+      - ".github/workflows/crawl.yml"
+      - ".github/workflows/validate-crawler.yml"
   pull_request:
     paths:
       - "crawler/**"

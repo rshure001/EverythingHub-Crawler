@@ -24,7 +24,7 @@ python crawler/report.py
 ```
 
 ## Automation and observability
-GitHub Actions runs on a 15-minute schedule and supports manual dispatch. Each run validates configuration, executes unit tests, crawls up to 80 pages, and publishes a compact health report in the workflow summary. The workflow does not trigger on pushes, preventing crawler data commits from recursively launching more crawls. GitHub may delay scheduled runs.
+GitHub Actions runs the crawler on a 15-minute schedule and supports manual dispatch. Code pushes trigger a separate validation-only workflow; they do not start a data crawl. Each scheduled crawl validates configuration, crawls up to 80 pages, rebuilds and verifies public search shards, and publishes a compact health report. Crawler data commits cannot recursively launch another crawl. GitHub may delay scheduled runs.
 
 The health report distinguishes total indexed records, unique hosts, discovered URLs, queued URLs, fetched pages, parsed pages, and depth distribution. Attempted fetches are not counted as indexed pages.
 

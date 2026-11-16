@@ -1,10 +1,5 @@
 name: Everything Hub crawler
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/crawl.yml"
-      - "crawler/**"
   schedule:
     - cron: "*/15 * * * *"
   workflow_dispatch:
