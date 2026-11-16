@@ -18,6 +18,11 @@ class MediaDiscoveryComplianceTests(unittest.TestCase):
         self.assertIn("Unverified", source)
         self.assertIn("verify reuse rights on the source page", source)
 
+    def test_commons_requests_respect_maxlag_and_identify_the_client(self):
+        source = SOURCE.read_text(encoding="utf-8")
+        self.assertIn('maxlag: "5"', source)
+        self.assertIn('"User-Agent": "EverythingHub/1.0 (https://github.com/rshure001/EverythingHub-Crawler; media discovery)"', source)
+
     def test_response_exposes_source_and_usage_rights(self):
         source = SOURCE.read_text(encoding="utf-8")
         self.assertIn('source: "Wikimedia Commons"', source)
