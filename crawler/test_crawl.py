@@ -36,6 +36,22 @@ class CrawlerTests(unittest.TestCase):
         self.assertNotIn("secret()", text)
         self.assertIn("/next", parser.links)
 
+    def test_page_redirect_handler_blocks_cross_origin_redirects(self):
+        handler = crawl.SameOriginRedirectHandler()
+        request = crawl.urllib.request.Request("https://example.com/start")
+        with self.assertRaises(crawl.urllib.error.HTTPError):
+            handler.redirect_request(
+                request, None, 302, "Found", {}, "https://other.example/target"
+            )
+
+    def test_page_redirect_handler_allows_same_origin_redirects(self):
+        handler = crawl.SameOriginRedirectHandler()
+        request = crawl.urllib.request.Request("https://example.com/start")
+        redirected = handler.redirect_request(
+            request, None, 302, "Found", {}, "/next"
+        )
+        self.assertEqual(redirected.full_url, "https://example.com/next")
+
     def test_effective_host_delay_respects_robots_directives(self):
         parser = urllib.robotparser.RobotFileParser()
         parser.parse([
