@@ -13,6 +13,13 @@ class ScheduleWatchdogTests(unittest.TestCase):
         self.assertIn('    - cron: "7,22,37,52 * * * *"', workflow)
         self.assertNotIn('    - cron: "*/15 * * * *"', workflow)
 
+    def test_watchdog_runs_after_each_completed_crawl(self):
+        workflow = (Path(__file__).resolve().parents[1] / ".github" / "workflows" / "crawl-watchdog.yml").read_text(encoding="utf-8")
+        self.assertIn(
+            '  workflow_run:\n    workflows:\n      - "Everything Hub crawler"\n    types:\n      - completed',
+            workflow,
+        )
+
     def test_recent_success_is_healthy(self):
         result = evaluate(
             [{"status": "completed", "conclusion": "success", "created_at": "2026-11-16T15:20:00Z"}],
