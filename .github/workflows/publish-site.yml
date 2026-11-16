@@ -2,6 +2,7 @@ name: EverythingHub Publisher
 on:
   workflow_dispatch:
   push:
+    branches: [main]
     paths:
       - "site/**"
       - "public-search/**"
@@ -22,6 +23,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Rebuild and validate the public crawler catalog
+        run: |
+          python crawler/build_search_shards.py
+          python crawler/validate_public_index.py
       - name: Validate immutable release manifest
         run: python publisher/publish.py --check
       - name: Validate and stage the crawler search catalog
