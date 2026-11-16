@@ -4,11 +4,13 @@
 Build toward a **23,000,000-page searchable index**. This is a total-index target, not a promise of 23 million fetches per hour. Throughput targets must be set from measured benchmarks and available compute.
 
 ## Current verified baseline
-- Latest verified GitHub Actions crawl: run 74, completed successfully on 2026-11-15 at 23:41 UTC.
-- That run attempted 80 fetches and indexed 52 pages; the repository index contained 2,353 page records across 30 hosts.
-- The frontier held 28,803 discovered URLs, with 25,477 waiting at the end of that run.
-- Verified depth distribution: depth 0 = 25, depth 1 = 800, depth 2 = 768, depth 3 = 760.
-- The crawler writes its own repository JSON index and 13 public-search shards. Production Everything Hub database ingestion is still separate and is currently blocked by database recovery.
+- Latest verified GitHub Actions crawl: run 76, completed successfully on 2026-11-16 at 01:13 UTC.
+- That run attempted 80 page fetches and indexed 63 pages; the repository index contained 2,466 page records across 30 hosts.
+- The frontier held 29,428 discovered URLs, with 24,225 waiting at the end of that run.
+- Verified indexed-record depth distribution: depth 0 = 24, depth 1 = 807, depth 2 = 796, depth 3 = 839.
+- The run recorded 207 robots-blocked URL checks and completed in 36.6 seconds. The repository currently contains 13 validated public-search shards.
+- The crawler writes its own repository JSON index. Production Everything Hub database ingestion remains separate and is blocked while PostgreSQL replays WAL and refuses connections; the Supabase crawler and sitemap Edge Functions remain paused rather than risking partial writes.
+- The independent Bing RSS search route and media-search Edge Function are separate from that database. Browser verification has passed for the canonical Vercel homepage, approved artwork, eight categories, Rolex results, and a 390px mobile viewport; a later custom-domain probe timed out.
 - GitHub Actions remains a polite prototype runner, not a distributed crawl fleet or a measured 100-pages/minute service.
 
 ## Target architecture
