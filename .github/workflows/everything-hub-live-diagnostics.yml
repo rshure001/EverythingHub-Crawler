@@ -15,7 +15,7 @@ jobs:
         run: |
           set -euo pipefail
           echo "=== HOMEPAGE ==="
-          curl -sS -D /tmp/headers.txt "$BASE/everything-hub-site" -o /tmp/home.html
+          curl -fsSL -D /tmp/headers.txt "$BASE/everything-hub-site" -o /tmp/home.html
           head -n 1 /tmp/headers.txt
           grep -i '^content-type:' /tmp/headers.txt | tail -1
           printf 'bytes='; wc -c < /tmp/home.html
@@ -23,7 +23,7 @@ jobs:
             if grep -Fq "$needle" /tmp/home.html; then echo "PASS homepage contains: $needle"; else echo "FAIL homepage missing: $needle"; exit 1; fi
           done
           echo "=== CUSTOM EVERYTHING HUB BROWSER ==="
-          curl -sS -D /tmp/browser-headers.txt "$BASE/everything-hub-browser" -o /tmp/browser.html
+          curl -fsSL -D /tmp/browser-headers.txt "$BASE/everything-hub-browser" -o /tmp/browser.html
           head -n 1 /tmp/browser-headers.txt
           grep -i '^content-type:' /tmp/browser-headers.txt | tail -1
           printf 'browser_bytes='; wc -c < /tmp/browser.html
@@ -31,7 +31,7 @@ jobs:
             if grep -Fq "$needle" /tmp/browser.html; then echo "PASS browser contains: $needle"; else echo "FAIL browser missing: $needle"; exit 1; fi
           done
           echo "=== SEARCH API: ROLEX ==="
-          curl -sS -G "$BASE/everything-hub-web-search" -H "apikey: $KEY" -H "accept: application/json" --data-urlencode "q=Rolex" --data-urlencode "limit=10" -o /tmp/search.json
+          curl -fsS -G "$BASE/everything-hub-web-search" -H "apikey: $KEY" -H "accept: application/json" --data-urlencode "q=Rolex" --data-urlencode "limit=10" -o /tmp/search.json
           node -e '
             const fs=require("fs"); const d=JSON.parse(fs.readFileSync("/tmp/search.json","utf8"));
             const a=Array.isArray(d.results)?d.results:[];
@@ -39,11 +39,28 @@ jobs:
             if(!a.length) process.exit(2);
             if(!a.some(x=>x.title||x.url)) process.exit(3);
           '
+          echo "=== DATABASE-INDEPENDENT SEARCH FALLBACK ==="
+          curl -fsS -G "$BASE/everything-hub-independent-search" --data-urlencode "q=Rolex" -o /tmp/independent.json
+          node -e '
+            const fs=require("fs"); const d=JSON.parse(fs.readFileSync("/tmp/independent.json","utf8"));
+            const a=Array.isArray(d.results)?d.results:[];
+            console.log(JSON.stringify({provider:d.provider,independentOfDatabase:d.independentOfDatabase,count:d.count,resultCount:a.length,first:a[0]?.title},null,2));
+            if(d.independentOfDatabase!==true || !a.length) process.exit(2);
+          '
           echo "=== MEDIA API: IMAGES ==="
-          curl -sS -G "$BASE/everything-hub-media-search" -H "apikey: $KEY" -H "accept: application/json" --data-urlencode "q=octopus" --data-urlencode "type=image" -o /tmp/media.json
+          curl -fsS -G "$BASE/everything-hub-media-search" -H "apikey: $KEY" -H "accept: application/json" --data-urlencode "q=octopus" --data-urlencode "type=image" -o /tmp/media.json
           node -e '
             const fs=require("fs"); const d=JSON.parse(fs.readFileSync("/tmp/media.json","utf8"));
             const a=Array.isArray(d.results)?d.results:[];
             console.log(JSON.stringify({provider:d.provider??null,resultCount:a.length,sample:a.slice(0,3)},null,2));
             if(!a.length) process.exit(2);
+          '
+
+          echo "=== MEDIA API: VIDEOS ==="
+          curl -fsS -G "$BASE/everything-hub-media-search" -H "apikey: $KEY" -H "accept: application/json" --data-urlencode "q=technology science travel documentary" --data-urlencode "type=video" -o /tmp/video.json
+          node -e '
+            const fs=require("fs"); const d=JSON.parse(fs.readFileSync("/tmp/video.json","utf8"));
+            const a=Array.isArray(d.results)?d.results:[];
+            console.log(JSON.stringify({provider:d.provider??null,resultCount:a.length,hasWarning:!!d.warning},null,2));
+            if(!Array.isArray(d.results)) process.exit(2);
           '
