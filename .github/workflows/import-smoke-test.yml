@@ -56,7 +56,7 @@ jobs:
         run: python -m unittest discover -s database -p 'test_*.py' -v
       - name: Import crawler snapshot into temporary database
         run: python database/import_repository_index.py
-      - name: Verify imported records
+      - name: Verify imported records and lane distribution
         run: |
           count=$(psql "$DATABASE_URL" -tA -c "SELECT count(*) FROM eh_quad.eh_documents;")
           echo "Imported records: $count"
@@ -66,13 +66,27 @@ jobs:
           test "$invalid_lanes" = "0"
           echo "Imported records by search lane:"
           psql "$DATABASE_URL" -P pager=off -c "SELECT lane, count(*) AS records FROM eh_quad.eh_documents GROUP BY lane ORDER BY lane;"
-      - name: Verify authenticated search API
+      - name: Verify authenticated search, lane filters, and pagination
         env:
           EH_SEARCH_API_TOKEN: isolated-test-token
           EH_SEARCH_HOST: 127.0.0.1
           EH_SEARCH_PORT: "8080"
         run: |
-          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "INSERT INTO eh_quad.eh_documents (canonical_url, source_host, lane, title, description, body_text, content_hash) VALUES ('https://everythinghub.test/search-smoke-fixture', 'everythinghub.test', 'general', 'EverythingHub search smoke fixture', 'authenticated search verification', 'quartz lantern integration test', 'smoke-fixture-v1') ON CONFLICT (canonical_url) DO NOTHING;"
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO eh_quad.eh_documents
+            (canonical_url, source_host, lane, title, description, body_text, content_hash)
+          VALUES
+            ('https://everythinghub.test/search-smoke-general', 'everythinghub.test', 'general',
+             'EverythingHub search smoke general', 'quartz lantern integration verification',
+             'quartz lantern integration test general', 'smoke-general-v1'),
+            ('https://everythinghub.test/search-smoke-science', 'everythinghub.test', 'science',
+             'EverythingHub search smoke science', 'quartz lantern integration verification',
+             'quartz lantern integration test science', 'smoke-science-v1'),
+            ('https://everythinghub.test/search-smoke-business', 'everythinghub.test', 'business',
+             'EverythingHub search smoke business', 'quartz lantern integration verification',
+             'quartz lantern integration test business', 'smoke-business-v1')
+          ON CONFLICT (canonical_url) DO NOTHING;
+          SQL
           python database/search_api.py > /tmp/eh-search-api.log 2>&1 &
           api_pid=$!
           trap 'kill "$api_pid" 2>/dev/null || true' EXIT
@@ -81,7 +95,40 @@ jobs:
             sleep 1
           done
           grep -q '"status": "ok"' /tmp/eh-health.json
+
           unauthorized=$(curl --silent --output /tmp/eh-unauthorized.json --write-out '%{http_code}' 'http://127.0.0.1:8080/search?q=quartz')
           test "$unauthorized" = "401"
-          curl --silent --fail -H "Authorization: Bearer isolated-test-token" 'http://127.0.0.1:8080/search?q=quartz%20lantern' > /tmp/eh-search.json
-          python -c "import json; d=json.load(open('/tmp/eh-search.json')); assert d['total'] >= 1 and any(x['url']=='https://everythinghub.test/search-smoke-fixture' for x in d['results']); print('Authenticated search returned fixture; total matches:', d['total'])"
+
+          for offset in 0 1 2; do
+            curl --silent --fail -H "Authorization: Bearer isolated-test-token" \
+              "http://127.0.0.1:8080/search?q=quartz%20lantern&limit=1&offset=$offset" \
+              > "/tmp/eh-page-$offset.json"
+          done
+          python - <<'PY'
+          import json
+          pages = [json.load(open(f"/tmp/eh-page-{offset}.json")) for offset in range(3)]
+          urls = [page["results"][0]["url"] for page in pages]
+          expected = {
+              "https://everythinghub.test/search-smoke-general",
+              "https://everythinghub.test/search-smoke-science",
+              "https://everythinghub.test/search-smoke-business",
+          }
+          assert all(page["total"] == 3 and len(page["results"]) == 1 for page in pages), pages
+          assert pages[0]["hasMore"] is True and pages[1]["hasMore"] is True and pages[2]["hasMore"] is False, pages
+          assert len(set(urls)) == 3 and set(urls) == expected, urls
+          print("Pagination returned all three unique fixture records in three one-row pages.")
+          PY
+
+          curl --silent --fail -H "Authorization: Bearer isolated-test-token" \
+            'http://127.0.0.1:8080/search?q=quartz%20lantern&tentacle=science' \
+            > /tmp/eh-science.json
+          python - <<'PY'
+          import json
+          data = json.load(open("/tmp/eh-science.json"))
+          assert data["total"] == 1, data
+          assert len(data["results"]) == 1, data
+          assert data["results"][0]["url"] == "https://everythinghub.test/search-smoke-science", data
+          assert data["results"][0]["tentacle"] == "science", data
+          assert data["tentacle"] == "science", data
+          print("Science lane filter returned only the science fixture.")
+          PY
