@@ -161,48 +161,50 @@ def validate(root: Path = ROOT) -> list[str]:
         )
 
     catalog = manifest.get("catalog_gzip")
-    if not isinstance(catalog, dict):
-        errors.append("manifest catalog_gzip metadata is missing")
-    elif catalog.get("file") != CATALOG_NAME:
-        errors.append(f"catalog filename must be {CATALOG_NAME}")
-    else:
-        catalog_path = search_dir / CATALOG_NAME
-        if not catalog_path.is_file():
-            errors.append(f"missing compressed catalog: {CATALOG_NAME}")
+    # Older manifests remain valid and are served through the verified shard fallback.
+    if catalog is not None:
+        if not isinstance(catalog, dict):
+            errors.append("manifest catalog_gzip metadata must be an object")
+        elif catalog.get("file") != CATALOG_NAME:
+            errors.append(f"catalog filename must be {CATALOG_NAME}")
         else:
-            raw = catalog_path.read_bytes()
-            if len(raw) > MAX_CATALOG_GZIP_BYTES:
-                errors.append("compressed catalog exceeds the 5 MB safety limit")
-            if catalog.get("bytes") != len(raw):
-                errors.append("compressed catalog byte-size mismatch")
-            digest = catalog.get("sha256")
-            if (
-                not isinstance(digest, str)
-                or len(digest) != 64
-                or any(char not in "0123456789abcdef" for char in digest)
-            ):
-                errors.append("compressed catalog SHA-256 is invalid")
-            elif hashlib.sha256(raw).hexdigest() != digest:
-                errors.append("compressed catalog SHA-256 mismatch")
-            try:
-                decoded = gzip.decompress(raw)
-                if len(decoded) > MAX_CATALOG_UNCOMPRESSED_BYTES:
-                    errors.append("decompressed catalog exceeds the 25 MB safety limit")
-                payload = json.loads(decoded.decode("utf-8"))
-                catalog_pages = payload.get("pages") if isinstance(payload, dict) else None
-                if not isinstance(catalog_pages, list):
-                    errors.append("compressed catalog pages must be an array")
-                else:
-                    if payload.get("version") != 1:
-                        errors.append("compressed catalog version must be 1")
-                    if len(catalog_pages) != total_pages:
-                        errors.append("compressed catalog page count differs from the shards")
-                    if catalog.get("pages") != len(catalog_pages):
-                        errors.append("compressed catalog metadata page count mismatch")
-                    if catalog_pages != shard_records:
-                        errors.append("compressed catalog records differ from the verified shards")
-            except Exception as exc:
-                errors.append(f"compressed catalog is invalid: {exc}")
+            catalog_path = search_dir / CATALOG_NAME
+            if not catalog_path.is_file():
+                errors.append(f"missing compressed catalog: {CATALOG_NAME}")
+            else:
+                raw = catalog_path.read_bytes()
+                if len(raw) > MAX_CATALOG_GZIP_BYTES:
+                    errors.append("compressed catalog exceeds the 5 MB safety limit")
+                if catalog.get("bytes") != len(raw):
+                    errors.append("compressed catalog byte-size mismatch")
+                digest = catalog.get("sha256")
+                if (
+                    not isinstance(digest, str)
+                    or len(digest) != 64
+                    or any(char not in "0123456789abcdef" for char in digest)
+                ):
+                    errors.append("compressed catalog SHA-256 is invalid")
+                elif hashlib.sha256(raw).hexdigest() != digest:
+                    errors.append("compressed catalog SHA-256 mismatch")
+                try:
+                    decoded = gzip.decompress(raw)
+                    if len(decoded) > MAX_CATALOG_UNCOMPRESSED_BYTES:
+                        errors.append("decompressed catalog exceeds the 25 MB safety limit")
+                    payload = json.loads(decoded.decode("utf-8"))
+                    catalog_pages = payload.get("pages") if isinstance(payload, dict) else None
+                    if not isinstance(catalog_pages, list):
+                        errors.append("compressed catalog pages must be an array")
+                    else:
+                        if payload.get("version") != 1:
+                            errors.append("compressed catalog version must be 1")
+                        if len(catalog_pages) != total_pages:
+                            errors.append("compressed catalog page count differs from the shards")
+                        if catalog.get("pages") != len(catalog_pages):
+                            errors.append("compressed catalog metadata page count mismatch")
+                        if catalog_pages != shard_records:
+                            errors.append("compressed catalog records differ from the verified shards")
+                except Exception as exc:
+                    errors.append(f"compressed catalog is invalid: {exc}")
 
     return errors
 
