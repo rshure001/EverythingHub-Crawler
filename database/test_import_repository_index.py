@@ -2,7 +2,8 @@ import importlib.util
 import unittest
 from pathlib import Path
 
-MODULE_PATH = Path(__file__).with_name("import_repository_index.py")
+HERE = Path(__file__).resolve().parent
+MODULE_PATH = HERE / "import_repository_index.py"
 SPEC = importlib.util.spec_from_file_location("eh_importer", MODULE_PATH)
 IMPORTER = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(IMPORTER)
@@ -23,6 +24,16 @@ class SchemaIsolationTests(unittest.TestCase):
         self.assertIn('insert into "eh_quad".eh_documents', sql)
         self.assertNotIn('"public".', sql)
         self.assertNotIn("public.eh_documents", sql)
+
+    def test_migration_is_confined_to_eh_quad(self):
+        sql = (HERE / "002_eh_quad_schema.sql").read_text(encoding="utf-8").lower()
+        self.assertIn("create schema if not exists eh_quad", sql)
+        self.assertIn("create table if not exists eh_quad.eh_documents", sql)
+        self.assertIn("create table if not exists eh_quad.eh_crawl_queue", sql)
+        self.assertIn("create or replace function eh_quad.eh_search_pages", sql)
+        self.assertNotIn("public.", sql)
+        self.assertNotIn("auth.", sql)
+        self.assertNotIn("storage.", sql)
 
 
 if __name__ == "__main__":
