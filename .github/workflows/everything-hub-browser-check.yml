@@ -1,9 +1,10 @@
-name: Everything Hub live browser verification
+name: Everything Hub live homepage verification
 on:
   push:
     branches: [main]
     paths:
       - ".github/workflows/everything-hub-browser-check.yml"
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
@@ -20,7 +21,7 @@ jobs:
           npm init -y
           npm install --no-save playwright
           npx playwright install --with-deps chromium
-      - name: Open and test the live Everything Hub browser
+      - name: Verify the live approved homepage and real search
         run: |
           cat > browser-check.cjs <<'JS'
           const { chromium } = require('playwright');
@@ -29,36 +30,57 @@ jobs:
             const browser = await chromium.launch({ headless: true });
             const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 1 });
             const errors = [];
-            page.on('pageerror', e => errors.push('PAGE: ' + e.message));
-            page.on('console', m => { if (m.type() === 'error') errors.push('CONSOLE: ' + m.text()); });
-            page.on('requestfailed', r => errors.push('REQUEST: ' + r.url() + ' ' + (r.failure()?.errorText || 'failed')));
-            const report = { url: 'https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-browser', startedAt: new Date().toISOString() };
+            page.on('pageerror', e => errors.push(e.message));
+            const report = { url: 'https://everythinghub-homepage-fixed.vercel.app/', startedAt: new Date().toISOString() };
             try {
               const response = await page.goto(report.url, { waitUntil: 'domcontentloaded', timeout: 45000 });
               report.httpStatus = response?.status();
               report.title = await page.title();
-              report.header = await page.locator('header .brand').innerText();
-              report.addressBar = await page.locator('#address').count() === 1;
-              report.navigationControls = await page.locator('#back, #forward, #reload, #home').count();
-              report.categoryTabs = await page.locator('.tab').allTextContents();
-              await page.screenshot({ path: 'everything-hub-browser-home.png', fullPage: true });
-              await page.locator('#address').fill('Rolex');
-              await page.locator('#nav button.go').click();
-              await page.locator('#results .result a').first().waitFor({ state: 'visible', timeout: 20000 });
-              report.searchState = await page.locator('#state').innerText();
-              report.resultCount = await page.locator('#results .result').count();
-              report.firstResults = await page.locator('#results .result').evaluateAll(nodes => nodes.slice(0, 5).map(n => ({ title: n.querySelector('a')?.innerText, url: n.querySelector('a')?.href })));
-              await page.screenshot({ path: 'everything-hub-browser-rolex.png', fullPage: true });
-              report.errors = errors;
-              report.passed = report.httpStatus === 200 && report.addressBar && report.navigationControls === 4 && report.categoryTabs.length === 8 && report.resultCount > 0 && report.firstResults.every(x => x.url.startsWith('http')) && errors.length === 0;
+              report.searchInput = await page.locator('#q').count() === 1;
+              report.categoryCount = await page.locator('.tile').count();
+              report.approvedArtwork = await page.locator('img.approved-master-art').evaluate(img => ({
+                complete: img.complete, naturalWidth: img.naturalWidth, alt: img.alt
+              }));
+              if (!response?.ok() || !report.title.includes('Everything Hub') || !report.searchInput ||
+                  report.categoryCount !== 8 || !report.approvedArtwork.complete || report.approvedArtwork.naturalWidth < 100) {
+                throw new Error('Homepage structure check failed: ' + JSON.stringify(report));
+              }
+              await page.screenshot({ path: 'everything-hub-homepage-desktop.png', fullPage: true });
+              await page.locator('#q').fill('Rolex');
+              await page.locator('#q').press('Enter');
+              await page.locator('#results .result a').first().waitFor({ state: 'visible', timeout: 30000 });
+              report.rolexResultCount = await page.locator('#results .result').count();
+              report.firstResults = await page.locator('#results .result').evaluateAll(nodes =>
+                nodes.slice(0, 5).map(n => ({ title: n.querySelector('a')?.innerText, url: n.querySelector('a')?.href }))
+              );
+              if (!report.rolexResultCount || !report.firstResults.every(x => x.url?.startsWith('http'))) {
+                throw new Error('Rolex search did not render usable web results.');
+              }
+              await page.screenshot({ path: 'everything-hub-rolex-search.png', fullPage: true });
+              await page.setViewportSize({ width: 390, height: 844 });
+              await page.reload({ waitUntil: 'domcontentloaded' });
+              await page.locator('#q').waitFor({ state: 'visible' });
+              report.mobile = await page.evaluate(() => ({
+                viewportWidth: document.documentElement.clientWidth,
+                documentWidth: document.documentElement.scrollWidth,
+                searchVisible: !!document.querySelector('#q')?.getClientRects().length,
+                categoryCount: document.querySelectorAll('.tile').length
+              }));
+              if (report.mobile.documentWidth > report.mobile.viewportWidth + 2 ||
+                  !report.mobile.searchVisible || report.mobile.categoryCount !== 8) {
+                throw new Error('Mobile layout check failed: ' + JSON.stringify(report.mobile));
+              }
+              report.pageErrors = errors;
+              report.passed = errors.length === 0;
+              if (errors.length) throw new Error('Browser page errors: ' + errors.join('; '));
             } catch (e) {
               report.failure = e.stack || e.message;
-              report.errors = errors;
+              report.pageErrors = errors;
               report.passed = false;
-              await page.screenshot({ path: 'everything-hub-browser-failure.png', fullPage: true }).catch(() => {});
+              await page.screenshot({ path: 'everything-hub-homepage-failure.png', fullPage: true }).catch(() => {});
             } finally {
               report.finishedAt = new Date().toISOString();
-              fs.writeFileSync('everything-hub-browser-report.json', JSON.stringify(report, null, 2));
+              fs.writeFileSync('everything-hub-homepage-report.json', JSON.stringify(report, null, 2));
               await browser.close();
               console.log(JSON.stringify(report, null, 2));
               if (!report.passed) process.exitCode = 1;
@@ -66,15 +88,15 @@ jobs:
           })();
           JS
           node browser-check.cjs
-      - name: Save screenshots and test report
+      - name: Save homepage screenshots and test report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: everything-hub-browser-visual-check
+          name: everything-hub-live-homepage-visual-check
           path: |
-            everything-hub-browser-home.png
-            everything-hub-browser-rolex.png
-            everything-hub-browser-failure.png
-            everything-hub-browser-report.json
+            everything-hub-homepage-desktop.png
+            everything-hub-rolex-search.png
+            everything-hub-homepage-failure.png
+            everything-hub-homepage-report.json
           if-no-files-found: warn
           retention-days: 3
