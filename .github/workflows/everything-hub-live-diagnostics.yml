@@ -20,6 +20,7 @@ jobs:
         env:
           BASE: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1
           KEY: sb_publishable_XlIsACWhtVS1jVODWYGTpg_GMs8v3vJ
+          VERCEL_BASE: https://everythinghub-homepage-fixed.vercel.app
         run: |
           set -euo pipefail
           echo "=== HOMEPAGE ==="
@@ -33,6 +34,56 @@ jobs:
           tile_count=$(grep -o 'class="tile"' /tmp/home.html | wc -l)
           echo "homepage_tiles=$tile_count"
           test "$tile_count" -eq 8
+          echo "=== CANONICAL VERCEL HOMEPAGE AND SEARCH CATALOG ==="
+          node <<'NODE'
+          const fs = require("fs");
+          (async () => {
+            const base = process.env.VERCEL_BASE.replace(/\/$/, "");
+            const homeResponse = await fetch(base + "/", { signal: AbortSignal.timeout(20000) });
+            if (!homeResponse.ok) throw new Error("Canonical homepage HTTP " + homeResponse.status);
+            const html = await homeResponse.text();
+            const tiles = (html.match(/class="tile"/g) || []).length;
+            if (!html.includes("Everything Hub") || !html.includes('id="q"') ||
+                !html.includes("approved-master-art") || tiles !== 8) {
+              throw new Error("Canonical homepage structure check failed: " + JSON.stringify({tiles}));
+            }
+            const manifestResponse = await fetch(base + "/search-index/manifest.json", { signal: AbortSignal.timeout(20000) });
+            if (!manifestResponse.ok) throw new Error("Search manifest HTTP " + manifestResponse.status);
+            const manifest = await manifestResponse.json();
+            if (!Array.isArray(manifest.shards) || manifest.shards.length !== manifest.shard_count) {
+              throw new Error("Search manifest shard metadata is inconsistent");
+            }
+            let total = 0;
+            for (const shard of manifest.shards) {
+              const response = await fetch(new URL("search-index/" + shard.file, base + "/"), {
+                signal: AbortSignal.timeout(20000)
+              });
+              if (!response.ok) throw new Error(shard.file + " HTTP " + response.status);
+              const payload = await response.json();
+              const count = Array.isArray(payload.pages) ? payload.pages.length : 0;
+              if (count !== shard.pages) throw new Error(shard.file + " count mismatch: " + count + " != " + shard.pages);
+              total += count;
+            }
+            if (total !== manifest.total_pages) {
+              throw new Error("Catalog total mismatch: " + total + " != " + manifest.total_pages);
+            }
+            const summary = "- Canonical Vercel homepage: PASS (HTTP 200, " + tiles + " categories)\\n" +
+              "- Canonical Vercel catalog: PASS (" + total + " pages across " + manifest.shards.length + " shards; all shards HTTP 200)\\n";
+            fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary);
+            console.log(JSON.stringify({homepageStatus:200,tiles,totalPages:total,shardCount:manifest.shards.length},null,2));
+          })().catch(error => { console.error(error); process.exit(1); });
+          NODE
+          echo "=== CUSTOM DOMAIN CHECK ==="
+          custom_domain_status="BLOCKED — domain request failed"
+          if curl --max-time 12 -fsSL "https://everythinghub.ink/" -o /tmp/custom-domain.html; then
+            if grep -Fq 'Everything Hub' /tmp/custom-domain.html && grep -Fq 'id="q"' /tmp/custom-domain.html; then
+              custom_domain_status="PASS"
+            else
+              custom_domain_status="WARNING — response did not match the approved homepage"
+            fi
+          else
+            echo "::warning::everythinghub.ink is not reachable; canonical Vercel deployment remains the verified publishing target."
+          fi
           echo "=== CUSTOM EVERYTHING HUB BROWSER ==="
           curl -fsSL -D /tmp/browser-headers.txt "$BASE/everything-hub-browser" -o /tmp/browser.html
           head -n 1 /tmp/browser-headers.txt
@@ -102,7 +153,8 @@ jobs:
           fi
           {
             echo "## Everything Hub live diagnostics"
-            echo "- Homepage: PASS (8 categories)"
+            echo "- Supabase homepage: PASS (8 categories)"
+            echo "- Custom domain: $custom_domain_status"
             echo "- Custom browser endpoint: PASS"
             echo "- Database-backed search: $db_search_status"
             echo "- Independent search: PASS ($independent_count results)"
