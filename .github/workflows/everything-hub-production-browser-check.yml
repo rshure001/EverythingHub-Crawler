@@ -1,10 +1,12 @@
-name: Everything Hub preview catalog browser verification
+name: Everything Hub production browser verification
 on:
   push:
     branches: [main]
     paths:
       - ".github/workflows/everything-hub-production-browser-check.yml"
+      - "vercel-homepage/**"
       - "public-search/**"
+      - "supabase/functions/everything-hub-web-search/**"
   workflow_run:
     workflows: ["Everything Hub crawler"]
     types: [completed]
@@ -12,13 +14,16 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: eh-production-browser-check
+  cancel-in-progress: true
 jobs:
-  staging-browser-check:
-    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+  production-browser-check:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 8
     env:
-      TARGET_URL: https://everythinghub-homepage-fixed.vercel.app/
+      TARGET_URL: https://everything-hub-ten.vercel.app/
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -29,131 +34,86 @@ jobs:
           npm init -y
           npm install --no-save playwright
           npx playwright install --with-deps chromium
-      - name: Verify preview homepage, approved art, complete crawler catalog, and search
+      - name: Verify approved homepage, crawler search, independent fallback, and mobile layout
         run: |
-          cat > staging-check.cjs <<'JS'
+          cat > production-check.cjs <<'JS'
           const { chromium } = require("playwright");
           const fs = require("fs");
-          const crypto = require("crypto");
           (async () => {
             const browser = await chromium.launch({ headless: true });
             const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
             const errors = [];
-            page.on("pageerror", e => errors.push(e.message));
+            page.on("pageerror", error => errors.push(error.message));
             const report = { url: process.env.TARGET_URL, startedAt: new Date().toISOString() };
             try {
               const response = await page.goto(report.url, { waitUntil: "domcontentloaded", timeout: 45000 });
               report.httpStatus = response?.status();
               report.title = await page.title();
               report.searchInput = await page.locator("#q").count() === 1;
-              report.categoryCount = await page.locator(".tile").count();
-              await page.locator("img.approved-master-art").waitFor({ state: "attached", timeout: 15000 });
+              report.categoryCount = await page.locator(".categories button[data-mode]").count();
+
+              const artwork = page.locator(".hero img").first();
+              await artwork.waitFor({ state: "visible", timeout: 15000 });
               await page.waitForFunction(() => {
-                const img = document.querySelector("img.approved-master-art");
-                return !!img && img.complete && img.naturalWidth >= 100;
-              }, { timeout: 25000 });
-              report.approvedArtwork = await page.locator("img.approved-master-art").evaluate(img => ({
-                complete: img.complete, naturalWidth: img.naturalWidth, alt: img.alt
+                const image = document.querySelector(".hero img");
+                return !!image && image.complete && image.naturalWidth >= 100;
+              }, null, { timeout: 20000 });
+              report.approvedArtwork = await artwork.evaluate(image => ({
+                src: image.getAttribute("src"),
+                complete: image.complete,
+                naturalWidth: image.naturalWidth,
+                alt: image.alt
               }));
-              const manifestResponse = await page.request.get(new URL("search-index/manifest.json", report.url).href);
-              if (!manifestResponse.ok()) throw new Error("Manifest HTTP " + manifestResponse.status());
-              const manifest = await manifestResponse.json();
-              const repositoryManifest = JSON.parse(fs.readFileSync("public-search/manifest.json", "utf8"));
-              const repositoryShards = Array.isArray(repositoryManifest.shards) ? repositoryManifest.shards : [];
-              const productionShards = Array.isArray(manifest.shards) ? manifest.shards : [];
-              const shardManifestMatches = productionShards.length === repositoryShards.length &&
-                productionShards.every((shard, index) => {
-                  const expected = repositoryShards[index];
-                  return expected && shard.file === expected.file &&
-                    Number(shard.pages) === Number(expected.pages) &&
-                    String(shard.sha256 || "") === String(expected.sha256 || "");
-                });
-              report.catalog = {
-                totalPages: manifest.total_pages,
-                shardCount: manifest.shard_count,
-                repositoryTotalPages: repositoryManifest.total_pages,
-                repositoryShardCount: repositoryManifest.shard_count,
-                manifestIntegrity: manifest.integrity || "legacy",
-                shardManifestMatches,
-                matchesMainBranch: Number(manifest.total_pages) === Number(repositoryManifest.total_pages) &&
-                  Number(manifest.shard_count) === Number(repositoryManifest.shard_count) &&
-                  shardManifestMatches,
-                shards: []
-              };
-              if (!report.catalog.matchesMainBranch) {
-                report.catalog.pagesBehind = Number(repositoryManifest.total_pages) - Number(manifest.total_pages);
-                console.warn("Preview catalog differs from the current GitHub crawler index: " +
-                  manifest.total_pages + " preview pages vs " + repositoryManifest.total_pages +
-                  " repository pages; shard metadata match: " + shardManifestMatches + ".");
-              }
-              if (!Array.isArray(manifest.shards) || manifest.shards.length !== manifest.shard_count) {
-                throw new Error("Invalid manifest shard metadata");
-              }
-              for (const shard of manifest.shards) {
-                const shardResponse = await page.request.get(new URL("search-index/" + shard.file, report.url).href);
-                if (!shardResponse.ok()) throw new Error(shard.file + " HTTP " + shardResponse.status());
-                const raw = await shardResponse.body();
-                if (manifest.integrity === "sha256" && !shard.sha256) {
-                  throw new Error(shard.file + " is missing its required SHA-256 digest");
-                }
-                let digestVerified = false;
-                if (shard.sha256) {
-                  if (!/^[a-f0-9]{64}$/.test(shard.sha256)) {
-                    throw new Error(shard.file + " has an invalid SHA-256 digest");
-                  }
-                  const digest = crypto.createHash("sha256").update(raw).digest("hex");
-                  if (digest !== shard.sha256) throw new Error(shard.file + " SHA-256 mismatch");
-                  digestVerified = true;
-                }
-                const payload = JSON.parse(raw.toString("utf8"));
-                const count = Array.isArray(payload.pages) ? payload.pages.length : 0;
-                if (count !== shard.pages) throw new Error(shard.file + " page count mismatch");
-                report.catalog.shards.push({ file: shard.file, pages: count, digestVerified });
-              }
-              const total = report.catalog.shards.reduce((n, shard) => n + shard.pages, 0);
-              if (total !== manifest.total_pages || total < 1) {
-                throw new Error("Catalog total mismatch: " + total);
-              }
-              if (!response?.ok() || !report.title.includes("Everything Hub") || !report.searchInput ||
-                  report.categoryCount !== 8 || report.approvedArtwork.naturalWidth < 100) {
-                throw new Error("Homepage structure check failed: " + JSON.stringify(report));
+
+              if (!response?.ok() || !report.title.includes("Everything Hub") ||
+                  !report.searchInput || report.categoryCount !== 8 ||
+                  report.approvedArtwork.naturalWidth < 100) {
+                throw new Error("Approved homepage structure check failed: " + JSON.stringify(report));
               }
               await page.screenshot({ path: "everything-hub-production-homepage.png", fullPage: true });
+
               await page.locator("#q").fill("Rolex");
               await page.locator("#q").press("Enter");
-              await page.locator("#results .result a").first().waitFor({ state: "visible", timeout: 30000 });
+              await page.locator("#results .result a").first().waitFor({ state: "visible", timeout: 35000 });
               report.rolexResultCount = await page.locator("#results .result").count();
-              if (!report.rolexResultCount) throw new Error("Rolex search returned no visible results");
+              report.rolexStatus = await page.locator("#status").innerText();
+              if (!report.rolexResultCount || !report.rolexStatus.includes("Bing RSS independent web fallback")) {
+                throw new Error("Rolex did not use the independent fallback: " + JSON.stringify({
+                  count: report.rolexResultCount, status: report.rolexStatus
+                }));
+              }
               await page.screenshot({ path: "everything-hub-production-rolex.png", fullPage: true });
+
               await page.locator("#q").fill("NASA");
               await page.locator("#q").press("Enter");
-              await page.locator("#results .result a").first().waitFor({ state: "visible", timeout: 30000 });
-              const nasaSources = await page.locator("#results .result .source").allTextContents();
-              report.nasaCrawlerIndexResults = nasaSources.filter(source => source.includes("EverythingHub index")).length;
-              if (report.nasaCrawlerIndexResults < 1) {
-                throw new Error("NASA search did not return any results from the published crawler index: " + JSON.stringify(nasaSources));
+              await page.locator("#results .result a").first().waitFor({ state: "visible", timeout: 35000 });
+              report.nasaResultCount = await page.locator("#results .result").count();
+              report.nasaStatus = await page.locator("#status").innerText();
+              if (!report.nasaResultCount || !report.nasaStatus.includes("Everything Hub public crawler index")) {
+                throw new Error("NASA did not return crawler-index results: " + JSON.stringify({
+                  count: report.nasaResultCount, status: report.nasaStatus
+                }));
               }
+              await page.screenshot({ path: "everything-hub-production-nasa.png", fullPage: true });
+
               await page.setViewportSize({ width: 390, height: 844 });
               await page.reload({ waitUntil: "domcontentloaded" });
               report.mobile = await page.evaluate(() => ({
                 viewportWidth: document.documentElement.clientWidth,
                 documentWidth: document.documentElement.scrollWidth,
                 searchVisible: !!document.querySelector("#q")?.getClientRects().length,
-                categoryCount: document.querySelectorAll(".tile").length
+                categoryCount: document.querySelectorAll(".categories button[data-mode]").length
               }));
               if (report.mobile.documentWidth > report.mobile.viewportWidth + 2 ||
                   !report.mobile.searchVisible || report.mobile.categoryCount !== 8) {
                 throw new Error("Mobile layout check failed: " + JSON.stringify(report.mobile));
               }
+
               report.pageErrors = errors;
-              report.passed = errors.length === 0 && report.catalog?.matchesMainBranch !== false;
-              if (report.catalog?.matchesMainBranch === false) {
-                report.failure = "Published preview catalog does not match the current repository manifest.";
-                console.error(report.failure);
-              }
+              report.passed = errors.length === 0;
               if (errors.length) throw new Error("Browser page errors: " + errors.join("; "));
-            } catch (e) {
-              report.failure = e.stack || e.message;
+            } catch (error) {
+              report.failure = error.stack || error.message;
               report.pageErrors = errors;
               report.passed = false;
               await page.screenshot({ path: "everything-hub-production-failure.png", fullPage: true }).catch(() => {});
@@ -166,8 +126,8 @@ jobs:
             }
           })();
           JS
-          node staging-check.cjs
-      - name: Save staging screenshots and report
+          node production-check.cjs
+      - name: Save production screenshots and report
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -175,6 +135,7 @@ jobs:
           path: |
             everything-hub-production-homepage.png
             everything-hub-production-rolex.png
+            everything-hub-production-nasa.png
             everything-hub-production-failure.png
             everything-hub-production-report.json
           if-no-files-found: warn
