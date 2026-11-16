@@ -138,7 +138,10 @@ Deno.serve(async (request: Request) => {
   const url = new URL(request.url);
   const query = (url.searchParams.get("q") || "").trim().slice(0, 120);
   const type = url.searchParams.get("type") === "video" ? "video" : "image";
-  if (query.length < 2) return Response.json({ results: [], count: 0, query, type }, { headers: cors });
+  if (query.length < 2) return Response.json({
+    results: [], count: 0, query, type,
+    usageNote: "Bing media results are discovery links only; verify reuse rights on the source page. Wikimedia Commons results include available license and attribution metadata."
+  }, { headers: cors });
 
   try {
     let results = await bing(query, type);
@@ -159,7 +162,11 @@ Deno.serve(async (request: Request) => {
         usageNote: "Review each file's license and attribution requirements before reuse."
       }, { headers: cors });
     } catch {
-      return Response.json({ results: [], count: 0, query, type, warning: "Free media sources are temporarily unavailable" }, { status: 200, headers: cors });
+      return Response.json({
+        results: [], count: 0, query, type,
+        warning: "Free media sources are temporarily unavailable",
+        usageNote: "No media results are currently available. Check each original source's terms before reuse."
+      }, { status: 200, headers: cors });
     }
   }
 });
