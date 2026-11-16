@@ -68,14 +68,14 @@ jobs:
           shutil.copyfile(manifest_path, target / 'manifest.json')
           print(json.dumps({'status':'validated-and-staged','pages':total,'shards':len(shards),'unique_urls':len(seen),'integrity':'sha256'}, indent=2))
           PY
+      - name: Upload validated release artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
         with:
           enablement: true
-      - name: Upload release artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: site
   deploy:
     environment:
       name: github-pages
