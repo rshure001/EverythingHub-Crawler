@@ -1,0 +1,67 @@
+name: Everything Hub media discovery smoke test
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/media-discovery-smoke.yml"
+      - "supabase/functions/everything-hub-media-search/index.ts"
+      - "database/test_media_discovery.py"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: everythinghub-media-smoke
+  cancel-in-progress: true
+jobs:
+  media-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Verify live image and video discovery metadata
+        env:
+          BASE: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-media-search
+        run: |
+          set -euo pipefail
+          curl --silent --show-error --fail --max-time 20 -G "$BASE" \
+            --data-urlencode "q=octopus" --data-urlencode "type=image" -o /tmp/images.json
+          curl --silent --show-error --fail --max-time 20 -G "$BASE" \
+            --data-urlencode "q=Apollo 11 NASA" --data-urlencode "type=video" -o /tmp/videos.json
+          node <<'NODE'
+          const fs = require("fs");
+          for (const type of ["images", "videos"]) {
+            const d = JSON.parse(fs.readFileSync("/tmp/" + type + ".json", "utf8"));
+            if (!Array.isArray(d.results) || d.count !== d.results.length) {
+              throw new Error(type + ": invalid results/count response");
+            }
+            if (typeof d.usageNote !== "string" || !d.usageNote.length) {
+              throw new Error(type + ": missing source-terms usage note");
+            }
+            if (d.results.length) {
+              const first = d.results[0];
+              if (!first.source || !first.usageRights || !first.pageUrl?.startsWith("https://")) {
+                throw new Error(type + ": result lacks source, usage rights, or source page");
+              }
+              if (d.provider === "Wikimedia Commons") {
+                for (const field of ["license", "licenseUrl", "creator", "credit", "attributionRequired"]) {
+                  if (!(field in first)) throw new Error(type + ": Commons result missing " + field);
+                }
+              } else if (/^Bing/.test(d.provider || "")) {
+                if (!String(first.usageRights).includes("Unverified")) {
+                  throw new Error(type + ": Bing result must not imply reuse permission");
+                }
+              }
+            }
+            console.log(JSON.stringify({
+              type,
+              provider: d.provider || null,
+              count: d.count,
+              warning: d.warning || null,
+              firstResult: d.results[0] ? {
+                title: d.results[0].title,
+                source: d.results[0].source,
+                license: d.results[0].license || null,
+                attributionRequired: d.results[0].attributionRequired ?? null
+              } : null
+            }, null, 2));
+          }
+          NODE
