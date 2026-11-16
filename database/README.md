@@ -56,5 +56,11 @@ unauthenticated search endpoint.
 
 The staged Edge search source is `supabase/functions/everything-hub-web-search/index.ts`; it explicitly selects `eh_quad` for both the RPC and fallback query. It is not deployed by this pull request. Deployment requires the database migration, exposed-schema configuration, and live search tests to pass.
 
+## Observed production deployment drift (2026-11-16)
+
+The connected Supabase deployment inspection found `everything-hub-web-search` version 10 active. Its deployed source still uses unqualified `supabase.rpc("eh_search_pages", ...)` and `supabase.from("eh_pages")`, which resolve through the default `public` schema. Do not treat that deployed version as an `eh_quad`-isolated search service. The repository source is the corrected, schema-qualified implementation and is covered by `SchemaIsolationTests.test_edge_search_uses_only_eh_quad`.
+
+Do not deploy the corrected Edge Function until PostgreSQL accepts connections, the `eh_quad` migration is confirmed, and `eh_quad` is exposed in the Data API while `anon` and `authenticated` remain ungranted. The canonical Vercel homepage currently uses its independently verified web-search endpoint plus the published static crawler catalog; that path is separate from the Supabase database-backed search function.
+
 No migration or import is run against Dog Tag Day. The files alone do not
 publish or switch production traffic.
