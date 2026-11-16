@@ -27,19 +27,25 @@ ROBOTS_MAX_BYTES = 512_000
 TIMEOUT = 15
 UA = "EverythingHubCrawler/1.1 (+https://github.com/rshure001/EverythingHub-Crawler)"
 
-class SameOriginRedirectHandler(urllib.request.HTTPRedirectHandler):
-    """Prevent page fetches from silently crossing into an unchecked host."""
+class RobotsAwareRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Allow same-host redirects only after checking robots.txt for the target URL."""
+    def __init__(self, is_allowed):
+        super().__init__()
+        self.is_allowed = is_allowed
+
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         target = urllib.parse.urljoin(req.full_url, newurl)
-        old = urllib.parse.urlsplit(req.full_url)
-        new = urllib.parse.urlsplit(target)
-        if (old.scheme.lower(), old.netloc.lower()) != (new.scheme.lower(), new.netloc.lower()):
+        old_host = (urllib.parse.urlsplit(req.full_url).hostname or "").lower()
+        new_host = (urllib.parse.urlsplit(target).hostname or "").lower()
+        if old_host != new_host:
             raise urllib.error.HTTPError(
-                req.full_url, code, "cross-origin redirect blocked", headers, fp
+                req.full_url, code, "cross-host redirect blocked", headers, fp
+            )
+        if not self.is_allowed(target):
+            raise urllib.error.HTTPError(
+                req.full_url, code, "redirect target blocked by robots.txt", headers, fp
             )
         return super().redirect_request(req, fp, code, msg, headers, target)
-
-HTTP_OPENER = urllib.request.build_opener(SameOriginRedirectHandler())
 
 class PageParser(HTMLParser):
     """Extract readable text and links while excluding repeated page chrome."""
@@ -88,16 +94,21 @@ def clean(url):
     return urllib.parse.urlunsplit((p.scheme.lower(), p.netloc.lower(), p.path or "/",
                                     urllib.parse.urlencode(query), ""))
 
-def request(url):
+def request(url, is_allowed):
     req = urllib.request.Request(url, headers={
         "User-Agent": UA, "Accept": "text/html,application/xml,*/*"
     })
-    with HTTP_OPENER.open(req, timeout=TIMEOUT) as response:
+    opener = urllib.request.build_opener(RobotsAwareRedirectHandler(is_allowed))
+    with opener.open(req, timeout=TIMEOUT) as response:
         return response.geturl(), response.headers.get_content_type(), response.read(2_000_000)
 
 def origin(url):
     p = urllib.parse.urlsplit(url)
     return f"{p.scheme}://{p.netloc}"
+
+def host_key(url):
+    p = urllib.parse.urlsplit(url)
+    return (p.hostname or p.netloc).lower()
 
 def effective_host_delay(parser):
     """Return the strictest robots.txt rate directive, with a safe minimum."""
@@ -122,7 +133,7 @@ def select_batch(queue, is_allowed, host_next_allowed, now, workers=WORKERS):
     for index, (url, depth) in enumerate(pending):
         if depth > MAX_DEPTH:
             continue
-        host = origin(url)
+        host = host_key(url)
         next_allowed = float(host_next_allowed.get(host, 0) or 0)
         if host in selected_hosts or next_allowed > now:
             deferred.append((url, depth))
@@ -142,7 +153,7 @@ def next_host_wait(queue, host_next_allowed, now):
     """Seconds until the next queued host is eligible, or zero if immediately ready."""
     ready_times = []
     for url, _depth in queue:
-        ready_at = float(host_next_allowed.get(origin(url), 0) or 0)
+        ready_at = float(host_next_allowed.get(host_key(url), 0) or 0)
         if ready_at <= now:
             return 0.0
         ready_times.append(ready_at)
@@ -178,7 +189,10 @@ def main():
                 with urllib.request.urlopen(req, timeout=TIMEOUT) as response:
                     if response.status >= 400:
                         raise RuntimeError(f"robots.txt returned HTTP {response.status}")
-                    body = response.read(ROBOTS_MAX_BYTES).decode("utf-8", "replace")
+                    raw = response.read(ROBOTS_MAX_BYTES + 1)
+                    if len(raw) > ROBOTS_MAX_BYTES:
+                        raise RuntimeError("robots.txt exceeds the safe size limit")
+                    body = raw.decode("utf-8", "replace")
                 parser.parse(body.splitlines())
             except Exception:
                 # If robots.txt cannot be read, fail closed for this host.
@@ -201,11 +215,15 @@ def main():
     saved_host_schedule = frontier.get("host_next_allowed", {})
     if not isinstance(saved_host_schedule, dict):
         saved_host_schedule = {}
-    host_next_allowed = {
-        str(host): float(timestamp)
-        for host, timestamp in saved_host_schedule.items()
-        if isinstance(timestamp, (int, float))
-    }
+    host_next_allowed = {}
+    for saved_host, timestamp in saved_host_schedule.items():
+        if not isinstance(timestamp, (int, float)):
+            continue
+        key = str(saved_host).lower()
+        if "://" in key:
+            parsed = urllib.parse.urlsplit(key)
+            key = (parsed.hostname or parsed.netloc).lower()
+        host_next_allowed[key] = max(host_next_allowed.get(key, 0), float(timestamp))
     queue = deque()
     for item in frontier.get("queue", []):
         if isinstance(item, dict) and item.get("url"):
@@ -241,9 +259,10 @@ def main():
         def fetch(item):
             url, depth = item
             try:
-                final, content_type, body = request(url)
+                final, content_type, body = request(url, allowed)
+                delay = max(host_delay(origin(url)), host_delay(origin(final)))
                 if content_type != "text/html":
-                    return None
+                    return None, None, delay
                 parser = PageParser()
                 parser.feed(body.decode("utf-8", "replace"))
                 title = re.sub(r"\s+", " ", " ".join(parser.title)).strip()
@@ -259,7 +278,7 @@ def main():
                     "url": final, "title": title,
                     "description": parser.description[:500],
                     "text": text, "depth": depth, "fetched_at": int(time.time())
-                }, links)
+                }, links, delay)
             except Exception as error:
                 print(f"skip {url}: {error}")
                 return None
@@ -269,15 +288,16 @@ def main():
 
         fetched += len(batch)
         completed_at = time.time()
-        for url, _depth in batch:
-            host = origin(url)
-            host_next_allowed[host] = completed_at + host_delay(host)
+        for (url, _depth), result in zip(batch, results):
+            host = host_key(url)
+            delay = result[2] if result else host_delay(origin(url))
+            host_next_allowed[host] = completed_at + delay
             requests_by_host[host] = requests_by_host.get(host, 0) + 1
 
         for result in results:
-            if not result:
+            if not result or not result[0]:
                 continue
-            record, links = result
+            record, links, _delay = result
             records[record["url"]] = record
             depth_counts[str(record["depth"])] = depth_counts.get(str(record["depth"]), 0) + 1
             for candidate in links:
