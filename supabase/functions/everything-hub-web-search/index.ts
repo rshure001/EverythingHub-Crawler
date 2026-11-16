@@ -17,10 +17,11 @@ const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   {
-    global: { fetch: createTimedFetch(fetch, 6500) },
+    global: { fetch: createTimedFetch(fetch, 2500) },
     auth: { persistSession: false, autoRefreshToken: false },
   },
 );
+// Fail fast during database recovery so the verified crawler/Bing fallback stays responsive.
 const db = supabase.schema("eh_quad");
 
 const STATIC_INDEX_BASE =
