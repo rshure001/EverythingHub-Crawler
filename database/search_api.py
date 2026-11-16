@@ -2,7 +2,7 @@
 """Small authenticated PostgreSQL full-text search API for Everything Hub.
 
 Run with DATABASE_URL, EH_SEARCH_API_TOKEN, and optionally EH_DB_SCHEMA.
-GET /healthz is a database readiness check. GET /search?q=...&limit=10&offset=0
+GET /healthz is a database readiness check. GET /search?q=...&tentacle=science&limit=10&offset=0
 requires Authorization: Bearer <EH_SEARCH_API_TOKEN>.
 """
 import json
@@ -15,6 +15,10 @@ TOKEN = os.environ.get("EH_SEARCH_API_TOKEN", "")
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 HOST = os.environ.get("EH_SEARCH_HOST", "127.0.0.1")
 PORT = int(os.environ.get("EH_SEARCH_PORT", "8080"))
+VALID_LANES = frozenset({
+    "general", "science", "news", "technology",
+    "business", "government", "culture", "nature",
+})
 
 if SCHEMA != "eh_quad":
     raise SystemExit("This search API is locked to eh_quad; no other schema is permitted.")
@@ -33,7 +37,7 @@ def connect():
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "EverythingHubSearch/0.1"
+    server_version = "EverythingHubSearch/0.2"
 
     def send_json(self, status, payload):
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -66,8 +70,8 @@ class Handler(BaseHTTPRequestHandler):
 
         params = parse_qs(route.query, keep_blank_values=True)
         query = (params.get("q") or [""])[0].strip()
-        if not query or len(query) > 200:
-            self.send_json(400, {"error": "q_required", "max_query_length": 200})
+        if not query or len(query) > 160:
+            self.send_json(400, {"error": "q_required", "max_query_length": 160})
             return
         try:
             limit = int((params.get("limit") or ["10"])[0])
@@ -75,35 +79,41 @@ class Handler(BaseHTTPRequestHandler):
         except ValueError:
             self.send_json(400, {"error": "invalid_pagination"})
             return
-        if not 1 <= limit <= 50 or not 0 <= offset <= 100000:
-            self.send_json(400, {"error": "pagination_out_of_range", "limit_max": 50})
+        if not 1 <= limit <= 20 or not 0 <= offset <= 5000:
+            self.send_json(400, {"error": "pagination_out_of_range", "limit_max": 20, "offset_max": 5000})
             return
 
+        requested_lane = (params.get("tentacle") or [""])[0].strip().lower()
+        lane = requested_lane if requested_lane in VALID_LANES else ""
+
         sql = f"""
-          select canonical_url, source_host, title, description,
+          select canonical_url, source_host, title, description, lane,
                  ts_rank(search_vector, plainto_tsquery('english', %s)) as score
           from "{SCHEMA}".eh_documents
           where search_vector @@ plainto_tsquery('english', %s)
-          order by score desc, fetched_at desc
+            and (%s = '' or lane = %s)
+          order by score desc, fetched_at desc, canonical_url asc
           limit %s offset %s
         """
         count_sql = f"""
           select count(*) from "{SCHEMA}".eh_documents
           where search_vector @@ plainto_tsquery('english', %s)
+            and (%s = '' or lane = %s)
         """
         try:
             with connect() as conn, conn.cursor() as cur:
-                cur.execute(count_sql, (query,))
+                cur.execute(count_sql, (query, lane, lane))
                 total = cur.fetchone()[0]
-                cur.execute(sql, (query, query, limit, offset))
+                cur.execute(sql, (query, query, lane, lane, limit, offset))
                 rows = cur.fetchall()
             results = [{
                 "url": row[0], "host": row[1], "title": row[2],
-                "description": row[3], "score": float(row[4])
+                "description": row[3], "tentacle": row[4], "score": float(row[5])
             } for row in rows]
             self.send_json(200, {
                 "query": query, "total": total, "limit": limit,
-                "offset": offset, "results": results
+                "offset": offset, "tentacle": lane or None,
+                "hasMore": offset + len(results) < total, "results": results
             })
         except Exception:
             self.send_json(503, {"error": "search_unavailable"})
