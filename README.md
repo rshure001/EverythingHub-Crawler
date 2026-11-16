@@ -11,7 +11,7 @@ Independent, polite crawler for the Everything Hub search project.
 - Same-host redirects are followed only after the target URL passes robots.txt; cross-host redirects are blocked.
 - Public search shards are validated against the canonical index before each crawler commit.
 - Maximum link depth: 3.
-- Same-host HTML link discovery; sitemap XML is not preloaded because it previously consumed the run budget without producing searchable pages.
+- Same-host HTML link discovery plus bounded sitemap discovery from robots.txt declarations: up to 3 seed hosts per run, one declared sitemap and up to 2 same-host child sitemaps per host, at most 100 page URLs per host, and a 1 MB sitemap-response cap. Hosts are rechecked after 7 days; robots failures are retried after 1 hour.
 - Checks each site's `robots.txt`; if robots rules cannot be read, the crawler fails closed for that host.
 - Stores normalized page records in `data/index.json` and resumable frontier state in `data/frontier.json`.
 

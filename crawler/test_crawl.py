@@ -60,6 +60,47 @@ class CrawlerTests(unittest.TestCase):
                 request, None, 301, "Moved", {}, "https://example.com/private"
             )
 
+    def test_robots_parser_reads_sitemap_declarations(self):
+        parser = urllib.robotparser.RobotFileParser()
+        parser.parse([
+            "User-agent: *",
+            "Allow: /",
+            "Sitemap: https://example.com/sitemap.xml",
+        ])
+        self.assertEqual(parser.site_maps(), ["https://example.com/sitemap.xml"])
+
+    def test_sitemap_urlset_extracts_bounded_same_host_pages(self):
+        body = b"""<?xml version="1.0" encoding="UTF-8"?>
+        <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+          <url><loc>https://example.com/one?utm_source=test</loc></url>
+          <url><loc>https://example.com/two</loc></url>
+          <url><loc>https://other.example/skip</loc></url>
+        </urlset>"""
+        pages, children = crawl.parse_sitemap_xml(
+            body, "https://example.com/sitemap.xml", max_urls=1
+        )
+        self.assertEqual(pages, ["https://example.com/one"])
+        self.assertEqual(children, [])
+
+    def test_sitemap_index_returns_only_same_host_child_sitemaps(self):
+        body = b"""<?xml version="1.0" encoding="UTF-8"?>
+        <sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+          <sitemap><loc>https://example.com/part-1.xml</loc></sitemap>
+          <sitemap><loc>https://other.example/part-2.xml</loc></sitemap>
+        </sitemapindex>"""
+        pages, children = crawl.parse_sitemap_xml(
+            body, "https://example.com/sitemap-index.xml"
+        )
+        self.assertEqual(pages, [])
+        self.assertEqual(children, ["https://example.com/part-1.xml"])
+
+    def test_sitemap_parser_fails_closed_on_malformed_xml(self):
+        pages, children = crawl.parse_sitemap_xml(
+            b"not XML", "https://example.com/sitemap.xml"
+        )
+        self.assertEqual(pages, [])
+        self.assertEqual(children, [])
+
     def test_effective_host_delay_respects_robots_directives(self):
         parser = urllib.robotparser.RobotFileParser()
         parser.parse([
