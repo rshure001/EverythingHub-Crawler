@@ -90,3 +90,9 @@ test("normalizes punctuation and case in multi-term queries", () => {
   assert.equal(result.count, 1);
   assert.equal(result.results[0].source, "science.nasa.gov");
 });
+
+test("returns no matches for terms absent from the crawler excerpt set", () => {
+  const result = searchStaticPages(pages, "Rolexium", null, 10, 0);
+  assert.equal(result.count, 0);
+  assert.equal(result.results.length, 0);
+});
