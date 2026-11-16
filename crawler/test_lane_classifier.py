@@ -4,12 +4,22 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from build_search_shards import compact
+from build_search_shards import compact, is_publishable
 from lane_classifier import VALID_LANES, classify_lane
 from validate_public_index import validate
 
 
 class LaneClassifierTests(unittest.TestCase):
+    def test_public_index_excludes_explicit_robots_denials(self):
+        self.assertFalse(is_publishable({"url": "https://example.org/private", "robots_allowed": False}))
+
+    def test_public_index_keeps_records_without_legacy_robots_flag(self):
+        self.assertTrue(is_publishable({"url": "https://example.org/public"}))
+
+    def test_public_index_rejects_malformed_urls(self):
+        self.assertFalse(is_publishable({"url": None}))
+        self.assertFalse(is_publishable({"url": "javascript:alert(1)"}))
+
     def test_all_eight_lanes_have_curated_source_examples(self):
         examples = {
             "general": "https://www.wikipedia.org/",

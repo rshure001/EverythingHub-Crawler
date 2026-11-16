@@ -11,6 +11,14 @@ SOURCE = ROOT / "data" / "index.json"
 OUT = ROOT / "public-search"
 MAX_BYTES = 350_000
 
+def is_publishable(doc):
+    """Exclude explicitly robots-disallowed records from public search shards."""
+    if not isinstance(doc, dict) or doc.get("robots_allowed") is False:
+        return False
+    url = doc.get("url")
+    return isinstance(url, str) and url.startswith(("http://", "https://"))
+
+
 def compact(doc):
     url = str(doc.get("url", ""))[:2048]
     lane = doc.get("lane")
@@ -26,8 +34,7 @@ def compact(doc):
 
 def main():
     source = json.loads(SOURCE.read_text(encoding="utf-8"))
-    pages = [compact(p) for p in source.get("pages", [])
-             if isinstance(p, dict) and p.get("url", "").startswith(("http://", "https://"))]
+    pages = [compact(p) for p in source.get("pages", []) if is_publishable(p)]
     pages.sort(key=lambda p: (p["title"].casefold(), p["url"]))
     OUT.mkdir(parents=True, exist_ok=True)
     for old in OUT.glob("shard-*.json"):
