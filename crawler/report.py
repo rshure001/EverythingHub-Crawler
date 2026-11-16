@@ -23,6 +23,10 @@ def main():
     depths = Counter(str(p.get("depth", "unknown")) for p in pages)
     updated = index.get("updated_at")
     updated_text = datetime.fromtimestamp(updated, timezone.utc).isoformat() if updated else "unknown"
+    duration = float(index.get("run_duration_seconds", 0) or 0)
+    indexed_this_run = int(index.get("pages_indexed_this_run", 0) or 0)
+    indexed_rate = indexed_this_run / (duration / 60) if duration > 0 else 0
+    host_requests = index.get("host_requests_this_run", {}) or {}
     lines = [
         "## Everything Hub crawler health",
         "",
@@ -31,13 +35,19 @@ def main():
         f"- URLs discovered (frontier seen): **{len(frontier.get('seen', [])):,}**",
         f"- URLs waiting in frontier: **{len(frontier.get('queue', [])):,}**",
         f"- Fetched this run: **{index.get('pages_crawled_this_run', 0):,}**",
-        f"- Parsed/indexed this run: **{index.get('pages_indexed_this_run', 0):,}**",
+        f"- Parsed/indexed this run: **{indexed_this_run:,}**",
+        f"- Not indexed this run: **{int(index.get('pages_not_indexed_this_run', 0) or 0):,}**",
+        f"- Robots-blocked URLs this run: **{int(index.get('robots_blocked_this_run', 0) or 0):,}**",
+        f"- Run duration: **{duration:.1f} seconds**",
+        f"- Measured indexed rate (this run): **{indexed_rate:,.1f} pages/minute**",
         f"- Last index update (UTC): **{updated_text}**",
         "",
         "### Indexed records by crawl depth",
         "",
     ]
     lines.extend(f"- Depth {depth}: {count:,}" for depth, count in sorted(depths.items()))
+    lines += ["", "### Requests by host this run", ""]
+    lines.extend(f"- {host}: {count:,}" for host, count in sorted(host_requests.items(), key=lambda item: (-item[1], item[0]))[:10])
     lines += ["", "### Largest indexed hosts", ""]
     lines.extend(f"- {host}: {count:,}" for host, count in hosts.most_common(10))
     report = "\n".join(lines) + "\n"
