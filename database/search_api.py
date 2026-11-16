@@ -11,7 +11,7 @@ import re
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 
-SCHEMA = os.environ.get("EH_DB_SCHEMA", "public")
+SCHEMA = os.environ.get("EH_DB_SCHEMA", "eh_quad")
 TOKEN = os.environ.get("EH_SEARCH_API_TOKEN", "")
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 HOST = os.environ.get("EH_SEARCH_HOST", "127.0.0.1")

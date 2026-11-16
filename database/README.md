@@ -15,10 +15,16 @@ database dedicated to EverythingHub. It is separate from Dog Tag Day.
 
 ## Apply schema
 
-Create a **new, dedicated PostgreSQL database** for EverythingHub. Do not run
-this migration against Dog Tag Day or against the existing production database.
-Apply `001_everythinghub_core.sql` using the database owner's normal migration
-mechanism. The SQL is transactional and uses idempotent table/index creation.
+Use only the dedicated Everything Hub Supabase project and the `eh_quad` schema.
+Never run this migration against Dog Tag Day or the Story Wall project. Create the
+schema first, then apply the migration with `eh_quad` first in the session search path:
+
+```bash
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c 'CREATE SCHEMA IF NOT EXISTS eh_quad;'
+PGOPTIONS='-c search_path=eh_quad,public' psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f database/001_everythinghub_core.sql
+```
+
+The SQL is transactional and uses idempotent table/index creation.
 
 ## Import the repository index
 
@@ -30,8 +36,12 @@ so imported prototype pages enter `general` and can be reclassified later.
 ```bash
 python -m pip install 'psycopg[binary]>=3.2'
 export DATABASE_URL='postgresql://USER:PASSWORD@HOST:5432/DBNAME?sslmode=require'
+export EH_DB_SCHEMA=eh_quad
 python database/import_repository_index.py
 ```
+
+The importer and search API default to `eh_quad`; set `EH_DB_SCHEMA` explicitly
+in production secrets/configuration as an additional safeguard.
 
 Keep `DATABASE_URL` in a private secret store or local environment only.
 Never commit credentials or service-role keys.
