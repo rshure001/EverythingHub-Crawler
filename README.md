@@ -9,7 +9,7 @@ Independent, polite crawler for the Everything Hub search project.
 - A six-minute run budget; next-allowed host timestamps are persisted with the frontier across scheduled runs.
 - Persistent frontier with a 50,000 discovered-URL ceiling; host pacing is keyed by hostname across HTTP and HTTPS.
 - Same-host redirects are followed only after the target URL passes robots.txt; cross-host redirects are blocked. A strict 80-page fetch cap is enforced per run; sitemap requests are counted separately.
-- Public search shards are validated against the canonical index before each crawler commit.
+- Public search shards are validated against the canonical index before each crawler commit. New manifests include a SHA-256 digest for every shard; the validator checks the digest as well as byte size, page count, URL uniqueness, and exact canonical-index coverage. Legacy manifests without digest metadata remain readable during rollout.
 - Maximum link depth: 3.
 - Same-host HTML link discovery plus bounded sitemap discovery from robots.txt declarations: up to 3 seed hosts per run, one declared sitemap and up to 2 same-host child sitemaps per host, at most 100 page URLs per host, and a 1 MB sitemap-response cap. Hosts are rechecked after 7 days; robots failures are retried after 1 hour. The crawler honors `Retry-After` on 429/503 responses, applies conservative cooldowns to transient failures, and requeues retryable URLs in the durable frontier.
 - Checks each site's `robots.txt`; if robots rules cannot be read, the crawler fails closed for that host.
@@ -24,7 +24,7 @@ python crawler/report.py
 ```
 
 ## Automation and observability
-GitHub Actions runs the crawler every 15 minutes at minutes 7, 22, 37, and 52 UTC, offset away from quarter-hour load peaks, and supports manual dispatch. Ordinary crawler-source pushes trigger validation only; editing the crawler workflow itself triggers one bounded crawl. Each crawl validates configuration, fetches at most 80 pages, rebuilds and verifies public search shards, and publishes a compact health report. Crawler data commits cannot recursively launch another crawl. A separate live-diagnostics workflow checks the homepage, browser endpoint, database-backed search, independent search fallback, and media APIs hourly at minute 17 UTC. GitHub may delay scheduled runs.
+GitHub Actions runs the crawler hourly at minute 13 UTC and supports manual dispatch. A separate isolated importer smoke test runs every 15 minutes at minutes 7, 22, 37, and 52 UTC against a temporary PostgreSQL service; it never connects to production. Ordinary crawler-source pushes trigger validation only; editing the crawler workflow itself triggers one bounded crawl. Each crawl validates configuration, fetches at most 80 pages, rebuilds and verifies public search shards, and publishes a compact health report. Crawler data commits cannot recursively launch another crawl. A separate live-diagnostics workflow checks the homepage, browser endpoint, database-backed search, independent search fallback, and media APIs hourly at minute 17 UTC. GitHub may delay scheduled runs.
 
 The health report distinguishes total indexed records, unique hosts, discovered URLs, queued URLs, fetched pages, parsed pages, and depth distribution. Attempted fetches are not counted as indexed pages.
 
