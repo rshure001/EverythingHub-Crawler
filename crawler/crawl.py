@@ -116,7 +116,7 @@ def host_key(url):
     return (p.hostname or p.netloc).lower()
 
 def parse_sitemap_xml(body, sitemap_url, max_urls=MAX_SITEMAP_URLS_PER_HOST):
-    """Extract bounded same-origin page URLs or child sitemaps from XML."""
+    """Extract bounded same-host page URLs or child sitemaps from XML."""
     try:
         root = ET.fromstring(body)
     except (ET.ParseError, ValueError, TypeError):
@@ -352,7 +352,7 @@ def main():
                 print(f"skip sitemap {current_sitemap}: {error}")
                 host_next_allowed[host] = time.time() + host_delay(origin(current_sitemap))
                 continue
-            host_next_allowed[host] = time.time() + host_delay(origin(current_sitemap))
+            host_next_allowed[host] = time.time() + max(host_delay(origin(current_sitemap)), host_delay(origin(final_sitemap)))
             if len(body) > MAX_SITEMAP_BYTES:
                 print(f"skip sitemap {current_sitemap}: exceeds {MAX_SITEMAP_BYTES} bytes")
                 continue
