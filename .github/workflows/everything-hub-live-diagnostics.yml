@@ -22,7 +22,7 @@ jobs:
         env:
           BASE: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1
           KEY: sb_publishable_XlIsACWhtVS1jVODWYGTpg_GMs8v3vJ
-          VERCEL_BASE: https://everythinghub-homepage-fixed.vercel.app
+          VERCEL_BASE: https://everything-hub-ten.vercel.app
         run: |
           set -euo pipefail
           echo "=== HOMEPAGE ==="
