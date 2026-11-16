@@ -1,4 +1,5 @@
 import unittest
+from pathlib import Path
 from datetime import datetime, timezone
 
 from crawler.schedule_watchdog import evaluate
@@ -7,6 +8,11 @@ NOW = datetime(2026, 11, 16, 16, 0, tzinfo=timezone.utc)
 
 
 class ScheduleWatchdogTests(unittest.TestCase):
+    def test_watchdog_schedule_is_staggered_away_from_peak_minutes(self):
+        workflow = (Path(__file__).resolve().parents[1] / ".github" / "workflows" / "crawl-watchdog.yml").read_text(encoding="utf-8")
+        self.assertIn('    - cron: "7,22,37,52 * * * *"', workflow)
+        self.assertNotIn('    - cron: "*/15 * * * *"', workflow)
+
     def test_recent_success_is_healthy(self):
         result = evaluate(
             [{"status": "completed", "conclusion": "success", "created_at": "2026-11-16T15:20:00Z"}],

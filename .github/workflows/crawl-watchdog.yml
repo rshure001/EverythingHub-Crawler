@@ -7,8 +7,8 @@ on:
       - "crawler/schedule_watchdog.py"
       - "crawler/test_schedule_watchdog.py"
   schedule:
-    # Lightweight 15-minute checks; dispatch only after 75 minutes without a successful crawl.
-    - cron: "*/15 * * * *"
+    # Stagger lightweight 15-minute checks away from quarter-hour and top-of-hour Actions peaks.
+    - cron: "7,22,37,52 * * * *"
   workflow_dispatch:
 permissions:
   actions: write
