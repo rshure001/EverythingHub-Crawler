@@ -33,7 +33,7 @@ jobs:
             page.on('pageerror', e => errors.push(e.message));
             const failedRequests = [];
             page.on('requestfailed', r => failedRequests.push({ url: r.url(), error: r.failure()?.errorText }));
-            const report = { url: 'https://everythinghub.ink/', startedAt: new Date().toISOString() };
+            const report = { url: 'https://everythinghub-homepage-fixed.vercel.app/', customDomainUrl: 'https://everythinghub.ink/', startedAt: new Date().toISOString() };
             try {
               const response = await page.goto(report.url, { waitUntil: 'domcontentloaded', timeout: 45000 });
               report.httpStatus = response?.status();
@@ -78,8 +78,23 @@ jobs:
                   !report.mobile.searchVisible || report.mobile.categoryCount !== 8) {
                 throw new Error('Mobile layout check failed: ' + JSON.stringify(report.mobile));
               }
+              const domainPage = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+              try {
+                const domainResponse = await domainPage.goto(report.customDomainUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
+                report.customDomain = {
+                  httpStatus: domainResponse?.status(),
+                  title: await domainPage.title(),
+                  reachable: !!domainResponse?.ok()
+                };
+              } catch (error) {
+                report.customDomain = { reachable: false, error: String(error.message || error) };
+              }
+              await domainPage.close();
+              if (!report.customDomain.reachable || !report.customDomain.title?.includes('Everything Hub')) {
+                throw new Error('Custom domain verification failed: ' + JSON.stringify(report.customDomain));
+              }
               report.pageErrors = errors;
-              report.passed = errors.length === 0;
+              report.passed = errors.length === 0 && report.customDomain.reachable;
               if (errors.length) throw new Error('Browser page errors: ' + errors.join('; '));
             } catch (e) {
               report.failure = e.stack || e.message;
