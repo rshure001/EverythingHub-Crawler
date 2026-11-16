@@ -1,4 +1,4 @@
-name: Everything Hub production catalog browser verification
+name: Everything Hub preview catalog browser verification
 on:
   push:
     branches: [main]
@@ -24,11 +24,12 @@ jobs:
           npm init -y
           npm install --no-save playwright
           npx playwright install --with-deps chromium
-      - name: Verify staging homepage, approved art, complete crawler catalog, and search
+      - name: Verify preview homepage, approved art, complete crawler catalog, and search
         run: |
           cat > staging-check.cjs <<'JS'
           const { chromium } = require("playwright");
           const fs = require("fs");
+          const crypto = require("crypto");
           (async () => {
             const browser = await chromium.launch({ headless: true });
             const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
@@ -53,18 +54,32 @@ jobs:
               if (!manifestResponse.ok()) throw new Error("Manifest HTTP " + manifestResponse.status());
               const manifest = await manifestResponse.json();
               const repositoryManifest = JSON.parse(fs.readFileSync("public-search/manifest.json", "utf8"));
+              const repositoryShards = Array.isArray(repositoryManifest.shards) ? repositoryManifest.shards : [];
+              const productionShards = Array.isArray(manifest.shards) ? manifest.shards : [];
+              const shardManifestMatches = productionShards.length === repositoryShards.length &&
+                productionShards.every((shard, index) => {
+                  const expected = repositoryShards[index];
+                  return expected && shard.file === expected.file &&
+                    Number(shard.pages) === Number(expected.pages) &&
+                    String(shard.sha256 || "") === String(expected.sha256 || "");
+                });
               report.catalog = {
                 totalPages: manifest.total_pages,
                 shardCount: manifest.shard_count,
                 repositoryTotalPages: repositoryManifest.total_pages,
                 repositoryShardCount: repositoryManifest.shard_count,
+                manifestIntegrity: manifest.integrity || "legacy",
+                shardManifestMatches,
                 matchesMainBranch: Number(manifest.total_pages) === Number(repositoryManifest.total_pages) &&
-                  Number(manifest.shard_count) === Number(repositoryManifest.shard_count),
+                  Number(manifest.shard_count) === Number(repositoryManifest.shard_count) &&
+                  shardManifestMatches,
                 shards: []
               };
               if (!report.catalog.matchesMainBranch) {
-                console.warn("Production catalog is behind the current GitHub crawler index: " +
-                  manifest.total_pages + " production pages vs " + repositoryManifest.total_pages + " repository pages.");
+                report.catalog.pagesBehind = Number(repositoryManifest.total_pages) - Number(manifest.total_pages);
+                console.warn("Preview catalog differs from the current GitHub crawler index: " +
+                  manifest.total_pages + " preview pages vs " + repositoryManifest.total_pages +
+                  " repository pages; shard metadata match: " + shardManifestMatches + ".");
               }
               if (!Array.isArray(manifest.shards) || manifest.shards.length !== manifest.shard_count) {
                 throw new Error("Invalid manifest shard metadata");
@@ -72,10 +87,23 @@ jobs:
               for (const shard of manifest.shards) {
                 const shardResponse = await page.request.get(new URL("search-index/" + shard.file, report.url).href);
                 if (!shardResponse.ok()) throw new Error(shard.file + " HTTP " + shardResponse.status());
-                const payload = await shardResponse.json();
+                const raw = await shardResponse.body();
+                if (manifest.integrity === "sha256" && !shard.sha256) {
+                  throw new Error(shard.file + " is missing its required SHA-256 digest");
+                }
+                let digestVerified = false;
+                if (shard.sha256) {
+                  if (!/^[a-f0-9]{64}$/.test(shard.sha256)) {
+                    throw new Error(shard.file + " has an invalid SHA-256 digest");
+                  }
+                  const digest = crypto.createHash("sha256").update(raw).digest("hex");
+                  if (digest !== shard.sha256) throw new Error(shard.file + " SHA-256 mismatch");
+                  digestVerified = true;
+                }
+                const payload = JSON.parse(raw.toString("utf8"));
                 const count = Array.isArray(payload.pages) ? payload.pages.length : 0;
                 if (count !== shard.pages) throw new Error(shard.file + " page count mismatch");
-                report.catalog.shards.push({ file: shard.file, pages: count });
+                report.catalog.shards.push({ file: shard.file, pages: count, digestVerified });
               }
               const total = report.catalog.shards.reduce((n, shard) => n + shard.pages, 0);
               if (total !== manifest.total_pages || total < 1) {
@@ -113,7 +141,11 @@ jobs:
                 throw new Error("Mobile layout check failed: " + JSON.stringify(report.mobile));
               }
               report.pageErrors = errors;
-              report.passed = errors.length === 0;
+              report.passed = errors.length === 0 && report.catalog?.matchesMainBranch !== false;
+              if (report.catalog?.matchesMainBranch === false) {
+                report.failure = "Published preview catalog does not match the current repository manifest.";
+                console.error(report.failure);
+              }
               if (errors.length) throw new Error("Browser page errors: " + errors.join("; "));
             } catch (e) {
               report.failure = e.stack || e.message;
