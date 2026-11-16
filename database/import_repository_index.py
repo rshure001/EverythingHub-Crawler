@@ -34,7 +34,7 @@ def iso_timestamp(value):
 
 def main():
     database_url = os.environ.get("DATABASE_URL")
-    schema = os.environ.get("EH_DB_SCHEMA", "public")
+    schema = os.environ.get("EH_DB_SCHEMA", "eh_quad")
     if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", schema):
         raise SystemExit("EH_DB_SCHEMA must be a simple PostgreSQL schema name.")
     if not database_url:
