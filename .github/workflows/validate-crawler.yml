@@ -5,6 +5,7 @@ on:
       - "crawler/**"
       - "publisher/**"
       - "database/**"
+      - "supabase/functions/**"
       - "README.md"
       - "SCALABLE-ARCHITECTURE.md"
       - ".github/workflows/validate-crawler.yml"
