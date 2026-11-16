@@ -8,6 +8,10 @@ on:
       - "public-search/**"
       - "publisher/**"
       - ".github/workflows/publish-site.yml"
+  workflow_run:
+    workflows: ["Everything Hub crawler"]
+    types: [completed]
+    branches: [main]
 permissions:
   contents: read
   pages: write
@@ -17,6 +21,9 @@ concurrency:
   cancel-in-progress: false
 jobs:
   validate-and-build:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    outputs:
+      pages_available: ${{ steps.pages.outputs.available }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -92,17 +99,34 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           path: site
-      - name: Configure GitHub Pages
-        uses: actions/configure-pages@v5
-        with:
-          enablement: true
+      - name: Check GitHub Pages access without changing repository settings
+        id: pages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh api "repos/$GITHUB_REPOSITORY/pages" >/dev/null 2>/tmp/pages-error; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+            echo "- GitHub Pages access: available to this integration" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::GitHub Pages is not accessible to this integration; the validated artifact is retained without deployment."
+            echo "## GitHub Pages deployment blocked" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Artifact: validated and uploaded." >> "$GITHUB_STEP_SUMMARY"
+            echo "- Blocker: the repository Pages endpoint is not accessible to this GitHub Actions integration." >> "$GITHUB_STEP_SUMMARY"
+            echo "- API response: $(head -c 300 /tmp/pages-error | tr '\n' ' ')" >> "$GITHUB_STEP_SUMMARY"
+          fi
   deploy:
+    if: needs.validate-and-build.outputs.pages_available == 'true'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     needs: validate-and-build
     steps:
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
       - name: Deploy validated release
         id: deployment
         uses: actions/deploy-pages@v4
