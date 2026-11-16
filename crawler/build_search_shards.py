@@ -4,17 +4,24 @@ import hashlib
 import json
 from pathlib import Path
 
+from lane_classifier import VALID_LANES, classify_lane
+
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "data" / "index.json"
 OUT = ROOT / "public-search"
 MAX_BYTES = 350_000
 
 def compact(doc):
+    url = str(doc.get("url", ""))[:2048]
+    lane = doc.get("lane")
+    if not isinstance(lane, str) or lane not in VALID_LANES:
+        lane = classify_lane(url)
     return {
-        "url": str(doc.get("url", ""))[:2048],
+        "url": url,
         "title": str(doc.get("title", ""))[:500],
         "description": str(doc.get("description", ""))[:500],
         "text": str(doc.get("text", ""))[:1600],
+        "lane": lane,
     }
 
 def main():

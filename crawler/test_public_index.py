@@ -23,6 +23,17 @@ class PublicIndexValidationTests(unittest.TestCase):
             json.dumps({"version": 1, "pages": source_pages}),
             encoding="utf-8",
         )
+        # Public search shards now require one of the eight supported lanes.
+        shard_pages = [
+            {
+                **page,
+                "lane": page.get("lane") if page.get("lane") in {
+                    "general", "science", "news", "technology",
+                    "business", "government", "culture", "nature",
+                } else "general",
+            }
+            for page in shard_pages
+        ]
         raw = (
             json.dumps(
                 {"version": 1, "pages": shard_pages},

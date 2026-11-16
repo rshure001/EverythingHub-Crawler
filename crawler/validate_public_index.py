@@ -8,6 +8,8 @@ import sys
 from pathlib import Path
 from urllib.parse import urlsplit
 
+from lane_classifier import VALID_LANES
+
 ROOT = Path(__file__).resolve().parents[1]
 MAX_SHARD_BYTES = 350_000
 
@@ -127,6 +129,9 @@ def validate(root: Path = ROOT) -> list[str]:
             if parsed.scheme not in ("http", "https") or not parsed.hostname:
                 errors.append(f"non-public-web URL in {name}: {url[:160]}")
                 continue
+            lane = page.get("lane")
+            if not isinstance(lane, str) or lane not in VALID_LANES:
+                errors.append(f"missing or invalid search lane in {name}: {lane!r}")
             if url in seen_urls:
                 errors.append(f"duplicate URL across public shards: {url[:160]}")
             seen_urls.add(url)

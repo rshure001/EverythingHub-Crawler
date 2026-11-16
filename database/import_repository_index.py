@@ -11,11 +11,15 @@ The import is additive/upsert-only. It never deletes destination records.
 import hashlib
 import json
 import os
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "crawler"))
+from lane_classifier import VALID_LANES, classify_lane
+
 INDEX = ROOT / "data" / "index.json"
 TARGET_SCHEMA = "eh_quad"
 
@@ -38,6 +42,14 @@ def target_schema(value=None):
     return TARGET_SCHEMA
 
 
+def page_lane(page, url):
+    """Preserve a valid crawler lane or classify the source host safely."""
+    lane = page.get("lane")
+    if isinstance(lane, str) and lane in VALID_LANES:
+        return lane
+    return classify_lane(url)
+
+
 def build_upsert_statement():
     schema = target_schema()
     return f"""
@@ -48,6 +60,7 @@ def build_upsert_statement():
       values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
       on conflict (canonical_url) do update set
         source_host = excluded.source_host,
+        lane = excluded.lane,
         title = excluded.title,
         description = excluded.description,
         body_text = excluded.body_text,
@@ -55,6 +68,7 @@ def build_upsert_statement():
         fetched_at = greatest(target.fetched_at, excluded.fetched_at),
         updated_at = now()
       where target.content_hash is distinct from excluded.content_hash
+         or target.lane is distinct from excluded.lane
     """
 
 
@@ -98,7 +112,7 @@ def main():
         ).hexdigest()
 
         rows.append((
-            url, parsed.hostname.lower(), "general", title, description, body,
+            url, parsed.hostname.lower(), page_lane(page, url), title, description, body,
             None, None, None, digest, fetched, None, True
         ))
 
