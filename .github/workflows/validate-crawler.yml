@@ -38,11 +38,11 @@ jobs:
       - name: Compile crawler and database tools
         run: |
           python -m py_compile crawler/crawl.py crawler/report.py crawler/build_search_shards.py crawler/validate_public_index.py database/import_repository_index.py
-      - name: Run crawler and schema-isolation tests
+      - name: Run crawler, schema-isolation, and edge-search tests
         run: |
           python -m unittest discover -s crawler -p 'test_*.py' -v
           python -m unittest discover -s database -p 'test_*.py' -v
-          node --test supabase/functions/everything-hub-web-search/params.test.mjs
+          node --test supabase/functions/everything-hub-web-search/params.test.mjs supabase/functions/everything-hub-web-search/db-fetch.test.mjs
           python crawler/validate_public_index.py
       - name: Validate static release manifest
         run: python publisher/publish.py --check
