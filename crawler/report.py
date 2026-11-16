@@ -27,8 +27,17 @@ def main():
     indexed_this_run = int(index.get("pages_indexed_this_run", 0) or 0)
     indexed_rate = indexed_this_run / (duration / 60) if duration > 0 else 0
     host_requests = index.get("host_requests_this_run", {}) or {}
+    run_id = os.environ.get("GITHUB_RUN_ID", "local")
+    run_number = os.environ.get("GITHUB_RUN_NUMBER", "local")
+    run_attempt = os.environ.get("GITHUB_RUN_ATTEMPT", "1")
+    event_name = os.environ.get("GITHUB_EVENT_NAME", "local")
+    commit_sha = os.environ.get("GITHUB_SHA", "local")[:12]
     lines = [
         "## Everything Hub crawler health",
+        "",
+        f"- GitHub workflow run: **{run_number}** (ID `{run_id}`, attempt {run_attempt})",
+        f"- Trigger: **{event_name}**",
+        f"- Source commit: `{commit_sha}`",
         "",
         f"- Total indexed page records: **{len(pages):,}**",
         f"- Unique indexed hosts: **{len(hosts):,}**",
