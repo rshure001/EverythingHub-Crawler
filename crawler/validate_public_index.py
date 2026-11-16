@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Validate the generated public search shards against the canonical crawler index."""
+"""Validate public search shards and the compressed catalog against the crawler index."""
 from __future__ import annotations
 
+import gzip
 import hashlib
 import json
 import sys
@@ -12,6 +13,9 @@ from lane_classifier import VALID_LANES
 
 ROOT = Path(__file__).resolve().parents[1]
 MAX_SHARD_BYTES = 350_000
+MAX_CATALOG_GZIP_BYTES = 5_000_000
+MAX_CATALOG_UNCOMPRESSED_BYTES = 25_000_000
+CATALOG_NAME = "catalog-v1.json.gz"
 
 
 def validate(root: Path = ROOT) -> list[str]:
@@ -52,12 +56,14 @@ def validate(root: Path = ROOT) -> list[str]:
         page.get("url")
         for page in source_pages
         if isinstance(page, dict)
+        and page.get("robots_allowed") is not False
         and isinstance(page.get("url"), str)
         and page["url"].startswith(("http://", "https://"))
     }
 
     seen_urls: set[str] = set()
     declared_files: set[str] = set()
+    shard_records: list[dict] = []
     total_pages = 0
 
     for entry in shards:
@@ -121,6 +127,7 @@ def validate(root: Path = ROOT) -> list[str]:
             if not isinstance(page, dict):
                 errors.append(f"non-object page record in {name}")
                 continue
+            shard_records.append(page)
             url = page.get("url")
             if not isinstance(url, str):
                 errors.append(f"missing URL in {name}")
@@ -152,6 +159,53 @@ def validate(root: Path = ROOT) -> list[str]:
             f"shard file set mismatch; unlisted={sorted(actual_files - declared_files)}, "
             f"missing={sorted(declared_files - actual_files)}"
         )
+
+    catalog = manifest.get("catalog_gzip")
+    # Older manifests remain valid and are served through the verified shard fallback.
+    if catalog is not None:
+        if not isinstance(catalog, dict):
+            errors.append("manifest catalog_gzip metadata must be an object")
+        elif catalog.get("file") != CATALOG_NAME:
+            errors.append(f"catalog filename must be {CATALOG_NAME}")
+        else:
+            catalog_path = search_dir / CATALOG_NAME
+            if not catalog_path.is_file():
+                errors.append(f"missing compressed catalog: {CATALOG_NAME}")
+            else:
+                raw = catalog_path.read_bytes()
+                if len(raw) > MAX_CATALOG_GZIP_BYTES:
+                    errors.append("compressed catalog exceeds the 5 MB safety limit")
+                if catalog.get("bytes") != len(raw):
+                    errors.append("compressed catalog byte-size mismatch")
+                digest = catalog.get("sha256")
+                if (
+                    not isinstance(digest, str)
+                    or len(digest) != 64
+                    or any(char not in "0123456789abcdef" for char in digest)
+                ):
+                    errors.append("compressed catalog SHA-256 is invalid")
+                elif hashlib.sha256(raw).hexdigest() != digest:
+                    errors.append("compressed catalog SHA-256 mismatch")
+                try:
+                    decoded = gzip.decompress(raw)
+                    if len(decoded) > MAX_CATALOG_UNCOMPRESSED_BYTES:
+                        errors.append("decompressed catalog exceeds the 25 MB safety limit")
+                    payload = json.loads(decoded.decode("utf-8"))
+                    catalog_pages = payload.get("pages") if isinstance(payload, dict) else None
+                    if not isinstance(catalog_pages, list):
+                        errors.append("compressed catalog pages must be an array")
+                    else:
+                        if payload.get("version") != 1:
+                            errors.append("compressed catalog version must be 1")
+                        if len(catalog_pages) != total_pages:
+                            errors.append("compressed catalog page count differs from the shards")
+                        if catalog.get("pages") != len(catalog_pages):
+                            errors.append("compressed catalog metadata page count mismatch")
+                        if catalog_pages != shard_records:
+                            errors.append("compressed catalog records differ from the verified shards")
+                except Exception as exc:
+                    errors.append(f"compressed catalog is invalid: {exc}")
+
     return errors
 
 
@@ -161,10 +215,12 @@ def main() -> None:
         print("\n".join(f"ERROR: {error}" for error in errors), file=sys.stderr)
         raise SystemExit(1)
     manifest = json.loads((ROOT / "public-search" / "manifest.json").read_text(encoding="utf-8"))
+    catalog = manifest["catalog_gzip"]
     print(
         "Public search index valid: "
         f"{manifest['total_pages']:,} pages across {manifest['shard_count']:,} shards; "
-        "all shard sizes, SHA-256 digests, URLs, and records match data/index.json."
+        "all shard sizes, SHA-256 digests, URLs, and records match data/index.json; "
+        f"compressed catalog verified ({catalog['bytes']:,} bytes)."
     )
 
 

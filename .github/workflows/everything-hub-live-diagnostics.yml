@@ -22,7 +22,7 @@ jobs:
         env:
           BASE: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1
           KEY: sb_publishable_XlIsACWhtVS1jVODWYGTpg_GMs8v3vJ
-          VERCEL_BASE: https://everythinghub-homepage-fixed.vercel.app
+          VERCEL_BASE: https://everything-hub-ten.vercel.app
         run: |
           set -euo pipefail
           echo "=== HOMEPAGE ==="
@@ -172,7 +172,7 @@ jobs:
           node -e '
             const fs=require("fs"); const d=JSON.parse(fs.readFileSync("/tmp/static-search.json","utf8"));
             const a=Array.isArray(d.results)?d.results:[];
-            console.log(JSON.stringify({source:d.source??null,indexIntegrity:d.indexIntegrity??null,count:d.count??a.length,resultCount:a.length,sample:a.slice(0,3).map(x=>({title:x.title,url:x.url}))},null,2));
+            console.log(JSON.stringify({source:d.source??null,indexIntegrity:d.indexIntegrity??null,indexTransport:d.indexTransport??null,count:d.count??a.length,resultCount:a.length,sample:a.slice(0,3).map(x=>({title:x.title,url:x.url}))},null,2));
             if(d.source!=="Everything Hub public crawler index" || d.indexIntegrity!=="sha256" || !a.length) process.exit(2);
           '
           static_index_ok=1

@@ -28,10 +28,12 @@ const STATIC_INDEX_BASE =
 const STATIC_INDEX_CACHE_MS = 60_000;
 const MAX_STATIC_INDEX_PAGES = 10_000;
 const MAX_STATIC_SHARD_BYTES = 350_000;
+const MAX_STATIC_CATALOG_GZIP_BYTES = 5_000_000;
 
 type StaticCatalog = {
   pages: any[];
   updatedAt: string | null;
+  mode: "gzip" | "shards";
   expiresAt: number;
 };
 
@@ -73,56 +75,113 @@ async function loadStaticCatalog(): Promise<StaticCatalog> {
     }
 
     const pages: any[] = [];
-    const concurrency = 8;
-    for (let offset = 0; offset < manifest.shards.length; offset += concurrency) {
-      const batch = await Promise.all(manifest.shards.slice(offset, offset + concurrency).map(async (shard: any) => {
+    let catalogMode: "gzip" | "shards" = "shards";
+    const compressed = manifest.catalog_gzip;
+
+    if (compressed) {
+      try {
         if (
-          !shard ||
-          typeof shard.file !== "string" ||
-          !/^shard-\d{4}\.json$/.test(shard.file) ||
-          !Number.isInteger(shard.bytes) ||
-          shard.bytes < 2 ||
-          shard.bytes > MAX_STATIC_SHARD_BYTES ||
-          !Number.isInteger(shard.pages) ||
-          shard.pages < 1 ||
-          typeof shard.sha256 !== "string" ||
-          !/^[a-f0-9]{64}$/.test(shard.sha256)
+          compressed.file !== "catalog-v1.json.gz" ||
+          !Number.isInteger(compressed.bytes) ||
+          compressed.bytes < 2 ||
+          compressed.bytes > MAX_STATIC_CATALOG_GZIP_BYTES ||
+          compressed.pages !== manifest.total_pages ||
+          typeof compressed.sha256 !== "string" ||
+          !/^[a-f0-9]{64}$/.test(compressed.sha256)
         ) {
-          throw new Error("Public crawler shard metadata is invalid");
+          throw new Error("Compressed catalog metadata is invalid");
         }
 
-        const response = await fetch(STATIC_INDEX_BASE + "/" + shard.file, {
+        const response = await fetch(STATIC_INDEX_BASE + "/" + compressed.file, {
           headers,
           signal: AbortSignal.timeout(9000),
         });
         if (!response.ok) {
-          throw new Error(shard.file + " returned HTTP " + response.status);
+          throw new Error("Compressed catalog returned HTTP " + response.status);
         }
-
         const bytes = new Uint8Array(await response.arrayBuffer());
-        if (bytes.length !== shard.bytes) {
-          throw new Error(shard.file + " byte length does not match the manifest");
+        if (bytes.length !== compressed.bytes) {
+          throw new Error("Compressed catalog byte length does not match the manifest");
         }
         const digestBuffer = await crypto.subtle.digest("SHA-256", bytes);
         const digest = Array.from(new Uint8Array(digestBuffer))
           .map((value) => value.toString(16).padStart(2, "0"))
           .join("");
-        if (digest !== shard.sha256) {
-          throw new Error(shard.file + " SHA-256 does not match the manifest");
+        if (digest !== compressed.sha256) {
+          throw new Error("Compressed catalog SHA-256 does not match the manifest");
         }
 
-        const payload = JSON.parse(new TextDecoder().decode(bytes));
+        const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
+        const decoded = await new Response(stream).text();
+        const payload: any = JSON.parse(decoded);
         if (
           payload?.version !== 1 ||
           !Array.isArray(payload?.pages) ||
-          payload.pages.length !== shard.pages
+          payload.pages.length !== manifest.total_pages
         ) {
-          throw new Error(shard.file + " failed page-count validation");
+          throw new Error("Compressed catalog page count or schema is invalid");
         }
-        return payload.pages;
-      }));
+        pages.push(...payload.pages);
+        catalogMode = "gzip";
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : String(error);
+        console.error("Compressed catalog unavailable; using verified shards:", detail);
+        pages.length = 0;
+      }
+    }
 
-      for (const shardPages of batch) pages.push(...shardPages);
+    if (!pages.length) {
+      const concurrency = 8;
+      for (let offset = 0; offset < manifest.shards.length; offset += concurrency) {
+        const batch = await Promise.all(manifest.shards.slice(offset, offset + concurrency).map(async (shard: any) => {
+          if (
+            !shard ||
+            typeof shard.file !== "string" ||
+            !/^shard-\d{4}\.json$/.test(shard.file) ||
+            !Number.isInteger(shard.bytes) ||
+            shard.bytes < 2 ||
+            shard.bytes > MAX_STATIC_SHARD_BYTES ||
+            !Number.isInteger(shard.pages) ||
+            shard.pages < 1 ||
+            typeof shard.sha256 !== "string" ||
+            !/^[a-f0-9]{64}$/.test(shard.sha256)
+          ) {
+            throw new Error("Public crawler shard metadata is invalid");
+          }
+
+          const response = await fetch(STATIC_INDEX_BASE + "/" + shard.file, {
+            headers,
+            signal: AbortSignal.timeout(9000),
+          });
+          if (!response.ok) {
+            throw new Error(shard.file + " returned HTTP " + response.status);
+          }
+
+          const bytes = new Uint8Array(await response.arrayBuffer());
+          if (bytes.length !== shard.bytes) {
+            throw new Error(shard.file + " byte length does not match the manifest");
+          }
+          const digestBuffer = await crypto.subtle.digest("SHA-256", bytes);
+          const digest = Array.from(new Uint8Array(digestBuffer))
+            .map((value) => value.toString(16).padStart(2, "0"))
+            .join("");
+          if (digest !== shard.sha256) {
+            throw new Error(shard.file + " SHA-256 does not match the manifest");
+          }
+
+          const payload = JSON.parse(new TextDecoder().decode(bytes));
+          if (
+            payload?.version !== 1 ||
+            !Array.isArray(payload?.pages) ||
+            payload.pages.length !== shard.pages
+          ) {
+            throw new Error(shard.file + " failed page-count validation");
+          }
+          return payload.pages;
+        }));
+
+        for (const shardPages of batch) pages.push(...shardPages);
+      }
     }
 
     if (pages.length !== manifest.total_pages) {
@@ -132,6 +191,7 @@ async function loadStaticCatalog(): Promise<StaticCatalog> {
     const catalog: StaticCatalog = {
       pages,
       updatedAt: typeof manifest.updated_at === "string" ? manifest.updated_at : null,
+      mode: catalogMode,
       expiresAt: Date.now() + STATIC_INDEX_CACHE_MS,
     };
     staticCatalogCache = catalog;
@@ -230,10 +290,12 @@ Deno.serve(async (req: Request) => {
   const staticFallback = async (reason: string) => {
     let crawlerIndexCount: number | null = null;
     let catalogLoaded = false;
+    let catalogTransport: "gzip" | "shards" | null = null;
 
     try {
       const catalog = await loadStaticCatalog();
       catalogLoaded = true;
+      catalogTransport = catalog.mode;
       let found = searchStaticPages(catalog.pages, query, validLane, limit, offset);
       let laneFallback = false;
 
@@ -257,6 +319,7 @@ Deno.serve(async (req: Request) => {
           source: "Everything Hub public crawler index",
           indexUpdatedAt: catalog.updatedAt,
           indexIntegrity: "sha256",
+          indexTransport: catalog.mode,
           offset,
           limit,
           hasMore: found.hasMore,
@@ -282,6 +345,7 @@ Deno.serve(async (req: Request) => {
         laneFallback: false,
         source: "Everything Hub public crawler index",
         indexIntegrity: "sha256",
+        indexTransport: catalogTransport ?? "shards",
         offset,
         limit,
         hasMore: false,
