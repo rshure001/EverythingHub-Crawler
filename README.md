@@ -7,7 +7,9 @@ Independent, polite crawler for the Everything Hub search project.
 - Up to 8 concurrent workers, with at most one request per host in each batch.
 - A 1-second minimum host interval, increased when robots.txt declares a longer Crawl-delay or Request-rate.
 - A six-minute run budget; next-allowed host timestamps are persisted with the frontier across scheduled runs.
-- Persistent frontier with a 50,000 discovered-URL ceiling.
+- Persistent frontier with a 50,000 discovered-URL ceiling; host pacing is keyed by hostname across HTTP and HTTPS.
+- Same-host redirects are followed only after the target URL passes robots.txt; cross-host redirects are blocked.
+- Public search shards are validated against the canonical index before each crawler commit.
 - Maximum link depth: 3.
 - Same-host HTML link discovery; sitemap XML is not preloaded because it previously consumed the run budget without producing searchable pages.
 - Checks each site's `robots.txt`; if robots rules cannot be read, the crawler fails closed for that host.
