@@ -36,21 +36,29 @@ class CrawlerTests(unittest.TestCase):
         self.assertNotIn("secret()", text)
         self.assertIn("/next", parser.links)
 
-    def test_page_redirect_handler_blocks_cross_origin_redirects(self):
-        handler = crawl.SameOriginRedirectHandler()
+    def test_page_redirect_handler_blocks_cross_host_redirects(self):
+        handler = crawl.RobotsAwareRedirectHandler(lambda _url: True)
         request = crawl.urllib.request.Request("https://example.com/start")
         with self.assertRaises(crawl.urllib.error.HTTPError):
             handler.redirect_request(
                 request, None, 302, "Found", {}, "https://other.example/target"
             )
 
-    def test_page_redirect_handler_allows_same_origin_redirects(self):
-        handler = crawl.SameOriginRedirectHandler()
-        request = crawl.urllib.request.Request("https://example.com/start")
+    def test_page_redirect_handler_checks_robots_before_same_host_scheme_redirect(self):
+        handler = crawl.RobotsAwareRedirectHandler(lambda _url: True)
+        request = crawl.urllib.request.Request("http://example.com/start")
         redirected = handler.redirect_request(
-            request, None, 302, "Found", {}, "/next"
+            request, None, 301, "Moved", {}, "https://example.com/next"
         )
         self.assertEqual(redirected.full_url, "https://example.com/next")
+
+    def test_page_redirect_handler_blocks_same_host_redirect_disallowed_by_robots(self):
+        handler = crawl.RobotsAwareRedirectHandler(lambda _url: False)
+        request = crawl.urllib.request.Request("http://example.com/start")
+        with self.assertRaises(crawl.urllib.error.HTTPError):
+            handler.redirect_request(
+                request, None, 301, "Moved", {}, "https://example.com/private"
+            )
 
     def test_effective_host_delay_respects_robots_directives(self):
         parser = urllib.robotparser.RobotFileParser()
@@ -66,16 +74,20 @@ class CrawlerTests(unittest.TestCase):
         parser.parse(["User-agent: *"])
         self.assertEqual(crawl.effective_host_delay(parser), crawl.HOST_MIN_INTERVAL)
 
-    def test_select_batch_limits_each_host_to_one_request(self):
+    def test_host_key_normalizes_http_and_https(self):
+        self.assertEqual(crawl.host_key("http://example.com/one"), "example.com")
+        self.assertEqual(crawl.host_key("https://example.com/two"), "example.com")
+
+    def test_select_batch_limits_each_host_to_one_request_across_schemes(self):
         queue = deque([
-            ("https://example.com/one", 0),
+            ("http://example.com/one", 0),
             ("https://example.com/two", 0),
             ("https://other.example/three", 0),
         ])
         batch = crawl.select_batch(queue, lambda _url: True, {}, now=100.0, workers=8)
         self.assertEqual(
-            {crawl.origin(url) for url, _depth in batch},
-            {"https://example.com", "https://other.example"},
+            {crawl.host_key(url) for url, _depth in batch},
+            {"example.com", "other.example"},
         )
         self.assertEqual(list(queue), [("https://example.com/two", 0)])
 
@@ -84,7 +96,7 @@ class CrawlerTests(unittest.TestCase):
             ("https://slow.example/one", 0),
             ("https://ready.example/two", 0),
         ])
-        next_allowed = {"https://slow.example": 130.0}
+        next_allowed = {"slow.example": 130.0}
         batch = crawl.select_batch(queue, lambda _url: True, next_allowed, now=100.0)
         self.assertEqual(batch, [("https://ready.example/two", 0)])
         self.assertEqual(list(queue), [("https://slow.example/one", 0)])
