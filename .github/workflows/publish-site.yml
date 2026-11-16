@@ -27,7 +27,7 @@ jobs:
       - name: Validate and stage the crawler search catalog
         run: |
           python - <<'PY'
-          import hashlib, json, pathlib, re, shutil
+          import gzip, hashlib, json, pathlib, re, shutil
           source = pathlib.Path('public-search')
           target = pathlib.Path('site/search-index')
           manifest_path = source / 'manifest.json'
@@ -65,8 +65,23 @@ jobs:
               shutil.copyfile(source / name, target / name)
           if total != int(manifest.get('total_pages', -1)):
               raise SystemExit(f'Catalog total mismatch: {total} pages')
+          catalog = manifest.get('catalog_gzip')
+          if not isinstance(catalog, dict) or catalog.get('file') != 'catalog-v1.json.gz':
+              raise SystemExit('Compressed crawler catalog metadata is missing or unsafe')
+          catalog_raw = (source / catalog['file']).read_bytes()
+          if len(catalog_raw) != int(catalog.get('bytes', -1)):
+              raise SystemExit('Compressed crawler catalog byte length mismatch')
+          if hashlib.sha256(catalog_raw).hexdigest() != catalog.get('sha256'):
+              raise SystemExit('Compressed crawler catalog SHA-256 mismatch')
+          catalog_payload = json.loads(gzip.decompress(catalog_raw))
+          catalog_pages = catalog_payload.get('pages') if isinstance(catalog_payload, dict) else None
+          if catalog_payload.get('version') != 1 or not isinstance(catalog_pages, list) or len(catalog_pages) != total:
+              raise SystemExit('Compressed crawler catalog page count or schema mismatch')
+          if catalog_pages != [page for shard in shards for page in json.loads((source / shard['file']).read_bytes()).get('pages', [])]:
+              raise SystemExit('Compressed crawler catalog records differ from the verified shards')
+          shutil.copyfile(source / catalog['file'], target / catalog['file'])
           shutil.copyfile(manifest_path, target / 'manifest.json')
-          print(json.dumps({'status':'validated-and-staged','pages':total,'shards':len(shards),'unique_urls':len(seen),'integrity':'sha256'}, indent=2))
+          print(json.dumps({'status':'validated-and-staged','pages':total,'shards':len(shards),'unique_urls':len(seen),'catalog_gzip_bytes':len(catalog_raw),'integrity':'sha256'}, indent=2))
           PY
       - name: Upload validated release artifact
         uses: actions/upload-pages-artifact@v3
@@ -91,7 +106,7 @@ jobs:
           PAGE_URL: ${{ steps.deployment.outputs.page_url }}
         run: |
           python - <<'PY'
-          import hashlib, json, os, urllib.request
+          import gzip, hashlib, json, os, urllib.request
           base = os.environ['PAGE_URL'].rstrip('/') + '/'
           def get(path):
               request = urllib.request.Request(base + path, headers={'User-Agent':'EverythingHub-Pages-Verification/1.0'})
@@ -123,5 +138,16 @@ jobs:
               total += len(pages)
           if total != int(manifest.get('total_pages', -1)):
               raise SystemExit(f'Published total mismatch: {total} pages')
-          print(json.dumps({'status':'published-and-verified','url':base,'pages':total,'shards':len(shards),'integrity':'sha256','homepage_categories':8}, indent=2))
+          catalog = manifest.get('catalog_gzip')
+          if not isinstance(catalog, dict) or catalog.get('file') != 'catalog-v1.json.gz':
+              raise SystemExit('Published compressed crawler catalog metadata is missing')
+          catalog_raw = get('search-index/' + catalog['file'])
+          if len(catalog_raw) != int(catalog.get('bytes', -1)):
+              raise SystemExit('Published compressed crawler catalog byte length mismatch')
+          if hashlib.sha256(catalog_raw).hexdigest() != catalog.get('sha256'):
+              raise SystemExit('Published compressed crawler catalog SHA-256 mismatch')
+          catalog_payload = json.loads(gzip.decompress(catalog_raw))
+          if catalog_payload.get('version') != 1 or len(catalog_payload.get('pages', [])) != total:
+              raise SystemExit('Published compressed crawler catalog page count mismatch')
+          print(json.dumps({'status':'published-and-verified','url':base,'pages':total,'shards':len(shards),'catalog_gzip_bytes':len(catalog_raw),'integrity':'sha256','homepage_categories':8}, indent=2))
           PY
