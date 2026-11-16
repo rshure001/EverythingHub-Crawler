@@ -3,10 +3,18 @@ on:
   push:
     paths:
       - .github/workflows/everything-hub-live-diagnostics.yml
+  schedule:
+    - cron: "17 * * * *"
   workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: everything-hub-live-diagnostics
+  cancel-in-progress: false
 jobs:
   diagnose:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Check live homepage and search API
         env:
