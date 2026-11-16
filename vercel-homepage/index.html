@@ -548,7 +548,7 @@ async function loadCrawlerCatalog(){
    if(!Array.isArray(manifest.shards)||manifest.shards.length!==Number(manifest.shard_count))throw Error('Crawler catalog manifest is invalid');
    const batches=await Promise.all(manifest.shards.map(async shard=>{
     const file=String(shard.file||'');
-    if(!/^shard-\\d{4}\\.json$/.test(file))throw Error('Invalid crawler shard name');
+    if(!/^shard-\d{4}\.json$/.test(file))throw Error('Invalid crawler shard name');
     const r=await fetch('./search-index/'+file,{cache:'force-cache'});
     if(!r.ok)throw Error('Crawler catalog shard '+file+' unavailable ('+r.status+')');
     const data=await r.json();
@@ -560,7 +560,7 @@ async function loadCrawlerCatalog(){
    const seen=new Set();
    return pages.filter(page=>{
     const url=String(page&&page.url||'');
-    if(!/^https?:\\/\\//i.test(url)||seen.has(url))return false;
+    if(!/^https?:\/\//i.test(url)||seen.has(url))return false;
     seen.add(url);return true;
    });
   })();
