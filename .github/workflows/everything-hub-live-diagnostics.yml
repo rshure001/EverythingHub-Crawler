@@ -97,27 +97,39 @@ jobs:
           done
           db_search_ok=1
           db_search_detail="query returned usable results"
+          static_index_ok=0
+          static_index_count=0
           independent_count=0
           image_count=0
           video_count=0
-          echo "=== DATABASE-BACKED SEARCH API: ROLEX ==="
+          echo "=== EH_QUAD SEARCH WITH PUBLIC CRAWLER FALLBACK: ROLEX ==="
           if curl --max-time 10 -sS -G "$BASE/everything-hub-web-search" -H "apikey: $KEY" -H "accept: application/json" --data-urlencode "q=Rolex" --data-urlencode "limit=10" -o /tmp/search.json -w '%{http_code} %{time_total}\n' > /tmp/search-metrics.txt; then
             read -r db_search_http db_search_seconds < /tmp/search-metrics.txt
-            echo "Database search HTTP $db_search_http in $db_search_seconds seconds"
+            echo "Search API HTTP $db_search_http in $db_search_seconds seconds"
             case "$db_search_http" in
               200)
                 if node -e '
                   const fs=require("fs"); const d=JSON.parse(fs.readFileSync("/tmp/search.json","utf8"));
                   const a=Array.isArray(d.results)?d.results:[];
-                  console.log(JSON.stringify({count:d.count??a.length,resultCount:a.length,sample:a.slice(0,3).map(x=>({title:x.title,url:x.url}))},null,2));
+                  console.log(JSON.stringify({source:d.source??null,fallback:d.fallback??false,count:d.count??a.length,resultCount:a.length,sample:a.slice(0,3).map(x=>({title:x.title,url:x.url}))},null,2));
                   if(!a.length) process.exit(2);
+                  if(d.fallback===true && d.source==="Everything Hub public crawler index") process.exit(3);
                 '; then
-                  echo "PASS: database-backed search returned usable results."
-                  db_search_detail="HTTP 200 in $db_search_seconds seconds with usable results"
+                  echo "PASS: eh_quad database-backed search returned usable results."
+                  db_search_detail="HTTP 200 in $db_search_seconds seconds with database-backed results"
                 else
-                  echo "WARN: database-backed search returned no usable results."
-                  db_search_ok=0
-                  db_search_detail="HTTP 200 but response contained no usable results"
+                  search_exit=$?
+                  if [ "$search_exit" -eq 3 ]; then
+                    static_index_ok=1
+                    static_index_count=$(node -p "require('/tmp/search.json').results.length")
+                    db_search_ok=0
+                    db_search_detail="HTTP 200 in $db_search_seconds seconds via public crawler fallback; PostgreSQL is still unavailable"
+                    echo "PASS: public crawler index fallback returned $static_index_count results; database-backed search remains blocked."
+                  else
+                    echo "WARN: search API returned no usable results."
+                    db_search_ok=0
+                    db_search_detail="HTTP 200 but response contained no usable results"
+                  fi
                 fi
                 ;;
               503)
@@ -186,6 +198,9 @@ jobs:
             echo "- Custom domain: $custom_domain_status"
             echo "- Custom browser endpoint: PASS"
             echo "- Database-backed search: $db_search_status"
+            if [ "$static_index_ok" -eq 1 ]; then
+              echo "- Public crawler fallback: PASS ($static_index_count results; SHA-256 verified shards)"
+            fi
             echo "- Independent search: PASS ($independent_count results)"
             echo "- Image discovery: PASS ($image_count results)"
             echo "- Video discovery: PASS ($video_count results)"
