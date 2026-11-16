@@ -42,7 +42,7 @@ jobs:
           total = 0
           for shard in shards:
               name = shard.get('file', '')
-              if not re.fullmatch(r'shard-\\d{4}\\.json', name):
+              if not re.fullmatch(r'shard-\d{4}\.json', name):
                   raise SystemExit(f'Unsafe shard filename: {name!r}')
               raw = (source / name).read_bytes()
               if len(raw) != int(shard.get('bytes', -1)):
