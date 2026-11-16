@@ -77,6 +77,33 @@ jobs:
               await page.locator('#q').press('Enter');
               await page.locator('#results .result .source').filter({ hasText: 'EverythingHub index' }).first().waitFor({ state: 'visible', timeout: 30000 });
               report.crawlerCatalogResultCount = await page.locator('#results .result .source').filter({ hasText: 'EverythingHub index' }).count();
+              report.catalog = await page.evaluate(async () => {
+                const response = await fetch('./search-index/manifest.json', { cache: 'no-store' });
+                const manifest = await response.json();
+                const checks = await Promise.all((manifest.shards || []).map(async entry => {
+                  const r = await fetch('./search-index/' + encodeURIComponent(entry.file), { cache: 'no-store' });
+                  const data = await r.json();
+                  return { status: r.status, pages: Array.isArray(data.pages) ? data.pages.length : 0 };
+                }));
+                return {
+                  manifestStatus: response.status,
+                  totalPages: manifest.total_pages,
+                  shardCount: manifest.shards?.length || 0,
+                  shardResponsesOk: checks.filter(x => x.status === 200).length,
+                  shardPageTotal: checks.reduce((sum, x) => sum + x.pages, 0)
+                };
+              });
+              if (report.catalog.manifestStatus !== 200 || report.catalog.shardCount !== 14 ||
+                  report.catalog.shardResponsesOk !== 14 || report.catalog.shardPageTotal !== report.catalog.totalPages ||
+                  report.crawlerCatalogResultCount < 1) {
+                throw new Error('Published crawler catalog verification failed: ' + JSON.stringify(report.catalog));
+              }
+              await page.screenshot({ path: 'everything-hub-crawler-index-search.png', fullPage: true });
+
+              await page.locator('#q').fill('NASA');
+              await page.locator('#q').press('Enter');
+              await page.locator('#results .result .source').filter({ hasText: 'EverythingHub index' }).first().waitFor({ state: 'visible', timeout: 30000 });
+              report.crawlerCatalogResultCount = await page.locator('#results .result .source').filter({ hasText: 'EverythingHub index' }).count();
               report.catalogManifestStatus = catalogResponses.find(x => x.url.includes('/search-index/manifest.json'))?.status ?? null;
               report.catalogShardResponseCount = catalogResponses.filter(x => x.url.includes('/search-index/shard-') && x.status === 200).length;
               report.catalogResponses = catalogResponses;
@@ -146,6 +173,7 @@ jobs:
           path: |
             everything-hub-homepage-desktop.png
             everything-hub-rolex-search.png
+            everything-hub-crawler-index-search.png
             everything-hub-homepage-failure.png
             everything-hub-homepage-report.json
           if-no-files-found: warn
