@@ -15,6 +15,18 @@ jobs:
       PUBLISHER_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-static-publisher
       PUBLISHER_USER_JWT: ${{ secrets.SUPABASE_PUBLISHER_USER_JWT }}
     steps:
+      - name: Require a signed-in publisher JWT before network access
+        run: |
+          set -euo pipefail
+          if [ -z "$PUBLISHER_USER_JWT" ]; then
+            echo "::error::Missing GitHub Actions secret SUPABASE_PUBLISHER_USER_JWT. The publisher requires a signed-in Supabase user access token."
+            exit 1
+          fi
+          if [[ ! "$PUBLISHER_USER_JWT" =~ ^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$ ]]; then
+            echo "::error::SUPABASE_PUBLISHER_USER_JWT is present but is not JWT-shaped. No token value was printed."
+            exit 1
+          fi
+          echo "Publisher JWT is present and JWT-shaped; token value withheld."
       - name: Read-only publisher storage preflight
         run: |
           set -euo pipefail
@@ -27,13 +39,6 @@ jobs:
           }
           console.log(JSON.stringify({status:d.status,bucket:d.bucket,bucketExists:d.bucketExists,publishOnProbe:d.publishOnProbe},null,2));
           NODE
-      - name: Require an authenticated publisher session
-        run: |
-          set -euo pipefail
-          if [ -z "$PUBLISHER_USER_JWT" ]; then
-            echo "::error::Missing GitHub Actions secret SUPABASE_PUBLISHER_USER_JWT. The publisher requires a valid signed-in Supabase user access token; publishable keys and service-role keys are not accepted as a user session."
-            exit 1
-          fi
       - name: Publish the approved homepage with the signed-in user session
         id: publish
         run: |
