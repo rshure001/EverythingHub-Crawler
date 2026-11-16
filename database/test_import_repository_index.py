@@ -13,6 +13,11 @@ class SchemaIsolationTests(unittest.TestCase):
     def test_default_schema_is_eh_quad(self):
         self.assertEqual(IMPORTER.target_schema("eh_quad"), "eh_quad")
 
+    def test_importer_skips_explicit_robots_denials(self):
+        self.assertFalse(IMPORTER.is_robots_allowed({"robots_allowed": False}))
+        self.assertTrue(IMPORTER.is_robots_allowed({}))
+        self.assertTrue(IMPORTER.is_robots_allowed({"robots_allowed": True}))
+
     def test_other_schemas_are_rejected(self):
         for schema in ("public", "auth", "storage", "dog_tag_day"):
             with self.subTest(schema=schema):
