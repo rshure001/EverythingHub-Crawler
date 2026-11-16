@@ -10,20 +10,46 @@ permissions:
 jobs:
   publish-and-verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PUBLISHER_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-static-publisher
+      PUBLISHER_USER_JWT: ${{ secrets.SUPABASE_PUBLISHER_USER_JWT }}
     steps:
-      - name: Publish the approved homepage through the existing in-house publisher
+      - name: Read-only publisher storage preflight
+        run: |
+          set -euo pipefail
+          curl --silent --show-error --fail --max-time 20 "$PUBLISHER_URL?probe=publisher-diagnostic" -o /tmp/probe.json
+          node <<'NODE'
+          const fs = require('fs');
+          const d = JSON.parse(fs.readFileSync('/tmp/probe.json', 'utf8'));
+          if (!['ready', 'bucket_missing'].includes(d.status) || d.publishOnProbe !== false) {
+            throw new Error('Publisher storage preflight failed: ' + JSON.stringify(d));
+          }
+          console.log(JSON.stringify({status:d.status,bucket:d.bucket,bucketExists:d.bucketExists,publishOnProbe:d.publishOnProbe},null,2));
+          NODE
+      - name: Require an authenticated publisher session
+        run: |
+          set -euo pipefail
+          if [ -z "$PUBLISHER_USER_JWT" ]; then
+            echo "::error::Missing GitHub Actions secret SUPABASE_PUBLISHER_USER_JWT. The publisher requires a valid signed-in Supabase user access token; publishable keys and service-role keys are not accepted as a user session."
+            exit 1
+          fi
+      - name: Publish the approved homepage with the signed-in user session
         id: publish
         run: |
           set -euo pipefail
-          curl -sS "https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-static-publisher" -o /tmp/publish.json -w "HTTP %{http_code}\\n"
-          cat /tmp/publish.json
-          test "$(head -c 1 /tmp/publish.json)" = "{"
-          cat /tmp/publish.json
+          curl --silent --show-error --max-time 30 -X POST "$PUBLISHER_URL" \
+            -H "Authorization: Bearer $PUBLISHER_USER_JWT" \
+            -H "Content-Type: application/json" \
+            --data '{}' -o /tmp/publish.json -w "HTTP %{http_code}\\n"
           node --input-type=module <<'NODE'
-          import fs from "node:fs";
-          const d = JSON.parse(fs.readFileSync("/tmp/publish.json","utf8"));
-          if (d.status !== "published" || !d.url) throw new Error("Publisher did not confirm publication");
-          fs.appendFileSync(process.env.GITHUB_OUTPUT, "url=" + d.url + "\\n");
+          import fs from 'node:fs';
+          const d = JSON.parse(fs.readFileSync('/tmp/publish.json','utf8'));
+          if (d.status !== 'published' || !d.url || !Number.isInteger(d.bytes)) {
+            throw new Error('Publisher did not confirm publication: ' + JSON.stringify(d));
+          }
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, 'url=' + d.url + '\\n');
+          console.log(JSON.stringify({status:d.status,url:d.url,bytes:d.bytes,contentType:d.contentType},null,2));
           NODE
       - name: Verify published response headers and approved homepage content
         env:
@@ -32,6 +58,7 @@ jobs:
         run: |
           set -euo pipefail
           curl -fsS -D /tmp/site-headers.txt "$SITE_URL" -o /tmp/site.html
+          cmp -s site/index.html /tmp/site.html || { echo "Published homepage does not byte-match the approved repository site/index.html"; exit 1; }
           cat /tmp/site-headers.txt
           grep -Eiq '^content-type: *text/html' /tmp/site-headers.txt
           for needle in '<!doctype html' 'Everything Hub — Everything within reach' 'everythinghub-approved.png' 'id="searchForm"' 'data-mode="web"' 'data-mode="news"' 'data-mode="images"' 'data-mode="videos"' 'data-mode="shopping"' 'data-mode="places"' 'data-mode="business"' 'data-mode="research"' 'everything-hub-media-search'; do
