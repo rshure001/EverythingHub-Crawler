@@ -117,6 +117,19 @@ create index if not exists eh_crawl_runs_lane_started
 create index if not exists eh_media_document
   on eh_quad.eh_media(document_id);
 
+-- Keep all dedicated-schema tables protected if eh_quad is exposed through PostgREST.
+alter table eh_quad.eh_documents enable row level security;
+alter table eh_quad.eh_crawl_queue enable row level security;
+alter table eh_quad.eh_host_leases enable row level security;
+alter table eh_quad.eh_crawl_runs enable row level security;
+alter table eh_quad.eh_media enable row level security;
+alter table eh_quad.eh_lane_state enable row level security;
+
+-- Only the server-side service role receives read access for the search RPC.
+-- No anon or authenticated grants are created.
+grant usage on schema eh_quad to service_role;
+grant select on eh_quad.eh_documents to service_role;
+
 create or replace function eh_quad.eh_search_pages(
   query_text text,
   lane_filter text default null,
@@ -155,5 +168,7 @@ as $$
   order by m.rank_value desc, m.fetched_at desc
   limit greatest(1, least(coalesce(result_limit, 10), 50));
 $$;
+
+grant execute on function eh_quad.eh_search_pages(text, text, integer) to service_role;
 
 commit;
