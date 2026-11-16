@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.49.1";
 import { boundedInteger, normalizeLane, normalizeQuery } from "./params.mjs";
 import { createTimedFetch, isTransientDatabaseError } from "./db-fetch.mjs";
+import { searchStaticPages } from "./static-search.mjs";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -22,6 +23,129 @@ const supabase = createClient(
 );
 const db = supabase.schema("eh_quad");
 
+const STATIC_INDEX_BASE =
+  "https://raw.githubusercontent.com/rshure001/EverythingHub-Crawler/main/public-search";
+const STATIC_INDEX_CACHE_MS = 60_000;
+const MAX_STATIC_INDEX_PAGES = 10_000;
+const MAX_STATIC_SHARD_BYTES = 350_000;
+
+type StaticCatalog = {
+  pages: any[];
+  updatedAt: string | null;
+  expiresAt: number;
+};
+
+let staticCatalogCache: StaticCatalog | null = null;
+let staticCatalogPromise: Promise<StaticCatalog> | null = null;
+
+async function loadStaticCatalog(): Promise<StaticCatalog> {
+  if (staticCatalogCache && staticCatalogCache.expiresAt > Date.now()) {
+    return staticCatalogCache;
+  }
+  if (staticCatalogPromise) return staticCatalogPromise;
+
+  const pending = (async () => {
+    const headers = {
+      Accept: "application/json",
+      "User-Agent": "EverythingHubSearch/1.0 (+https://github.com/rshure001/EverythingHub-Crawler)",
+    };
+    const manifestResponse = await fetch(STATIC_INDEX_BASE + "/manifest.json", {
+      headers,
+      signal: AbortSignal.timeout(9000),
+    });
+    if (!manifestResponse.ok) {
+      throw new Error("Public crawler manifest returned HTTP " + manifestResponse.status);
+    }
+
+    const manifest: any = await manifestResponse.json();
+    if (
+      manifest?.version !== 1 ||
+      manifest?.integrity !== "sha256" ||
+      !Array.isArray(manifest?.shards) ||
+      manifest.shards.length < 1 ||
+      manifest.shards.length > 32 ||
+      manifest.shard_count !== manifest.shards.length ||
+      !Number.isInteger(manifest.total_pages) ||
+      manifest.total_pages < 1 ||
+      manifest.total_pages > MAX_STATIC_INDEX_PAGES
+    ) {
+      throw new Error("Public crawler manifest failed structural validation");
+    }
+
+    const pages: any[] = [];
+    const concurrency = 8;
+    for (let offset = 0; offset < manifest.shards.length; offset += concurrency) {
+      const batch = await Promise.all(manifest.shards.slice(offset, offset + concurrency).map(async (shard: any) => {
+        if (
+          !shard ||
+          typeof shard.file !== "string" ||
+          !/^shard-\d{4}\.json$/.test(shard.file) ||
+          !Number.isInteger(shard.bytes) ||
+          shard.bytes < 2 ||
+          shard.bytes > MAX_STATIC_SHARD_BYTES ||
+          !Number.isInteger(shard.pages) ||
+          shard.pages < 1 ||
+          typeof shard.sha256 !== "string" ||
+          !/^[a-f0-9]{64}$/.test(shard.sha256)
+        ) {
+          throw new Error("Public crawler shard metadata is invalid");
+        }
+
+        const response = await fetch(STATIC_INDEX_BASE + "/" + shard.file, {
+          headers,
+          signal: AbortSignal.timeout(9000),
+        });
+        if (!response.ok) {
+          throw new Error(shard.file + " returned HTTP " + response.status);
+        }
+
+        const bytes = new Uint8Array(await response.arrayBuffer());
+        if (bytes.length !== shard.bytes) {
+          throw new Error(shard.file + " byte length does not match the manifest");
+        }
+        const digestBuffer = await crypto.subtle.digest("SHA-256", bytes);
+        const digest = Array.from(new Uint8Array(digestBuffer))
+          .map((value) => value.toString(16).padStart(2, "0"))
+          .join("");
+        if (digest !== shard.sha256) {
+          throw new Error(shard.file + " SHA-256 does not match the manifest");
+        }
+
+        const payload = JSON.parse(new TextDecoder().decode(bytes));
+        if (
+          payload?.version !== 1 ||
+          !Array.isArray(payload?.pages) ||
+          payload.pages.length !== shard.pages
+        ) {
+          throw new Error(shard.file + " failed page-count validation");
+        }
+        return payload.pages;
+      }));
+
+      for (const shardPages of batch) pages.push(...shardPages);
+    }
+
+    if (pages.length !== manifest.total_pages) {
+      throw new Error("Public crawler page total does not match the manifest");
+    }
+
+    const catalog: StaticCatalog = {
+      pages,
+      updatedAt: typeof manifest.updated_at === "string" ? manifest.updated_at : null,
+      expiresAt: Date.now() + STATIC_INDEX_CACHE_MS,
+    };
+    staticCatalogCache = catalog;
+    return catalog;
+  })();
+
+  staticCatalogPromise = pending;
+  try {
+    return await pending;
+  } finally {
+    if (staticCatalogPromise === pending) staticCatalogPromise = null;
+  }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
   if (req.method !== "GET") return json({ error: "GET required" }, 405);
@@ -40,6 +164,42 @@ Deno.serve(async (req: Request) => {
     error: "Search temporarily unavailable",
   }, 503);
 
+  const staticFallback = async (reason: string) => {
+    try {
+      const catalog = await loadStaticCatalog();
+      let found = searchStaticPages(catalog.pages, query, validLane, limit, offset);
+      let laneFallback = false;
+
+      if (validLane && found.count < 3) {
+        const broad = searchStaticPages(catalog.pages, query, null, limit, offset);
+        if (broad.count > found.count) {
+          found = broad;
+          laneFallback = true;
+        }
+      }
+
+      return json({
+        results: found.results,
+        count: found.count,
+        query,
+        tentacle: laneFallback ? null : validLane,
+        requestedTentacle: validLane,
+        laneFallback,
+        source: "Everything Hub public crawler index",
+        indexUpdatedAt: catalog.updatedAt,
+        offset,
+        limit,
+        hasMore: found.hasMore,
+        fallback: true,
+        fallbackReason: reason,
+      }, 200, "public, max-age=30, stale-while-revalidate=60");
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      console.error("Static crawler index fallback unavailable:", detail);
+      return unavailable();
+    }
+  };
+
   try {
     let data: any[] = [];
     let totalCount = 0;
@@ -54,7 +214,9 @@ Deno.serve(async (req: Request) => {
         totalCount = Number(data[0]?.total_count ?? data.length);
       } else {
         console.error("Ranked eh_quad search unavailable:", rpc.error.message);
-        if (isTransientDatabaseError(rpc.error)) return unavailable();
+        if (isTransientDatabaseError(rpc.error)) {
+          return await staticFallback("database_unavailable");
+        }
         source = "Everything Hub eh_quad fallback index";
       }
     }
@@ -66,7 +228,9 @@ Deno.serve(async (req: Request) => {
       });
       if (broad.error) {
         console.error("Broadened eh_quad search unavailable:", broad.error.message);
-        if (isTransientDatabaseError(broad.error)) return unavailable();
+        if (isTransientDatabaseError(broad.error)) {
+          return await staticFallback("database_unavailable");
+        }
       } else if ((broad.data || []).length > data.length) {
         data = broad.data || [];
         totalCount = Number(data[0]?.total_count ?? data.length);
@@ -86,7 +250,7 @@ Deno.serve(async (req: Request) => {
       const fallback = await fallbackQuery;
       if (fallback.error) {
         console.error("eh_quad paged index search failed:", fallback.error.message);
-        return unavailable();
+        return await staticFallback("database_unavailable");
       }
       data = (fallback.data || []).map((row: any) => ({
         url: row.canonical_url, title: row.title, description: row.description,
@@ -106,6 +270,8 @@ Deno.serve(async (req: Request) => {
       relevance: row.relevance ?? 0,
     }));
 
+    if (!results.length) return await staticFallback("database_empty");
+
     const hasMore = offset + results.length < totalCount;
     return json(
       { results, count: totalCount, query, tentacle: laneFallback ? null : validLane, requestedTentacle: validLane, laneFallback, source, offset, limit, hasMore },
@@ -114,6 +280,9 @@ Deno.serve(async (req: Request) => {
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     console.error("eh_quad search request failed:", detail);
+    if (isTransientDatabaseError(error)) {
+      return await staticFallback("database_unavailable");
+    }
     return unavailable();
   }
 });
