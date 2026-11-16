@@ -21,7 +21,7 @@ Build toward a **23,000,000-page searchable index**. This is a total-index targe
 
 2. **Polite fetch workers**
    - Run multiple independently scalable worker processes.
-   - Enforce robots.txt, one request per host per batch, persisted host pacing, crawl-delay/request-rate directives, timeouts, response-size limits, content-type checks, and retry/backoff.
+   - Enforce robots.txt, one request per hostname per batch across schemes, persisted host pacing, crawl-delay/request-rate directives, robots-checked same-host redirects, timeouts, response-size limits, content-type checks, and retry/backoff.
    - Identify the crawler clearly and provide a contact/policy URL.
    - Do not bypass logins, paywalls, CAPTCHAs, access controls, or site restrictions.
 
