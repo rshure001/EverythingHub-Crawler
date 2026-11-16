@@ -2,6 +2,7 @@
 """Validate the generated public search shards against the canonical crawler index."""
 from __future__ import annotations
 
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -36,6 +37,9 @@ def validate(root: Path = ROOT) -> list[str]:
 
     if manifest.get("version") != 1:
         errors.append("public search manifest version must be 1")
+    integrity = manifest.get("integrity")
+    if integrity not in (None, "sha256"):
+        errors.append(f"unsupported public search integrity mode: {integrity!r}")
     shards = manifest.get("shards")
     if not isinstance(shards, list):
         return errors + ["manifest shards must be an array"]
@@ -81,6 +85,20 @@ def validate(root: Path = ROOT) -> list[str]:
             errors.append(f"shard exceeds {MAX_SHARD_BYTES} bytes: {name}")
         if entry.get("bytes") != len(raw):
             errors.append(f"byte-size mismatch: {name}")
+
+        digest = entry.get("sha256")
+        if digest is None and integrity == "sha256":
+            errors.append(f"missing SHA-256 digest: {name}")
+        elif digest is not None:
+            if (
+                not isinstance(digest, str)
+                or len(digest) != 64
+                or any(char not in "0123456789abcdef" for char in digest)
+            ):
+                errors.append(f"invalid SHA-256 digest: {name}")
+            elif hashlib.sha256(raw).hexdigest() != digest:
+                errors.append(f"SHA-256 mismatch: {name}")
+
         try:
             payload = json.loads(raw.decode("utf-8"))
         except Exception as exc:
@@ -141,7 +159,7 @@ def main() -> None:
     print(
         "Public search index valid: "
         f"{manifest['total_pages']:,} pages across {manifest['shard_count']:,} shards; "
-        "all shard sizes, URLs, and records match data/index.json."
+        "all shard sizes, SHA-256 digests, URLs, and records match data/index.json."
     )
 
 
