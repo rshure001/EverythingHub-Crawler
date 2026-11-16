@@ -73,7 +73,7 @@ async function bing(q: string, type: "image" | "video") {
 
 async function commons(q: string, type: "image" | "video") {
   const params = new URLSearchParams({
-    action: "query", generator: "search",
+    action: "query", generator: "search", maxlag: "5",
     gsrsearch: q + (type === "video" ? " filetype:video" : " filetype:bitmap"),
     gsrnamespace: "6", gsrlimit: "24", prop: "imageinfo",
     iiprop: "url|mime|extmetadata",
@@ -81,7 +81,7 @@ async function commons(q: string, type: "image" | "video") {
     iiurlwidth: "640", format: "json", origin: "*"
   });
   const response = await fetch("https://commons.wikimedia.org/w/api.php?" + params, {
-    headers: { "Accept": "application/json", "User-Agent": "EverythingHub/1.0 (media discovery)" },
+    headers: { "Accept": "application/json", "User-Agent": "EverythingHub/1.0 (https://github.com/rshure001/EverythingHub-Crawler; media discovery)" },
     signal: AbortSignal.timeout(9000)
   });
   if (!response.ok) return [];
