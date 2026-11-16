@@ -5,11 +5,16 @@ on:
     paths:
       - ".github/workflows/everything-hub-production-browser-check.yml"
       - "public-search/**"
+  workflow_run:
+    workflows: ["Everything Hub crawler"]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
   staging-browser-check:
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 8
     env:
