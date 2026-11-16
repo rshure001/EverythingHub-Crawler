@@ -4,7 +4,9 @@ Independent, polite crawler for the Everything Hub search project.
 
 ## Current configuration
 - 49 curated public starting sites in `crawler/seeds.txt` (a newly assembled set, not a recovered historical list).
-- 8 concurrent workers and a maximum of 80 fetch attempts per run.
+- Up to 8 concurrent workers, with at most one request per host in each batch.
+- A 1-second minimum host interval, increased when robots.txt declares a longer Crawl-delay or Request-rate.
+- A six-minute run budget; next-allowed host timestamps are persisted with the frontier across scheduled runs.
 - Persistent frontier with a 50,000 discovered-URL ceiling.
 - Maximum link depth: 3.
 - Same-host HTML link discovery; sitemap XML is not preloaded because it previously consumed the run budget without producing searchable pages.
