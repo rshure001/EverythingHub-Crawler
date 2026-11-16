@@ -3,6 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from build_search_shards import is_publishable
 from validate_public_index import validate
 
 
@@ -67,6 +68,14 @@ class PublicIndexValidationTests(unittest.TestCase):
         ]
         self.write_fixture(pages, pages)
         self.assertEqual(validate(self.root), [])
+
+    def test_robots_disallowed_records_are_never_published(self):
+        blocked = {"url": "https://example.com/private", "robots_allowed": False}
+        allowed = {"url": "https://example.com/public", "robots_allowed": True}
+        legacy = {"url": "https://example.com/legacy"}
+        self.assertFalse(is_publishable(blocked))
+        self.assertTrue(is_publishable(allowed))
+        self.assertTrue(is_publishable(legacy))
 
     def test_duplicate_urls_are_rejected(self):
         source = [{"url": "https://example.com/a", "title": "A"}]
