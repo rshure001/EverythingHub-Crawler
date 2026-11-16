@@ -16,6 +16,9 @@ class LaneClassifierTests(unittest.TestCase):
     def test_public_index_keeps_records_without_legacy_robots_flag(self):
         self.assertTrue(is_publishable({"url": "https://example.org/public"}))
 
+    def test_public_index_keeps_records_with_explicit_robots_allow(self):
+        self.assertTrue(is_publishable({"url": "https://example.org/public", "robots_allowed": True}))
+
     def test_public_index_rejects_malformed_urls(self):
         self.assertFalse(is_publishable({"url": None}))
         self.assertFalse(is_publishable({"url": "javascript:alert(1)"}))
