@@ -15,3 +15,6 @@ This is the source HTML for the `everythinghub-homepage-fixed` Vercel project. T
 - Production aliases assigned by Vercel: `everythinghub.ink`, `everything.dogtagday.org`, and `everythinghub-homepage-fixed.vercel.app`
 
 The approved artwork and visual layout were not changed in this update. Only the crawler-catalog loader was connected to the published search shards.
+
+## Custom-domain status
+Vercel has the `everythinghub.ink` alias assigned and marks domain ownership as verified, but its DNS configuration is currently `misconfigured: true`. The authoritative nameservers are Namecheap (`dns1.registrar-servers.com`, `dns2.registrar-servers.com`); the observed apex A record is `192.64.119.157`. Vercel's current recommended IPv4 values are `216.198.79.1` and `64.29.17.1` (with `76.76.21.21` as an alternate recommendation). The custom hostname timed out in the browser check, while the canonical Vercel hostname and all 14 catalog shards returned HTTP 200. No DNS changes were made from this session.
