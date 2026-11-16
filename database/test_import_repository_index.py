@@ -52,6 +52,13 @@ class SchemaIsolationTests(unittest.TestCase):
         self.assertNotIn('.from("eh_pages")', source)
         self.assertNotIn('supabase.rpc("eh_search_pages"', source)
 
+    def test_legacy_search_edge_function_is_locked_to_eh_quad(self):
+        source = (HERE.parent / "supabase" / "functions" / "everything-hub-search" / "index.ts").read_text(encoding="utf-8")
+        self.assertIn('}).schema("eh_quad")', source)
+        self.assertIn('db.rpc("eh_search_pages"', source)
+        self.assertNotIn('createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });', source)
+        self.assertNotIn('public.', source)
+
 
 if __name__ == "__main__":
     unittest.main()
