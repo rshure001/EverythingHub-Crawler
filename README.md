@@ -24,12 +24,14 @@ python crawler/report.py
 ```
 
 ## Automation and observability
-GitHub Actions runs the crawler on a 15-minute schedule and supports manual dispatch. Code pushes trigger a separate validation-only workflow; they do not start a data crawl. Each scheduled crawl validates configuration, crawls up to 80 pages, rebuilds and verifies public search shards, and publishes a compact health report. Crawler data commits cannot recursively launch another crawl. GitHub may delay scheduled runs.
+GitHub Actions runs the crawler every 15 minutes at minutes 7, 22, 37, and 52 UTC, offset away from quarter-hour load peaks, and supports manual dispatch. Ordinary crawler-source pushes trigger validation only; editing the crawler workflow itself triggers one bounded crawl. Each crawl validates configuration, fetches at most 80 pages, rebuilds and verifies public search shards, and publishes a compact health report. Crawler data commits cannot recursively launch another crawl. A separate live-diagnostics workflow checks the homepage, browser endpoint, database-backed search, independent search fallback, and media APIs hourly at minute 17 UTC. GitHub may delay scheduled runs.
 
 The health report distinguishes total indexed records, unique hosts, discovered URLs, queued URLs, fetched pages, parsed pages, and depth distribution. Attempted fetches are not counted as indexed pages.
 
 ## Search integration status
-The crawler currently writes its own repository index. It is **not yet connected** to Everything Hub's production search index. Do not publish or expose crawler records as production search results until the production ingestion endpoint, authentication, and indexing format are verified end-to-end.
+The crawler writes the canonical repository index (`data/index.json`) and a compact static catalog (`public-search/`). At 2026-11-16 05:57 UTC the repository catalog contains **2,654 pages in 14 shards across 31 hosts**. The canonical Vercel deployment still serves **2,592 pages** (manifest last modified 04:11 UTC), so the latest 62-page increment has not yet been published there. The Vercel project has no verified GitHub auto-deploy connection; its latest production deployment predates this crawl commit. Do not describe the 2,654-page repository snapshot as live until a new deployment serves and verifies it.
+
+The production database path is separate. The `eh_quad` migration, schema-locked importer, and authenticated search API pass isolated PostgreSQL tests. Production Supabase is still in WAL redo recovery and rejects connections with PostgreSQL `57P03`; no production migration or import has been attempted. The deployed database-backed Edge Function also timed out during live diagnostics. Do not route production search to `eh_quad` until PostgreSQL is healthy, the dedicated migration is applied, and the deployed function is verified against `eh_quad` only.
 
 ## Scale and safety
 This GitHub Actions worker is a prototype runner, not a distributed crawl fleet. Respect robots rules and host-level limits. Do not bypass logins, paywalls, CAPTCHAs, access controls, or site restrictions. Do not create paid infrastructure or buy credits without the owner's explicit approval.
