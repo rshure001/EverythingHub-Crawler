@@ -22,7 +22,7 @@ jobs:
           for needle in '<!doctype html' 'Everything Hub' 'id="q"' 'approved-master-art' 'class="tile"' 'everything-hub-media-search'; do
             if grep -Fq "$needle" /tmp/home.html; then echo "PASS homepage contains: $needle"; else echo "FAIL homepage missing: $needle"; exit 1; fi
           done
-          tile_count=$(grep -oE 'class="[^"]*\\btile\\b[^"]*"' /tmp/home.html | wc -l)
+          tile_count=$(grep -o 'class="tile"' /tmp/home.html | wc -l)
           echo "homepage_tiles=$tile_count"
           test "$tile_count" -eq 8
           echo "=== CUSTOM EVERYTHING HUB BROWSER ==="
