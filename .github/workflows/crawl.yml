@@ -4,6 +4,8 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/crawl.yml"
+      - "crawler/crawl.py"
+      - "crawler/seeds.txt"
       - "crawler/build_search_shards.py"
       - "crawler/validate_public_index.py"
   schedule:
