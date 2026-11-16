@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Polite, resumable, depth-limited crawler for Everything Hub."""
 import concurrent.futures
+import email.utils
 import json
 import re
 import time
@@ -10,6 +11,7 @@ import urllib.request
 import urllib.robotparser
 import xml.etree.ElementTree as ET
 from collections import deque
+from datetime import datetime, timezone
 from html.parser import HTMLParser
 from pathlib import Path
 
@@ -26,6 +28,10 @@ MAX_SITEMAP_CHILD_SITEMAPS = 2
 MAX_SITEMAP_URLS_PER_HOST = 100
 MAX_SITEMAP_BYTES = 1_000_000
 SITEMAP_RECHECK_SECONDS = 7 * 24 * 60 * 60
+MAX_RETRY_AFTER_SECONDS = 7 * 24 * 60 * 60
+DEFAULT_429_BACKOFF_SECONDS = 3600
+DEFAULT_5XX_BACKOFF_SECONDS = 600
+DEFAULT_NETWORK_BACKOFF_SECONDS = 60
 MAX_RUN_SECONDS = 360
 HOST_MIN_INTERVAL = 1.0
 ROBOTS_MAX_BYTES = 512_000
@@ -114,6 +120,27 @@ def origin(url):
 def host_key(url):
     p = urllib.parse.urlsplit(url)
     return (p.hostname or p.netloc).lower()
+
+def retry_after_seconds(error, default_seconds=0):
+    """Parse Retry-After seconds or HTTP-date, with a bounded safe fallback."""
+    headers = getattr(error, "headers", None)
+    raw = headers.get("Retry-After") if headers else None
+    seconds = None
+    if raw:
+        try:
+            seconds = float(raw)
+        except (TypeError, ValueError):
+            try:
+                retry_at = email.utils.parsedate_to_datetime(str(raw))
+                if retry_at.tzinfo is None:
+                    retry_at = retry_at.replace(tzinfo=timezone.utc)
+                seconds = (retry_at - datetime.now(timezone.utc)).total_seconds()
+            except (TypeError, ValueError, OverflowError):
+                seconds = None
+    if seconds is None:
+        seconds = default_seconds
+    return min(max(0.0, float(seconds)), float(MAX_RETRY_AFTER_SECONDS))
+
 
 def parse_sitemap_xml(body, sitemap_url, max_urls=MAX_SITEMAP_URLS_PER_HOST):
     """Extract bounded same-host page URLs or child sitemaps from XML."""
@@ -225,6 +252,7 @@ def main():
     seeds = list(dict.fromkeys(x for x in seeds if x))
     robots = {}
     robots_blocked_count = [0]
+    rate_limited_count = [0]
 
     def policy(site):
         if site not in robots:
@@ -290,6 +318,7 @@ def main():
     sitemap_hosts_checked = 0
     sitemap_fetches = 0
     sitemap_urls_added = 0
+    transient_retries_queued = 0
     candidate_hosts = []
     now_epoch = time.time()
     for seed in seeds:
@@ -349,8 +378,30 @@ def main():
                     current_sitemap, allowed, max_bytes=MAX_SITEMAP_BYTES + 1
                 )
             except Exception as error:
-                print(f"skip sitemap {current_sitemap}: {error}")
-                host_next_allowed[host] = time.time() + host_delay(origin(current_sitemap))
+                status = getattr(error, "code", None)
+                if status in (429, 503):
+                    rate_limited_count[0] += 1
+                if status == 429:
+                    backoff = max(DEFAULT_429_BACKOFF_SECONDS, retry_after_seconds(error, DEFAULT_429_BACKOFF_SECONDS))
+                elif status in (500, 502, 503, 504):
+                    backoff = max(DEFAULT_5XX_BACKOFF_SECONDS, retry_after_seconds(error, DEFAULT_5XX_BACKOFF_SECONDS))
+                elif not isinstance(error, urllib.error.HTTPError) and isinstance(error, urllib.error.URLError):
+                    backoff = max(DEFAULT_NETWORK_BACKOFF_SECONDS, retry_after_seconds(error, DEFAULT_NETWORK_BACKOFF_SECONDS))
+                else:
+                    backoff = host_delay(origin(current_sitemap))
+                host_next_allowed[host] = time.time() + max(host_delay(origin(current_sitemap)), backoff)
+                if status == 403:
+                    cooldown = SITEMAP_RECHECK_SECONDS
+                else:
+                    cooldown = max(DEFAULT_NETWORK_BACKOFF_SECONDS, backoff)
+                sitemap_checked[host] = int(
+                    time.time() - SITEMAP_RECHECK_SECONDS + min(cooldown, MAX_RETRY_AFTER_SECONDS)
+                )
+                print(f"skip sitemap {current_sitemap}: {error}; host cooldown {backoff:.0f}s")
+                if status in (403, 429, 500, 502, 503, 504) or (
+                    not isinstance(error, urllib.error.HTTPError) and isinstance(error, urllib.error.URLError)
+                ):
+                    break
                 continue
             host_next_allowed[host] = time.time() + max(host_delay(origin(current_sitemap)), host_delay(origin(final_sitemap)))
             if len(body) > MAX_SITEMAP_BYTES:
@@ -382,7 +433,11 @@ def main():
         if elapsed >= MAX_RUN_SECONDS:
             break
 
-        batch = select_batch(queue, allowed, host_next_allowed, time.time())
+        remaining_fetches = MAX_FETCH_PER_RUN - fetched
+        batch = select_batch(
+            queue, allowed, host_next_allowed, time.time(),
+            workers=min(WORKERS, remaining_fetches)
+        )
         if not batch:
             wait = next_host_wait(queue, host_next_allowed, time.time())
             remaining = MAX_RUN_SECONDS - (time.monotonic() - run_started)
@@ -397,7 +452,7 @@ def main():
                 final, content_type, body = request(url, allowed)
                 delay = max(host_delay(origin(url)), host_delay(origin(final)))
                 if content_type != "text/html":
-                    return None, None, delay
+                    return None, None, delay, False
                 parser = PageParser()
                 parser.feed(body.decode("utf-8", "replace"))
                 title = re.sub(r"\s+", " ", " ".join(parser.title)).strip()
@@ -413,26 +468,47 @@ def main():
                     "url": final, "title": title,
                     "description": parser.description[:500],
                     "text": text, "depth": depth, "fetched_at": int(time.time())
-                }, links, delay)
+                }, links, delay, False)
             except Exception as error:
-                print(f"skip {url}: {error}")
-                return None
+                status = getattr(error, "code", None)
+                if status in (429, 503):
+                    rate_limited_count[0] += 1
+                is_http_error = isinstance(error, urllib.error.HTTPError)
+                if status == 429:
+                    backoff = max(DEFAULT_429_BACKOFF_SECONDS, retry_after_seconds(error, DEFAULT_429_BACKOFF_SECONDS))
+                elif status in (500, 502, 503, 504):
+                    backoff = max(DEFAULT_5XX_BACKOFF_SECONDS, retry_after_seconds(error, DEFAULT_5XX_BACKOFF_SECONDS))
+                elif not is_http_error and isinstance(error, urllib.error.URLError):
+                    backoff = max(DEFAULT_NETWORK_BACKOFF_SECONDS, retry_after_seconds(error, DEFAULT_NETWORK_BACKOFF_SECONDS))
+                elif isinstance(error, TimeoutError):
+                    backoff = DEFAULT_NETWORK_BACKOFF_SECONDS
+                else:
+                    backoff = host_delay(origin(url))
+                retryable = status in (429, 500, 502, 503, 504) or (
+                    not is_http_error and isinstance(error, urllib.error.URLError)
+                ) or isinstance(error, TimeoutError)
+                delay = max(host_delay(origin(url)), backoff)
+                print(f"skip {url}: {error}; host cooldown {delay:.0f}s")
+                return None, None, delay, retryable
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=min(WORKERS, len(batch))) as pool:
             results = list(pool.map(fetch, batch))
 
         fetched += len(batch)
         completed_at = time.time()
-        for (url, _depth), result in zip(batch, results):
+        for (url, depth), result in zip(batch, results):
             host = host_key(url)
             delay = result[2] if result else host_delay(origin(url))
             host_next_allowed[host] = completed_at + delay
+            if result and len(result) > 3 and result[3]:
+                queue.append((url, depth))
+                transient_retries_queued += 1
             requests_by_host[host] = requests_by_host.get(host, 0) + 1
 
         for result in results:
             if not result or not result[0]:
                 continue
-            record, links, _delay = result
+            record, links, _delay, _retryable = result
             records[record["url"]] = record
             depth_counts[str(record["depth"])] = depth_counts.get(str(record["depth"]), 0) + 1
             for candidate in links:
@@ -450,6 +526,8 @@ def main():
         "pages_indexed_this_run": len(records),
         "pages_not_indexed_this_run": fetched - len(records),
         "robots_blocked_this_run": robots_blocked_count[0],
+        "rate_limited_responses_this_run": rate_limited_count[0],
+        "transient_retries_queued_this_run": transient_retries_queued,
         "sitemap_hosts_checked_this_run": sitemap_hosts_checked,
         "sitemap_fetches_this_run": sitemap_fetches,
         "sitemap_urls_added_this_run": sitemap_urls_added,

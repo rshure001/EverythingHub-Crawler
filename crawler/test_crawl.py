@@ -74,12 +74,13 @@ class CrawlerTests(unittest.TestCase):
         <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
           <url><loc>https://example.com/one?utm_source=test</loc></url>
           <url><loc>https://example.com/two</loc></url>
+          <url><loc>https://example.com/three</loc></url>
           <url><loc>https://other.example/skip</loc></url>
         </urlset>"""
         pages, children = crawl.parse_sitemap_xml(
-            body, "https://example.com/sitemap.xml", max_urls=1
+            body, "https://example.com/sitemap.xml", max_urls=2
         )
-        self.assertEqual(pages, ["https://example.com/one"])
+        self.assertEqual(pages, ["https://example.com/one", "https://example.com/two"])
         self.assertEqual(children, [])
 
     def test_sitemap_index_returns_only_same_host_child_sitemaps(self):
@@ -100,6 +101,34 @@ class CrawlerTests(unittest.TestCase):
         )
         self.assertEqual(pages, [])
         self.assertEqual(children, [])
+
+    def test_retry_after_seconds_parses_numeric_header(self):
+        class FakeError:
+            headers = {"Retry-After": "120"}
+        self.assertEqual(crawl.retry_after_seconds(FakeError(), 30), 120.0)
+
+    def test_retry_after_seconds_uses_default_for_invalid_header(self):
+        class FakeError:
+            headers = {"Retry-After": "later"}
+        self.assertEqual(crawl.retry_after_seconds(FakeError(), 45), 45.0)
+
+    def test_retry_after_seconds_caps_long_server_delays(self):
+        class FakeError:
+            headers = {"Retry-After": str(crawl.MAX_RETRY_AFTER_SECONDS * 2)}
+        self.assertEqual(
+            crawl.retry_after_seconds(FakeError()),
+            float(crawl.MAX_RETRY_AFTER_SECONDS),
+        )
+
+    def test_select_batch_respects_remaining_worker_limit(self):
+        queue = deque([
+            ("https://one.example/a", 0),
+            ("https://two.example/b", 0),
+            ("https://three.example/c", 0),
+        ])
+        batch = crawl.select_batch(queue, lambda _url: True, {}, now=100.0, workers=2)
+        self.assertEqual(len(batch), 2)
+        self.assertEqual(len(queue), 1)
 
     def test_effective_host_delay_respects_robots_directives(self):
         parser = urllib.robotparser.RobotFileParser()
