@@ -7,8 +7,8 @@ on:
       - "crawler/schedule_watchdog.py"
       - "crawler/test_schedule_watchdog.py"
   schedule:
-    # Check after the crawler's normal hourly trigger and recover a missed run.
-    - cron: "37 * * * *"
+    # Lightweight 15-minute checks; dispatch only after 75 minutes without a successful crawl.
+    - cron: "*/15 * * * *"
   workflow_dispatch:
 permissions:
   actions: write
