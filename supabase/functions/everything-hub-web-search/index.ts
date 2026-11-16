@@ -72,7 +72,7 @@ Deno.serve(async (req: Request) => {
     const fallback = await fallbackQuery;
     if (fallback.error) {
       console.error("eh_quad paged index search failed:", fallback.error.message);
-      return json({ results: [], count: 0, query, offset, limit, hasMore: false, error: "Search temporarily unavailable" });
+      return json({ results: [], count: 0, query, offset, limit, hasMore: false, error: "Search temporarily unavailable" }, 503);
     }
     data = (fallback.data || []).map((row: any) => ({
       url: row.canonical_url, title: row.title, description: row.description,
