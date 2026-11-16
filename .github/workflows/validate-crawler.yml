@@ -42,6 +42,7 @@ jobs:
         run: |
           python -m unittest discover -s crawler -p 'test_*.py' -v
           python -m unittest discover -s database -p 'test_*.py' -v
+          node --test supabase/functions/everything-hub-web-search/params.test.mjs
           python crawler/validate_public_index.py
       - name: Validate static release manifest
         run: python publisher/publish.py --check
