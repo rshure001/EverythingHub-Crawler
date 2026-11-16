@@ -33,7 +33,7 @@ jobs:
             page.on('pageerror', e => errors.push(e.message));
             const failedRequests = [];
             page.on('requestfailed', r => failedRequests.push({ url: r.url(), error: r.failure()?.errorText }));
-            const report = { url: 'https://everythinghub-homepage-fixed.vercel.app/', startedAt: new Date().toISOString() };
+            const report = { url: 'https://everythinghub.ink/', startedAt: new Date().toISOString() };
             try {
               const response = await page.goto(report.url, { waitUntil: 'domcontentloaded', timeout: 45000 });
               report.httpStatus = response?.status();
