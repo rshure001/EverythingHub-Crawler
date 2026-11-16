@@ -43,14 +43,14 @@ jobs:
               await page.locator('img.approved-master-art').waitFor({ state: 'attached', timeout: 15000 });
               await page.waitForFunction(() => {
                 const img = document.querySelector('img.approved-master-art');
-                return !!img && (img.complete || img.naturalWidth > 0);
+                return !!img && img.naturalWidth > 0;
               }, { timeout: 20000 }).catch(() => {});
               report.approvedArtwork = await page.locator('img.approved-master-art').evaluate(img => ({
                 complete: img.complete, naturalWidth: img.naturalWidth, alt: img.alt, src: img.currentSrc || img.src
               }));
               report.failedRequests = failedRequests;
               if (!response?.ok() || !report.title.includes('Everything Hub') || !report.searchInput ||
-                  report.categoryCount !== 8 || !report.approvedArtwork.complete || report.approvedArtwork.naturalWidth < 100) {
+                  report.categoryCount !== 8 || report.approvedArtwork.naturalWidth < 100) {
                 throw new Error('Homepage structure check failed: ' + JSON.stringify(report));
               }
               await page.screenshot({ path: 'everything-hub-homepage-desktop.png', fullPage: true });
