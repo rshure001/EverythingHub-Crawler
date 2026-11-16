@@ -1,6 +1,7 @@
 name: Everything Hub live diagnostics
 on:
   push:
+    branches: [main]
     paths:
       - .github/workflows/everything-hub-live-diagnostics.yml
       - supabase/functions/everything-hub-web-search/**
