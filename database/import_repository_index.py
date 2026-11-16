@@ -42,6 +42,11 @@ def target_schema(value=None):
     return TARGET_SCHEMA
 
 
+def is_robots_allowed(page):
+    """Treat an explicit robots denial as non-importable; legacy records default to allowed."""
+    return page.get("robots_allowed") is not False
+
+
 def page_lane(page, url):
     """Preserve a valid crawler lane or classify the source host safely."""
     lane = page.get("lane")
@@ -92,6 +97,9 @@ def main():
 
     for page in pages:
         if not isinstance(page, dict):
+            skipped += 1
+            continue
+        if not is_robots_allowed(page):
             skipped += 1
             continue
         url = page.get("url")
