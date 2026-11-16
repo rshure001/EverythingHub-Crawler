@@ -36,6 +36,22 @@ class ScheduleWatchdogTests(unittest.TestCase):
         self.assertEqual(result["action"], "dispatch")
         self.assertEqual(result["age_seconds"], 7200)
 
+    def test_recent_failure_waits_before_retry(self):
+        result = evaluate(
+            [{"status": "completed", "conclusion": "failure", "created_at": "2026-11-16T15:30:00Z"}],
+            now=NOW,
+        )
+        self.assertEqual(result["action"], "wait")
+        self.assertEqual(result["age_seconds"], 1800)
+
+    def test_stale_failure_requests_one_recovery_dispatch(self):
+        result = evaluate(
+            [{"status": "completed", "conclusion": "failure", "created_at": "2026-11-16T14:00:00Z"}],
+            now=NOW,
+        )
+        self.assertEqual(result["action"], "dispatch")
+        self.assertEqual(result["age_seconds"], 7200)
+
     def test_active_run_prevents_duplicate_dispatch(self):
         result = evaluate(
             [
@@ -47,12 +63,21 @@ class ScheduleWatchdogTests(unittest.TestCase):
         self.assertEqual(result["action"], "wait")
         self.assertEqual(result["active_runs"], 1)
 
-    def test_missing_success_requests_recovery(self):
+    def test_no_crawl_history_requests_recovery(self):
+        result = evaluate([], now=NOW)
+        self.assertEqual(result["action"], "dispatch")
+        self.assertIsNone(result["age_seconds"])
+
+    def test_recent_failure_is_not_overridden_by_an_older_success(self):
         result = evaluate(
-            [{"status": "completed", "conclusion": "failure", "created_at": "2026-11-16T15:30:00Z"}],
+            [
+                {"status": "completed", "conclusion": "success", "created_at": "2026-11-16T15:50:00Z"},
+                {"status": "completed", "conclusion": "failure", "created_at": "2026-11-16T15:55:00Z"},
+            ],
             now=NOW,
         )
-        self.assertEqual(result["action"], "dispatch")
+        self.assertEqual(result["action"], "wait")
+        self.assertEqual(result["last_conclusion"], "failure")
 
     def test_latest_success_is_selected_not_first_success(self):
         result = evaluate(
