@@ -6,14 +6,20 @@ on:
       - "database/**"
       - ".github/workflows/import-smoke-test.yml"
   schedule:
-    - cron: "7,22,37,52 * * * *"
+    - cron: "7 * * * *"
   workflow_dispatch:
+  workflow_run:
+    workflows:
+      - "Everything Hub crawler"
+    types:
+      - completed
 
 permissions:
   contents: read
 
 jobs:
   import-smoke-test:
+    if: ${{ github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     services:
@@ -55,6 +61,11 @@ jobs:
           count=$(psql "$DATABASE_URL" -tA -c "SELECT count(*) FROM eh_quad.eh_documents;")
           echo "Imported records: $count"
           test "$count" -gt 0
+          invalid_lanes=$(psql "$DATABASE_URL" -tA -c "SELECT count(*) FROM eh_quad.eh_documents WHERE lane NOT IN ('general','science','news','technology','business','government','culture','nature');")
+          echo "Invalid lane rows: $invalid_lanes"
+          test "$invalid_lanes" = "0"
+          echo "Imported records by search lane:"
+          psql -P pager=off -c "SELECT lane, count(*) AS records FROM eh_quad.eh_documents GROUP BY lane ORDER BY lane;"
       - name: Verify authenticated search API
         env:
           EH_SEARCH_API_TOKEN: isolated-test-token
