@@ -4,6 +4,7 @@ import concurrent.futures
 import json
 import re
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 import urllib.robotparser
@@ -25,6 +26,20 @@ HOST_MIN_INTERVAL = 1.0
 ROBOTS_MAX_BYTES = 512_000
 TIMEOUT = 15
 UA = "EverythingHubCrawler/1.1 (+https://github.com/rshure001/EverythingHub-Crawler)"
+
+class SameOriginRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Prevent page fetches from silently crossing into an unchecked host."""
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        target = urllib.parse.urljoin(req.full_url, newurl)
+        old = urllib.parse.urlsplit(req.full_url)
+        new = urllib.parse.urlsplit(target)
+        if (old.scheme.lower(), old.netloc.lower()) != (new.scheme.lower(), new.netloc.lower()):
+            raise urllib.error.HTTPError(
+                req.full_url, code, "cross-origin redirect blocked", headers, fp
+            )
+        return super().redirect_request(req, fp, code, msg, headers, target)
+
+HTTP_OPENER = urllib.request.build_opener(SameOriginRedirectHandler())
 
 class PageParser(HTMLParser):
     """Extract readable text and links while excluding repeated page chrome."""
@@ -77,7 +92,7 @@ def request(url):
     req = urllib.request.Request(url, headers={
         "User-Agent": UA, "Accept": "text/html,application/xml,*/*"
     })
-    with urllib.request.urlopen(req, timeout=TIMEOUT) as response:
+    with HTTP_OPENER.open(req, timeout=TIMEOUT) as response:
         return response.geturl(), response.headers.get_content_type(), response.read(2_000_000)
 
 def origin(url):
