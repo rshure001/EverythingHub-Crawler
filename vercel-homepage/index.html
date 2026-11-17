@@ -727,12 +727,15 @@ form.addEventListener('submit',async e=>{
  const seenUrls=new Set(),items=[];
  const addItems=(rows)=>{for(const x of rows||[]){const url=safe(x.url);if(url==='#'||seenUrls.has(url))continue;seenUrls.add(url);items.push({...x,url});}};
  const loadApiPage=async(page)=>{
-  if(page>1){apiHasMore=false;return [];}
   const u=new URL('https://everythinghub-search-backend.vercel.app/api/search');
   u.searchParams.set('q',q);
+  u.searchParams.set('limit','50');
+  u.searchParams.set('offset',String((page-1)*50));
   const r=await fetch(u,{headers:{accept:'application/json'}});
   if(!r.ok)throw Error('Independent Everything Hub search '+r.status);
-  const d=await r.json();apiHasMore=false;totalIndexed=Number(d.count)||0;
+  const d=await r.json();
+  apiHasMore=Boolean(d.hasMore);
+  totalIndexed=Number(d.count)||totalIndexed;
   return (d.results||[]).map(x=>({...x,description:x.snippet||x.description||'',source:x.source||d.provider||'Web search',mediaType:'web'}));
  };
  const render=()=>{
