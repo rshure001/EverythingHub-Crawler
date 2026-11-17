@@ -24,6 +24,7 @@ const TRANSIENT_DATABASE_CODES = new Set([
   "53300",
   "57P03",
   "PGRST000",
+  "PGRST002",
   "PGRST003",
 ]);
 
