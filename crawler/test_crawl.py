@@ -118,6 +118,33 @@ class CrawlerTests(unittest.TestCase):
             {"none", "noindex", "nofollow"},
         )
 
+    def test_noindex_page_keeps_depth_for_following_allowed_links(self):
+        page_url = "https://example.com/listing"
+        next_url = "https://example.com/listing/next"
+        record = crawl.build_page_record(
+            page_url, "Private listing", "", "body", 1, {"noindex"}
+        )
+        self.assertTrue(record["_eh_noindex"])
+        self.assertEqual(record["depth"], 1)
+        self.assertNotIn("title", record)
+
+        queue = deque()
+        seen = {page_url}
+        added = crawl.enqueue_discovered_links(queue, seen, [next_url], record)
+        self.assertEqual(added, 1)
+        self.assertEqual(list(queue), [(next_url, 2)])
+
+    def test_noindex_page_with_nofollow_has_no_discoverable_links(self):
+        record = crawl.build_page_record(
+            "https://example.com/private", "Private", "", "", 2,
+            {"noindex", "nofollow"},
+        )
+        self.assertEqual(record["depth"], 2)
+        queue = deque()
+        seen = {record["url"]}
+        self.assertEqual(crawl.enqueue_discovered_links(queue, seen, [], record), 0)
+        self.assertEqual(list(queue), [])
+
     def test_merge_index_records_removes_only_explicit_noindex_urls(self):
         existing = [
             {"url": "https://example.com/noindex", "title": "Old private listing"},
