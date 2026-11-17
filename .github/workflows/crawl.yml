@@ -9,8 +9,8 @@ on:
       - "crawler/build_search_shards.py"
       - "crawler/validate_public_index.py"
   schedule:
-    # Run once per hour away from GitHub's top-of-hour scheduling peak.
-    - cron: "13 * * * *"
+    # Run every 5 minutes; the durable frontier resumes work and concurrency prevents overlapping crawls.
+    - cron: "*/5 * * * *"
   workflow_dispatch:
 permissions:
   contents: write
