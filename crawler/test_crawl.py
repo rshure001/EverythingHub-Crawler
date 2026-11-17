@@ -84,6 +84,24 @@ class CrawlerTests(unittest.TestCase):
             {"none", "noindex", "nofollow"},
         )
 
+    def test_merge_index_records_removes_only_explicit_noindex_urls(self):
+        existing = [
+            {"url": "https://example.com/noindex", "title": "Old private listing"},
+            {"url": "https://example.com/keep", "title": "Keep this page"},
+        ]
+        new = {
+            "https://example.com/new": {
+                "url": "https://example.com/new", "title": "New page", "lane": "general"
+            }
+        }
+        merged = crawl.merge_index_records(
+            existing, new, {"https://example.com/noindex"}
+        )
+        self.assertEqual(
+            set(merged),
+            {"https://example.com/keep", "https://example.com/new"},
+        )
+
     def test_page_redirect_handler_blocks_cross_host_redirects(self):
         handler = crawl.RobotsAwareRedirectHandler(lambda _url: True)
         request = crawl.urllib.request.Request("https://example.com/start")
