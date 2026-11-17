@@ -513,6 +513,32 @@ main{width:min(900px,calc(100% - 28px))!important;margin:22px auto 40px!importan
  .tagline{margin:4px 0 0!important;padding:0!important;line-height:1.3!important}
  .eh-search-workspace{position:relative!important;margin:12px auto 20px!important;top:0!important;transform:none!important}
 }
+
+/* Google-style search results interface: one search field in approved artwork,
+   compact filters below, and classic blue-link result rows. */
+.eh-search-workspace{width:min(900px,100%)!important;max-width:900px!important;margin:12px auto 30px!important;padding:0 18px 28px!important;border:0!important;border-radius:0!important;background:#fff!important;color:#202124!important;box-shadow:none!important}
+.eh-modebar{display:flex!important;align-items:center!important;gap:0!important;overflow-x:auto!important;white-space:nowrap!important;margin:0 0 12px!important;padding:0!important;border-bottom:1px solid #dadce0!important}
+.eh-mode{flex:0 0 auto!important;min-height:44px!important;padding:0 14px!important;border:0!important;border-bottom:3px solid transparent!important;border-radius:0!important;background:transparent!important;color:#5f6368!important;font-size:13px!important;font-weight:500!important}
+.eh-mode.active,.eh-mode:hover{border:0!important;border-bottom:3px solid #1a73e8!important;background:transparent!important;color:#1a73e8!important;box-shadow:none!important}
+.eh-results{min-height:0!important;padding:0!important;background:#fff!important;color:#202124!important}
+.eh-welcome{padding:18px 0!important;color:#5f6368!important}
+.eh-welcome strong{font-size:18px!important;font-weight:500!important;color:#202124!important}
+.eh-welcome span{font-size:13px!important;color:#5f6368!important}
+#results .result{display:grid!important;grid-template-columns:minmax(0,104px) minmax(0,1fr)!important;gap:14px!important;padding:16px 0!important;border:0!important;border-bottom:1px solid #eee!important;border-radius:0!important;background:#fff!important;box-shadow:none!important}
+#results .result-copy a,#results .result a{color:#1a0dab!important;font-size:18px!important;font-weight:400!important;text-decoration:none!important;line-height:1.35!important}
+#results .result-copy a:hover,#results .result a:hover{text-decoration:underline!important}
+#results .result-copy p{margin:5px 0!important;color:#4d5156!important;font-size:13px!important;line-height:1.5!important}
+#results .source,#results .result-count{color:#70757a!important;font-size:12px!important}
+#results .preview{border-radius:8px!important}
+#results .search-tabs{display:none!important}
+#results #moreResults{border:1px solid #dadce0!important;border-radius:20px!important;background:#f8f9fa!important;color:#1a73e8!important;box-shadow:none!important}
+@media(max-width:700px){
+ .eh-search-workspace{width:100%!important;margin:8px auto 20px!important;padding:0 12px 24px!important}
+ .eh-modebar{gap:0!important}
+ .eh-mode{padding:0 11px!important;min-height:42px!important;font-size:12px!important}
+ #results .result{grid-template-columns:minmax(0,88px) minmax(0,1fr)!important;gap:11px!important;padding:14px 0!important}
+ #results .result-copy a,#results .result a{font-size:16px!important}
+}
 </style><link rel="canonical" href="https://everythinghub.ink/"><meta name="robots" content="index,follow,max-image-preview:large"><meta property="og:type" content="website"><meta property="og:title" content="Everything Hub — Everything within reach"><meta property="og:description" content="Search the web, discover pictures and videos, explore places, businesses, news, shopping and research."><meta property="og:url" content="https://everythinghub.ink/"><script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","name":"Everything Hub","url":"https://everythinghub.ink/","description":"A broad search and discovery engine for web pages, images, videos, news, places, businesses, shopping and research.","potentialAction":{"@type":"SearchAction","target":{"@type":"EntryPoint","urlTemplate":"https://everythinghub.ink/?q={search_term_string}"},"query-input":"required name=search_term_string"}}</script></head>
 <body>
 <header class="topbar">
@@ -540,25 +566,14 @@ main{width:min(900px,calc(100% - 28px))!important;margin:22px auto 40px!importan
   </div>
 <div class="tagline">EVERYTHING HUB · EVERYTHING WITHIN REACH</div>
 </section>
-<section class="eh-search-workspace" aria-label="Search Everything Hub">
- <div class="eh-search-heading"><span>EXPLORE EVERYTHING</span><h2>What are you looking for?</h2><p>Search across the web, news, images, videos, shopping, places, businesses and research.</p></div>
- <nav class="eh-modebar" aria-label="Search categories">
-  <button class="eh-mode active" type="button" data-mode="web">⌕ Web</button><button class="eh-mode" type="button" data-mode="news">▤ News</button><button class="eh-mode" type="button" data-mode="images">▧ Images</button><button class="eh-mode" type="button" data-mode="videos">▶ Videos</button><button class="eh-mode" type="button" data-mode="shopping">▣ Shopping</button><button class="eh-mode" type="button" data-mode="places">⌖ Places</button><button class="eh-mode" type="button" data-mode="business">▦ Business</button><button class="eh-mode" type="button" data-mode="research">▥ Research</button>
+<section class="eh-search-workspace" aria-label="Everything Hub search results">
+ <nav class="eh-modebar" aria-label="Search filters">
+  <button class="eh-mode active" type="button" data-mode="web">All</button><button class="eh-mode" type="button" data-mode="news">News</button><button class="eh-mode" type="button" data-mode="images">Images</button><button class="eh-mode" type="button" data-mode="videos">Videos</button><button class="eh-mode" type="button" data-mode="shopping">Shopping</button><button class="eh-mode" type="button" data-mode="places">Maps</button><button class="eh-mode" type="button" data-mode="business">Business</button><button class="eh-mode" type="button" data-mode="research">Research</button>
  </nav>
- <div class="eh-suggestions"><span>TRY A SEARCH</span><button type="button" data-query="latest technology news">Technology</button><button type="button" data-query="Las Vegas attractions">Las Vegas</button><button type="button" data-query="Rolex watches">Rolex</button><button type="button" data-query="space exploration">Space</button></div>
- <section id="results" class="eh-results" aria-live="polite"><div class="eh-welcome"><strong>Your search starts here.</strong><span>Choose a category above or enter a search to see results.</span></div></section>
+ <section id="results" class="eh-results" aria-live="polite"><div class="eh-welcome"><strong>Search the web</strong><span>Enter a search above to explore web pages, images, videos, news and more.</span></div></section>
 </section>
-<section class="gallery"><div class="heading"><h2>Discover more</h2><small>Fresh visuals · stories · ideas</small></div><div class="gallery-grid">
-<a class="media-card" href="?mode=people"><img loading="lazy" src="https://images.unsplash.com/photo-1521737711867-e3b97375f902?w=900&auto=format&fit=crop&q=82" alt="People collaborating"><div class="caption">People <small>Profiles & communities</small></div></a>
-<a class="media-card" href="?mode=places"><img loading="lazy" src="https://images.unsplash.com/photo-1519608487953-e999c86e7455?w=900&auto=format&fit=crop&q=82" alt="Night skyline"><div class="caption">Places <small>Explore destinations</small></div></a>
-<a class="media-card" href="?mode=videos"><img loading="lazy" src="https://images.unsplash.com/photo-1492619375914-88005aa9e8fb?w=900&auto=format&fit=crop&q=82" alt="Video production camera"><span class="play">▶</span><div class="caption">Videos <small>Watch & discover</small></div></a>
-<a class="media-card" href="?mode=images"><img loading="lazy" src="https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=900&auto=format&fit=crop&q=82" alt="Camera and photography"><div class="caption">Images <small>Photo discovery</small></div></a>
-<a class="media-card" href="?mode=markets"><img loading="lazy" src="https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=900&auto=format&fit=crop&q=82" alt="Financial market chart"><div class="caption">Markets <small>Stocks & indexes</small></div></a>
-<a class="media-card" href="?mode=weather"><img loading="lazy" src="https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=900&auto=format&fit=crop&q=82" alt="Sunlit landscape"><div class="caption">Weather <small>Forecasts & conditions</small></div></a>
-<a class="media-card" href="?mode=knowledge"><img loading="lazy" src="https://images.unsplash.com/photo-1481627834876-b7833e8f5570?w=900&auto=format&fit=crop&q=82" alt="Library shelves"><div class="caption">Knowledge <small>Learn & research</small></div></a>
-<a class="media-card" href="?mode=news"><img loading="lazy" src="https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=900&auto=format&fit=crop&q=82" alt="News desk and newspaper"><div class="caption">News <small>World & technology</small></div></a>
+</section>
 
-</div></section>
 <section class="live-media" aria-label="Live pictures and videos">
  <div class="heading"><h2>Live Pictures &amp; Videos</h2><small>Fresh discoveries from across the web</small></div>
  <div class="live-media-block"><div class="live-media-title"><strong>Pictures</strong><span>Explore images</span></div><div id="homeLiveImages" class="live-media-grid"><div class="live-loading">Loading fresh pictures…</div></div></div>
