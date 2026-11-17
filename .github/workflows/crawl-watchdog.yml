@@ -42,18 +42,44 @@ jobs:
         run: |
           set -euo pipefail
           gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/crawl.yml/runs?per_page=20" > /tmp/crawl-runs.json
-          python crawler/schedule_watchdog.py /tmp/crawl-runs.json > /tmp/decision.json
+          gh api "repos/${GITHUB_REPOSITORY}/contents/public-search/manifest.json" > /tmp/public-manifest-envelope.json
+          python - <<'PY'
+          import base64
+          import json
+          from pathlib import Path
+
+          envelope = json.loads(Path("/tmp/public-manifest-envelope.json").read_text(encoding="utf-8"))
+          encoded = envelope.get("content")
+          if not isinstance(encoded, str):
+              raise SystemExit("GitHub did not return the public search manifest content")
+          manifest = json.loads(base64.b64decode(encoded).decode("utf-8"))
+          if (
+              not isinstance(manifest, dict)
+              or manifest.get("version") != 1
+              or not isinstance(manifest.get("updated_at"), int)
+              or manifest["updated_at"] <= 0
+              or not isinstance(manifest.get("total_pages"), int)
+              or manifest["total_pages"] < 1
+          ):
+              raise SystemExit("Public search manifest failed the watchdog freshness preflight")
+          Path("/tmp/public-manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+          print("Public manifest timestamp:", manifest["updated_at"])
+          print("Public manifest indexed pages:", manifest["total_pages"])
+          PY
+          python crawler/schedule_watchdog.py /tmp/crawl-runs.json /tmp/public-manifest.json > /tmp/decision.json
           cat /tmp/decision.json
 
           action="$(python -c 'import json; print(json.load(open("/tmp/decision.json"))["action"])')"
           reason="$(python -c 'import json; print(json.load(open("/tmp/decision.json"))["reason"])')"
           age="$(python -c 'import json; print(json.load(open("/tmp/decision.json")).get("age_seconds"))')"
+          manifest_age="$(python -c 'import json; print(json.load(open("/tmp/decision.json")).get("manifest_age_seconds"))')"
 
           {
             echo "### Everything Hub crawler schedule watchdog"
             echo "- Decision: $action"
             echo "- Reason: $reason"
-            echo "- Last-success age (seconds): $age"
+            echo "- Last crawler attempt age (seconds): $age"
+            echo "- Public manifest age (seconds): $manifest_age"
           } >> "$GITHUB_STEP_SUMMARY"
 
           case "$action" in
@@ -65,7 +91,7 @@ jobs:
               echo "An existing crawler run is queued or active; no duplicate dispatch."
               ;;
             healthy)
-              echo "The most recent successful crawler run is within the 75-minute window."
+              echo "The most recent crawler run and public manifest are within the 75-minute freshness window."
               ;;
             *)
               echo "Unexpected watchdog decision: $action" >&2
