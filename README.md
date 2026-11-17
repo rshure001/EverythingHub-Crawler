@@ -223,3 +223,28 @@ Run: https://github.com/rshure001/EverythingHub-Crawler/actions/runs/44062366732
 
 ### Next gate
 Wait for PostgreSQL to accept connections, inspect only `eh_quad` read-only, then apply the additive migration and importer under the documented validation sequence. Do not resume database-backed crawling before that gate passes.
+
+
+## Automation run — 2026-11-17 13:03 UTC
+
+### Public crawler and index
+- Latest successful public crawler run: [#44081625920](https://github.com/rshure001/EverythingHub-Crawler/actions/runs/44081625920), completed **12:17:24 UTC**.
+- Run totals: **80 fetched**, **59 indexed**, **21 not indexed**; **2 robots-blocked URLs**, **4 noindex exclusions**, **0 nofollow expansions**, **2 robots-policy fetch failures (fail-closed)**, **0 rate-limited responses**, and **0 transient retries queued**.
+- Published snapshot: **3,667 pages**, **31 hosts**, **31,423 discovered URLs**, **21,137 queued URLs**, and **20 shards**. The shard page totals reconcile exactly; all 20 SHA-256 values are well-formed; largest shard is **339,928 bytes**; compressed catalog is **1,153,757 bytes**. Manifest timestamp: **2026-11-17 12:17:12 UTC**.
+- The crawler continues to enforce the 80-page per-run cap, robots.txt fail-closed behavior, host pacing, Retry-After handling, and bounded sitemap discovery.
+
+### Watchdog freshness improvement
+- The schedule watchdog now fetches the committed `public-search/manifest.json`, validates its basic structure and timestamp, and checks catalog freshness as well as the latest crawler workflow attempt.
+- The watchdog uses the existing **75-minute** recovery window. A fresh successful run with a stale manifest waits for the recovery window rather than creating an immediate duplicate; a stale run can request one recovery dispatch.
+- Watchdog test run [#44088719368](https://github.com/rshure001/EverythingHub-Crawler/actions/runs/44088719368) passed **18/18 tests**. Its live decision was `healthy`: last crawler attempt age **2,745 seconds**, public manifest age **2,714 seconds**, **3,667** indexed pages.
+
+### Search, media, and browser verification
+- Browser verification [#44084462550](https://github.com/rshure001/EverythingHub-Crawler/actions/runs/44084462550) passed against the canonical Vercel alias `everythinghub-homepage-fixed-rshure001-8053.vercel.app`: HTTP **200**, approved artwork loaded, exactly one search form inside the artwork, all **8** category tiles, **24** visible Rolex results, **24** visible NASA results, **21** image results, **2** video results, no mobile horizontal overflow, and **0** page errors.
+- Media-search Edge Function v21 returned HTTP **200** for live image/video discovery probes. Commons results include available license and attribution metadata; Bing results remain explicitly unverified for reuse.
+- The custom domain `everythinghub.ink` was not browser-verified in that run. The canonical Vercel alias passing does not establish that the custom domain is currently serving the same deployment.
+
+### Production database and publishing gates
+- Supabase project `everything-hub-control` reports `ACTIVE_HEALTHY` in the control plane, but PostgreSQL is still replaying WAL. At **2026-11-17 12:57:50 UTC**, the startup log reported redo elapsed **5,460.41 seconds**; at **12:57:51.786 UTC**, PostgreSQL returned SQLSTATE **57P03** (“the database system is not accepting connections”; detail: “Hot standby mode is disabled”). Read-only `eh_quad` table and migration inventory calls still fail.
+- The production crawler Edge Function remains intentionally paused at v49 with HTTP 503. Search v20, independent-search v2, and media-search v21 remain active. Do not resume the database-backed crawler or importer until PostgreSQL accepts connections and the `eh_quad` inventory/migration checks pass.
+- The latest publisher run [#44081745316](https://github.com/rshure001/EverythingHub-Crawler/actions/runs/44081745316) validated and uploaded the release artifact; the GitHub Pages deploy job was skipped because the Pages site is not available to the connected Actions integration. No Pages settings or permissions were changed. The canonical Vercel alias has browser-pass evidence; the custom domain still needs its own browser check.
+- No production database write, migration, import, restore, or destructive operation was attempted. The separate Dog Tag Day Story Wall Supabase project was not accessed. No AppDeploy was used.
