@@ -119,6 +119,32 @@ def origin(url):
     p = urllib.parse.urlsplit(url)
     return f"{p.scheme}://{p.netloc}"
 
+
+def load_robots_policy(site):
+    """Fetch robots.txt with a bounded read; deny the host if policy cannot be read."""
+    parser = urllib.robotparser.RobotFileParser()
+    parser.set_url(site.rstrip("/") + "/robots.txt")
+    try:
+        req = urllib.request.Request(site.rstrip("/") + "/robots.txt", headers={
+            "User-Agent": UA, "Accept": "text/plain,*/*"
+        })
+        with urllib.request.urlopen(req, timeout=TIMEOUT) as response:
+            if response.status >= 400:
+                raise RuntimeError(f"robots.txt returned HTTP {response.status}")
+            raw = response.read(ROBOTS_MAX_BYTES + 1)
+            if len(raw) > ROBOTS_MAX_BYTES:
+                raise RuntimeError("robots.txt exceeds the safe size limit")
+        parser.parse(raw.decode("utf-8", "replace").splitlines())
+    except urllib.error.HTTPError as error:
+        parser.disallow_all = True
+        parser.everythinghub_policy_error = f"http_{error.code}"
+    except Exception as error:
+        parser.disallow_all = True
+        parser.everythinghub_policy_error = (
+            "too_large" if "safe size limit" in str(error) else "unavailable"
+        )
+    return parser
+
 def host_key(url):
     p = urllib.parse.urlsplit(url)
     return (p.hostname or p.netloc).lower()
@@ -253,29 +279,17 @@ def main():
              if x.strip() and not x.startswith("#")]
     seeds = list(dict.fromkeys(x for x in seeds if x))
     robots = {}
+    robots_policy_failures = {}
     robots_blocked_count = [0]
     rate_limited_count = [0]
 
     def policy(site):
         if site not in robots:
-            parser = urllib.robotparser.RobotFileParser()
-            parser.set_url(site + "/robots.txt")
-            try:
-                req = urllib.request.Request(site + "/robots.txt", headers={
-                    "User-Agent": UA, "Accept": "text/plain,*/*"
-                })
-                with urllib.request.urlopen(req, timeout=TIMEOUT) as response:
-                    if response.status >= 400:
-                        raise RuntimeError(f"robots.txt returned HTTP {response.status}")
-                    raw = response.read(ROBOTS_MAX_BYTES + 1)
-                    if len(raw) > ROBOTS_MAX_BYTES:
-                        raise RuntimeError("robots.txt exceeds the safe size limit")
-                    body = raw.decode("utf-8", "replace")
-                parser.parse(body.splitlines())
-            except Exception:
-                # If robots.txt cannot be read, fail closed for this host.
-                parser.disallow_all = True
+            parser = load_robots_policy(site)
             robots[site] = parser
+            failure = getattr(parser, "everythinghub_policy_error", None)
+            if failure:
+                robots_policy_failures[host_key(site)] = failure
         return robots[site]
 
     def allowed(url):
@@ -533,6 +547,11 @@ def main():
         "pages_indexed_this_run": len(records),
         "pages_not_indexed_this_run": fetched - len(records),
         "robots_blocked_this_run": robots_blocked_count[0],
+        "robots_policy_failures_this_run": len(robots_policy_failures),
+        "robots_policy_failure_hosts_this_run": [
+            {"host": host, "reason": reason}
+            for host, reason in sorted(robots_policy_failures.items())
+        ],
         "rate_limited_responses_this_run": rate_limited_count[0],
         "transient_retries_queued_this_run": transient_retries_queued,
         "sitemap_hosts_checked_this_run": sitemap_hosts_checked,

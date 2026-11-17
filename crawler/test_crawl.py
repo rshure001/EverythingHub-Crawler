@@ -3,11 +3,28 @@ import unittest
 import urllib.robotparser
 from collections import deque
 from pathlib import Path
+from unittest import mock
 
 MODULE_PATH = Path(__file__).with_name("crawl.py")
 SPEC = importlib.util.spec_from_file_location("everythinghub_crawl", MODULE_PATH)
 crawl = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(crawl)
+
+class FakeRobotsResponse:
+    status = 200
+
+    def __init__(self, body):
+        self.body = body
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        return False
+
+    def read(self, limit):
+        return self.body[:limit]
+
 
 class CrawlerTests(unittest.TestCase):
     def test_clean_removes_tracking_and_fragment(self):
@@ -68,6 +85,32 @@ class CrawlerTests(unittest.TestCase):
             "Sitemap: https://example.com/sitemap.xml",
         ])
         self.assertEqual(parser.site_maps(), ["https://example.com/sitemap.xml"])
+
+
+    def test_robots_policy_fetch_parses_allow_and_disallow_rules(self):
+        body = b"User-agent: *\nAllow: /\nDisallow: /private\n"
+        with mock.patch.object(crawl.urllib.request, "urlopen", return_value=FakeRobotsResponse(body)):
+            parser = crawl.load_robots_policy("https://example.com")
+        self.assertTrue(parser.can_fetch(crawl.UA, "https://example.com/public"))
+        self.assertFalse(parser.can_fetch(crawl.UA, "https://example.com/private"))
+
+    def test_robots_policy_fails_closed_on_http_error(self):
+        error = crawl.urllib.error.HTTPError(
+            "https://example.com/robots.txt", 404, "Not Found", {}, None
+        )
+        with mock.patch.object(crawl.urllib.request, "urlopen", side_effect=error):
+            parser = crawl.load_robots_policy("https://example.com")
+        self.assertTrue(parser.disallow_all)
+        self.assertEqual(parser.everythinghub_policy_error, "http_404")
+        self.assertFalse(parser.can_fetch(crawl.UA, "https://example.com/public"))
+
+    def test_robots_policy_fails_closed_on_oversized_file(self):
+        body = b"#" * (crawl.ROBOTS_MAX_BYTES + 1)
+        with mock.patch.object(crawl.urllib.request, "urlopen", return_value=FakeRobotsResponse(body)):
+            parser = crawl.load_robots_policy("https://example.com")
+        self.assertTrue(parser.disallow_all)
+        self.assertEqual(parser.everythinghub_policy_error, "too_large")
+        self.assertFalse(parser.can_fetch(crawl.UA, "https://example.com/public"))
 
     def test_sitemap_urlset_extracts_bounded_same_host_pages(self):
         body = b"""<?xml version="1.0" encoding="UTF-8"?>
