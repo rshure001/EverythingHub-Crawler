@@ -720,56 +720,35 @@ loadHomepageDiscovery();
 
 async function loadDiscoverFeed(topic='world'){
  const target=document.getElementById('discoverCards');if(!target)return;
+ target.innerHTML='<div class="discover-loading">Finding fresh stories…</div>';
+ target.dataset.error='';
+ document.querySelectorAll('.discover-topic').forEach(b=>b.classList.toggle('active',b.dataset.topic===topic));
  const queries={
-  world:'latest world news',
+  world:'latest world news today',
   technology:'latest technology news artificial intelligence',
   sports:'latest sports news',
   entertainment:'latest entertainment news movies music',
-  business:'latest business economy news'
- };
- document.querySelectorAll('.discover-topic').forEach(b=>b.classList.toggle('active',b.dataset.topic===topic));
- target.innerHTML='<div class="discover-loading">Loading '+esc(topic==='world'?'top stories':topic)+'…</div>';
- const timedFetch=async(url,ms=9000)=>{
-  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),ms);
-  try{return await fetch(url,{headers:{accept:'application/json'},signal:controller.signal});}
-  finally{clearTimeout(timer);}
+  business:'latest business news economy markets'
  };
  try{
-  // Use the same independent search service as the site's main search first.
-  // This avoids relying on a browser-to-GDELT request that can stall or be blocked.
-  const u=new URL('https://everythinghub-search-backend.vercel.app/api/search');
+  const u=new URL(EH_SUPABASE_URL+'/functions/v1/everything-hub-independent-search');
   u.searchParams.set('q',queries[topic]||queries.world);
-  u.searchParams.set('limit','12');u.searchParams.set('offset','0');
-  const response=await timedFetch(u.toString());
-  if(!response.ok)throw Error('Search feed '+response.status);
+  const response=await fetch(u.toString(),{headers:{apikey:EH_PUBLIC_KEY,accept:'application/json'}});
+  if(!response.ok)throw Error('Bing RSS discovery '+response.status);
   const data=await response.json();
   const stories=(data.results||[]).filter(a=>a.title&&a.url).slice(0,12);
-  if(!stories.length)throw Error('No indexed stories returned');
+  if(!stories.length)throw Error('Bing RSS returned no stories for '+topic);
+  target.dataset.provider=data.provider||'Bing RSS';
   target.innerHTML=stories.map(a=>{
-   const href=safe(a.url),rawImage=a.image||a.thumbnail||a.thumbnailUrl||a.imageUrl||'';
-   const img=safe(rawImage),title=esc(a.title),source=esc(a.source||a.domain||host(a.url));
-   return '<a class="discover-card" href="'+href+'" target="_blank" rel="noopener noreferrer">'+(img!=='#'?'<img class="discover-image" loading="lazy" src="'+img+'" alt="" referrerpolicy="no-referrer" onerror="this.style.display=\'none\'">':'<div class="discover-image" aria-hidden="true"></div>')+'<div class="discover-card-body"><h3>'+title+'</h3><div class="discover-meta"><span class="discover-source">'+source+'</span><span class="discover-dot">·</span><span>Web result</span></div></div></a>';
+   const href=safe(a.url),img=safe(a.image||'');
+   const title=esc(a.title),source=esc(a.source||host(a.url));
+   const stamp=Date.parse(a.publishedAt||'');
+   const date=Number.isFinite(stamp)?new Date(stamp).toLocaleDateString('en-US',{month:'short',day:'numeric'}):'Latest';
+   return '<a class="discover-card" href="'+href+'" target="_blank" rel="noopener noreferrer">'+(img!=='#'?'<img class="discover-image" loading="lazy" src="'+img+'" alt="" referrerpolicy="no-referrer">':'<div class="discover-image" aria-hidden="true"></div>')+'<div class="discover-card-body"><h3>'+title+'</h3><div class="discover-meta"><span class="discover-source">'+source+'</span><span class="discover-dot">·</span><span>'+date+'</span></div></div></a>';
   }).join('');
-  target.dataset.feedSource='Everything Hub search';
- }catch(primaryError){
-  // Secondary public source, bounded by a timeout so the page never spins forever.
-  try{
-   const u=new URL('https://api.gdeltproject.org/api/v2/doc/doc');
-   u.searchParams.set('query',queries[topic]||queries.world);u.searchParams.set('mode','ArtList');
-   u.searchParams.set('format','json');u.searchParams.set('maxrecords','12');u.searchParams.set('sort','HybridRel');
-   const response=await timedFetch(u.toString(),7000);if(!response.ok)throw Error('News source '+response.status);
-   const data=await response.json(),stories=(data.articles||[]).filter(a=>a.title&&a.url).slice(0,12);
-   if(!stories.length)throw Error('No stories returned');
-   target.innerHTML=stories.map(a=>{
-    const href=safe(a.url),img=safe(a.socialimage||''),title=esc(a.title),source=esc(a.domain||host(a.url));
-    return '<a class="discover-card" href="'+href+'" target="_blank" rel="noopener noreferrer">'+(img!=='#'?'<img class="discover-image" loading="lazy" src="'+img+'" alt="" referrerpolicy="no-referrer" onerror="this.style.display=\'none\'">':'<div class="discover-image" aria-hidden="true"></div>')+'<div class="discover-card-body"><h3>'+title+'</h3><div class="discover-meta"><span class="discover-source">'+source+'</span><span class="discover-dot">·</span><span>News</span></div></div></a>';
-   }).join('');
-   target.dataset.feedSource='GDELT';
-  }catch(fallbackError){
-   target.innerHTML='<div class="discover-empty">The story feed could not connect. Your main search above is still available.</div><button class="discover-retry" type="button" data-discover-retry>Try again</button>';
-   const retry=target.querySelector('[data-discover-retry]');
-   if(retry)retry.addEventListener('click',()=>loadDiscoverFeed(topic));
-  }
+ }catch(error){
+  target.dataset.error=String(error).slice(0,180);
+  target.innerHTML='<div class="discover-empty">The live story feed is temporarily unavailable. Search still works above; please refresh to retry.</div>';
  }
 }
 document.querySelectorAll('.discover-topic').forEach(button=>button.addEventListener('click',()=>loadDiscoverFeed(button.dataset.topic)));
