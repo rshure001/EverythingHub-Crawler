@@ -15,10 +15,11 @@ class ScheduleWatchdogTests(unittest.TestCase):
 
     def test_watchdog_runs_after_each_completed_crawl(self):
         workflow = (Path(__file__).resolve().parents[1] / ".github" / "workflows" / "crawl-watchdog.yml").read_text(encoding="utf-8")
-        self.assertIn(
-            '  workflow_run:\n    workflows:\n      - "Everything Hub crawler"\n    types:\n      - completed',
-            workflow,
-        )
+        workflow_run = workflow.split("  workflow_run:\n", 1)[1].split("  workflow_dispatch:", 1)[0]
+        self.assertIn('- "Everything Hub crawler"', workflow_run)
+        self.assertIn('- "Everything Hub live diagnostics"', workflow_run)
+        self.assertIn("types:\n      - completed", workflow_run)
+        self.assertIn("branches: [main]", workflow_run)
 
     def test_recent_success_is_healthy(self):
         result = evaluate(
