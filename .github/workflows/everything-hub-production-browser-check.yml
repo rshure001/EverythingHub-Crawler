@@ -80,6 +80,36 @@ jobs:
               }
               await page.screenshot({ path: "everything-hub-production-homepage.png", fullPage: true });
 
+              report.crawlerApiProbe = await page.evaluate(async () => {
+                const url = new URL("https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-web-search");
+                url.searchParams.set("q", "NASA");
+                url.searchParams.set("limit", "10");
+                const response = await fetch(url, {
+                  headers: { apikey: "sb_publishable_XlIsACWhtVS1jVODWYGTpg_GMs8v3vJ", accept: "application/json" }
+                });
+                const data = await response.json();
+                return { status: response.status, source: data.source || "", count: Number(data.count || 0), fallback: Boolean(data.fallback), transport: data.indexTransport || null };
+              });
+              if (report.crawlerApiProbe.status !== 200 || !report.crawlerApiProbe.count ||
+                  !report.crawlerApiProbe.source.toLowerCase().includes("index")) {
+                throw new Error("Crawler Edge Function did not return indexed NASA results: " + JSON.stringify(report.crawlerApiProbe));
+              }
+
+              report.independentApiProbe = await page.evaluate(async () => {
+                const url = new URL("https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-web-search");
+                url.searchParams.set("q", "Rolex");
+                url.searchParams.set("limit", "10");
+                const response = await fetch(url, {
+                  headers: { apikey: "sb_publishable_XlIsACWhtVS1jVODWYGTpg_GMs8v3vJ", accept: "application/json" }
+                });
+                const data = await response.json();
+                return { status: response.status, source: data.source || "", count: Number(data.count || 0), fallback: Boolean(data.fallback), independentOfDatabase: Boolean(data.independentOfDatabase) };
+              });
+              if (report.independentApiProbe.status !== 200 || !report.independentApiProbe.count ||
+                  !report.independentApiProbe.source.toLowerCase().includes("bing rss")) {
+                throw new Error("Independent Bing RSS fallback did not return Rolex results: " + JSON.stringify(report.independentApiProbe));
+              }
+
               await page.locator("#q").fill("Rolex");
               await page.locator("#q").press("Enter");
               await page.locator("#results .result a").first().waitFor({ state: "visible", timeout: 35000 });
