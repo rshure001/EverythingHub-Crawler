@@ -709,7 +709,8 @@ async function searchCrawlerIndex(query){
   url:x.url,
   snippet:x.snippet||x.description||'',
   image:x.image||x.imageUrl||'',
-  source:x.origin||x.source||data.source||'Everything Hub index',
+  source:x.source||host(x.url),
+  origin:x.origin||data.source||'',
   mediaType:'web',
   score:Number(x.relevance??x.score)||0
  }));
@@ -766,8 +767,29 @@ form.addEventListener('submit',async e=>{
  out.innerHTML="<p>Searching Everything Hub's own index and connected sources…</p>";
  let apiPage=1,apiHasMore=false,totalIndexed=0,loadingMore=false,shown=24;
  let activeType=['news','images','videos','shopping','places','business','research'].includes(selectedMode)?selectedMode:'web';
- const seenUrls=new Set(),items=[];
- const addItems=(rows)=>{for(const x of rows||[]){const url=safe(x.url);if(url==='#'||seenUrls.has(url))continue;seenUrls.add(url);items.push({...x,url});}};
+ const seenUrls=new Set(),items=[],itemByUrl=new Map();
+ const isCrawlerOrigin=value=>/Everything Hub (?:public crawler|eh_quad) index/i.test(String(value||''));
+ const addItems=(rows)=>{
+  for(const x of rows||[]){
+   const url=safe(x.url);if(url==='#')continue;
+   if(seenUrls.has(url)){
+    const existing=itemByUrl.get(url);
+    if(existing&&isCrawlerOrigin(x.origin)){
+     existing.origin=x.origin;
+     existing.crawlerIndexRecord=true;
+     existing.sourceHost=x.source||host(url);
+    }
+    continue;
+   }
+   seenUrls.add(url);
+   const item={...x,url};
+   if(isCrawlerOrigin(item.origin)){
+    item.crawlerIndexRecord=true;
+    item.sourceHost=item.source||host(url);
+   }
+   items.push(item);itemByUrl.set(url,item);
+  }
+ };
  const loadApiPage=async(page)=>{
   const u=new URL('https://everythinghub-search-backend.vercel.app/api/search');
   u.searchParams.set('q',q);
@@ -794,7 +816,8 @@ form.addEventListener('submit',async e=>{
     : image!=='#'
       ? '<a class="preview" target="_blank" rel="noopener noreferrer" href="'+link+'"><img loading="lazy" src="'+image+'" alt="" referrerpolicy="no-referrer">'+(isVideo(x)?'<span class="play">▶</span>':'')+'</a>'
       : isVideo(x)?'<a class="preview video-link" target="_blank" rel="noopener noreferrer" href="'+link+'"><span class="play">▶</span><span>WATCH VIDEO</span></a>':'';
-   return '<article class="result">'+preview+'<div class="result-copy"><a target="_blank" rel="noopener noreferrer" href="'+link+'">'+esc(x.title)+'</a>'+(isVideo(x)?'<span class="media-tag">VIDEO</span>':'')+'<p>'+esc(x.snippet||'')+'</p><div class="source">'+esc(x.source||host(x.url))+'</div></div></article>';
+   const sourceLabel=x.crawlerIndexRecord?(x.origin+' · '+(x.sourceHost||host(x.url))):(x.source||host(x.url));
+   return '<article class="result">'+preview+'<div class="result-copy"><a target="_blank" rel="noopener noreferrer" href="'+link+'">'+esc(x.title)+'</a>'+(isVideo(x)?'<span class="media-tag">VIDEO</span>':'')+'<p>'+esc(x.snippet||'')+'</p><div class="source">'+esc(sourceLabel)+'</div></div></article>';
   }).join('');
   const moreAvailable=shown<matches.length||(activeType==='web'&&apiHasMore);
   const resultLabel=activeType==='web'&&totalIndexed?'Showing '+matches.length.toLocaleString()+' results · '+totalIndexed.toLocaleString()+' provider matches':matches.length.toLocaleString()+' '+activeType+' results';
