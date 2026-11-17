@@ -4,9 +4,17 @@ on:
     branches: [main]
     paths:
       - .github/workflows/everything-hub-live-diagnostics.yml
+      - .github/workflows/publish-site.yml
+      - publisher/**
       - supabase/functions/everything-hub-web-search/**
   schedule:
     - cron: "17 * * * *"
+  workflow_run:
+    workflows:
+      - "Everything Hub crawler"
+    types:
+      - completed
+    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read
@@ -22,7 +30,7 @@ jobs:
         env:
           BASE: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1
           KEY: sb_publishable_XlIsACWhtVS1jVODWYGTpg_GMs8v3vJ
-          VERCEL_BASE: https://everything-hub-ten.vercel.app
+          VERCEL_BASE: https://everythinghub-homepage-fixed.vercel.app
         run: |
           set -euo pipefail
           echo "=== HOMEPAGE ==="
@@ -48,8 +56,13 @@ jobs:
             const dataModes = (html.match(/data-mode=/g) || []).length;
             const tiles = Math.max(classTiles, dataModes);
             const hasArtwork = html.includes("approved-homepage.webp") || html.includes("approved-master-art");
-            if (!html.includes("Everything Hub") || !html.includes('id="q"') || !hasArtwork || tiles !== 8) {
-              throw new Error("Canonical homepage structure check failed: " + JSON.stringify({tiles,classTiles,dataModes,hasArtwork}));
+            const searchForms = (html.match(/<form\\b[^>]*\\bid=["']search["']/gi) || []).length;
+            const artworkOpen = html.indexOf('class="hero-art-wrap"');
+            const searchFormAt = html.indexOf('id="search"');
+            const artworkClose = searchFormAt >= 0 ? html.indexOf("</div>", searchFormAt) : -1;
+            const searchInsideArtwork = artworkOpen >= 0 && searchFormAt > artworkOpen && artworkClose > searchFormAt;
+            if (!html.includes("Everything Hub") || !html.includes('id="q"') || !hasArtwork || tiles !== 8 || searchForms !== 1 || !searchInsideArtwork) {
+              throw new Error("Canonical homepage structure check failed: " + JSON.stringify({tiles,classTiles,dataModes,hasArtwork,searchForms,searchInsideArtwork}));
             }
             const imageMatch = html.match(/<img[^>]+src="([^"]+)"/i);
             if (!imageMatch) throw new Error("Canonical homepage is missing its approved artwork image");
@@ -62,10 +75,11 @@ jobs:
             const summary = [
               "- Canonical Vercel homepage: PASS (HTTP 200, " + tiles + " categories via " + categoryMarkup + ")",
               "- Approved Vercel artwork: PASS (HTTP " + imageResponse.status + ", " + imageResponse.headers.get("content-type") + ")",
+              "- Search form: PASS (exactly one functional form inside the artwork)",
               "- Search catalog: served through the Supabase Edge Function and verified by the crawler/Bing checks below"
             ].join(String.fromCharCode(10)) + String.fromCharCode(10);
             fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary);
-            console.log(JSON.stringify({homepageStatus:200,tiles,classTiles,dataModes,artworkStatus:imageResponse.status,artworkContentType:imageResponse.headers.get("content-type")},null,2));
+            console.log(JSON.stringify({homepageStatus:200,tiles,classTiles,dataModes,searchForms,searchInsideArtwork,artworkStatus:imageResponse.status,artworkContentType:imageResponse.headers.get("content-type")},null,2));
           })().catch(error => { console.error(error); process.exit(1); });
           NODE
           echo "=== CUSTOM DOMAIN CHECK ==="
