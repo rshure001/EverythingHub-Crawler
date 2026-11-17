@@ -4,11 +4,11 @@ Independent, polite crawler for the Everything Hub search project.
 
 ## Current configuration
 - 49 curated public starting sites in `crawler/seeds.txt` (a newly assembled set, not a recovered historical list).
-- Up to 8 concurrent workers, with at most one request per host in each batch.
+- Up to 16 concurrent workers, with at most one request per hostname in each batch; a batch never contains two URLs for the same host.
 - A 1-second minimum host interval, increased when robots.txt declares a longer Crawl-delay or Request-rate.
 - A six-minute run budget; next-allowed host timestamps are persisted with the frontier across scheduled runs.
 - Persistent frontier with a 50,000 discovered-URL ceiling; host pacing is keyed by hostname across HTTP and HTTPS.
-- Same-host redirects are followed only after the target URL passes robots.txt; cross-host redirects are blocked. A strict 80-page fetch cap is enforced per run; sitemap requests are counted separately.
+- Same-host redirects are followed only after the target URL passes robots.txt; cross-host redirects are blocked. A strict 1,600-page fetch cap is enforced per run; sitemap requests are separately bounded.
 - Public search shards are validated against the canonical index before each crawler commit. New manifests include a SHA-256 digest for every shard; the validator checks the digest as well as byte size, page count, URL uniqueness, and exact canonical-index coverage. Legacy manifests without digest metadata remain readable during rollout.
 - Maximum link depth: 3.
 - Same-host HTML link discovery plus bounded sitemap discovery from robots.txt declarations: up to 3 seed hosts per run, one declared sitemap and up to 2 same-host child sitemaps per host, at most 100 page URLs per host, and a 1 MB sitemap-response cap. Hosts are rechecked after 7 days; robots failures are retried after 1 hour. The crawler honors `Retry-After` on 429/503 responses, applies conservative cooldowns to transient failures, and requeues retryable URLs in the durable frontier.
@@ -17,20 +17,22 @@ Independent, polite crawler for the Everything Hub search project.
 
 ## Run locally
 ```bash
-python -m py_compile crawler/crawl.py crawler/report.py
+python -m py_compile crawler/crawl.py crawler/report.py crawler/build_search_shards.py crawler/validate_public_index.py
 python -m unittest discover -s crawler -p 'test_*.py' -v
 python crawler/crawl.py
+python crawler/build_search_shards.py
+python crawler/validate_public_index.py
 python crawler/report.py
 ```
 
 ## Automation and observability
-GitHub Actions runs the crawler hourly at minute 13 UTC and supports manual dispatch. A separate isolated importer smoke test runs every 15 minutes at minutes 7, 22, 37, and 52 UTC against a temporary PostgreSQL service; it never connects to production. Ordinary crawler-source pushes trigger validation only; editing the crawler workflow itself triggers one bounded crawl. Each crawl validates configuration, fetches at most 80 pages, rebuilds and verifies public search shards, and publishes a compact health report. Crawler data commits cannot recursively launch another crawl. A separate live-diagnostics workflow checks the homepage, browser endpoint, database-backed search, independent search fallback, and media APIs hourly at minute 17 UTC. GitHub may delay scheduled runs.
+GitHub Actions schedules the crawler every five minutes (`*/5 * * * *`) and supports manual dispatch. A repository concurrency group serializes crawler runs so a new run cannot overlap an active crawl; at most one pending run is retained by GitHub Actions. Each run validates configuration and tests, allows up to 16 workers across distinct hosts, enforces the six-minute crawl budget and 1,600-page hard cap, rebuilds and verifies the public search shards, and publishes a compact health report. Per-host pacing remains at least one second and increases for robots.txt `Crawl-delay` or `Request-rate`; host timestamps persist in the frontier, and `Retry-After`/transient cooldowns are requeued rather than bypassed. A separate watchdog checks every 15 minutes and also runs after crawler/diagnostic workflow completion; it validates manifest freshness before deciding whether to dispatch a recovery crawl. The isolated importer smoke test runs every 15 minutes against a temporary PostgreSQL service and never connects to production. Ordinary crawler-source pushes trigger validation only; editing the crawler workflow itself triggers one bounded crawl. The live-diagnostics workflow checks the homepage, browser endpoint, database-backed search, independent search fallback, and media APIs hourly at minute 17 UTC and after completed crawler runs. GitHub may delay scheduled runs.
 
 The health report distinguishes total indexed records, unique hosts, discovered URLs, queued URLs, fetched pages, parsed pages, depth distribution, robots-policy exclusions, and noindex/nofollow exclusions. Attempted fetches are not counted as indexed pages.
 
 ## Search integration status
 
-Operational snapshot: **2026-11-17 01:09 UTC**.
+Historical operational snapshot: **2026-11-17 01:09 UTC**. Later dated checks are recorded below.
 
 - The latest completed GitHub Actions crawler run (#43991961223) fetched **80** pages and indexed **62**. The catalog now contains **3,363 pages across 18 shards and 31 hosts**. The frontier contains **31,153 discovered URLs** and **21,407 queued URLs**.
 - That run excluded **7 noindex pages**, did not expand **4 nofollow pages**, blocked **1 robots-disallowed URL**, and recorded **0 rate-limited responses** and **0 transient retries**. The compressed public catalog is **999,423 bytes**; its SHA-256 and all shard records passed validation.
@@ -254,3 +256,12 @@ Wait for PostgreSQL to accept connections, inspect only `eh_quad` read-only, the
 - Full validation run [#44089258962](https://github.com/rshure001/EverythingHub-Crawler/actions/runs/44089258962) passed: **78 crawler/watchdog tests**, **22 database-schema-isolation and media-compliance tests**, the Edge Search Node test suite, and the public release-manifest validator. The validator confirmed **3,667 pages across 20 shards** and verified the compressed catalog.
 - A fresh read-only production check at **13:04:56 UTC** still failed. PostgreSQL logs showed WAL redo elapsed **5,870.10 seconds** at 13:04:39 UTC and SQLSTATE **57P03** through 13:04:56 UTC. The direct read-only eh_quad inventory and migration calls returned **ECONNREFUSED** on PostgreSQL port 5432. Control-plane ACTIVE_HEALTHY is not SQL readiness.
 - The exact remaining production gate is PostgreSQL recovery and restored read-only connectivity. Until that succeeds, the production crawler stays paused and no production import or migration is safe.
+
+
+## Current configuration and verified checkpoint — 2026-11-17 18:00 UTC
+
+- Current crawler source is configured for **16 workers**, a **1,600-page hard cap**, a **six-minute crawl budget**, a **50,000-URL frontier ceiling**, and at least **one second between requests to the same hostname**. Each selected batch contains at most one URL per hostname. The effective delay is increased for matching robots.txt `Crawl-delay` and `Request-rate` directives; saved host cooldowns persist between runs. Same-host redirect targets are rechecked against robots.txt, cross-host redirects are blocked, and a robots-policy read failure denies that host. The crawler honors `Retry-After` and requeues transient failures.
+- The workflow schedule is every five minutes, with a concurrency group that prevents overlapping crawler jobs. The latest completed crawl run at this checkpoint was [#112](https://github.com/rshure001/EverythingHub-Crawler/actions/runs/44139336563). It fetched **409**, indexed **322**, and did not index **87**. Policy accounting: **16 robots-blocked**, **25 noindex**, **17 nofollow**, **2 robots-policy fetch failures (fail-closed)**, **1 rate-limited response**, and **1 transient retry queued**. The retry was retained with cooldown rather than immediately repeated.
+- That committed public index contains **4,560 pages across 25 shards**, **31 indexed hosts**, **32,264 discovered URLs**, and **20,751 queued URLs**. The compressed catalog is **1,595,814 bytes**. The validator passed all shard byte-size, SHA-256, URL uniqueness, canonical-index coverage, and compressed-catalog checks. The next crawl run was still active/queued at the time of this checkpoint, so the 16-worker setting has not yet been represented by a completed crawl result.
+- The dedicated Supabase project `everything-hub-control` reports `ACTIVE_HEALTHY` in the control plane, but read-only `eh_quad` table inventory and migration inspection still fail with **SQLSTATE 57P03**: PostgreSQL is not accepting connections (`Hot standby mode is disabled`). The latest inspected log at **18:00:40 UTC** still contained connection rejections; WAL redo was reported at **4,990 seconds**. The production crawler Edge Function remains intentionally paused at **v49**. Search v20 is active and explicitly scopes its database client to `eh_quad`, with a SHA-256-validated public-catalog fallback; independent search v2 and media search v21 are active. No production migration, import, restore, or database write was attempted.
+- This checkpoint did not access the separate Dog Tag Day Story Wall Supabase project or its data. The temporary importer tests remain isolated from production. No AppDeploy was used.
