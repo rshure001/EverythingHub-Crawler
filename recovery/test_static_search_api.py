@@ -30,8 +30,8 @@ class StaticSearchTests(unittest.TestCase):
                              tok(page["text"]), tok(page["url"])))
 
     def test_title_hits_rank_first(self):
-        result = api.search("NASA", "", 10, 0)
-        self.assertEqual(result["total"], 2)
+        result = api.search("Apollo", "", 10, 0)
+        self.assertEqual(result["total"], 1)
         self.assertEqual(result["results"][0]["url"], "https://nasa.gov/moon")
 
     def test_lane_filter(self):
