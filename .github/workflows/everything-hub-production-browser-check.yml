@@ -158,7 +158,7 @@ jobs:
                 /Everything Hub public crawler index/i.test(source.trim())
               ).length;
               const hasNasaSource = report.nasaSources.some(source =>
-                /(^|\\.)nasa\\.gov$/i.test(source.trim())
+                source.trim().toLowerCase().endsWith("nasa.gov")
               );
               if (!report.nasaResultCount || !nasaIndexedCount || !hasNasaSource) {
                 throw new Error("NASA UI did not show crawler-index matches: " + JSON.stringify({
