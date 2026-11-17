@@ -44,6 +44,14 @@ jobs:
             const browser = await chromium.launch({ headless: true });
             const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
             const errors = [];
+            const crawlerCatalogResponses = [];
+            page.on("response", response => {
+              const url = response.url();
+              const base = "https://raw.githubusercontent.com/rshure001/EverythingHub-Crawler/main/public-search/";
+              if (url.startsWith(base)) {
+                crawlerCatalogResponses.push({ file: url.slice(base.length).split("?")[0], status: response.status() });
+              }
+            });
             page.on("pageerror", error => errors.push(error.message));
             const report = { url: process.env.TARGET_URL, startedAt: new Date().toISOString() };
             try {
@@ -154,6 +162,66 @@ jobs:
                 }));
               }
               await page.screenshot({ path: "everything-hub-production-nasa.png", fullPage: true });
+
+              // Prove the browser fetched the published GitHub catalog, not just an independent provider.
+              report.crawlerCatalogTransport = crawlerCatalogResponses;
+              const manifestFetch = crawlerCatalogResponses.find(item => item.file === "manifest.json" && item.status === 200);
+              const catalogFetch = crawlerCatalogResponses.find(item =>
+                item.status === 200 && (item.file === "catalog-v1.json.gz" || /^shard-\\d{4}\\.json$/.test(item.file))
+              );
+              if (!manifestFetch || !catalogFetch) {
+                throw new Error("Browser did not fetch the manifest and a catalog/shard: " +
+                  JSON.stringify(crawlerCatalogResponses));
+              }
+
+              // Exercise Images and Videos modes through the deployed media function.
+              report.mediaModeChecks = {};
+              for (const [mode, query, mediaType] of [
+                ["images", "octopus", "image"],
+                ["videos", "Apollo 11 NASA", "video"]
+              ]) {
+                const target = new URL(report.url);
+                target.searchParams.set("mode", mode);
+                await page.goto(target.toString(), { waitUntil: "domcontentloaded", timeout: 45000 });
+                const mediaResponsePromise = page.waitForResponse(response => {
+                  try {
+                    const url = new URL(response.url());
+                    return url.pathname.endsWith("/everything-hub-media-search") &&
+                      url.searchParams.get("q") === query &&
+                      url.searchParams.get("type") === mediaType;
+                  } catch { return false; }
+                }, { timeout: 35000 });
+                await page.locator("#q").fill(query);
+                await page.locator("#q").press("Enter");
+                await page.locator("#results .result").first().waitFor({ state: "visible", timeout: 35000 });
+                const mediaResponse = await mediaResponsePromise;
+                const mediaPayload = await mediaResponse.json();
+                const cards = await page.locator("#results .result").count();
+                const previewImages = await page.locator("#results .result .preview img").count();
+                const videoIndicators = await page.locator("#results .result .media-tag, #results .result .play, #results .result video").count();
+                const sources = await page.locator("#results .result .source").allTextContents();
+                if (mediaResponse.status() !== 200 || !Array.isArray(mediaPayload.results) ||
+                    !mediaPayload.results.length || mediaPayload.count !== mediaPayload.results.length || !cards) {
+                  throw new Error(mode + " mode returned no valid media results: " + JSON.stringify({
+                    status: mediaResponse.status(), payloadCount: mediaPayload.count, cards
+                  }));
+                }
+                if (mode === "images" && previewImages < 1) {
+                  throw new Error("Images mode returned results without a visible preview: " + JSON.stringify({ cards, sources }));
+                }
+                if (mode === "videos" && videoIndicators < 1) {
+                  throw new Error("Videos mode returned results without a video indicator: " + JSON.stringify({ cards, sources }));
+                }
+                report.mediaModeChecks[mode] = {
+                  status: mediaResponse.status(),
+                  provider: mediaPayload.provider || null,
+                  apiResults: mediaPayload.count,
+                  renderedCards: cards,
+                  previewImages,
+                  videoIndicators,
+                  sources
+                };
+              }
 
               await page.setViewportSize({ width: 390, height: 844 });
               await page.reload({ waitUntil: "domcontentloaded" });
