@@ -140,3 +140,15 @@ This GitHub Actions worker is a prototype runner, not a distributed crawl fleet.
 - The GitHub Pages publisher permission issue and `everythinghub.ink` custom-host fetch failure remain unresolved. The canonical Vercel alias is the only hostname verified in this run.
 - Safety: only Everything Hub homepage code and this crawler-repository status note were changed. The production `eh_quad` schema was not modified. No Dog Tag Day or Story Wall data was touched.
 - Next gate: continue waiting for PostgreSQL recovery; once SQL accepts connections, inspect only `eh_quad` read-only and rerun the isolated importer validation before enabling any production write path. Separately, run an interactive browser test for Images and Videos mode after the new homepage build is available to the browser-test workflow.
+
+
+## Client catalog delivery correction — 2026-11-17 09:07 UTC
+
+- A direct production GET exposed that the previous local `search-index.json.gz` deployment was a **zero-byte file** (HTTP 200, `content-length: 0`). It was not counted as a successful index delivery.
+- Corrected the homepage loader to retrieve the current public crawler manifest and compressed catalog from the repository's raw public index. It validates manifest structure, compressed byte length and SHA-256 before decompressing. If browser gzip decompression is unavailable or the compressed catalog fails validation, it falls back to the 19 manifest-listed shards, with concurrency capped at **4** and per-shard byte length, SHA-256, schema, and page-count checks.
+- Removed the empty local gzip artifact from the new deployment. Vercel production deployment `dpl_4TXd2zQfcxSD2fSVVAwZ5Jo2Lbbg` is **READY**. The canonical alias returned **HTTP 200**; the served homepage source contains the GitHub-backed loader, one search form, the approved artwork, and the shared media-search helper. The old local `/search-index.json.gz` path now returns **404 by design** because the client reads the public repository catalog instead.
+- The browser-side raw-GitHub fetch and interactive Images/Videos results still need an actual browser-runtime test; the HTTP/source check alone does not prove those client-side requests complete.
+- Current public manifest remains **3,530 pages / 19 shards**; compressed catalog metadata declares **1,081,352 bytes** and SHA-256 `1590f7006637b8c5dd1f2d21ca68a66eadc47e01a8f28b73f4d2e92c87f606bf`.
+- The deployed media-search Edge Function remains **v21 ACTIVE**; web-search remains **v20 ACTIVE**; crawler remains **v49 ACTIVE but paused**. No Supabase Edge Function or production schema was changed in this run.
+- PostgreSQL is still unavailable; the read-only `eh_quad` inventory fails with SQLSTATE **57P03**. No production write, migration, import, restore, or crawler restart was attempted. Dog Tag Day and Story Wall data remain untouched.
+- Next gate: browser-runtime validation of the GitHub-backed catalog loader and Images/Videos mode; independently, wait for PostgreSQL to accept connections before any `eh_quad` inventory or production crawler resume.
