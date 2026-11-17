@@ -1,4 +1,5 @@
 name: Everything Hub live diagnostics
+# Push-triggered checks also verify the latest committed crawler catalog immediately.
 on:
   push:
     branches: [main]
