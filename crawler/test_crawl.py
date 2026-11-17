@@ -88,25 +88,25 @@ class CrawlerTests(unittest.TestCase):
 
 
     def test_robots_policy_fetch_parses_allow_and_disallow_rules(self):
-        body = b"User-agent: *\\nAllow: /\\nDisallow: /private\\n"
+        body = b"User-agent: *\nAllow: /\nDisallow: /private\n"
         with mock.patch.object(crawl.urllib.request, "urlopen", return_value=FakeRobotsResponse(body)):
             parser = crawl.load_robots_policy("https://example.com")
         self.assertTrue(crawl.robots_can_fetch(parser, crawl.UA, "https://example.com/public"))
         self.assertFalse(crawl.robots_can_fetch(parser, crawl.UA, "https://example.com/private"))
 
     def test_robots_longest_match_and_allow_tie_break_are_order_independent(self):
-        body = b"User-agent: *\\nAllow: /\\nDisallow: /private\\n"
+        body = b"User-agent: *\nAllow: /\nDisallow: /private\n"
         with mock.patch.object(crawl.urllib.request, "urlopen", return_value=FakeRobotsResponse(body)):
             parser = crawl.load_robots_policy("https://example.com")
         self.assertFalse(crawl.robots_can_fetch(parser, crawl.UA, "https://example.com/private"))
 
-        tied = b"User-agent: *\\nDisallow: /private\\nAllow: /private\\n"
+        tied = b"User-agent: *\nDisallow: /private\nAllow: /private\n"
         with mock.patch.object(crawl.urllib.request, "urlopen", return_value=FakeRobotsResponse(tied)):
             parser = crawl.load_robots_policy("https://example.com")
         self.assertTrue(crawl.robots_can_fetch(parser, crawl.UA, "https://example.com/private"))
 
     def test_robots_wildcard_and_end_anchor_are_respected(self):
-        body = b"User-agent: *\\nDisallow: /private*\\nAllow: /private/public$\\n"
+        body = b"User-agent: *\nDisallow: /private*\nAllow: /private/public$\n"
         with mock.patch.object(crawl.urllib.request, "urlopen", return_value=FakeRobotsResponse(body)):
             parser = crawl.load_robots_policy("https://example.com")
         self.assertTrue(crawl.robots_can_fetch(parser, crawl.UA, "https://example.com/private/public"))
@@ -115,8 +115,8 @@ class CrawlerTests(unittest.TestCase):
 
     def test_specific_user_agent_group_takes_precedence_over_wildcard(self):
         body = (
-            b"User-agent: *\\nDisallow: /\\n\\n"
-            b"User-agent: EverythingHubCrawler\\nDisallow: /private\\n"
+            b"User-agent: *\nDisallow: /\n\n"
+            b"User-agent: EverythingHubCrawler\nDisallow: /private\n"
         )
         with mock.patch.object(crawl.urllib.request, "urlopen", return_value=FakeRobotsResponse(body)):
             parser = crawl.load_robots_policy("https://example.com")
@@ -125,8 +125,8 @@ class CrawlerTests(unittest.TestCase):
 
     def test_repeated_matching_user_agent_groups_are_combined(self):
         body = (
-            b"User-agent: EverythingHubCrawler\\nDisallow: /private\\n\\n"
-            b"User-agent: EverythingHubCrawler\\nAllow: /private/public\\n"
+            b"User-agent: EverythingHubCrawler\nDisallow: /private\n\n"
+            b"User-agent: EverythingHubCrawler\nAllow: /private/public\n"
         )
         with mock.patch.object(crawl.urllib.request, "urlopen", return_value=FakeRobotsResponse(body)):
             parser = crawl.load_robots_policy("https://example.com")

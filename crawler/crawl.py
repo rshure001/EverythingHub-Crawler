@@ -233,59 +233,11 @@ def robots_can_fetch(parser, useragent, url):
 
     parsed = urllib.parse.urlsplit(url)
     target = _robots_normalize_component(
-        parsed.path or "/", safe="/%:@!def load_robots_policy(site):
-    """Fetch robots.txt with a bounded read; deny the host if policy cannot be read."""
-    parser = urllib.robotparser.RobotFileParser()
-    parser.set_url(site.rstrip("/") + "/robots.txt")
-    try:
-        req = urllib.request.Request(site.rstrip("/") + "/robots.txt", headers={
-            "User-Agent": UA, "Accept": "text/plain,*/*"
-        })
-        with urllib.request.urlopen(req, timeout=TIMEOUT) as response:
-            if response.status >= 400:
-                raise RuntimeError(f"robots.txt returned HTTP {response.status}")
-            raw = response.read(ROBOTS_MAX_BYTES + 1)
-            if len(raw) > ROBOTS_MAX_BYTES:
-                raise RuntimeError("robots.txt exceeds the safe size limit")
-        parser.parse(raw.decode("utf-8", "replace").splitlines())
-    except urllib.error.HTTPError as error:
-        parser.disallow_all = True
-        parser.everythinghub_policy_error = f"http_{error.code}"
-    except Exception as error:
-        parser.disallow_all = True
-        parser.everythinghub_policy_error = (
-            "too_large" if "safe size limit" in str(error) else "unavailable"
-        )
-    return parser
-'()*+,;=-._~"
+        parsed.path or "/", safe="/%:@!$&'()*+,;=-._~"
     )
     if parsed.query:
         target += "?" + _robots_normalize_component(
-            parsed.query, safe="/?%:@!def load_robots_policy(site):
-    """Fetch robots.txt with a bounded read; deny the host if policy cannot be read."""
-    parser = urllib.robotparser.RobotFileParser()
-    parser.set_url(site.rstrip("/") + "/robots.txt")
-    try:
-        req = urllib.request.Request(site.rstrip("/") + "/robots.txt", headers={
-            "User-Agent": UA, "Accept": "text/plain,*/*"
-        })
-        with urllib.request.urlopen(req, timeout=TIMEOUT) as response:
-            if response.status >= 400:
-                raise RuntimeError(f"robots.txt returned HTTP {response.status}")
-            raw = response.read(ROBOTS_MAX_BYTES + 1)
-            if len(raw) > ROBOTS_MAX_BYTES:
-                raise RuntimeError("robots.txt exceeds the safe size limit")
-        parser.parse(raw.decode("utf-8", "replace").splitlines())
-    except urllib.error.HTTPError as error:
-        parser.disallow_all = True
-        parser.everythinghub_policy_error = f"http_{error.code}"
-    except Exception as error:
-        parser.disallow_all = True
-        parser.everythinghub_policy_error = (
-            "too_large" if "safe size limit" in str(error) else "unavailable"
-        )
-    return parser
-'()*+,;=-._~"
+            parsed.query, safe="/?%:@!$&'()*+,;=-._~"
         )
 
     matches = []
@@ -295,31 +247,7 @@ def robots_can_fetch(parser, useragent, url):
             anchored = pattern.endswith("$")
             raw_pattern = pattern[:-1] if anchored else pattern
             normalized = _robots_normalize_component(
-                raw_pattern, safe="/%:@!def load_robots_policy(site):
-    """Fetch robots.txt with a bounded read; deny the host if policy cannot be read."""
-    parser = urllib.robotparser.RobotFileParser()
-    parser.set_url(site.rstrip("/") + "/robots.txt")
-    try:
-        req = urllib.request.Request(site.rstrip("/") + "/robots.txt", headers={
-            "User-Agent": UA, "Accept": "text/plain,*/*"
-        })
-        with urllib.request.urlopen(req, timeout=TIMEOUT) as response:
-            if response.status >= 400:
-                raise RuntimeError(f"robots.txt returned HTTP {response.status}")
-            raw = response.read(ROBOTS_MAX_BYTES + 1)
-            if len(raw) > ROBOTS_MAX_BYTES:
-                raise RuntimeError("robots.txt exceeds the safe size limit")
-        parser.parse(raw.decode("utf-8", "replace").splitlines())
-    except urllib.error.HTTPError as error:
-        parser.disallow_all = True
-        parser.everythinghub_policy_error = f"http_{error.code}"
-    except Exception as error:
-        parser.disallow_all = True
-        parser.everythinghub_policy_error = (
-            "too_large" if "safe size limit" in str(error) else "unavailable"
-        )
-    return parser
-'()*+,;=-._~"
+                raw_pattern, safe="/%:@!$&'()*+,;=-._~"
             )
             regex = "^" + re.escape(normalized).replace(r"\*", ".*")
             if anchored:
