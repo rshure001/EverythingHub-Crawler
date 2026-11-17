@@ -56,7 +56,7 @@ jobs:
             const dataModes = (html.match(/data-mode=/g) || []).length;
             const tiles = Math.max(classTiles, dataModes);
             const hasArtwork = html.includes("approved-homepage.webp") || html.includes("approved-master-art");
-            const searchForms = (html.match(/<form\\b[^>]*\\bid=["']search["']/gi) || []).length;
+            const searchForms = (html.match(/<form\b[^>]*\bid=["']search["']/gi) || []).length;
             const artworkOpen = html.indexOf('class="hero-art-wrap"');
             const searchFormAt = html.indexOf('id="search"');
             const artworkClose = searchFormAt >= 0 ? html.indexOf("</div>", searchFormAt) : -1;
