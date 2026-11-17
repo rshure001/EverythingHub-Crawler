@@ -1,4 +1,4 @@
-name: Everything Hub production browser verification
+name: Everything Hub browser verification
 on:
   push:
     branches: [main]
@@ -15,7 +15,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: eh-production-browser-check
+  group: eh-browser-check
   cancel-in-progress: true
 jobs:
   production-browser-check:
@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     env:
-      TARGET_URL: https://everything-hub-ten.vercel.app/
+      TARGET_URL: ${{ github.event_name == 'push' && 'https://everythinghub-homepage-fixed-824h3trnm-rshure001-8053.vercel.app/' || 'https://everything-hub-ten.vercel.app/' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -50,20 +50,20 @@ jobs:
               report.httpStatus = response?.status();
               report.title = await page.title();
               report.searchInput = await page.locator("#q").count() === 1;
-              const categoryTiles = page.locator('.tile[href*="mode="]');
+              const categoryTiles = page.locator('.tile[href*="mode="], .hotspot[data-mode]');
               report.categoryCount = await categoryTiles.count();
               report.categoryModes = await categoryTiles.evaluateAll(nodes =>
-                nodes.map(node => new URL(node.href).searchParams.get("mode")).sort()
+                nodes.map(node => node.dataset.mode || new URL(node.href).searchParams.get("mode")).filter(Boolean).sort()
               );
               const expectedModes = ["business", "images", "news", "places", "research", "shopping", "videos", "web"];
               if (JSON.stringify(report.categoryModes) !== JSON.stringify(expectedModes)) {
                 throw new Error("Homepage search categories are incomplete or duplicated: " + JSON.stringify(report.categoryModes));
               }
 
-              const artwork = page.locator(".hero img").first();
+              const artwork = page.locator(".hero img, .art img").first();
               await artwork.waitFor({ state: "visible", timeout: 15000 });
               await page.waitForFunction(() => {
-                const image = document.querySelector(".hero img");
+                const image = document.querySelector(".hero img, .art img");
                 return !!image && image.complete && image.naturalWidth >= 100;
               }, null, { timeout: 20000 });
               report.approvedArtwork = await artwork.evaluate(image => ({
@@ -114,7 +114,7 @@ jobs:
               await page.locator("#q").press("Enter");
               await page.locator("#results .result a").first().waitFor({ state: "visible", timeout: 35000 });
               report.rolexResultCount = await page.locator("#results .result").count();
-              report.rolexStatus = await page.locator("#results .result-count").innerText();
+              report.rolexStatus = await page.locator("#results .result-count, #status").first().innerText();
               report.rolexSources = await page.locator("#results .result .source").allTextContents();
               if (!report.rolexResultCount || !report.rolexSources.some(source => source.toLowerCase().includes("bing rss"))) {
                 throw new Error("Rolex did not use the independent Bing RSS fallback: " + JSON.stringify({
@@ -127,7 +127,7 @@ jobs:
               await page.locator("#q").press("Enter");
               await page.locator("#results .result a").first().waitFor({ state: "visible", timeout: 35000 });
               report.nasaResultCount = await page.locator("#results .result").count();
-              report.nasaStatus = await page.locator("#results .result-count").innerText();
+              report.nasaStatus = await page.locator("#results .result-count, #status").first().innerText();
               report.nasaSources = await page.locator("#results .result .source").allTextContents();
               if (!report.nasaResultCount || !report.nasaSources.some(source =>
                 source.toLowerCase().includes("everythinghub index") ||
@@ -145,7 +145,7 @@ jobs:
                 viewportWidth: document.documentElement.clientWidth,
                 documentWidth: document.documentElement.scrollWidth,
                 searchVisible: !!document.querySelector("#q")?.getClientRects().length,
-                categoryCount: document.querySelectorAll('.tile[href*="mode="]').length
+                categoryCount: document.querySelectorAll('.tile[href*="mode="], .hotspot[data-mode]').length
               }));
               if (report.mobile.documentWidth > report.mobile.viewportWidth + 2 ||
                   !report.mobile.searchVisible || report.mobile.categoryCount !== 8) {
@@ -174,7 +174,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: everything-hub-production-browser-check
+          name: everything-hub-browser-check
           path: |
             everything-hub-production-homepage.png
             everything-hub-production-rolex.png
