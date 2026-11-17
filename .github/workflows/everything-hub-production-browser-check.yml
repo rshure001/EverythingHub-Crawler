@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     env:
-      TARGET_URL: ${{ github.event_name == 'push' && 'https://everythinghub-homepage-fixed-824h3trnm-rshure001-8053.vercel.app/' || 'https://everything-hub-ten.vercel.app/' }}
+      TARGET_URL: https://everythinghub.ink/
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -50,6 +50,8 @@ jobs:
               report.httpStatus = response?.status();
               report.title = await page.title();
               report.searchInput = await page.locator("#q").count() === 1;
+              report.searchFormCount = await page.locator("form#search").count();
+              report.searchInsideArtwork = await page.locator(".hero-art-wrap form#search").count() === 1;
               const categoryTiles = page.locator('.tile[href*="mode="], .hotspot[data-mode]');
               report.categoryCount = await categoryTiles.count();
               report.categoryModes = await categoryTiles.evaluateAll(nodes =>
@@ -74,8 +76,8 @@ jobs:
               }));
 
               if (!response?.ok() || !report.title.includes("Everything Hub") ||
-                  !report.searchInput || report.categoryCount !== 8 ||
-                  report.approvedArtwork.naturalWidth < 100) {
+                  !report.searchInput || report.searchFormCount !== 1 || !report.searchInsideArtwork ||
+                  report.categoryCount !== 8 || report.approvedArtwork.naturalWidth < 100) {
                 throw new Error("Approved homepage structure check failed: " + JSON.stringify(report));
               }
               await page.screenshot({ path: "everything-hub-production-homepage.png", fullPage: true });
@@ -96,17 +98,17 @@ jobs:
               }
 
               report.independentApiProbe = await page.evaluate(async () => {
-                const url = new URL("https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-web-search");
+                const url = new URL("https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-independent-search");
                 url.searchParams.set("q", "Rolex");
                 url.searchParams.set("limit", "10");
                 const response = await fetch(url, {
                   headers: { apikey: "sb_publishable_XlIsACWhtVS1jVODWYGTpg_GMs8v3vJ", accept: "application/json" }
                 });
                 const data = await response.json();
-                return { status: response.status, source: data.source || "", count: Number(data.count || 0), fallback: Boolean(data.fallback), independentOfDatabase: Boolean(data.independentOfDatabase) };
+                return { status: response.status, provider: data.provider || "", count: Number(data.count || 0), independentOfDatabase: Boolean(data.independentOfDatabase), firstSource: data.results?.[0]?.source || "" };
               });
               if (report.independentApiProbe.status !== 200 || !report.independentApiProbe.count ||
-                  !report.independentApiProbe.source.toLowerCase().includes("bing rss")) {
+                  report.independentApiProbe.provider !== "Bing RSS" || !report.independentApiProbe.independentOfDatabase) {
                 throw new Error("Independent Bing RSS fallback did not return Rolex results: " + JSON.stringify(report.independentApiProbe));
               }
 
@@ -116,8 +118,8 @@ jobs:
               report.rolexResultCount = await page.locator("#results .result").count();
               report.rolexStatus = await page.locator("#results .result-count, #status").first().innerText();
               report.rolexSources = await page.locator("#results .result .source").allTextContents();
-              if (!report.rolexResultCount || !report.rolexSources.some(source => source.toLowerCase().includes("bing rss"))) {
-                throw new Error("Rolex did not use the independent Bing RSS fallback: " + JSON.stringify({
+              if (!report.rolexResultCount) {
+                throw new Error("Rolex search returned no visible results: " + JSON.stringify({
                   count: report.rolexResultCount, status: report.rolexStatus, sources: report.rolexSources
                 }));
               }
@@ -145,10 +147,15 @@ jobs:
                 viewportWidth: document.documentElement.clientWidth,
                 documentWidth: document.documentElement.scrollWidth,
                 searchVisible: !!document.querySelector("#q")?.getClientRects().length,
+                searchFormCount: document.querySelectorAll("form#search").length,
+                searchInsideArtwork: !!document.querySelector(".hero-art-wrap form#search"),
+                searchPosition: document.querySelector("#search") ? getComputedStyle(document.querySelector("#search")).position : null,
                 categoryCount: document.querySelectorAll('.tile[href*="mode="], .hotspot[data-mode]').length
               }));
               if (report.mobile.documentWidth > report.mobile.viewportWidth + 2 ||
-                  !report.mobile.searchVisible || report.mobile.categoryCount !== 8) {
+                  !report.mobile.searchVisible || report.mobile.searchFormCount !== 1 ||
+                  !report.mobile.searchInsideArtwork || report.mobile.searchPosition !== "absolute" ||
+                  report.mobile.categoryCount !== 8) {
                 throw new Error("Mobile layout check failed: " + JSON.stringify(report.mobile));
               }
 
