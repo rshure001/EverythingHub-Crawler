@@ -476,6 +476,26 @@ def save_json(path, payload):
     temp.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     temp.replace(path)
 
+
+def merge_index_records(existing_pages, new_records, noindex_urls=()):
+    """Merge new pages while removing only URLs explicitly marked noindex."""
+    blocked = set(noindex_urls)
+    merged = {
+        page["url"]: page
+        for page in existing_pages
+        if isinstance(page, dict) and page.get("url") and page["url"] not in blocked
+    }
+    for page in merged.values():
+        lane = page.get("lane")
+        if not isinstance(lane, str) or lane not in VALID_LANES:
+            page["lane"] = classify_lane(page.get("url", ""))
+    merged.update({
+        url: page for url, page in new_records.items()
+        if url not in blocked
+    })
+    return merged
+
+
 def main():
     seeds = [clean(x.strip()) for x in SEEDS.read_text(encoding="utf-8").splitlines()
              if x.strip() and not x.startswith("#")]
@@ -644,6 +664,7 @@ def main():
                 sitemap_urls_added += 1
 
     records = {}
+    noindex_urls = set()
     fetched = 0
     depth_counts = {}
     requests_by_host = {}
@@ -681,9 +702,8 @@ def main():
                     nofollow_pages_count[0] += 1
                 title = re.sub(r"\s+", " ", " ".join(parser.title)).strip()
                 text = re.sub(r"\s+", " ", " ".join(parser.text)).strip()[:4000]
-                record = None
                 if "noindex" in directives:
-                    index_policy_blocked_count[0] += 1
+                    record = {"url": final, "_eh_noindex": True}
                 else:
                     record = {
                         "url": final, "title": title, "lane": classify_lane(final),
@@ -738,8 +758,12 @@ def main():
             if not result or not result[0]:
                 continue
             record, links, _delay, _retryable = result
-            records[record["url"]] = record
-            depth_counts[str(record["depth"])] = depth_counts.get(str(record["depth"]), 0) + 1
+            if record.get("_eh_noindex"):
+                index_policy_blocked_count[0] += 1
+                noindex_urls.add(record["url"])
+            else:
+                records[record["url"]] = record
+                depth_counts[str(record["depth"])] = depth_counts.get(str(record["depth"]), 0) + 1
             for candidate in links:
                 if candidate not in seen and len(seen) < QUEUE_LIMIT:
                     seen.add(candidate)
@@ -747,13 +771,7 @@ def main():
 
     run_duration = round(time.monotonic() - run_started, 2)
     old = load_json(OUTPUT, {"version": 1, "pages": []})
-    merged = {p["url"]: p for p in old.get("pages", []) if p.get("url")}
-    # Backfill deterministic lanes for the existing catalog as well as new pages.
-    for page in merged.values():
-        lane = page.get("lane")
-        if not isinstance(lane, str) or lane not in VALID_LANES:
-            page["lane"] = classify_lane(page.get("url", ""))
-    merged.update(records)
+    merged = merge_index_records(old.get("pages", []), records, noindex_urls)
     save_json(OUTPUT, {
         "version": 1, "updated_at": int(time.time()),
         "pages_crawled_this_run": fetched,
