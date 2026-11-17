@@ -160,6 +160,7 @@ as $$
     cross join q
     where q.tsq <> ''::tsquery
       and d.search_vector @@ q.tsq
+      and d.robots_allowed is true
       and (lane_filter is null or d.lane = lane_filter)
   )
   select m.title, m.canonical_url, m.description, m.lane, m.fetched_at,
