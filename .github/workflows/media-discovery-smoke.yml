@@ -45,6 +45,9 @@ jobs:
             if (typeof d.usageNote !== "string" || !d.usageNote.length) {
               throw new Error(type + ": missing source-terms usage note");
             }
+            if (!d.results.length) {
+              throw new Error(type + ": no discoverable media returned; provider=" + (d.provider || "unknown") + "; warning=" + (d.warning || "none"));
+            }
             if (d.results.length) {
               const first = d.results[0];
               if (!first.source || !first.usageRights || !first.pageUrl?.startsWith("https://")) {
