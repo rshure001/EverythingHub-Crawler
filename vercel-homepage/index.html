@@ -486,6 +486,25 @@ main{width:min(900px,calc(100% - 28px))!important;margin:22px auto 40px!importan
 #results.image-mode .result-copy p{display:none!important}
 @media(max-width:680px){.eh-search-workspace{background:#fff!important}#results .result{max-width:100%!important}#results.image-mode{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px!important}#results.image-mode .result .preview{height:125px!important}}
 
+
+/* AUTHORITATIVE MOBILE HERO REPAIR — overrides legacy conflicting patches.
+   Preserve the approved master artwork and its single transparent live search form. */
+.hero{height:auto!important;min-height:0!important;overflow:visible!important}
+.hero-art-wrap{position:relative!important;display:block!important;width:100%!important;max-width:720px!important;height:auto!important;min-height:0!important;aspect-ratio:auto!important;overflow:visible!important;margin:0 auto!important}
+.approved-master-art{display:block!important;width:100%!important;height:auto!important;min-height:0!important;max-height:none!important;aspect-ratio:auto!important;object-fit:contain!important;object-position:center center!important}
+.hero-live-search{position:absolute!important;left:4.2%!important;top:29.5%!important;width:91.6%!important;height:12.3%!important;min-height:0!important;margin:0!important;transform:none!important;z-index:20!important;background:transparent!important;border:0!important;box-shadow:none!important}
+.hero-live-search input{height:100%!important;color:#17251f!important;background:transparent!important;font-size:clamp(12px,2vw,16px)!important}
+.hero-live-search input::placeholder{color:transparent!important}
+.hero-live-search button{height:100%!important;background:transparent!important;color:transparent!important;border:0!important;box-shadow:none!important}
+.eh-search-workspace{margin:12px auto 24px!important}
+@media(max-width:700px){
+ main{width:100%!important;margin:8px auto 24px!important;padding:0 8px 24px!important}
+ .hero{padding:0!important;margin:0!important;border:0!important;border-radius:0!important}
+ .hero-art-wrap{width:100%!important;max-width:620px!important}
+ .approved-master-art{width:100%!important;height:auto!important;max-height:none!important;object-fit:contain!important}
+ .hero-live-search{left:4.2%!important;top:29.5%!important;width:91.6%!important;height:12.3%!important}
+ .eh-search-workspace{width:100%!important;max-width:620px!important;margin:10px auto 20px!important;padding:16px 12px 18px!important}
+}
 </style><link rel="canonical" href="https://everythinghub.ink/"><meta name="robots" content="index,follow,max-image-preview:large"><meta property="og:type" content="website"><meta property="og:title" content="Everything Hub — Everything within reach"><meta property="og:description" content="Search the web, discover pictures and videos, explore places, businesses, news, shopping and research."><meta property="og:url" content="https://everythinghub.ink/"><script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","name":"Everything Hub","url":"https://everythinghub.ink/","description":"A broad search and discovery engine for web pages, images, videos, news, places, businesses, shopping and research.","potentialAction":{"@type":"SearchAction","target":{"@type":"EntryPoint","urlTemplate":"https://everythinghub.ink/?q={search_term_string}"},"query-input":"required name=search_term_string"}}</script></head>
 <body>
 <header class="topbar">
