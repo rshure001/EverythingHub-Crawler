@@ -63,7 +63,7 @@ The deployed `everything-hub-web-search` version 20 and legacy `everything-hub-s
 ## Observed production deployment state (2026-11-17 12:35 UTC)
 
 - Supabase Edge Function inspection shows `everything-hub-web-search` version **20** and legacy `everything-hub-search` version **4**. Both deployed sources explicitly use `.schema("eh_quad")`; the current web-search source also contains static public-crawler and independent Bing RSS fallbacks.
-- The separate Everything Hub crawler function is version **49** and explicitly returns HTTP 503 with status `paused` while database storage recovery is in progress. Sitemap discovery version **7** is paused for the same reason. These functions report that existing queue and indexed data were preserved.
+- The separate Everything Hub crawler function is version **49** and its deployed source marks it `paused` while database storage recovery is in progress. Sitemap discovery version **7** is paused for the same reason. Their responses identify the recovery pause and state that existing queue and indexed data were preserved.
 - The database control plane reports `ACTIVE_HEALTHY`, but direct SQL and PostgREST connections are currently failing with PostgreSQL SQLSTATE `57P03`: “the database system is not accepting connections” / “Hot standby mode is disabled.” Table and migration listings therefore cannot be verified.
 - Recent Edge request logs show media discovery and independent search returning HTTP 200. The database-backed search RPC is timing out during the PostgreSQL outage; a successful web-search fallback response does not prove that the database path is healthy.
 - GitHub Pages publishing is permission-gated: `publish-site.yml` validates and uploads the release artifact, but skips deployment when the repository Pages endpoint returns 404. The workflow records that a previous `configure-pages` site-creation attempt was rejected with `Resource not accessible by integration`. The required capability is repository Pages site creation/administration permission for the GitHub Actions integration; no repository setting was changed.
@@ -74,7 +74,7 @@ No migration or import has been run against Dog Tag Day; that separate project i
 
 ## Latest repository snapshot and recovery status (2026-11-17 12:35 UTC)
 
-The public crawler repository's latest `main` commit is `3086f3d` (2026-11-17 12:34:45 UTC), which hardens the Node timeout unit test; the public catalog itself remains at **3,667 pages across 20 SHA-256-listed shards**, with a **1,153,757-byte** compressed catalog. These are public repository catalog counts, not production database row counts.
+The public crawler catalog was last refreshed by commit `c18fecb` (2026-11-17 12:17:18 UTC). The current `main` branch also includes the `3086f3d` Node timeout-test hardening and subsequent operational documentation updates. The catalog remains at **3,667 pages across 20 SHA-256-listed shards**, with a **1,153,757-byte** compressed catalog. These are public repository catalog counts, not production database row counts.
 
 Local validation on Node 22.16.0 passed **19/19** tests across robots policy (7), database timeout/error classification (5), and static search ranking/pagination/robots filtering (7). The timeout test now keeps the Node process alive until `AbortSignal.timeout()` fires, avoiding a false cancellation by `node --test`.
 
