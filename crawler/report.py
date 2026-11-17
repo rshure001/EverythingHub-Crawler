@@ -66,6 +66,7 @@ def main():
         f"- Robots-blocked URLs this run: **{int(index.get('robots_blocked_this_run', 0) or 0):,}**",
         f"- Noindex pages excluded this run: **{int(index.get('index_policy_blocked_this_run', 0) or 0):,}**",
         f"- Access-challenge pages excluded this run: **{int(index.get('access_challenge_pages_this_run', 0) or 0):,}**",
+        f"- Existing access-challenge records removed: **{int(index.get('access_challenge_pages_removed_from_existing_index', 0) or 0):,}**",
         f"- Nofollow pages not expanded this run: **{int(index.get('nofollow_pages_this_run', 0) or 0):,}**",
         f"- Robots.txt policy fetch failures (fail-closed): **{int(index.get('robots_policy_failures_this_run', 0) or 0):,}**",
         f"- Rate-limited responses this run: **{int(index.get('rate_limited_responses_this_run', 0) or 0):,}**",

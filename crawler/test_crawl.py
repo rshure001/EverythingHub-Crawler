@@ -167,6 +167,24 @@ class CrawlerTests(unittest.TestCase):
         self.assertEqual(crawl.enqueue_discovered_links(queue, seen, [], record), 0)
         self.assertEqual(list(queue), [])
 
+    def test_merge_index_records_removes_short_access_challenge_stubs(self):
+        existing = [
+            {
+                "url": "https://example.com/challenge",
+                "title": "",
+                "description": "",
+                "text": "Powered and protected by Privacy",
+            },
+            {
+                "url": "https://example.com/keep",
+                "title": "Useful page",
+                "description": "",
+                "text": "Substantive content that belongs in the search index.",
+            },
+        ]
+        merged = crawl.merge_index_records(existing, {})
+        self.assertEqual(set(merged), {"https://example.com/keep"})
+
     def test_merge_index_records_removes_only_explicit_noindex_urls(self):
         existing = [
             {"url": "https://example.com/noindex", "title": "Old private listing"},

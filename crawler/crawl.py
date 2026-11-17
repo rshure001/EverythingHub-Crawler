@@ -579,7 +579,14 @@ def merge_index_records(existing_pages, new_records, noindex_urls=()):
     merged = {
         page["url"]: page
         for page in existing_pages
-        if isinstance(page, dict) and page.get("url") and page["url"] not in blocked
+        if (
+            isinstance(page, dict)
+            and page.get("url")
+            and page["url"] not in blocked
+            and not is_access_challenge_page(
+                page.get("title"), page.get("description"), page.get("text")
+            )
+        )
     }
     for page in merged.values():
         lane = page.get("lane")
@@ -864,6 +871,18 @@ def main():
 
     run_duration = round(time.monotonic() - run_started, 2)
     old = load_json(OUTPUT, {"version": 1, "pages": []})
+    old_challenge_urls = {
+        page.get("url")
+        for page in old.get("pages", [])
+        if isinstance(page, dict)
+        and isinstance(page.get("url"), str)
+        and is_access_challenge_page(
+            page.get("title"), page.get("description"), page.get("text")
+        )
+    }
+    removed_existing_challenge_count = len(
+        old_challenge_urls - set(records) - noindex_urls
+    )
     merged = merge_index_records(old.get("pages", []), records, noindex_urls)
     save_json(OUTPUT, {
         "version": 1, "updated_at": int(time.time()),
@@ -873,6 +892,7 @@ def main():
         "robots_blocked_this_run": robots_blocked_count[0],
         "index_policy_blocked_this_run": index_policy_blocked_count[0],
         "access_challenge_pages_this_run": access_challenge_pages_count[0],
+        "access_challenge_pages_removed_from_existing_index": removed_existing_challenge_count,
         "nofollow_pages_this_run": nofollow_pages_count[0],
         "robots_policy_failures_this_run": len(robots_policy_failures),
         "robots_policy_failure_hosts_this_run": [
