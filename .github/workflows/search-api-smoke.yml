@@ -1,4 +1,5 @@
 name: EverythingHub search API smoke test
+# Re-run the live API smoke on demand after crawler-published catalog snapshots.
 on:
   push:
     branches: [main]
