@@ -134,6 +134,119 @@ def load_robots_policy(site):
             raw = response.read(ROBOTS_MAX_BYTES + 1)
             if len(raw) > ROBOTS_MAX_BYTES:
                 raise RuntimeError("robots.txt exceeds the safe size limit")
+        body = raw.decode("utf-8", "replace")
+        parser.parse(body.splitlines())
+        parser.everythinghub_groups = parse_robots_groups(body)
+    except urllib.error.HTTPError as error:
+        parser.disallow_all = True
+        parser.everythinghub_policy_error = f"http_{error.code}"
+    except Exception as error:
+        parser.disallow_all = True
+        parser.everythinghub_policy_error = (
+            "too_large" if "safe size limit" in str(error) else "unavailable"
+        )
+    return parser
+
+
+def parse_robots_groups(body):
+    """Parse robots groups while preserving Allow/Disallow rules for RFC-style matching."""
+    groups = []
+    agents = []
+    rules = []
+
+    def flush():
+        if agents:
+            groups.append({"agents": list(agents), "rules": list(rules)})
+
+    for raw_line in body.splitlines():
+        line = raw_line.split("#", 1)[0].strip()
+        if not line:
+            if agents:
+                flush()
+                agents = []
+                rules = []
+            continue
+        if ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        key = key.strip().lower()
+        value = value.strip()
+        if key == "user-agent":
+            if rules:
+                flush()
+                agents = []
+                rules = []
+            if value:
+                agents.append(value.lower())
+        elif key in ("allow", "disallow") and agents:
+            if key == "disallow" and not value:
+                continue
+            if value:
+                rules.append({"pattern": value, "allow": key == "allow"})
+    flush()
+    return groups
+
+
+def _robots_normalize_component(value, safe):
+    """Normalize unreserved percent escapes and encode non-ASCII path octets."""
+    unreserved = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~"
+
+    def normalize_escape(match):
+        octet = chr(int(match.group(1), 16))
+        return octet if octet in unreserved else "%" + match.group(1).upper()
+
+    value = re.sub(r"%([0-9a-fA-F]{2})", normalize_escape, value)
+    return urllib.parse.quote(value, safe=safe)
+
+
+def robots_can_fetch(parser, useragent, url):
+    """Apply the most-specific matching robots rule; Allow wins equal-specificity ties."""
+    if parser.disallow_all:
+        return False
+    if parser.allow_all:
+        return True
+
+    groups = getattr(parser, "everythinghub_groups", None)
+    if groups is None:
+        return parser.can_fetch(useragent, url)
+
+    product_parts = useragent.split("/", 1)[0].split()
+    product = product_parts[0].lower() if product_parts else ""
+    matching_groups = []
+    for group in groups:
+        scores = [
+            len(agent)
+            for agent in group["agents"]
+            if agent == "*" or (agent and agent in product)
+        ]
+        if scores:
+            matching_groups.append((max(scores), group))
+
+    specific = [item for item in matching_groups if item[0] > 0]
+    if specific:
+        best_agent_score = max(score for score, _group in specific)
+        selected = [group for score, group in specific if score == best_agent_score]
+    else:
+        selected = [group for score, group in matching_groups if score == 0]
+    if not selected:
+        return True
+
+    parsed = urllib.parse.urlsplit(url)
+    target = _robots_normalize_component(
+        parsed.path or "/", safe="/%:@!def load_robots_policy(site):
+    """Fetch robots.txt with a bounded read; deny the host if policy cannot be read."""
+    parser = urllib.robotparser.RobotFileParser()
+    parser.set_url(site.rstrip("/") + "/robots.txt")
+    try:
+        req = urllib.request.Request(site.rstrip("/") + "/robots.txt", headers={
+            "User-Agent": UA, "Accept": "text/plain,*/*"
+        })
+        with urllib.request.urlopen(req, timeout=TIMEOUT) as response:
+            if response.status >= 400:
+                raise RuntimeError(f"robots.txt returned HTTP {response.status}")
+            raw = response.read(ROBOTS_MAX_BYTES + 1)
+            if len(raw) > ROBOTS_MAX_BYTES:
+                raise RuntimeError("robots.txt exceeds the safe size limit")
         parser.parse(raw.decode("utf-8", "replace").splitlines())
     except urllib.error.HTTPError as error:
         parser.disallow_all = True
@@ -144,6 +257,81 @@ def load_robots_policy(site):
             "too_large" if "safe size limit" in str(error) else "unavailable"
         )
     return parser
+'()*+,;=-._~"
+    )
+    if parsed.query:
+        target += "?" + _robots_normalize_component(
+            parsed.query, safe="/?%:@!def load_robots_policy(site):
+    """Fetch robots.txt with a bounded read; deny the host if policy cannot be read."""
+    parser = urllib.robotparser.RobotFileParser()
+    parser.set_url(site.rstrip("/") + "/robots.txt")
+    try:
+        req = urllib.request.Request(site.rstrip("/") + "/robots.txt", headers={
+            "User-Agent": UA, "Accept": "text/plain,*/*"
+        })
+        with urllib.request.urlopen(req, timeout=TIMEOUT) as response:
+            if response.status >= 400:
+                raise RuntimeError(f"robots.txt returned HTTP {response.status}")
+            raw = response.read(ROBOTS_MAX_BYTES + 1)
+            if len(raw) > ROBOTS_MAX_BYTES:
+                raise RuntimeError("robots.txt exceeds the safe size limit")
+        parser.parse(raw.decode("utf-8", "replace").splitlines())
+    except urllib.error.HTTPError as error:
+        parser.disallow_all = True
+        parser.everythinghub_policy_error = f"http_{error.code}"
+    except Exception as error:
+        parser.disallow_all = True
+        parser.everythinghub_policy_error = (
+            "too_large" if "safe size limit" in str(error) else "unavailable"
+        )
+    return parser
+'()*+,;=-._~"
+        )
+
+    matches = []
+    for group in selected:
+        for rule in group["rules"]:
+            pattern = rule["pattern"]
+            anchored = pattern.endswith("$")
+            raw_pattern = pattern[:-1] if anchored else pattern
+            normalized = _robots_normalize_component(
+                raw_pattern, safe="/%:@!def load_robots_policy(site):
+    """Fetch robots.txt with a bounded read; deny the host if policy cannot be read."""
+    parser = urllib.robotparser.RobotFileParser()
+    parser.set_url(site.rstrip("/") + "/robots.txt")
+    try:
+        req = urllib.request.Request(site.rstrip("/") + "/robots.txt", headers={
+            "User-Agent": UA, "Accept": "text/plain,*/*"
+        })
+        with urllib.request.urlopen(req, timeout=TIMEOUT) as response:
+            if response.status >= 400:
+                raise RuntimeError(f"robots.txt returned HTTP {response.status}")
+            raw = response.read(ROBOTS_MAX_BYTES + 1)
+            if len(raw) > ROBOTS_MAX_BYTES:
+                raise RuntimeError("robots.txt exceeds the safe size limit")
+        parser.parse(raw.decode("utf-8", "replace").splitlines())
+    except urllib.error.HTTPError as error:
+        parser.disallow_all = True
+        parser.everythinghub_policy_error = f"http_{error.code}"
+    except Exception as error:
+        parser.disallow_all = True
+        parser.everythinghub_policy_error = (
+            "too_large" if "safe size limit" in str(error) else "unavailable"
+        )
+    return parser
+'()*+,;=-._~"
+            )
+            regex = "^" + re.escape(normalized).replace(r"\*", ".*")
+            if anchored:
+                regex += "$"
+            if re.match(regex, target):
+                specificity = len(urllib.parse.unquote_to_bytes(normalized.replace("*", "")))
+                matches.append((specificity, rule["allow"]))
+
+    if not matches:
+        return True
+    longest = max(specificity for specificity, _allow in matches)
+    return any(allow for specificity, allow in matches if specificity == longest)
 
 def host_key(url):
     p = urllib.parse.urlsplit(url)
@@ -293,7 +481,7 @@ def main():
         return robots[site]
 
     def allowed(url):
-        permitted = policy(origin(url)).can_fetch(UA, url)
+        permitted = robots_can_fetch(policy(origin(url)), UA, url)
         if not permitted:
             robots_blocked_count[0] += 1
         return permitted
