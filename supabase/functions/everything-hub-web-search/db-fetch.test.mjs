@@ -44,6 +44,13 @@ test("classifies PostgreSQL recovery and transport failures as transient", () =>
   assert.equal(isTransientDatabaseError(new Error("The operation timed out")), true);
 });
 
+test("classifies PostgREST schema-cache connection failures as transient", () => {
+  assert.equal(isTransientDatabaseError({
+    code: "PGRST002",
+    message: "Could not query the schema cache while PostgreSQL is recovering",
+  }), true);
+});
+
 test("does not classify a missing search RPC as a transport outage", () => {
   assert.equal(isTransientDatabaseError({
     code: "PGRST202",
