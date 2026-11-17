@@ -152,13 +152,21 @@ jobs:
               report.nasaResultCount = await page.locator("#results .result").count();
               report.nasaStatus = await page.locator("#results .result-count, #status").first().innerText();
               report.nasaSources = await page.locator("#results .result .source").allTextContents();
-              if (!report.nasaResultCount || !report.nasaSources.some(source =>
-                source.toLowerCase().includes("everythinghub index") ||
-                source.toLowerCase().includes("everything hub crawler index") ||
-                source.toLowerCase().includes("everything hub public crawler index")
-              )) {
-                throw new Error("NASA did not return crawler-index results: " + JSON.stringify({
-                  count: report.nasaResultCount, status: report.nasaStatus, sources: report.nasaSources
+              // The result cards label their source host (for example, www.nasa.gov),
+              // not the index provider. Index provenance is independently checked above
+              // through crawlerApiProbe.source and below through manifest/catalog requests.
+              const nasaIndexedCount = Number(
+                (report.nasaStatus.match(/([\\d,]+)\\s+indexed matches/i) || [])[1]?.replace(/,/g, "") || 0
+              );
+              const hasNasaSource = report.nasaSources.some(source =>
+                /(^|\\.)nasa\\.gov$/i.test(source.trim())
+              );
+              if (!report.nasaResultCount || !nasaIndexedCount || !hasNasaSource) {
+                throw new Error("NASA UI did not show crawler-index matches: " + JSON.stringify({
+                  count: report.nasaResultCount,
+                  indexedMatches: nasaIndexedCount,
+                  status: report.nasaStatus,
+                  sources: report.nasaSources
                 }));
               }
               await page.screenshot({ path: "everything-hub-production-nasa.png", fullPage: true });
