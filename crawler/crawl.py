@@ -41,6 +41,34 @@ ROBOTS_MAX_BYTES = 512_000
 TIMEOUT = 15
 UA = "EverythingHubCrawler/1.1 (+https://github.com/rshure001/EverythingHub-Crawler)"
 
+
+def parse_indexing_directives(values, useragent=UA):
+    """Return applicable noindex/nofollow directives from meta or X-Robots-Tag."""
+    product = useragent.split("/", 1)[0].split()[0].lower()
+    non_agent_prefixes = {
+        "max-snippet", "max-image-preview", "max-video-preview",
+        "unavailable_after", "notranslate",
+    }
+    directives = set()
+    for value in values or []:
+        raw = str(value or "").strip()
+        if not raw:
+            continue
+        match = re.match(r"^([a-z0-9._*-]+)\s*:\s*(.*)$", raw, re.IGNORECASE)
+        if match and match.group(1).lower() not in non_agent_prefixes:
+            agent = match.group(1).lower()
+            if agent not in ("*", product) and agent not in product:
+                continue
+            raw = match.group(2)
+        directives.update(re.findall(
+            r"(?<![a-z0-9_-])(noindex|nofollow|none)(?![a-z0-9_-])",
+            raw.lower(),
+        ))
+    if "none" in directives:
+        directives.update(("noindex", "nofollow"))
+    return directives
+
+
 class RobotsAwareRedirectHandler(urllib.request.HTTPRedirectHandler):
     """Allow same-host redirects only after checking robots.txt for the target URL."""
     def __init__(self, is_allowed):
@@ -70,6 +98,7 @@ class PageParser(HTMLParser):
         self.description = ""
         self.text = []
         self.links = []
+        self.robots_directives = set()
         self.skip_depth = 0
 
     def handle_starttag(self, tag, attrs):
@@ -77,10 +106,16 @@ class PageParser(HTMLParser):
         a = dict(attrs)
         if tag == "title":
             self.title_on = True
-        if tag == "meta" and a.get("name", "").lower() == "description":
-            self.description = a.get("content", "")
+        if tag == "meta":
+            meta_name = a.get("name", "").strip().lower()
+            if meta_name == "description":
+                self.description = a.get("content", "")
+            elif meta_name in ("robots", UA.split("/", 1)[0].lower()):
+                self.robots_directives.update(parse_indexing_directives([a.get("content", "")]))
         if tag == "a" and a.get("href"):
-            self.links.append(a["href"])
+            rel = {item.lower() for item in a.get("rel", "").split()}
+            if "nofollow" not in rel:
+                self.links.append(a["href"])
         if tag in ("script", "style", "noscript", "svg", "nav", "footer", "header"):
             self.skip_depth += 1
 
@@ -114,7 +149,8 @@ def request(url, is_allowed, max_bytes=2_000_000):
     })
     opener = urllib.request.build_opener(RobotsAwareRedirectHandler(is_allowed))
     with opener.open(req, timeout=TIMEOUT) as response:
-        return response.geturl(), response.headers.get_content_type(), response.read(max_bytes)
+        x_robots_tags = response.headers.get_all("X-Robots-Tag") or []
+        return response.geturl(), response.headers.get_content_type(), x_robots_tags, response.read(max_bytes)
 
 def origin(url):
     p = urllib.parse.urlsplit(url)
@@ -447,6 +483,8 @@ def main():
     robots = {}
     robots_policy_failures = {}
     robots_blocked_count = [0]
+    index_policy_blocked_count = [0]
+    nofollow_pages_count = [0]
     rate_limited_count = [0]
 
     def policy(site):
@@ -556,7 +594,7 @@ def main():
                 continue
             sitemap_fetches += 1
             try:
-                final_sitemap, _content_type, body = request(
+                final_sitemap, _content_type, _x_robots_tags, body = request(
                     current_sitemap, allowed, max_bytes=MAX_SITEMAP_BYTES + 1
                 )
             except Exception as error:
@@ -631,26 +669,35 @@ def main():
         def fetch(item):
             url, depth = item
             try:
-                final, content_type, body = request(url, allowed)
+                final, content_type, x_robots_tags, body = request(url, allowed)
                 delay = max(host_delay(origin(url)), host_delay(origin(final)))
                 if content_type != "text/html":
                     return None, None, delay, False
                 parser = PageParser()
                 parser.feed(body.decode("utf-8", "replace"))
+                directives = set(parser.robots_directives)
+                directives.update(parse_indexing_directives(x_robots_tags))
+                if "nofollow" in directives:
+                    nofollow_pages_count[0] += 1
                 title = re.sub(r"\s+", " ", " ".join(parser.title)).strip()
                 text = re.sub(r"\s+", " ", " ".join(parser.text)).strip()[:4000]
+                record = None
+                if "noindex" in directives:
+                    index_policy_blocked_count[0] += 1
+                else:
+                    record = {
+                        "url": final, "title": title, "lane": classify_lane(final),
+                        "description": parser.description[:500],
+                        "text": text, "depth": depth, "fetched_at": int(time.time()), "robots_allowed": True
+                    }
                 links = []
-                if depth < MAX_DEPTH:
+                if depth < MAX_DEPTH and "nofollow" not in directives:
                     host = urllib.parse.urlsplit(final).netloc
                     for href in parser.links:
                         candidate = clean(urllib.parse.urljoin(final, href))
                         if candidate and urllib.parse.urlsplit(candidate).netloc == host:
                             links.append(candidate)
-                return ({
-                    "url": final, "title": title, "lane": classify_lane(final),
-                    "description": parser.description[:500],
-                    "text": text, "depth": depth, "fetched_at": int(time.time()), "robots_allowed": True
-                }, links, delay, False)
+                return record, links, delay, False
             except Exception as error:
                 status = getattr(error, "code", None)
                 if status in (429, 503):
@@ -713,6 +760,8 @@ def main():
         "pages_indexed_this_run": len(records),
         "pages_not_indexed_this_run": fetched - len(records),
         "robots_blocked_this_run": robots_blocked_count[0],
+        "index_policy_blocked_this_run": index_policy_blocked_count[0],
+        "nofollow_pages_this_run": nofollow_pages_count[0],
         "robots_policy_failures_this_run": len(robots_policy_failures),
         "robots_policy_failure_hosts_this_run": [
             {"host": host, "reason": reason}
