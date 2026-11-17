@@ -392,10 +392,18 @@ main{width:min(900px,calc(100% - 28px))!important;margin:22px auto 40px!importan
  .hero-live-search button{min-height:24px!important;padding:0 8px!important;font-size:10px!important}
 }
 
-/* Approved octopus master artwork + live search alignment */
-.hero-art-wrap{position:relative!important;overflow:hidden!important}
-.hero-live-search{position:absolute!important;left:29%!important;top:46%!important;width:42%!important;height:7%!important;min-height:28px!important;margin:0!important;transform:none!important;z-index:8!important}
-@media(max-width:680px){.hero-live-search{left:29%!important;top:46%!important;width:42%!important;height:7%!important;min-height:22px!important;transform:none!important}}
+/* Approved master artwork: show the complete image and place one live input in its printed search slot. */
+.hero-art-wrap{position:relative!important;display:block!important;width:100%!important;max-width:720px!important;height:auto!important;aspect-ratio:auto!important;overflow:visible!important;margin:0 auto!important}
+.approved-master-art{display:block!important;width:100%!important;height:auto!important;max-height:none!important;aspect-ratio:auto!important;object-fit:contain!important;object-position:center center!important}
+.hero-live-search{position:absolute!important;left:4.2%!important;top:29.5%!important;width:91.6%!important;height:12.3%!important;min-height:0!important;margin:0!important;padding:4px 8px 4px 18px!important;gap:6px!important;transform:none!important;z-index:8!important;border-radius:999px!important;background:#fff!important;border:2px solid #d9eadf!important;box-shadow:0 0 8px #00ff9940!important}
+.hero-live-search input{font-size:clamp(11px,2vw,16px)!important;color:#17251f!important}
+.hero-live-search button{height:100%!important;min-height:0!important;padding:0 15px!important;border-radius:999px!important;font-size:clamp(10px,1.5vw,13px)!important}
+@media(max-width:680px){
+ .hero-art-wrap{width:100%!important;max-width:100%!important}
+ .hero-live-search{left:4.2%!important;top:29.5%!important;width:91.6%!important;height:12.3%!important;padding:3px 6px 3px 13px!important;gap:4px!important}
+ .hero-live-search input{font-size:12px!important}
+ .hero-live-search button{padding:0 10px!important;font-size:10px!important}
+}
 </style><link rel="canonical" href="https://everythinghub.ink/"><meta name="robots" content="index,follow,max-image-preview:large"><meta property="og:type" content="website"><meta property="og:title" content="Everything Hub — Everything within reach"><meta property="og:description" content="Search the web, discover pictures and videos, explore places, businesses, news, shopping and research."><meta property="og:url" content="https://everythinghub.ink/"><script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","name":"Everything Hub","url":"https://everythinghub.ink/","description":"A broad search and discovery engine for web pages, images, videos, news, places, businesses, shopping and research.","potentialAction":{"@type":"SearchAction","target":{"@type":"EntryPoint","urlTemplate":"https://everythinghub.ink/?q={search_term_string}"},"query-input":"required name=search_term_string"}}</script></head>
 <body>
 <header class="topbar">
