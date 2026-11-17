@@ -549,53 +549,23 @@ async function loadDashboard(){
 }
 loadDashboard();
 
-let crawlerCatalogPromise;
-async function loadCrawlerCatalog(){
- if(!crawlerCatalogPromise){
-  crawlerCatalogPromise=(async()=>{
-   const response=await fetch('./search-index/manifest.json',{cache:'force-cache'});
-   if(!response.ok)throw Error('Crawler catalog manifest unavailable ('+response.status+')');
-   const manifest=await response.json();
-   if(!Array.isArray(manifest.shards)||manifest.shards.length!==Number(manifest.shard_count))throw Error('Crawler catalog manifest is invalid');
-   const batches=await Promise.all(manifest.shards.map(async shard=>{
-    const file=String(shard.file||'');
-    if(!/^shard-\d{4}\.json$/.test(file))throw Error('Invalid crawler shard name');
-    const r=await fetch('./search-index/'+file,{cache:'force-cache'});
-    if(!r.ok)throw Error('Crawler catalog shard '+file+' unavailable ('+r.status+')');
-    const data=await r.json();
-    if(!Array.isArray(data.pages)||data.pages.length!==Number(shard.pages))throw Error('Crawler catalog shard count mismatch: '+file);
-    return data.pages;
-   }));
-   const pages=batches.flat();
-   if(pages.length!==Number(manifest.total_pages))throw Error('Crawler catalog total mismatch');
-   const seen=new Set();
-   return pages.filter(page=>{
-    const url=String(page&&page.url||'');
-    if(!/^https?:\/\//i.test(url)||seen.has(url))return false;
-    seen.add(url);return true;
-   });
-  })();
- }
- return crawlerCatalogPromise;
-}
-async function searchCrawlerCatalog(query){
- const pages=await loadCrawlerCatalog();
- const terms=query.toLowerCase().split(/[^a-z0-9]+/).filter(x=>x.length>1);
- if(!terms.length)return [];
- const ranked=[];
- for(const page of pages){
-  const title=String(page.title||'').toLowerCase(),description=String(page.description||'').toLowerCase(),snippet=String(page.text||'').toLowerCase();
-  let score=0;
-  for(const term of terms){
-   if(title.includes(term))score+=5;
-   if(description.includes(term))score+=2;
-   if(snippet.includes(term))score+=1;
-  }
-  if(terms.length>1&&terms.every(term=>(title+' '+description+' '+snippet).includes(term)))score+=4;
-  if(score)ranked.push({title:page.title,url:page.url,snippet:page.description||page.text||'',image:page.image||'',video:page.video||'',mediaType:page.mediaType||'web',score,source:'EverythingHub index'});
- }
- ranked.sort((a,b)=>b.score-a.score);
- return ranked.slice(0,100);
+async function searchCrawlerIndex(query){
+ const u=new URL(EH_SUPABASE_URL+'/functions/v1/everything-hub-web-search');
+ u.searchParams.set('q',query);
+ u.searchParams.set('limit','50');
+ u.searchParams.set('offset','0');
+ const response=await fetch(u,{headers:{apikey:EH_PUBLIC_KEY,accept:'application/json'}});
+ if(!response.ok)throw Error('Everything Hub crawler index '+response.status);
+ const data=await response.json();
+ return (data.results||[]).map(x=>({
+  title:x.title||x.url,
+  url:x.url,
+  snippet:x.snippet||x.description||'',
+  image:x.image||x.imageUrl||'',
+  source:x.origin||x.source||data.source||'Everything Hub index',
+  mediaType:'web',
+  score:Number(x.relevance??x.score)||0
+ }));
 }
 async function searchPublicSources(query){
  const jobs=[
@@ -694,7 +664,7 @@ form.addEventListener('submit',async e=>{
   // Search Everything Hub's own published crawler catalog on every query.
   // It is the primary index, not a last-resort fallback when outside sources fail.
   const [catalogResult,apiResult,publicResult]=await Promise.allSettled([
-   searchCrawlerCatalog(q),
+   searchCrawlerIndex(q),
    loadApiPage(1),
    searchPublicSources(q)
   ]);
