@@ -58,17 +58,22 @@ unauthenticated search endpoint.
    host limits.
 6. Run a controlled shadow period; only then consider switching live traffic.
 
-The staged Edge search source is `supabase/functions/everything-hub-web-search/index.ts`; it explicitly selects `eh_quad` for both the RPC and fallback query. The database RPC and authenticated Python search API both require `robots_allowed IS TRUE` in result and count queries, so soft-excluded documents cannot leak into result counts. It is not deployed by this pull request. Deployment requires the database migration, exposed-schema configuration, and live search tests to pass.
+The deployed `everything-hub-web-search` version 20 and legacy `everything-hub-search` version 4 both explicitly select `eh_quad`. The web-search function calls `eh_search_pages` and uses the schema-qualified `eh_documents` fallback path; it also has database-independent fallbacks to the public crawler catalog and Bing RSS. The database RPC and authenticated Python search API both require `robots_allowed IS TRUE` in result and count queries, so soft-excluded documents cannot leak into result counts. The deployed function source is schema-scoped, but its database path and the production schema objects cannot currently be validated because PostgreSQL is rejecting connections with SQLSTATE `57P03`. Do not apply migrations or import data until database connections and schema inspection succeed.
 
-## Observed production deployment drift (2026-11-16)
+## Observed production deployment state (2026-11-17 12:27 UTC)
 
-The connected Supabase deployment inspection found `everything-hub-web-search` version 10 active. Its deployed source still uses unqualified `supabase.rpc("eh_search_pages", ...)` and `supabase.from("eh_pages")`, which resolve through the default `public` schema. Do not treat that deployed version as an `eh_quad`-isolated search service. The repository source is the corrected, schema-qualified implementation and is covered by `SchemaIsolationTests.test_edge_search_uses_only_eh_quad`.
+- Supabase Edge Function inspection shows `everything-hub-web-search` version **20** and legacy `everything-hub-search` version **4**. Both deployed sources explicitly use `.schema("eh_quad")`; the current web-search source also contains static public-crawler and independent Bing RSS fallbacks.
+- The separate Everything Hub crawler function is version **49** and explicitly returns HTTP 503 with status `paused` while database storage recovery is in progress. Sitemap discovery version **7** is paused for the same reason. These functions report that existing queue and indexed data were preserved.
+- The database control plane reports `ACTIVE_HEALTHY`, but direct SQL and PostgREST connections are currently failing with PostgreSQL SQLSTATE `57P03`: “the database system is not accepting connections” / “Hot standby mode is disabled.” Table and migration listings therefore cannot be verified.
+- Recent Edge request logs show media discovery and independent search returning HTTP 200. The database-backed search RPC is timing out during the PostgreSQL outage; a successful web-search fallback response does not prove that the database path is healthy.
+- The canonical homepage's separate public search path remains independent of the database-backed `eh_quad` search. No database migration, import, reset, or restore was attempted during this inspection.
 
-Do not deploy the corrected Edge Function until PostgreSQL accepts connections, the `eh_quad` migration is confirmed, and `eh_quad` is exposed in the Data API while `anon` and `authenticated` remain ungranted. The canonical Vercel homepage currently uses its independently verified web-search endpoint plus the published static crawler catalog; that path is separate from the Supabase database-backed search function.
+No migration or import has been run against Dog Tag Day; that separate project is not an Everything Hub target. The files alone do not publish or switch production traffic.
 
-No migration or import is run against Dog Tag Day. The files alone do not
-publish or switch production traffic.
+## Latest repository snapshot and recovery status (2026-11-17 12:27 UTC)
 
-## Latest repository snapshot and recovery status (2026-11-16 06:12 UTC)
+The public crawler repository's latest `main` commit is `c18fecb` (2026-11-17 12:17:18 UTC). Its published public search catalog contains **3,667 pages across 20 SHA-256-listed shards**; the compressed catalog is **1,153,757 bytes**. These are public repository catalog counts, not production database row counts.
 
-The canonical crawler repository snapshot contains **2,654 pages across 14 public-search shards**. The importer is tested against an ephemeral PostgreSQL service in GitHub Actions; that test database is disposable and is never the production Supabase project. Production `eh_quad` remains unverified because PostgreSQL is still in WAL redo recovery and rejects connections with `57P03`. Do not apply the migration or import to production until direct schema reads succeed.
+Production `eh_quad` remains unverified because the dedicated `everything-hub-control` PostgreSQL service is rejecting connections with SQLSTATE `57P03` and detail “Hot standby mode is disabled.” `list_tables` and `list_migrations` cannot complete while the database is unavailable. Do not apply `002_eh_quad_schema.sql`, run the importer, or attempt project reset/restore until direct database reads succeed.
+
+The public GitHub crawler remains separately scheduled hourly and has published the latest catalog snapshot. The Supabase database-backed crawler and sitemap-discovery Edge Functions are paused; their deployed responses explicitly state that existing queue and index data were preserved. Dog Tag Day Story Wall remains in its separate Supabase project and is not a migration or import target.
