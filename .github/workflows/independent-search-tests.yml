@@ -1,0 +1,40 @@
+name: Independent search engine tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "engine/**"
+      - "public-search/catalog-v1.json.gz"
+      - ".github/workflows/independent-search-tests.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: independent-search-tests
+  cancel-in-progress: true
+
+jobs:
+  unit-and-catalog-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run independent search unit tests
+        working-directory: engine
+        run: python -m unittest -v test_search_core test_catalog_search
+
+      - name: Search the committed public catalog
+        working-directory: engine
+        run: |
+          python catalog_search.py "NASA" --limit 5
+          python catalog_search.py "Rolex" --limit 5
