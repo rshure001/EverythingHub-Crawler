@@ -10,7 +10,7 @@ from lane_classifier import VALID_LANES, classify_lane
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "data" / "index.json"
 OUT = ROOT / "public-search"
-MAX_BYTES = 350_000
+MAX_BYTES = 340_000  # Keep 10 KB headroom below the 350 KB serving/validation ceiling.
 CATALOG_NAME = "catalog-v1.json.gz"
 
 
@@ -47,7 +47,7 @@ def encode_batch(items):
 
 
 def batch_fits(items, max_bytes=MAX_BYTES):
-    """Use on-disk byte size so the builder and validator share one boundary."""
+    """Measure exact on-disk bytes while keeping below the public hard ceiling."""
     return len(encode_batch(items)) <= max_bytes
 
 
