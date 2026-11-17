@@ -113,10 +113,14 @@ jobs:
                 naturalWidth: image.naturalWidth,
                 alt: image.alt
               }));
+              report.approvedArtwork.selfHosted =
+                report.approvedArtwork.src === "/assets/everythinghub-approved.png" &&
+                !/appdeploy\\.ai/i.test(String(report.approvedArtwork.src || ""));
 
               if (!response?.ok() || !report.title.includes("Everything Hub") ||
                   !report.searchInput || report.searchFormCount !== 1 || !report.searchInsideArtwork ||
-                  report.categoryCount !== 8 || report.approvedArtwork.naturalWidth < 100) {
+                  report.categoryCount !== 8 || report.approvedArtwork.naturalWidth < 100 ||
+                  !report.approvedArtwork.selfHosted) {
                 throw new Error("Approved homepage structure check failed: " + JSON.stringify(report));
               }
               await page.screenshot({ path: "everything-hub-production-homepage.png", fullPage: true });
