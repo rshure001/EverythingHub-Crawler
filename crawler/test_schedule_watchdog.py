@@ -18,6 +18,7 @@ class ScheduleWatchdogTests(unittest.TestCase):
         workflow_run = workflow.split("  workflow_run:\n", 1)[1].split("  workflow_dispatch:", 1)[0]
         self.assertIn('- "Everything Hub crawler"', workflow_run)
         self.assertIn('- "Everything Hub live diagnostics"', workflow_run)
+        self.assertIn('- "Validate Everything Hub crawler and schema"', workflow_run)
         self.assertIn("types:\n      - completed", workflow_run)
         self.assertIn("branches: [main]", workflow_run)
 
