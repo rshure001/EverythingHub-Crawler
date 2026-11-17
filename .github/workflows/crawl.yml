@@ -31,7 +31,7 @@ jobs:
           python -m py_compile crawler/crawl.py crawler/report.py crawler/build_search_shards.py crawler/validate_public_index.py
           test "$(grep -c '^https://' crawler/seeds.txt)" -eq 49
           python -m unittest discover -s crawler -p 'test_*.py' -v
-      # Validate bounded sitemap discovery, Retry-After backoff, and the strict 1,200-page fetch cap.
+      # Validate bounded sitemap discovery, Retry-After backoff, and the strict 1,600-page fetch cap.
       - name: Crawl configured sites
         run: python crawler/crawl.py
       - name: Build small public search shards
