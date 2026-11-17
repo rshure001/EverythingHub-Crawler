@@ -65,13 +65,13 @@ jobs:
 
               report.searchWorkspace = {
                 modeCount: await page.locator(".eh-search-workspace .eh-mode").count(),
-                suggestionCount: await page.locator(".eh-search-workspace .eh-suggestions button[data-query]").count(),
-                resultsContainerCount: await page.locator(".eh-search-workspace #results").count()
+                resultsContainerCount: await page.locator(".eh-search-workspace #results").count(),
+                discoverTopicCount: await page.locator(".discover-topic").count()
               };
               if (report.searchWorkspace.modeCount !== 8 ||
-                  report.searchWorkspace.suggestionCount < 1 ||
-                  report.searchWorkspace.resultsContainerCount !== 1) {
-                throw new Error("Google-style search workspace structure failed: " + JSON.stringify(report.searchWorkspace));
+                  report.searchWorkspace.resultsContainerCount !== 1 ||
+                  report.searchWorkspace.discoverTopicCount !== 5) {
+                throw new Error("Search and discovery structure failed: " + JSON.stringify(report.searchWorkspace));
               }
               await page.locator('.eh-search-workspace .eh-mode[data-mode="images"]').click();
               report.searchWorkspace.activeModeAfterClick =
@@ -80,25 +80,20 @@ jobs:
                 await page.locator("#q").getAttribute("placeholder");
               if (report.searchWorkspace.activeModeAfterClick !== "images" ||
                   !String(report.searchWorkspace.placeholderAfterModeClick).includes("Images")) {
-                throw new Error("Search workspace category controls are not wired: " + JSON.stringify(report.searchWorkspace));
+                throw new Error("Search category controls are not wired: " + JSON.stringify(report.searchWorkspace));
               }
               await page.locator('.eh-search-workspace .eh-mode[data-mode="web"]').click();
-              const rolexSuggestion = page.locator('.eh-search-workspace .eh-suggestions button[data-query="Rolex watches"]');
-              const suggestionResponsePromise = page.waitForResponse(response => {
-                try {
-                  const url = new URL(response.url());
-                  return url.pathname.endsWith("/everything-hub-web-search") &&
-                    url.searchParams.get("q") === "Rolex watches";
-                } catch { return false; }
-              }, { timeout: 35000 });
-              await rolexSuggestion.click();
-              const suggestionResponse = await suggestionResponsePromise;
-              await page.locator("#results .result a").first().waitFor({ state: "visible", timeout: 35000 });
-              report.searchWorkspace.suggestionQuery = await page.locator("#q").inputValue();
-              report.searchWorkspace.suggestionResponseStatus = suggestionResponse.status();
-              if (report.searchWorkspace.suggestionQuery !== "Rolex watches" ||
-                  report.searchWorkspace.suggestionResponseStatus !== 200) {
-                throw new Error("Search workspace suggestion did not reach live search: " + JSON.stringify(report.searchWorkspace));
+              await page.locator(".discover-card").first().waitFor({ state: "visible", timeout: 25000 });
+              report.discover = {
+                initialCards: await page.locator(".discover-card").count(),
+                firstHeadline: await page.locator(".discover-card h3").first().innerText(),
+                firstPublisher: await page.locator(".discover-source").first().innerText()
+              };
+              await page.locator('.discover-topic[data-topic="technology"]').click();
+              await page.locator(".discover-card").first().waitFor({ state: "visible", timeout: 25000 });
+              report.discover.technologyCards = await page.locator(".discover-card").count();
+              if (report.discover.initialCards < 1 || report.discover.technologyCards < 1) {
+                throw new Error("Live Discover feed did not return cards for selected topics: " + JSON.stringify(report.discover));
               }
 
               const artwork = page.locator(".hero img, .art img").first();
@@ -124,18 +119,6 @@ jobs:
                 throw new Error("Approved homepage structure check failed: " + JSON.stringify(report));
               }
               await page.screenshot({ path: "everything-hub-production-homepage.png", fullPage: true });
-
-              await page.locator("#homeLiveImages .live-media-card").first().waitFor({ state: "visible", timeout: 25000 });
-              await page.locator("#homeLiveVideos .live-media-card").first().waitFor({ state: "visible", timeout: 25000 });
-              report.mediaDiscovery = {
-                imageCards: await page.locator("#homeLiveImages .live-media-card").count(),
-                videoCards: await page.locator("#homeLiveVideos .live-media-card").count(),
-                imageProvider: await page.locator("#homeLiveImages .live-media-card small").first().innerText(),
-                videoProvider: await page.locator("#homeLiveVideos .live-media-card small").first().innerText()
-              };
-              if (report.mediaDiscovery.imageCards < 1 || report.mediaDiscovery.videoCards < 1) {
-                throw new Error("Homepage media discovery returned no visible cards: " + JSON.stringify(report.mediaDiscovery));
-              }
 
               report.crawlerApiProbe = await page.evaluate(async () => {
                 const url = new URL("https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-web-search");
