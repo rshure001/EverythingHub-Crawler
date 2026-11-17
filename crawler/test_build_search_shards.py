@@ -1,9 +1,13 @@
 import unittest
 
-from build_search_shards import batch_fits, compact, encode_batch
+from build_search_shards import MAX_BYTES, batch_fits, compact, encode_batch
 
 
 class SearchShardBatchBoundaryTests(unittest.TestCase):
+    def test_builder_target_keeps_headroom_under_public_hard_cap(self):
+        self.assertEqual(MAX_BYTES, 340_000)
+        self.assertLess(MAX_BYTES, 350_000)
+
     def test_size_limit_counts_the_exact_trailing_newline(self):
         page = compact({
             "url": "https://example.com/search-boundary",
