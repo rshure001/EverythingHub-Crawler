@@ -1,4 +1,5 @@
 name: EverythingHub Publisher
+# Revalidate and retain the current crawler catalog even while Pages deployment is permission-gated.
 on:
   workflow_dispatch:
   push:
