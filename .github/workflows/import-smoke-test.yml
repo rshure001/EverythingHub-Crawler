@@ -5,6 +5,10 @@ on:
     paths:
       - "database/**"
       - ".github/workflows/import-smoke-test.yml"
+  pull_request:
+    paths:
+      - "database/**"
+      - ".github/workflows/import-smoke-test.yml"
   schedule:
     - cron: "7 * * * *"
   workflow_dispatch:
@@ -74,17 +78,20 @@ jobs:
         run: |
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
           INSERT INTO eh_quad.eh_documents
-            (canonical_url, source_host, lane, title, description, body_text, content_hash)
+            (canonical_url, source_host, lane, title, description, body_text, content_hash, robots_allowed)
           VALUES
             ('https://everythinghub.test/search-smoke-general', 'everythinghub.test', 'general',
              'EverythingHub search smoke general', 'quartz lantern integration verification',
-             'quartz lantern integration test general', 'smoke-general-v1'),
+             'quartz lantern integration test general', 'smoke-general-v1', true),
             ('https://everythinghub.test/search-smoke-science', 'everythinghub.test', 'science',
              'EverythingHub search smoke science', 'quartz lantern integration verification',
-             'quartz lantern integration test science', 'smoke-science-v1'),
+             'quartz lantern integration test science', 'smoke-science-v1', true),
             ('https://everythinghub.test/search-smoke-business', 'everythinghub.test', 'business',
              'EverythingHub search smoke business', 'quartz lantern integration verification',
-             'quartz lantern integration test business', 'smoke-business-v1')
+             'quartz lantern integration test business', 'smoke-business-v1', true),
+            ('https://everythinghub.test/search-smoke-robots-denied', 'everythinghub.test', 'general',
+             'EverythingHub robots denied fixture', 'quartz lantern integration verification',
+             'quartz lantern integration test must not appear in search', 'smoke-robots-denied-v1', false)
           ON CONFLICT (canonical_url) DO NOTHING;
           SQL
           python database/search_api.py > /tmp/eh-search-api.log 2>&1 &
@@ -116,7 +123,14 @@ jobs:
           assert all(page["total"] == 3 and len(page["results"]) == 1 for page in pages), pages
           assert pages[0]["hasMore"] is True and pages[1]["hasMore"] is True and pages[2]["hasMore"] is False, pages
           assert len(set(urls)) == 3 and set(urls) == expected, urls
-          print("Pagination returned all three unique fixture records in three one-row pages.")
+          print("Pagination returned all three unique allowed fixture records; robots-denied fixture was exclu          rpc_count=$(psql "$DATABASE_URL" -tA -c "SELECT count(*) FROM eh_quad.eh_search_pages('quartz lantern', NULL, 20);")
+          echo "eh_quad RPC visible rows: $rpc_count"
+          test "$rpc_count" = "3"
+          rpc_denied=$(psql "$DATABASE_URL" -tA -c "SELECT count(*) FROM eh_quad.eh_search_pages('quartz lantern', NULL, 20) WHERE url = 'https://everythinghub.test/search-smoke-robots-denied';")
+          echo "eh_quad RPC robots-denied rows: $rpc_denied"
+          test "$rpc_denied" = "0"
+
+ded.")
           PY
 
           curl --silent --fail -H "Authorization: Bearer isolated-test-token" \
