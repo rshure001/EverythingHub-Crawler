@@ -43,7 +43,7 @@ UA = "EverythingHubCrawler/1.1 (+https://github.com/rshure001/EverythingHub-Craw
 
 
 def parse_indexing_directives(values, useragent=UA):
-    """Return applicable noindex/nofollow directives from meta or X-Robots-Tag."""
+    """Return applicable indexing and snippet directives from meta or X-Robots-Tag."""
     product = useragent.split("/", 1)[0].split()[0].lower()
     non_agent_prefixes = {
         "max-snippet", "max-image-preview", "max-video-preview",
@@ -61,12 +61,36 @@ def parse_indexing_directives(values, useragent=UA):
                 continue
             raw = match.group(2)
         directives.update(re.findall(
-            r"(?<![a-z0-9_-])(noindex|nofollow|none)(?![a-z0-9_-])",
+            r"(?<![a-z0-9_-])(noindex|nofollow|nosnippet|none)(?![a-z0-9_-])",
             raw.lower(),
         ))
+        directives.update(
+            "max-snippet:" + str(int(limit))
+            for limit in re.findall(
+                r"(?<![a-z0-9_-])max-snippet\s*:\s*(-?\d+)",
+                raw.lower(),
+            )
+        )
     if "none" in directives:
         directives.update(("noindex", "nofollow"))
     return directives
+
+
+def apply_snippet_policy(text, description, directives):
+    """Apply nosnippet and the strictest applicable max-snippet character limit."""
+    if "nosnippet" in directives:
+        return "", ""
+    limits = []
+    for directive in directives:
+        match = re.fullmatch(r"max-snippet:(-?\d+)", str(directive))
+        if match:
+            value = int(match.group(1))
+            if value >= 0:
+                limits.append(value)
+    if not limits:
+        return text, description
+    limit = min(limits)
+    return text[:limit], description[:limit]
 
 
 class RobotsAwareRedirectHandler(urllib.request.HTTPRedirectHandler):
@@ -702,12 +726,14 @@ def main():
                     nofollow_pages_count[0] += 1
                 title = re.sub(r"\s+", " ", " ".join(parser.title)).strip()
                 text = re.sub(r"\s+", " ", " ".join(parser.text)).strip()[:4000]
+                description = parser.description[:500]
+                text, description = apply_snippet_policy(text, description, directives)
                 if "noindex" in directives:
                     record = {"url": final, "_eh_noindex": True}
                 else:
                     record = {
                         "url": final, "title": title, "lane": classify_lane(final),
-                        "description": parser.description[:500],
+                        "description": description,
                         "text": text, "depth": depth, "fetched_at": int(time.time()), "robots_allowed": True
                     }
                 links = []

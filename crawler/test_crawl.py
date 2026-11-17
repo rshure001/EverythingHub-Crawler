@@ -56,10 +56,13 @@ class CrawlerTests(unittest.TestCase):
     def test_parser_extracts_robots_meta_directives(self):
         parser = crawl.PageParser()
         parser.feed(
-            '<meta name="robots" content="max-snippet:50, noindex, nofollow">'
+            '<meta name="robots" content="max-snippet:50, noindex, nofollow, nosnippet">'
             '<meta name="googlebot" content="index">'
         )
-        self.assertEqual(parser.robots_directives, {"noindex", "nofollow"})
+        self.assertEqual(
+            parser.robots_directives,
+            {"noindex", "nofollow", "nosnippet", "max-snippet:50"},
+        )
 
     def test_parser_does_not_follow_individually_nofollow_links(self):
         parser = crawl.PageParser()
@@ -76,6 +79,37 @@ class CrawlerTests(unittest.TestCase):
                 "EverythingHubCrawler: noindex",
             ]),
             {"noindex"},
+        )
+
+    def test_max_snippet_is_crawler_specific(self):
+        self.assertEqual(
+            crawl.parse_indexing_directives([
+                "googlebot: max-snippet:10",
+                "EverythingHubCrawler: max-snippet:7, nosnippet",
+            ]),
+            {"max-snippet:7", "nosnippet"},
+        )
+
+    def test_nosnippet_suppresses_text_and_description(self):
+        self.assertEqual(
+            crawl.apply_snippet_policy(
+                "searchable body text", "a description", {"nosnippet"}
+            ),
+            ("", ""),
+        )
+
+    def test_max_snippet_truncates_text_and_description(self):
+        self.assertEqual(
+            crawl.apply_snippet_policy(
+                "abcdefghij", "description", {"max-snippet:6", "max-snippet:4"}
+            ),
+            ("abcd", "desc"),
+        )
+
+    def test_max_snippet_zero_suppresses_text_and_description(self):
+        self.assertEqual(
+            crawl.apply_snippet_policy("body", "description", {"max-snippet:0"}),
+            ("", ""),
         )
 
     def test_none_directive_implies_noindex_and_nofollow(self):
