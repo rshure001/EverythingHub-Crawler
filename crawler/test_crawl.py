@@ -53,6 +53,37 @@ class CrawlerTests(unittest.TestCase):
         self.assertNotIn("secret()", text)
         self.assertIn("/next", parser.links)
 
+    def test_parser_extracts_robots_meta_directives(self):
+        parser = crawl.PageParser()
+        parser.feed(
+            '<meta name="robots" content="max-snippet:50, noindex, nofollow">'
+            '<meta name="googlebot" content="index">'
+        )
+        self.assertEqual(parser.robots_directives, {"noindex", "nofollow"})
+
+    def test_parser_does_not_follow_individually_nofollow_links(self):
+        parser = crawl.PageParser()
+        parser.feed(
+            '<a href="/follow">Follow</a>'
+            '<a href="/skip" rel="nofollow">Skip</a>'
+        )
+        self.assertEqual(parser.links, ["/follow"])
+
+    def test_x_robots_tag_applies_only_to_matching_crawler(self):
+        self.assertEqual(
+            crawl.parse_indexing_directives([
+                "googlebot: noindex, nofollow",
+                "EverythingHubCrawler: noindex",
+            ]),
+            {"noindex"},
+        )
+
+    def test_none_directive_implies_noindex_and_nofollow(self):
+        self.assertEqual(
+            crawl.parse_indexing_directives(["none"]),
+            {"none", "noindex", "nofollow"},
+        )
+
     def test_page_redirect_handler_blocks_cross_host_redirects(self):
         handler = crawl.RobotsAwareRedirectHandler(lambda _url: True)
         request = crawl.urllib.request.Request("https://example.com/start")
