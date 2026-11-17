@@ -441,6 +441,17 @@ main{width:min(900px,calc(100% - 28px))!important;margin:22px auto 40px!importan
 .hero-live-search input{padding-left:72px!important;padding-right:8px!important}
 @media(max-width:680px){.hero-live-search input{padding-left:72px!important;padding-right:6px!important}}
 
+/* Search experience directly beneath approved hero artwork */
+.eh-search-workspace{max-width:1120px;margin:26px auto 34px;padding:22px 22px 24px;border:1px solid #1eff9a55;border-radius:20px;background:linear-gradient(145deg,#071d26,#030b13 75%);box-shadow:0 12px 36px #0008;color:#effff6}
+.eh-search-heading span,.eh-suggestions>span{font-size:10px;letter-spacing:2px;font-weight:850;color:#aaff75}
+.eh-search-heading h2{margin:7px 0 5px;font-size:clamp(21px,3vw,29px);color:#f4fff8}.eh-search-heading p{margin:0;color:#a9cabb;font-size:13px;line-height:1.55}
+.eh-modebar{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:8px;margin:20px 0 16px}
+.eh-mode{min-height:46px;padding:8px 5px;border:1px solid #237b59;border-radius:11px;background:#061820;color:#dfffee;font-size:12px;font-weight:750}
+.eh-mode.active,.eh-mode:hover{border-color:#aaff75;background:linear-gradient(135deg,#125c43,#0b302b);color:#caff9c;box-shadow:0 0 12px #00ff9930}
+.eh-suggestions{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:0 0 15px}.eh-suggestions>span{margin-right:4px}
+.eh-suggestions button{padding:7px 12px;border:1px solid #234a41;border-radius:999px;background:#07151d;color:#c9e8d8;font-size:11px}
+.eh-results{min-height:100px;padding-top:4px}.eh-welcome{display:flex;flex-direction:column;gap:5px;padding:18px 2px;color:#9bcdb6}.eh-welcome strong{font-size:16px;color:#effff6}.eh-welcome span{font-size:12px}
+@media(max-width:680px){.eh-search-workspace{margin:20px 12px 28px;padding:17px 13px;border-radius:15px}.eh-modebar{grid-template-columns:repeat(4,minmax(0,1fr));gap:7px}.eh-mode{min-height:42px;font-size:11px}.eh-search-heading p{font-size:12px}.eh-suggestions{gap:6px}.eh-suggestions>span{width:100%;margin-bottom:2px}}
 </style><link rel="canonical" href="https://everythinghub.ink/"><meta name="robots" content="index,follow,max-image-preview:large"><meta property="og:type" content="website"><meta property="og:title" content="Everything Hub — Everything within reach"><meta property="og:description" content="Search the web, discover pictures and videos, explore places, businesses, news, shopping and research."><meta property="og:url" content="https://everythinghub.ink/"><script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","name":"Everything Hub","url":"https://everythinghub.ink/","description":"A broad search and discovery engine for web pages, images, videos, news, places, businesses, shopping and research.","potentialAction":{"@type":"SearchAction","target":{"@type":"EntryPoint","urlTemplate":"https://everythinghub.ink/?q={search_term_string}"},"query-input":"required name=search_term_string"}}</script></head>
 <body>
 <header class="topbar">
@@ -467,6 +478,14 @@ main{width:min(900px,calc(100% - 28px))!important;margin:22px auto 40px!importan
     </form>
   </div>
 <div class="tagline">EVERYTHING HUB · EVERYTHING WITHIN REACH</div>
+</section>
+<section class="eh-search-workspace" aria-label="Search Everything Hub">
+ <div class="eh-search-heading"><span>EXPLORE EVERYTHING</span><h2>What are you looking for?</h2><p>Search across the web, news, images, videos, shopping, places, businesses and research.</p></div>
+ <nav class="eh-modebar" aria-label="Search categories">
+  <button class="eh-mode active" type="button" data-mode="web">⌕ Web</button><button class="eh-mode" type="button" data-mode="news">▤ News</button><button class="eh-mode" type="button" data-mode="images">▧ Images</button><button class="eh-mode" type="button" data-mode="videos">▶ Videos</button><button class="eh-mode" type="button" data-mode="shopping">▣ Shopping</button><button class="eh-mode" type="button" data-mode="places">⌖ Places</button><button class="eh-mode" type="button" data-mode="business">▦ Business</button><button class="eh-mode" type="button" data-mode="research">▥ Research</button>
+ </nav>
+ <div class="eh-suggestions"><span>TRY A SEARCH</span><button type="button" data-query="latest technology news">Technology</button><button type="button" data-query="Las Vegas attractions">Las Vegas</button><button type="button" data-query="Rolex watches">Rolex</button><button type="button" data-query="space exploration">Space</button></div>
+ <section id="results" class="eh-results" aria-live="polite"><div class="eh-welcome"><strong>Your search starts here.</strong><span>Choose a category above or enter a search to see results.</span></div></section>
 </section>
 <section class="gallery"><div class="heading"><h2>Discover more</h2><small>Fresh visuals · stories · ideas</small></div><div class="gallery-grid">
 <a class="media-card" href="?mode=people"><img loading="lazy" src="https://images.unsplash.com/photo-1521737711867-e3b97375f902?w=900&auto=format&fit=crop&q=82" alt="People collaborating"><div class="caption">People <small>Profiles & communities</small></div></a>
@@ -521,7 +540,7 @@ main{width:min(900px,calc(100% - 28px))!important;margin:22px auto 40px!importan
   <a class="video-discovery" href="https://www.youtube.com/results?search_query=business+entrepreneurship+stories" target="_blank" rel="noopener noreferrer"><div class="video-thumb"><img loading="lazy" src="https://images.unsplash.com/photo-1521737711867-e3b97375f902?w=900&auto=format&fit=crop&q=82" alt="People working together"></div><div class="video-meta"><strong>Business &amp; People</strong><small>Ideas, interviews &amp; stories · Explore results ↗</small></div></a>
  </div>
 </section>
-<a class="dogtag-link" href="pages/" aria-label="Explore Everything Hub pages">Explore Pages</a><a class="dogtag-link" href="catalogs/" aria-label="Browse source catalogs">Source Catalogs</a><a class="dogtag-link" href="https://DogTagDay.org" target="_blank" rel="noopener noreferrer"><span class="tag-icon" aria-hidden="true">▱</span>DogTagDay.org</a><section id="results" aria-live="polite"></section>
+<a class="dogtag-link" href="pages/" aria-label="Explore Everything Hub pages">Explore Pages</a><a class="dogtag-link" href="catalogs/" aria-label="Browse source catalogs">Source Catalogs</a><a class="dogtag-link" href="https://DogTagDay.org" target="_blank" rel="noopener noreferrer"><span class="tag-icon" aria-hidden="true">▱</span>DogTagDay.org</a>
 </main><footer>EverythingHub · Independent search and discovery · <a href="catalogs/">Browse source catalogs</a><nav class="seo-directory" aria-label="Explore Everything Hub" style="max-width:1120px;margin:24px auto;padding:18px;border:1px solid #1eff9a55;border-radius:14px;background:#04131d;color:#eafff5"><strong style="display:block;margin-bottom:10px">Explore Everything Hub</strong><div style="display:flex;flex-wrap:wrap;gap:10px 16px;font-size:12px"><a style="color:#aaff75" href="/discover/web/">Web Search</a><a style="color:#aaff75" href="/discover/news/">News</a><a style="color:#aaff75" href="/discover/images/">Images</a><a style="color:#aaff75" href="/discover/videos/">Videos</a><a style="color:#aaff75" href="/discover/shopping/">Shopping</a><a style="color:#aaff75" href="/discover/places/">Places</a><a style="color:#aaff75" href="/discover/business/">Business</a><a style="color:#aaff75" href="/discover/research/">Research</a></div></nav></footer>
 <script>
 const form=document.querySelector('#search'),input=document.querySelector('#q'),out=document.querySelector('#results');
@@ -531,6 +550,8 @@ const modeNames={web:'the web',news:'News',images:'Images',videos:'Videos',shopp
 let selectedMode=new URLSearchParams(location.search).get('mode')||'web';
 function setSelectedMode(mode){selectedMode=modeNames[mode]?mode:'web';input.placeholder='Search '+modeNames[selectedMode]+'…';document.querySelectorAll('.tile').forEach(tile=>tile.classList.toggle('selected',new URL(tile.href).searchParams.get('mode')===selectedMode));}
 document.querySelectorAll('.tile').forEach(tile=>tile.addEventListener('click',event=>{event.preventDefault();setSelectedMode(new URL(tile.href).searchParams.get('mode')||'web');input.focus();}));
+document.querySelectorAll('.eh-mode').forEach(button=>button.addEventListener('click',()=>{setSelectedMode(button.dataset.mode);document.querySelectorAll('.eh-mode').forEach(b=>b.classList.toggle('active',b===button));input.focus();if(input.value.trim())form.requestSubmit();}));
+document.querySelectorAll('.eh-suggestions button[data-query]').forEach(button=>button.addEventListener('click',()=>{input.value=button.dataset.query;form.requestSubmit();}));
 setSelectedMode(selectedMode);
 document.querySelectorAll('.arm[data-mode]').forEach(arm=>{
  const openMode=()=>{const mode=arm.dataset.mode;location.href='?mode='+encodeURIComponent(mode)};
