@@ -22,9 +22,13 @@ project.
 ## Import the repository index
 
 The importer is locked to `eh_quad`; it rejects any other schema value.
-It is additive/upsert-only and never deletes destination rows. It reads
-`data/index.json`, validates HTTP(S) URLs, hashes content, and upserts in
-batches. Prototype crawler pages currently enter the `general` lane.
+It never deletes destination rows. It upserts allowed pages and soft-disables
+only exact existing rows whose current crawler record explicitly says
+`robots_allowed=false`; those rows remain stored for audit but are excluded
+from both database search paths. If a later allowed snapshot includes the URL,
+the upsert restores `robots_allowed=true`. It reads `data/index.json`,
+validates HTTP(S) URLs, hashes content, and upserts in batches. Prototype
+crawler pages currently enter the `general` lane.
 
 ```bash
 python -m pip install 'psycopg[binary]>=3.2,<4'
@@ -54,7 +58,7 @@ unauthenticated search endpoint.
    host limits.
 6. Run a controlled shadow period; only then consider switching live traffic.
 
-The staged Edge search source is `supabase/functions/everything-hub-web-search/index.ts`; it explicitly selects `eh_quad` for both the RPC and fallback query. It is not deployed by this pull request. Deployment requires the database migration, exposed-schema configuration, and live search tests to pass.
+The staged Edge search source is `supabase/functions/everything-hub-web-search/index.ts`; it explicitly selects `eh_quad` for both the RPC and fallback query. The database RPC and authenticated Python search API both require `robots_allowed IS TRUE` in result and count queries, so soft-excluded documents cannot leak into result counts. It is not deployed by this pull request. Deployment requires the database migration, exposed-schema configuration, and live search tests to pass.
 
 ## Observed production deployment drift (2026-11-16)
 
