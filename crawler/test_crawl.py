@@ -192,6 +192,31 @@ class CrawlerTests(unittest.TestCase):
         self.assertEqual(parser.everythinghub_policy_error, "http_404")
         self.assertFalse(crawl.robots_can_fetch(parser, crawl.UA, "https://example.com/public"))
 
+    def test_robots_policy_fails_closed_on_rate_limit_and_server_errors(self):
+        for status in (429, 500, 503):
+            with self.subTest(status=status):
+                error = crawl.urllib.error.HTTPError(
+                    "https://example.com/robots.txt", status, "Unavailable", {}, None
+                )
+                with mock.patch.object(crawl.urllib.request, "urlopen", side_effect=error):
+                    parser = crawl.load_robots_policy("https://example.com")
+                self.assertTrue(parser.disallow_all)
+                self.assertEqual(parser.everythinghub_policy_error, f"http_{status}")
+                self.assertFalse(
+                    crawl.robots_can_fetch(parser, crawl.UA, "https://example.com/public")
+                )
+
+    def test_robots_policy_fails_closed_on_network_timeout(self):
+        with mock.patch.object(
+            crawl.urllib.request, "urlopen", side_effect=TimeoutError("robots timeout")
+        ):
+            parser = crawl.load_robots_policy("https://example.com")
+        self.assertTrue(parser.disallow_all)
+        self.assertEqual(parser.everythinghub_policy_error, "unavailable")
+        self.assertFalse(
+            crawl.robots_can_fetch(parser, crawl.UA, "https://example.com/public")
+        )
+
     def test_robots_policy_fails_closed_on_oversized_file(self):
         body = b"#" * (crawl.ROBOTS_MAX_BYTES + 1)
         with mock.patch.object(crawl.urllib.request, "urlopen", return_value=FakeRobotsResponse(body)):
