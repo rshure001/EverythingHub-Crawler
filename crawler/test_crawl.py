@@ -221,6 +221,16 @@ class CrawlerTests(unittest.TestCase):
         ])
         self.assertEqual(crawl.effective_host_delay(parser), 4.0)
 
+    def test_effective_host_delay_combines_all_matching_groups(self):
+        body = (
+            b"User-agent: *\nCrawl-delay: 1\nRequest-rate: 10/1\n\n"
+            b"User-agent: EverythingHubCrawler\nCrawl-delay: 4\nRequest-rate: 1/6\n\n"
+            b"User-agent: EverythingHubCrawler\nCrawl-delay: 7\nRequest-rate: 2/3\n"
+        )
+        with mock.patch.object(crawl.urllib.request, "urlopen", return_value=FakeRobotsResponse(body)):
+            parser = crawl.load_robots_policy("https://example.com")
+        self.assertEqual(crawl.effective_host_delay(parser), 7.0)
+
     def test_effective_host_delay_enforces_minimum_interval(self):
         parser = urllib.robotparser.RobotFileParser()
         parser.parse(["User-agent: *"])

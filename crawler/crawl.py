@@ -3,6 +3,7 @@
 import concurrent.futures
 import email.utils
 import json
+import math
 import re
 import time
 import urllib.error
@@ -149,14 +150,21 @@ def load_robots_policy(site):
 
 
 def parse_robots_groups(body):
-    """Parse robots groups while preserving Allow/Disallow rules for RFC-style matching."""
+    """Parse robots groups and retain path plus per-host rate directives."""
     groups = []
     agents = []
     rules = []
+    crawl_delays = []
+    request_rates = []
 
     def flush():
         if agents:
-            groups.append({"agents": list(agents), "rules": list(rules)})
+            groups.append({
+                "agents": list(agents),
+                "rules": list(rules),
+                "crawl_delays": list(crawl_delays),
+                "request_rates": list(request_rates),
+            })
 
     for raw_line in body.splitlines():
         line = raw_line.split("#", 1)[0].strip()
@@ -165,6 +173,8 @@ def parse_robots_groups(body):
                 flush()
                 agents = []
                 rules = []
+                crawl_delays = []
+                request_rates = []
             continue
         if ":" not in line:
             continue
@@ -172,10 +182,12 @@ def parse_robots_groups(body):
         key = key.strip().lower()
         value = value.strip()
         if key == "user-agent":
-            if rules:
+            if rules or crawl_delays or request_rates:
                 flush()
                 agents = []
                 rules = []
+                crawl_delays = []
+                request_rates = []
             if value:
                 agents.append(value.lower())
         elif key in ("allow", "disallow") and agents:
@@ -183,6 +195,23 @@ def parse_robots_groups(body):
                 continue
             if value:
                 rules.append({"pattern": value, "allow": key == "allow"})
+        elif key == "crawl-delay" and agents:
+            try:
+                delay = float(value)
+                if math.isfinite(delay) and delay >= 0:
+                    crawl_delays.append(delay)
+            except (TypeError, ValueError):
+                continue
+        elif key == "request-rate" and agents:
+            parts = value.split("/", 1)
+            if len(parts) == 2:
+                try:
+                    requests = int(parts[0].strip())
+                    seconds = float(parts[1].strip())
+                    if requests > 0 and math.isfinite(seconds) and seconds > 0:
+                        request_rates.append((requests, seconds))
+                except (TypeError, ValueError):
+                    continue
     flush()
     return groups
 
@@ -199,6 +228,27 @@ def _robots_normalize_component(value, safe):
     return urllib.parse.quote(value, safe=safe)
 
 
+def matching_robots_groups(groups, useragent):
+    """Return all groups for the most-specific matching user-agent product token."""
+    product_parts = useragent.split("/", 1)[0].split()
+    product = product_parts[0].lower() if product_parts else ""
+    matches = []
+    for group in groups:
+        scores = [
+            len(agent)
+            for agent in group["agents"]
+            if agent == "*" or (agent and agent in product)
+        ]
+        if scores:
+            matches.append((max(scores), group))
+
+    specific = [item for item in matches if item[0] > 0]
+    if specific:
+        best_score = max(score for score, _group in specific)
+        return [group for score, group in specific if score == best_score]
+    return [group for score, group in matches if score == 0]
+
+
 def robots_can_fetch(parser, useragent, url):
     """Apply the most-specific matching robots rule; Allow wins equal-specificity ties."""
     if parser.disallow_all:
@@ -210,24 +260,7 @@ def robots_can_fetch(parser, useragent, url):
     if groups is None:
         return parser.can_fetch(useragent, url)
 
-    product_parts = useragent.split("/", 1)[0].split()
-    product = product_parts[0].lower() if product_parts else ""
-    matching_groups = []
-    for group in groups:
-        scores = [
-            len(agent)
-            for agent in group["agents"]
-            if agent == "*" or (agent and agent in product)
-        ]
-        if scores:
-            matching_groups.append((max(scores), group))
-
-    specific = [item for item in matching_groups if item[0] > 0]
-    if specific:
-        best_agent_score = max(score for score, _group in specific)
-        selected = [group for score, group in specific if score == best_agent_score]
-    else:
-        selected = [group for score, group in matching_groups if score == 0]
+    selected = matching_robots_groups(groups, useragent)
     if not selected:
         return True
 
@@ -260,6 +293,7 @@ def robots_can_fetch(parser, useragent, url):
         return True
     longest = max(specificity for specificity, _allow in matches)
     return any(allow for specificity, allow in matches if specificity == longest)
+
 
 def host_key(url):
     p = urllib.parse.urlsplit(url)
@@ -330,15 +364,31 @@ def parse_sitemap_xml(body, sitemap_url, max_urls=MAX_SITEMAP_URLS_PER_HOST):
 
 
 def effective_host_delay(parser):
-    """Return the strictest robots.txt rate directive, with a safe minimum."""
-    crawl_delay = parser.crawl_delay(UA) or 0
-    request_rate = parser.request_rate(UA)
-    rate_delay = (
-        request_rate.seconds / request_rate.requests
-        if request_rate and request_rate.requests
-        else 0
-    )
-    return max(HOST_MIN_INTERVAL, float(crawl_delay), float(rate_delay))
+    """Return the strictest matching robots rate directive, with a safe minimum."""
+    groups = getattr(parser, "everythinghub_groups", None)
+    if groups is None:
+        crawl_delay = parser.crawl_delay(UA) or 0
+        request_rate = parser.request_rate(UA)
+        rate_delay = (
+            request_rate.seconds / request_rate.requests
+            if request_rate and request_rate.requests
+            else 0
+        )
+        return max(HOST_MIN_INTERVAL, float(crawl_delay), float(rate_delay))
+
+    selected = matching_robots_groups(groups, UA)
+    delays = [
+        delay
+        for group in selected
+        for delay in group.get("crawl_delays", [])
+    ]
+    rate_delays = [
+        seconds / requests
+        for group in selected
+        for requests, seconds in group.get("request_rates", [])
+    ]
+    return max([HOST_MIN_INTERVAL, *delays, *rate_delays])
+
 
 def select_batch(queue, is_allowed, host_next_allowed, now, workers=WORKERS):
     """Select depth-prioritized work while limiting each batch to one URL per host."""
