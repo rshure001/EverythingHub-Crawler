@@ -286,3 +286,32 @@ Wait for PostgreSQL to accept connections, inspect only `eh_quad` read-only, the
 - **Publisher run #44** validated the 4,678-page catalog and uploaded a **3,325,963-byte** GitHub Pages artifact (artifact ID **14356051381**). The deploy job was skipped: the Pages endpoint returned **404**, and the Actions integration still lacks repository Pages site-creation/administration permission. No repository settings were changed.
 - Browser verification runs #43 and #44 exposed a **test assertion defect**, not a search outage: the test expected result-card source labels to say “EverythingHub index,” while the UI correctly labels each result with its source hostname (for example, www.nasa.gov). The same browser run showed **24 visible Rolex results** and **24 visible NASA results**, with “1,900 indexed matches” in the NASA status; the API probe and static catalog checks passed. The assertion now checks the indexed-match count and a NASA source hostname, while retaining the separate API provenance and manifest/catalog transport checks. Fix commits: [e5263f6](https://github.com/rshure001/EverythingHub-Crawler/commit/e5263f66661cb0578be446d7444ceeaed2ed38f9) and [c901b24](https://github.com/rshure001/EverythingHub-Crawler/commit/c901b24e3579e2a9067b4538e0ee527c8995901e). Corrected browser run [#46](https://github.com/rshure001/EverythingHub-Crawler/actions/runs/44144669893) **passed**: canonical homepage HTTP 200, one search form inside the artwork, all 8 categories, 24 visible Rolex results (268 indexed matches), 24 visible NASA results (1,900 indexed matches), and zero browser page errors. The browser fetched the GitHub manifest and gzip catalog successfully (HTTP 200). Homepage media shelf rendered 2 image and 2 video cards; Images mode returned 21 licensed-metadata Commons results with 21 previews, and Videos mode returned 2 results with video indicators. Mobile validation passed at 390 px with document width 390 px, one visible search form, and all 8 categories. The API provenance probe returned 1,898 NASA matches from the Everything Hub public crawler index; the independent Bing RSS probe returned 7 Rolex results.
 - Latest production read-only checks still fail. At **18:08:51 UTC**, PostgreSQL returned SQLSTATE **57P03**; at **18:08:57 UTC**, logs reported WAL redo elapsed **5,490 seconds**. Read-only eh_quad table and migration inspection remain unavailable. Production crawler Edge Function v49 remains paused. No production migration, import, restore, or write was attempted.
+
+## Current operations status (2026-11-17 20:06 UTC)
+
+This section supersedes earlier snapshot counts and status notes above; the prior history is retained for traceability.
+
+### Public crawler and search catalog
+
+- Latest verified public catalog: **4,866 indexed pages**, **27 SHA-256-verified shards**, and a **1,759,305-byte** compressed catalog.
+- Catalog SHA-256: `1c37a27645ed6e6b5c8f11705185a961a694762cf7612ac8807bf68f4735188b`.
+- Latest successful crawl snapshot (2026-11-17 19:06 UTC): 34 fetched, 27 indexed, 7 not indexed, 0 robots-blocked, 2 noindex pages excluded, 1 nofollow page not expanded, 2 robots-policy fetch failures handled fail-closed; 32 indexed hosts, 33,074 discovered URLs, and 21,151 frontier URLs remaining.
+- The public index validator confirmed all 27 shard sizes, SHA-256 digests, URL sets, page counts, and the compressed catalog against `data/index.json`.
+- The latest crawler schedule watchdog completed successfully and judged the crawl plus manifest fresh. The GitHub-hosted crawler remains the active public-catalog path while the Supabase queue worker is paused.
+
+### Search, media, and pipeline checks
+
+- Latest CI validation passed **84 crawler tests**, **23 database/schema/media tests**, and **17 Node edge-search tests**; static release-manifest validation passed.
+- Isolated importer smoke test **#105 passed** against a temporary PostgreSQL service: schema-isolation tests, additive import, lane distribution, authenticated search, lane filters, and pagination. This is not a production database import.
+- Live media smoke test **#11 passed**: **21 image results** for `octopus` and **2 video results** for `Apollo 11 NASA`, with Wikimedia Commons source and licensing/attribution metadata.
+- Homepage discovery now uses those live-smoke-tested queries. A regression test locks the homepage queries to the same smoke-tested terms.
+- The Vercel homepage production deployment `dpl_J9RVWnTS7ca7UKq6gjbjHenUmPjx` is **READY** and has the stable alias `https://everythinghub-homepage-fixed.vercel.app/`. The browser verification triggered by the latest homepage and workflow commits was still running/pending at the time of this note; READY alone is not a browser-pass claim.
+
+### Production database blocker and safety boundary
+
+- The Everything Hub Supabase control plane reports `ACTIVE_HEALTHY`, but direct PostgreSQL operations still fail with SQLSTATE **57P03**: `the database system is not accepting connections`, detail `Hot standby mode is disabled`.
+- `list_tables`, `list_migrations`, and a read-only `select current_timestamp` probe all failed with that same database error. Production `eh_quad` objects and row counts therefore remain unverified.
+- The deployed Supabase crawler remains paused at version **49**; sitemap discovery remains paused at version **7**. Their pause responses state that the existing queue and index data were preserved.
+- Do **not** apply `002_eh_quad_schema.sql`, run the repository importer against production, reset/restore the project, or switch live traffic until PostgreSQL accepts connections and `eh_quad` can be inspected.
+- Dog Tag Day Story Wall remains a separate Supabase project. It was checked read-only and was not modified; no Dog Tag Day or Story Wall data was read, migrated, or written during this work.
+- No production migration, production import, or DNS change was attempted in this run.
