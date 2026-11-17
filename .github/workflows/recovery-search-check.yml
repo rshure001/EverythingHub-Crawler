@@ -41,6 +41,29 @@ jobs:
           curl --fail --silent 'http://127.0.0.1:18080/search?q=NASA&limit=5' > nasa.json
           curl --fail --silent 'http://127.0.0.1:18080/search?q=Rolex&limit=5' > rolex.json
           python -c 'import json; n=json.load(open("nasa.json")); r=json.load(open("rolex.json")); assert n["total"]>0 and n["results"]; assert "results" in r and isinstance(r["results"],list); print("NASA indexed matches:",n["total"],"Rolex indexed matches:",r["total"],"(zero is valid when absent from local snapshot)")'
+      - name: Verify deployed Vercel preview search API
+        env:
+          PREVIEW_API: https://everythinghub-search-backend-gonwo4vlu-rshure001-8053.vercel.app
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 30 "$PREVIEW_API/api/health" > preview-health.json
+          curl --fail --silent --show-error --max-time 30 -G "$PREVIEW_API/api/search" --data-urlencode "q=NASA" --data-urlencode "limit=5" > preview-nasa.json
+          curl --fail --silent --show-error --max-time 30 -G "$PREVIEW_API/api/search" --data-urlencode "q=Rolex" --data-urlencode "limit=5" > preview-rolex.json
+          node <<'NODE'
+          const fs = require("fs");
+          const health = JSON.parse(fs.readFileSync("preview-health.json", "utf8"));
+          const nasa = JSON.parse(fs.readFileSync("preview-nasa.json", "utf8"));
+          const rolex = JSON.parse(fs.readFileSync("preview-rolex.json", "utf8"));
+          if (health.status !== "ok" || health.service !== "everythinghub-search") throw new Error("Vercel preview health check failed");
+          if (health.catalog !== "public-search/catalog-v1.json.gz") throw new Error("Preview is not configured for the current public catalog");
+          if (!Array.isArray(nasa.results) || !nasa.results.length || !(nasa.count >= nasa.results.length)) throw new Error("NASA preview search returned no valid local results");
+          if (!Number.isInteger(nasa.indexed_pages) || nasa.indexed_pages < 1 || nasa.provider !== "everythinghub-public-catalog") throw new Error("Preview search did not report the expected catalog provider");
+          for (const item of nasa.results) {
+            if (!item.title || !/^https?:\/\//.test(item.url || "") || !item.source) throw new Error("Preview search result is missing required fields");
+          }
+          if (!Array.isArray(rolex.results) || typeof rolex.count !== "number") throw new Error("Rolex preview response shape is invalid");
+          console.log(JSON.stringify({health, nasa:{count:nasa.count,shown:nasa.results.length,indexed_pages:nasa.indexed_pages}, rolex:{count:rolex.count,shown:rolex.results.length}}, null, 2));
+          NODE
       - name: Stop service
         if: always()
         run: docker rm -f eh-recovery || true

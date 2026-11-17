@@ -8,6 +8,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from lane_classifier import VALID_LANES, classify_lane
+from crawl import is_access_challenge_page
 
 ROOT = Path(__file__).resolve().parents[1]
 INDEX = ROOT / "data" / "index.json"
@@ -26,6 +27,15 @@ def main():
     lanes = Counter(
         p.get("lane") if isinstance(p.get("lane"), str) and p.get("lane") in VALID_LANES
         else classify_lane(p.get("url", ""))
+        for p in pages
+    )
+    blank_titles = sum(not str(p.get("title") or "").strip() for p in pages)
+    thin_content = sum(
+        len(" ".join(str(p.get(field) or "") for field in ("title", "description", "text")).strip()) < 80
+        for p in pages
+    )
+    challenge_pages = sum(
+        is_access_challenge_page(p.get("title"), p.get("description"), p.get("text"))
         for p in pages
     )
     updated = index.get("updated_at")
@@ -55,6 +65,7 @@ def main():
         f"- Not indexed this run: **{int(index.get('pages_not_indexed_this_run', 0) or 0):,}**",
         f"- Robots-blocked URLs this run: **{int(index.get('robots_blocked_this_run', 0) or 0):,}**",
         f"- Noindex pages excluded this run: **{int(index.get('index_policy_blocked_this_run', 0) or 0):,}**",
+        f"- Access-challenge pages excluded this run: **{int(index.get('access_challenge_pages_this_run', 0) or 0):,}**",
         f"- Nofollow pages not expanded this run: **{int(index.get('nofollow_pages_this_run', 0) or 0):,}**",
         f"- Robots.txt policy fetch failures (fail-closed): **{int(index.get('robots_policy_failures_this_run', 0) or 0):,}**",
         f"- Rate-limited responses this run: **{int(index.get('rate_limited_responses_this_run', 0) or 0):,}**",
@@ -65,6 +76,12 @@ def main():
         f"- Run duration: **{duration:.1f} seconds**",
         f"- Measured indexed rate (this run): **{indexed_rate:,.1f} pages/minute**",
         f"- Last index update (UTC): **{updated_text}**",
+        "",
+        "### Indexed content quality",
+        "",
+        f"- Records with blank titles: **{blank_titles:,}**",
+        f"- Records with fewer than 80 characters of combined text/metadata: **{thin_content:,}**",
+        f"- Records matching short challenge/interstitial patterns: **{challenge_pages:,}**",
         "",
         "### Indexed records by crawl depth",
         "",

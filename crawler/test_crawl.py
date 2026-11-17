@@ -53,6 +53,28 @@ class CrawlerTests(unittest.TestCase):
         self.assertNotIn("secret()", text)
         self.assertIn("/next", parser.links)
 
+    def test_access_challenge_policy_excludes_short_privacy_stub_and_disables_following(self):
+        directives = set()
+        detected = crawl.apply_access_challenge_policy(
+            "", "", "Powered and protected by Privacy", directives
+        )
+        self.assertTrue(detected)
+        self.assertEqual(directives, {"noindex", "nofollow"})
+        record = crawl.build_page_record(
+            "https://example.com/challenge", "", "", "Powered and protected by Privacy",
+            1, directives,
+        )
+        self.assertTrue(record["_eh_noindex"])
+        self.assertEqual(record["depth"], 1)
+
+    def test_access_challenge_policy_does_not_suppress_substantive_pages(self):
+        directives = set()
+        body = ("This article explains browser security and privacy. " * 40)
+        self.assertFalse(crawl.apply_access_challenge_policy(
+            "Browser Security Guide", "", body, directives
+        ))
+        self.assertEqual(directives, set())
+
     def test_parser_extracts_robots_meta_directives(self):
         parser = crawl.PageParser()
         parser.feed(

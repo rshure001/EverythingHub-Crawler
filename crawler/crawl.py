@@ -40,6 +40,22 @@ HOST_MIN_INTERVAL = 1.0
 ROBOTS_MAX_BYTES = 512_000
 TIMEOUT = 15
 UA = "EverythingHubCrawler/1.1 (+https://github.com/rshure001/EverythingHub-Crawler)"
+ACCESS_CHALLENGE_MAX_TEXT = 1200
+ACCESS_CHALLENGE_MARKERS = (
+    "powered and protected by privacy",
+    "checking your browser before accessing",
+    "just a moment...",
+    "attention required! | cloudflare",
+    "verify you are human",
+    "enable javascript and cookies to continue",
+    "please enable javascript and cookies to continue",
+    "complete the captcha",
+    "captcha verification",
+    "request blocked by security policy",
+    "your request has been blocked",
+    "unusual traffic from your network",
+    "temporarily blocked",
+)
 
 
 def parse_indexing_directives(values, useragent=UA):
@@ -91,6 +107,31 @@ def apply_snippet_policy(text, description, directives):
         return text, description
     limit = min(limits)
     return text[:limit], description[:limit]
+
+
+def is_access_challenge_page(title, description, text):
+    """Identify short anti-bot interstitials without suppressing substantive pages."""
+    visible_text = re.sub(r"\s+", " ", str(text or "")).strip()
+    if len(visible_text) > ACCESS_CHALLENGE_MAX_TEXT:
+        return False
+    combined = " ".join(str(value or "") for value in (title, description, visible_text))
+    normalized = re.sub(r"\s+", " ", combined).casefold()
+    if any(marker in normalized for marker in ACCESS_CHALLENGE_MARKERS):
+        return True
+    return (
+        "access denied" in normalized
+        and len(visible_text) <= 300
+        and not str(description or "").strip()
+    )
+
+
+def apply_access_challenge_policy(title, description, text, directives):
+    """Keep short challenge stubs out of search and do not expand their page chrome."""
+    if not is_access_challenge_page(title, description, text):
+        return False
+    directives.update(("noindex", "nofollow"))
+    return True
+
 
 def build_page_record(url, title, description, text, depth, directives):
     """Build a page record while retaining crawl depth for noindex pages."""
@@ -561,6 +602,7 @@ def main():
     index_policy_blocked_count = [0]
     nofollow_pages_count = [0]
     rate_limited_count = [0]
+    access_challenge_pages_count = [0]
 
     def policy(site):
         if site not in robots:
@@ -758,6 +800,8 @@ def main():
                 title = re.sub(r"\s+", " ", " ".join(parser.title)).strip()
                 text = re.sub(r"\s+", " ", " ".join(parser.text)).strip()[:4000]
                 description = parser.description[:500]
+                if apply_access_challenge_policy(title, description, text, directives):
+                    access_challenge_pages_count[0] += 1
                 text, description = apply_snippet_policy(text, description, directives)
                 record = build_page_record(
                     final, title, description, text, depth, directives
@@ -828,6 +872,7 @@ def main():
         "pages_not_indexed_this_run": fetched - len(records),
         "robots_blocked_this_run": robots_blocked_count[0],
         "index_policy_blocked_this_run": index_policy_blocked_count[0],
+        "access_challenge_pages_this_run": access_challenge_pages_count[0],
         "nofollow_pages_this_run": nofollow_pages_count[0],
         "robots_policy_failures_this_run": len(robots_policy_failures),
         "robots_policy_failure_hosts_this_run": [
@@ -855,7 +900,8 @@ def main():
         "sitemap_checked": sitemap_checked
     })
     print(f"Fetched {fetched}; indexed {len(records)}; not indexed {fetched - len(records)}; "
-          f"robots blocked {robots_blocked_count[0]}; duration {run_duration:.2f}s; "
+          f"robots blocked {robots_blocked_count[0]}; access challenges excluded {access_challenge_pages_count[0]}; "
+          f"duration {run_duration:.2f}s; "
           f"depth counts {depth_counts}; frontier remaining {len(queue)}; "
           f"discovered {len(seen)} URLs; total index {len(merged)}.")
 
