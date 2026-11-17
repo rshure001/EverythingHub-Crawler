@@ -91,6 +91,7 @@ class Handler(BaseHTTPRequestHandler):
                  ts_rank(search_vector, plainto_tsquery('english', %s)) as score
           from "{SCHEMA}".eh_documents
           where search_vector @@ plainto_tsquery('english', %s)
+            and robots_allowed is true
             and (%s = '' or lane = %s)
           order by score desc, fetched_at desc, canonical_url asc
           limit %s offset %s
@@ -98,6 +99,7 @@ class Handler(BaseHTTPRequestHandler):
         count_sql = f"""
           select count(*) from "{SCHEMA}".eh_documents
           where search_vector @@ plainto_tsquery('english', %s)
+            and robots_allowed is true
             and (%s = '' or lane = %s)
         """
         try:
