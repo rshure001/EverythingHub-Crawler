@@ -24,11 +24,11 @@ class ScheduleWatchdogTests(unittest.TestCase):
 
     def test_recent_success_is_healthy(self):
         result = evaluate(
-            [{"status": "completed", "conclusion": "success", "created_at": "2026-11-16T15:20:00Z"}],
+            [{"status": "completed", "conclusion": "success", "created_at": "2026-11-16T15:55:00Z"}],
             now=NOW,
         )
         self.assertEqual(result["action"], "healthy")
-        self.assertEqual(result["age_seconds"], 2400)
+        self.assertEqual(result["age_seconds"], 300)
 
     def test_stale_success_requests_one_recovery_dispatch(self):
         result = evaluate(
@@ -38,13 +38,21 @@ class ScheduleWatchdogTests(unittest.TestCase):
         self.assertEqual(result["action"], "dispatch")
         self.assertEqual(result["age_seconds"], 7200)
 
+    def test_success_older_than_ten_minutes_requests_recovery(self):
+        result = evaluate(
+            [{"status": "completed", "conclusion": "success", "created_at": "2026-11-16T15:49:00Z"}],
+            now=NOW,
+        )
+        self.assertEqual(result["action"], "dispatch")
+        self.assertEqual(result["age_seconds"], 660)
+
     def test_recent_failure_waits_before_retry(self):
         result = evaluate(
-            [{"status": "completed", "conclusion": "failure", "created_at": "2026-11-16T15:30:00Z"}],
+            [{"status": "completed", "conclusion": "failure", "created_at": "2026-11-16T15:55:00Z"}],
             now=NOW,
         )
         self.assertEqual(result["action"], "wait")
-        self.assertEqual(result["age_seconds"], 1800)
+        self.assertEqual(result["age_seconds"], 300)
 
     def test_stale_failure_requests_one_recovery_dispatch(self):
         result = evaluate(
@@ -93,14 +101,15 @@ class ScheduleWatchdogTests(unittest.TestCase):
         self.assertEqual(result["age_seconds"], 600)
 
     def test_recent_success_with_fresh_manifest_is_healthy(self):
-        manifest_time = int(datetime(2026, 11, 16, 15, 30, tzinfo=timezone.utc).timestamp())
+        manifest_time = int(datetime(2026, 11, 16, 15, 55, tzinfo=timezone.utc).timestamp())
         result = evaluate(
-            [{"status": "completed", "conclusion": "success", "created_at": "2026-11-16T15:50:00Z"}],
+            [{"status": "completed", "conclusion": "success", "created_at": "2026-11-16T15:55:00Z"}],
             now=NOW,
             manifest_updated_at=manifest_time,
         )
         self.assertEqual(result["action"], "healthy")
-        self.assertEqual(result["manifest_age_seconds"], 1800)
+        self.assertEqual(result["age_seconds"], 300)
+        self.assertEqual(result["manifest_age_seconds"], 300)
 
     def test_recent_success_with_stale_manifest_waits_before_retry(self):
         manifest_time = int(datetime(2026, 11, 16, 14, 0, tzinfo=timezone.utc).timestamp())
@@ -124,12 +133,12 @@ class ScheduleWatchdogTests(unittest.TestCase):
 
     def test_iso_manifest_timestamp_is_supported(self):
         result = evaluate(
-            [{"status": "completed", "conclusion": "success", "created_at": "2026-11-16T15:50:00Z"}],
+            [{"status": "completed", "conclusion": "success", "created_at": "2026-11-16T15:55:00Z"}],
             now=NOW,
-            manifest_updated_at="2026-11-16T15:30:00Z",
+            manifest_updated_at="2026-11-16T15:55:00Z",
         )
         self.assertEqual(result["action"], "healthy")
-        self.assertEqual(result["manifest_age_seconds"], 1800)
+        self.assertEqual(result["manifest_age_seconds"], 300)
 
     def test_future_manifest_timestamp_is_clamped_to_zero(self):
         result = evaluate(

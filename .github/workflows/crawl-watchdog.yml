@@ -91,7 +91,7 @@ jobs:
               echo "An existing crawler run is queued or active; no duplicate dispatch."
               ;;
             healthy)
-              echo "The most recent crawler run and public manifest are within the 75-minute freshness window."
+              echo "The most recent crawler run and public manifest are within the 10-minute freshness window."
               ;;
             *)
               echo "Unexpected watchdog decision: $action" >&2

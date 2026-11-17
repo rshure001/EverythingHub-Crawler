@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Decide whether the hourly crawler needs one safe recovery dispatch."""
+"""Decide whether the autonomous crawler needs one safe recovery dispatch."""
 from __future__ import annotations
 
 import json
@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-MAX_ATTEMPT_AGE_SECONDS = 75 * 60
+MAX_ATTEMPT_AGE_SECONDS = 10 * 60
 MAX_MANIFEST_AGE_SECONDS = MAX_ATTEMPT_AGE_SECONDS
 ACTIVE_STATUSES = {"queued", "in_progress", "pending", "waiting", "requested"}
 
