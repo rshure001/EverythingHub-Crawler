@@ -1,0 +1,46 @@
+name: Everything Hub independent recovery search
+on:
+  push:
+    branches: [main]
+    paths:
+      - "recovery/**"
+      - "public-search/**"
+      - ".github/workflows/recovery-search-check.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: everythinghub-recovery-search
+  cancel-in-progress: true
+jobs:
+  test-and-container-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile and run unit tests
+        run: |
+          python -m py_compile recovery/static_search_api.py recovery/test_static_search_api.py
+          python -m unittest discover -s recovery -p 'test_*.py' -v
+      - name: Build independent service image
+        run: docker build -f recovery/Dockerfile -t everythinghub-static-search:ci .
+      - name: Start service without database credentials
+        run: |
+          docker run -d --name eh-recovery -p 127.0.0.1:18080:8080 everythinghub-static-search:ci
+          for i in $(seq 1 20); do
+            if curl --fail --silent http://127.0.0.1:18080/healthz > health.json; then break; fi
+            sleep 1
+          done
+          cat health.json
+          python -c 'import json; d=json.load(open("health.json")); assert d["status"]=="ok"; assert d["database"]=="not_required"; assert d["indexed_pages"] > 0'
+      - name: Verify real index queries
+        run: |
+          curl --fail --silent 'http://127.0.0.1:18080/search?q=NASA&limit=5' > nasa.json
+          curl --fail --silent 'http://127.0.0.1:18080/search?q=Rolex&limit=5' > rolex.json
+          python -c 'import json; n=json.load(open("nasa.json")); r=json.load(open("rolex.json")); assert n["total"]>0 and n["results"]; assert r["total"]>0 and r["results"]; print("NASA:",n["total"],"Rolex:",r["total"])'
+      - name: Stop service
+        if: always()
+        run: docker rm -f eh-recovery || true
