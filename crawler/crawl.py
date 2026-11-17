@@ -246,7 +246,10 @@ def request(url, is_allowed, max_bytes=2_000_000):
     opener = urllib.request.build_opener(RobotsAwareRedirectHandler(is_allowed))
     with opener.open(req, timeout=TIMEOUT) as response:
         x_robots_tags = response.headers.get_all("X-Robots-Tag") or []
-        return response.geturl(), response.headers.get_content_type(), x_robots_tags, response.read(max_bytes)
+        body = response.read(max_bytes + 1)
+        if len(body) > max_bytes:
+            raise ValueError(f"response exceeds safe size limit ({max_bytes} bytes)")
+        return response.geturl(), response.headers.get_content_type(), x_robots_tags, body
 
 def origin(url):
     p = urllib.parse.urlsplit(url)
