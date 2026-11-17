@@ -48,3 +48,13 @@ The Supabase control plane reports the project as active, but PostgreSQL is repe
 
 ## Scale and safety
 This GitHub Actions worker is a prototype runner, not a distributed crawl fleet. Respect robots rules and host-level limits. Do not bypass logins, paywalls, CAPTCHAs, access controls, or site restrictions. Do not create paid infrastructure or buy credits without the owner's explicit approval.
+
+## Latest automation check — 2026-11-17 02:59 UTC
+
+- **Database remains unavailable.** A read-only listing of the dedicated `eh_quad` schema still fails with a PostgreSQL connection timeout. PostgreSQL logs at **02:59:56 UTC** show another automatic-recovery restart and SQLSTATE **57P03** (the database is not accepting connections; hot standby is disabled). No migration, import, restore, or data write was attempted.
+- **The broken hero image is explained by the same outage.** At **02:32:04 UTC**, Supabase Storage logged HTTP **429** for `/object/info/public/everything-hub-publishing/assets/approved-master.png`; its internal database lookup failed with `08P01` / `server_login_retry`. The object URL is being requested, but Storage cannot complete the database-backed object lookup during recovery.
+- The production `everything-hub-crawler` Edge Function remains intentionally paused (version **49**, HTTP 503). This protects the existing index/frontier while the database is unstable.
+- The media-search Edge Function (version **21**) returned HTTP **200** for image and video discovery requests at **02:24:56 UTC**. The web-search Edge Function (version **19**) remains scoped to `eh_quad` and contains verified static-catalog plus independent Bing RSS fallbacks.
+- The latest committed crawler snapshot remains **3,363 pages / 18 shards / 31 hosts**, with **31,153 discovered URLs** and **21,407 queued URLs**. The last recorded completed crawl run (#43991961223) fetched **80** pages and indexed **62**; no newer crawler-output commit is present after the **01:09:27 UTC** status commit.
+- A separate Vercel **preview** deployment was created to remove the Storage dependency from the hero image: **https://everythinghub-homepage-fixed-824h3trnm-rshure001-8053.vercel.app/**. It is **READY**, contains `src/index.html` and a local `src/assets/everythinghub-approved.png`, and uses the existing web/media Edge Functions for search. The image asset is the same repository-approved binary (SHA-1 `9770d91de70b91d27d83a7c0e00bbc6a9d2e3143`). The preview has no custom-domain alias and has **not** replaced `everythinghub.ink`. Browser rendering/search verification of this new preview is still pending; Vercel's deployment/file-tree checks alone do not prove a browser pass.
+- No `eh_quad` data, Dog Tag Day data, or Story Wall data was changed.
