@@ -452,6 +452,40 @@ main{width:min(900px,calc(100% - 28px))!important;margin:22px auto 40px!importan
 .eh-suggestions button{padding:7px 12px;border:1px solid #234a41;border-radius:999px;background:#07151d;color:#c9e8d8;font-size:11px}
 .eh-results{min-height:100px;padding-top:4px}.eh-welcome{display:flex;flex-direction:column;gap:5px;padding:18px 2px;color:#9bcdb6}.eh-welcome strong{font-size:16px;color:#effff6}.eh-welcome span{font-size:12px}
 @media(max-width:680px){.eh-search-workspace{margin:20px 12px 28px;padding:17px 13px;border-radius:15px}.eh-modebar{grid-template-columns:repeat(4,minmax(0,1fr));gap:7px}.eh-mode{min-height:42px;font-size:11px}.eh-search-heading p{font-size:12px}.eh-suggestions{gap:6px}.eh-suggestions>span{width:100%;margin-bottom:2px}}
+
+/* Search results: familiar search-engine layout, not dashboard cards */
+.eh-search-workspace{background:#fff!important;color:#202124!important;border:1px solid #dadce0!important;box-shadow:0 2px 12px #0002!important}
+.eh-search-heading span{color:#18865b!important}
+.eh-search-heading h2{color:#202124!important}
+.eh-search-heading p{color:#5f6368!important}
+.eh-mode{background:#fff!important;color:#3c4043!important;border:1px solid #dadce0!important;border-radius:7px!important}
+.eh-mode.active,.eh-mode:hover{background:#e8f5ee!important;color:#137333!important;border-color:#18865b!important;box-shadow:none!important}
+.eh-suggestions button{background:#f8f9fa!important;color:#3c4043!important;border:1px solid #dadce0!important}
+.eh-results{background:#fff!important;color:#202124!important}
+.eh-welcome{color:#5f6368!important}
+.eh-welcome strong{color:#202124!important}
+#results .search-tabs{display:flex;gap:24px;overflow-x:auto;border-bottom:1px solid #dadce0;padding:0 0 0;margin:18px 0 12px}
+#results .search-tab{border:0!important;border-radius:0!important;border-bottom:3px solid transparent!important;background:transparent!important;color:#5f6368!important;padding:12px 3px!important;font-size:13px!important;font-weight:600!important;white-space:nowrap}
+#results .search-tab[aria-pressed="true"]{color:#18865b!important;border-bottom-color:#18865b!important;box-shadow:none!important}
+#results .result{display:flex!important;flex-direction:column!important;gap:0!important;max-width:760px;padding:16px 0!important;border:0!important;border-bottom:1px solid #eee!important;background:transparent!important;border-radius:0!important}
+#results .result-copy{order:1}
+#results .result-copy>a{display:block;color:#1a0dab!important;font-size:19px!important;line-height:1.35!important;text-decoration:none!important;font-weight:400!important}
+#results .result-copy>a:hover{text-decoration:underline!important}
+#results .result-copy .source{color:#5f6368!important;font-size:12px!important;margin:4px 0 5px!important}
+#results .result-copy p{color:#4d5156!important;font-size:13px!important;line-height:1.55!important;margin:4px 0!important}
+#results .result .preview{order:2;max-width:220px!important;height:124px!important;margin-top:10px!important;border-radius:9px!important;overflow:hidden}
+#results .result .preview img{width:100%;height:100%;object-fit:cover}
+#results .result-count{color:#70757a!important;font-size:12px!important}
+#results #moreResults{background:#f8f9fa!important;color:#3c4043!important;border:1px solid #dadce0!important;border-radius:8px!important}
+#results.image-mode{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:12px!important}
+#results.image-mode>.search-tabs,#results.image-mode>.result-count,#results.image-mode>#moreResults{grid-column:1/-1!important}
+#results.image-mode .result{display:block!important;border:1px solid #dadce0!important;border-radius:10px!important;overflow:hidden!important;padding:0!important}
+#results.image-mode .result .preview{display:block!important;max-width:none!important;height:170px!important;margin:0!important;border-radius:0!important}
+#results.image-mode .result-copy{padding:10px!important}
+#results.image-mode .result-copy>a{font-size:14px!important;color:#1a0dab!important}
+#results.image-mode .result-copy p{display:none!important}
+@media(max-width:680px){.eh-search-workspace{background:#fff!important}#results .result{max-width:100%!important}#results.image-mode{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px!important}#results.image-mode .result .preview{height:125px!important}}
+
 </style><link rel="canonical" href="https://everythinghub.ink/"><meta name="robots" content="index,follow,max-image-preview:large"><meta property="og:type" content="website"><meta property="og:title" content="Everything Hub — Everything within reach"><meta property="og:description" content="Search the web, discover pictures and videos, explore places, businesses, news, shopping and research."><meta property="og:url" content="https://everythinghub.ink/"><script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","name":"Everything Hub","url":"https://everythinghub.ink/","description":"A broad search and discovery engine for web pages, images, videos, news, places, businesses, shopping and research.","potentialAction":{"@type":"SearchAction","target":{"@type":"EntryPoint","urlTemplate":"https://everythinghub.ink/?q={search_term_string}"},"query-input":"required name=search_term_string"}}</script></head>
 <body>
 <header class="topbar">
@@ -703,10 +737,10 @@ form.addEventListener('submit',async e=>{
  };
  const render=()=>{
   const isVideo=x=>x.mediaType==='video'||/youtube\.com|youtu\.be|vimeo\.com/i.test(String(x.url||''));
-  const matches=items.filter(x=>activeType==='images'?Boolean(safe(x.image)!=='#'):activeType==='videos'?isVideo(x):!isVideo(x));
+  const matches=items.filter(x=>activeType==='images'?Boolean(safe(x.image)!=='#'):activeType==='videos'?isVideo(x):activeType==='news'?/news|reuters|apnews|bbc|cnn|nytimes|theguardian/i.test(String(x.url||'')+' '+String(x.source||'')):activeType==='shopping'?/shop|store|amazon|walmart|ebay|product/i.test(String(x.url||'')+' '+String(x.title||'')):activeType==='places'?/maps|place|travel|visit|location/i.test(String(x.url||'')+' '+String(x.title||'')):activeType==='business'?/company|business|corporate|linkedin|crunchbase/i.test(String(x.url||'')+' '+String(x.title||'')):activeType==='research'?/research|study|journal|paper|scholar|arxiv/i.test(String(x.url||'')+' '+String(x.title||'')):!isVideo(x));
   const visible=matches.slice(0,shown);
   out.className=activeType==='images'?'image-mode':activeType==='videos'?'video-mode':'';
-  const tabs='<nav class="search-tabs" aria-label="Search categories">'+[['web','Web'],['images','Images'],['videos','Videos']].map(([key,label])=>'<button type="button" class="search-tab" data-type="'+key+'" aria-pressed="'+(activeType===key)+'">'+label+'</button>').join('')+'</nav>';
+  const tabs='<nav class="search-tabs" aria-label="Search categories">'+[['web','All'],['news','News'],['images','Images'],['videos','Videos'],['shopping','Shopping'],['places','Maps'],['business','Business'],['research','Research']].map(([key,label])=>'<button type="button" class="search-tab" data-type="'+key+'" aria-pressed="'+(activeType===key)+'">'+label+'</button>').join('')+'</nav>';
   const cards=visible.map(x=>{
    const image=safe(x.image),link=safe(x.url),video=safe(x.video);
    const directVideo=video!=='#'&&/\.(mp4|webm|ogg)(?:[?#]|$)/i.test(video);
