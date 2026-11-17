@@ -36,6 +36,21 @@ def compact(doc):
     }
 
 
+def encode_batch(items):
+    """Serialize exactly the bytes written to disk, including the final newline."""
+    payload = json.dumps(
+        {"version": 1, "pages": items},
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ) + "\n"
+    return payload.encode("utf-8")
+
+
+def batch_fits(items, max_bytes=MAX_BYTES):
+    """Use on-disk byte size so the builder and validator share one boundary."""
+    return len(encode_batch(items)) <= max_bytes
+
+
 def main():
     source = json.loads(SOURCE.read_text(encoding="utf-8"))
     pages = [compact(p) for p in source.get("pages", []) if is_publishable(p)]
@@ -54,12 +69,7 @@ def main():
             return
         number += 1
         name = f"shard-{number:04d}.json"
-        payload = json.dumps(
-            {"version": 1, "pages": items},
-            ensure_ascii=False,
-            separators=(",", ":"),
-        ) + "\n"
-        raw = payload.encode("utf-8")
+        raw = encode_batch(items)
         (OUT / name).write_bytes(raw)
         shards.append({
             "file": name,
@@ -70,14 +80,11 @@ def main():
 
     for page in pages:
         trial = batch + [page]
-        encoded = json.dumps(
-            {"version": 1, "pages": trial},
-            ensure_ascii=False,
-            separators=(",", ":"),
-        ).encode("utf-8")
-        if batch and len(encoded) > MAX_BYTES:
+        if batch and not batch_fits(trial):
             write_batch(batch)
             batch = [page]
+            if not batch_fits(batch):
+                raise ValueError("single compacted page exceeds the public shard size limit")
         else:
             batch = trial
     write_batch(batch)
