@@ -198,3 +198,28 @@ Run: https://github.com/rshure001/EverythingHub-Crawler/actions/runs/44062366732
 - Publisher run #35 validated and uploaded its artifact, but GitHub Pages deployment was skipped: Pages site lookup returned 404 and creation returned `Resource not accessible by integration`. No repository settings were changed.
 - The custom-domain fetch probe for `everythinghub.ink` returned `deployment_fetch_failed`; the canonical Vercel homepage passed browser verification.
 - Dog Tag Day and Story Wall data were not accessed or modified. No AppDeploy was used.
+
+
+## Automation run — 2026-11-17 11:16 UTC
+
+### Robots-policy search safety fix merged
+- Merged PR [#23](https://github.com/rshure001/EverythingHub-Crawler/pull/23), commit `acb66d0dd97e68155bbc1e0b907cd1d9636dc49e`.
+- The `eh_quad.eh_search_pages` SQL RPC and both authenticated Python search/count queries now require `robots_allowed IS TRUE`; denied rows cannot appear in results or inflate counts.
+- The importer now soft-disables only exact existing `eh_quad.eh_documents` rows explicitly marked robots-denied by the crawler. It never deletes rows; a later allowed snapshot can re-enable the row.
+- The isolated importer workflow now runs on pull requests and includes a robots-denied fixture plus direct RPC assertions.
+
+### Validation
+- PR validation run #110: passed, including Python compilation, crawler/schema unit tests, Edge search tests, public index validation, and release-manifest validation.
+- Isolated PostgreSQL 17 importer smoke run #87: passed. Imported **3,608** records into the disposable test database; **0** invalid lane rows. The search API returned exactly **3** allowed fixture rows; the robots-denied fixture returned **0** rows through both the Python API and `eh_quad.eh_search_pages`.
+- The database test suite ran **22 tests** successfully.
+- No production migration or import was run.
+
+### Production recovery snapshot
+- Target Supabase project: `everything-hub-control` (`vdceayvfgkwpgwixrhwi`); only this project was queried for Everything Hub. The separate Dog Tag Day Story Wall project was not accessed.
+- Read-only `eh_quad` table inventory still fails with PostgreSQL `57P03`: the database is not accepting connections.
+- In the 15-minute log window ending **2026-11-17 11:16 UTC**, there were **152** messages reporting that connections were not accepted and **45** WAL redo progress messages. Latest log: **11:15:56 UTC**, redo elapsed **5,741.52 seconds**.
+- Public catalog remains **3,608 pages / 20 shards**; shard page totals reconcile, largest shard **339,971 bytes**, compressed catalog **1,122,047 bytes**. Latest successful crawler run remains #104; no new crawl snapshot was published in this interval.
+- Crawler Edge Function v49 remains an explicit 503 pause. Web search v20 and media search v21 remain active. No production schema, Dog Tag Day, or Story Wall data was changed. No AppDeploy was used.
+
+### Next gate
+Wait for PostgreSQL to accept connections, inspect only `eh_quad` read-only, then apply the additive migration and importer under the documented validation sequence. Do not resume database-backed crawling before that gate passes.
