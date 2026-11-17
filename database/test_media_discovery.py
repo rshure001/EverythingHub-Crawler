@@ -45,5 +45,11 @@ class MediaDiscoveryComplianceTests(unittest.TestCase):
         self.assertIn('Unverified', workflow)
 
 
+    def test_homepage_media_queries_match_live_smoke_queries(self):
+        homepage = (SOURCE.parents[3] / "vercel-homepage" / "index.html").read_text(encoding="utf-8")
+        self.assertIn("loadHomepageMedia('image','octopus','homeLiveImages')", homepage)
+        self.assertIn("loadHomepageMedia('video','Apollo 11 NASA','homeLiveVideos')", homepage)
+
+
 if __name__ == "__main__":
     unittest.main()
