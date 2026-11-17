@@ -4,31 +4,54 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/search-api-smoke.yml"
+      - "supabase/functions/everything-hub-web-search/**"
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
   smoke-test:
     runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      BASE: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1
+      KEY: sb_publishable_XlIsACWhtVS1jVODWYGTpg_GMs8v3vJ
     steps:
-      - name: Check deployed preview API
+      - name: Check indexed search and database-independent fallback
         run: |
           python - <<'PY'
-          import json, urllib.request
-          url = "https://everythinghub-homepage-fixed-qeg6honkg-rshure001-8053.vercel.app/api/search?q=NASA"
-          req = urllib.request.Request(url, headers={"Accept": "application/json"})
-          with urllib.request.urlopen(req, timeout=45) as response:
-              assert response.status == 200, response.status
-              data = json.load(response)
-          assert data.get("indexedPages", 0) >= 1700, data
-          assert data.get("total", 0) >= 5, data
-          assert data.get("results"), data
-          for result in data["results"]:
+          import json
+          import os
+          import urllib.parse
+          import urllib.request
+
+          base = os.environ["BASE"]
+          key = os.environ["KEY"]
+
+          def get(function, query):
+              url = base + "/" + function + "?" + urllib.parse.urlencode({"q": query, "limit": 10})
+              request = urllib.request.Request(url, headers={
+                  "Accept": "application/json",
+                  "apikey": key,
+              })
+              with urllib.request.urlopen(request, timeout=25) as response:
+                  assert response.status == 200, response.status
+                  return json.load(response)
+
+          indexed = get("everything-hub-web-search", "NASA")
+          assert indexed.get("count", 0) > 0, indexed
+          assert "index" in str(indexed.get("source", "")).lower(), indexed
+          assert isinstance(indexed.get("results"), list), indexed
+          for result in indexed["results"]:
               assert result.get("url", "").startswith(("https://", "http://")), result
               assert result.get("title"), result
-          print("Search API smoke test passed")
-          print("Indexed pages:", data["indexedPages"])
-          print("Matching results:", data["total"])
-          for result in data["results"][:5]:
-              print("-", result["title"], result["url"])
+          print("Indexed search passed:", indexed["count"], "NASA results")
+
+          independent = get("everything-hub-independent-search", "Rolex")
+          assert independent.get("count", 0) > 0, independent
+          assert independent.get("provider") == "Bing RSS", independent
+          assert independent.get("independentOfDatabase") is True, independent
+          for result in independent["results"]:
+              assert result.get("url", "").startswith(("https://", "http://")), result
+              assert result.get("title"), result
+          print("Independent fallback passed:", independent["count"], "Rolex results")
           PY
