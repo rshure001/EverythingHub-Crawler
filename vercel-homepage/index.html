@@ -723,7 +723,7 @@ form.addEventListener('submit',async e=>{
  const q=input.value.trim();if(!q)return;
  out.innerHTML="<p>Searching Everything Hub's own index and connected sources…</p>";
  let apiPage=1,apiHasMore=false,totalIndexed=0,loadingMore=false,shown=24;
- let activeType=selectedMode==='images'?'images':selectedMode==='videos'?'videos':'web';
+ let activeType=['news','images','videos','shopping','places','business','research'].includes(selectedMode)?selectedMode:'web';
  const seenUrls=new Set(),items=[];
  const addItems=(rows)=>{for(const x of rows||[]){const url=safe(x.url);if(url==='#'||seenUrls.has(url))continue;seenUrls.add(url);items.push({...x,url});}};
  const loadApiPage=async(page)=>{
