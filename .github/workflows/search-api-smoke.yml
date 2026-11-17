@@ -7,10 +7,15 @@ on:
       - "supabase/functions/everything-hub-web-search/**"
       - "public-search/**"
   workflow_dispatch:
+  workflow_run:
+    workflows: ["Everything Hub crawler"]
+    types: [completed]
+    branches: [main]
 permissions:
   contents: read
 jobs:
   smoke-test:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 3
     env:
