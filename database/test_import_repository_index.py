@@ -18,6 +18,34 @@ class SchemaIsolationTests(unittest.TestCase):
         self.assertTrue(IMPORTER.is_robots_allowed({}))
         self.assertTrue(IMPORTER.is_robots_allowed({"robots_allowed": True}))
 
+    def test_robots_denied_urls_are_deduplicated_and_limited_to_public_http(self):
+        pages = [
+            {"url": "https://example.org/blocked", "robots_allowed": False},
+            {"url": "https://example.org/blocked", "robots_allowed": False},
+            {"url": "javascript:alert(1)", "robots_allowed": False},
+            {"url": "file:///tmp/private", "robots_allowed": False},
+            {"url": "https://example.org/allowed", "robots_allowed": True},
+            None,
+        ]
+        self.assertEqual(
+            IMPORTER.collect_robots_denied_urls(pages),
+            ["https://example.org/blocked"],
+        )
+
+    def test_robots_denials_soft_disable_only_matching_eh_quad_rows(self):
+        sql = IMPORTER.build_robots_exclusion_statement().lower()
+        self.assertIn('update "eh_quad".eh_documents', sql)
+        self.assertIn("set robots_allowed = false", sql)
+        self.assertIn("where canonical_url = any(%s)", sql)
+        self.assertIn("robots_allowed is distinct from false", sql)
+        for destructive in ("delete ", "truncate ", "drop "):
+            self.assertNotIn(destructive, sql)
+
+    def test_upsert_restores_allowed_flag_when_policy_allows_again(self):
+        sql = IMPORTER.build_upsert_statement().lower()
+        self.assertIn("robots_allowed = excluded.robots_allowed", sql)
+        self.assertIn("target.robots_allowed is distinct from excluded.robots_allowed", sql)
+
     def test_other_schemas_are_rejected(self):
         for schema in ("public", "auth", "storage", "dog_tag_day"):
             with self.subTest(schema=schema):
@@ -64,6 +92,7 @@ class SchemaIsolationTests(unittest.TestCase):
         self.assertIn("create table if not exists eh_quad.eh_documents", sql)
         self.assertIn("create table if not exists eh_quad.eh_crawl_queue", sql)
         self.assertIn("create or replace function eh_quad.eh_search_pages", sql)
+        self.assertIn("and d.robots_allowed is true", sql)
         self.assertIn("enable row level security", sql)
         self.assertIn("grant select on eh_quad.eh_documents to service_role", sql)
         self.assertNotIn("grant select on eh_quad.eh_documents to anon", sql)
@@ -76,6 +105,10 @@ class SchemaIsolationTests(unittest.TestCase):
         self.assertIn('os.environ.get("EH_DB_SCHEMA", "eh_quad")', source)
         self.assertIn('if SCHEMA != "eh_quad":', source)
         self.assertNotIn('os.environ.get("EH_DB_SCHEMA", "public")', source)
+
+    def test_python_search_and_count_both_exclude_robots_denied_rows(self):
+        source = (HERE / "search_api.py").read_text(encoding="utf-8")
+        self.assertEqual(source.count("and robots_allowed is true"), 2)
 
     def test_edge_search_uses_only_eh_quad(self):
         source = (HERE.parent / "supabase" / "functions" / "everything-hub-web-search" / "index.ts").read_text(encoding="utf-8")

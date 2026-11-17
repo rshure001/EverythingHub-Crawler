@@ -47,6 +47,28 @@ def is_robots_allowed(page):
     return page.get("robots_allowed") is not False
 
 
+def is_public_http_url(value):
+    """Accept only absolute HTTP(S) URLs with a hostname."""
+    if not isinstance(value, str):
+        return False
+    try:
+        parsed = urlsplit(value)
+    except ValueError:
+        return False
+    return parsed.scheme in ("http", "https") and bool(parsed.hostname)
+
+
+def collect_robots_denied_urls(pages):
+    """Return unique public URLs explicitly denied by the current robots policy."""
+    return sorted({
+        page["url"]
+        for page in pages
+        if isinstance(page, dict)
+        and page.get("robots_allowed") is False
+        and is_public_http_url(page.get("url"))
+    })
+
+
 def page_lane(page, url):
     """Preserve a valid crawler lane or classify the source host safely."""
     lane = page.get("lane")
@@ -71,9 +93,22 @@ def build_upsert_statement():
         body_text = excluded.body_text,
         content_hash = excluded.content_hash,
         fetched_at = greatest(target.fetched_at, excluded.fetched_at),
+        robots_allowed = excluded.robots_allowed,
         updated_at = now()
       where target.content_hash is distinct from excluded.content_hash
          or target.lane is distinct from excluded.lane
+         or target.robots_allowed is distinct from excluded.robots_allowed
+    """
+
+
+def build_robots_exclusion_statement():
+    """Soft-disable exact existing rows denied by current robots policy; never delete."""
+    schema = target_schema()
+    return f"""
+      update "{schema}".eh_documents
+      set robots_allowed = false, updated_at = now()
+      where canonical_url = any(%s)
+        and robots_allowed is distinct from false
     """
 
 
@@ -94,22 +129,22 @@ def main():
     pages = payload.get("pages", [])
     rows = []
     skipped = 0
+    denied_urls = collect_robots_denied_urls(pages)
+    denied_url_set = set(denied_urls)
 
     for page in pages:
         if not isinstance(page, dict):
             skipped += 1
             continue
-        if not is_robots_allowed(page):
+        url = page.get("url")
+        if not is_public_http_url(url):
             skipped += 1
             continue
-        url = page.get("url")
-        if not isinstance(url, str):
+        # If duplicate source records disagree, an explicit denial wins.
+        if url in denied_url_set or not is_robots_allowed(page):
             skipped += 1
             continue
         parsed = urlsplit(url)
-        if parsed.scheme not in ("http", "https") or not parsed.hostname:
-            skipped += 1
-            continue
 
         title = str(page.get("title") or "")[:2000]
         description = str(page.get("description") or "")[:5000]
@@ -124,12 +159,14 @@ def main():
             None, None, None, digest, fetched, None, True
         ))
 
-    if not rows:
+    if not rows and not denied_urls:
         print(f"No valid records to import; skipped {skipped}.")
         return
 
     statement = build_upsert_statement()
+    exclusion_statement = build_robots_exclusion_statement()
     processed = 0
+    robots_excluded = 0
     with psycopg.connect(database_url, connect_timeout=10) as connection:
         with connection.cursor() as cursor:
             for offset in range(0, len(rows), 250):
@@ -139,8 +176,16 @@ def main():
                 connection.commit()
                 print(f"Processed {processed:,}/{len(rows):,}")
 
-    print(f"Import complete. Processed {processed:,}; skipped {skipped:,}.")
-    print("Rows processed are not the same as newly inserted rows.")
+            if denied_urls:
+                cursor.execute(exclusion_statement, (denied_urls,))
+                robots_excluded = max(0, cursor.rowcount)
+                connection.commit()
+
+    print(
+        f"Import complete. Processed {processed:,}; skipped {skipped:,}; "
+        f"soft-excluded {robots_excluded:,} existing robots-denied documents."
+    )
+    print("Rows processed are not the same as newly inserted rows; no destination rows are deleted.")
 
 
 if __name__ == "__main__":
