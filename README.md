@@ -152,3 +152,49 @@ This GitHub Actions worker is a prototype runner, not a distributed crawl fleet.
 - The deployed media-search Edge Function remains **v21 ACTIVE**; web-search remains **v20 ACTIVE**; crawler remains **v49 ACTIVE but paused**. No Supabase Edge Function or production schema was changed in this run.
 - PostgreSQL is still unavailable; the read-only `eh_quad` inventory fails with SQLSTATE **57P03**. No production write, migration, import, restore, or crawler restart was attempted. Dog Tag Day and Story Wall data remain untouched.
 - Next gate: browser-runtime validation of the GitHub-backed catalog loader and Images/Videos mode; independently, wait for PostgreSQL to accept connections before any `eh_quad` inventory or production crawler resume.
+
+
+## Automation run — 2026-11-17 10:14 UTC
+
+### Code and pipeline changes
+- The crawler watchdog now also wakes after the crawler/schema validation workflow completes. Its push-triggered recovery run detected a stale last crawl (7,234 seconds) and dispatched exactly one recovery crawl. Subsequent watchdog runs observed the active/recent crawl and did not duplicate it.
+- The public shard builder now targets **340,000 bytes**, leaving 10 KB below the 350,000-byte serving/validation ceiling. A regression test locks in that headroom.
+- Production browser verification now checks that GitHub `manifest.json` and `catalog-v1.json.gz` are actually fetched successfully, then exercises Images and Videos category searches end-to-end.
+- The search API smoke workflow now runs after successful crawler completions as well as on code pushes/manual dispatch.
+
+### Latest successful crawler — run #104
+- **3,608 indexed pages**, **31 unique hosts**
+- **31,373 discovered URLs**, **21,169 frontier URLs waiting**
+- 50 fetched; 36 parsed/indexed; 14 not indexed
+- Robots: 2 disallowed; 5 noindex excluded; 3 nofollow not expanded; 2 robots-policy fetch failures handled fail-closed
+- 0 rate-limited responses; 0 transient retries
+- 3 sitemap hosts/files checked; 0 new sitemap URLs
+- Duration 8.3 seconds
+- **20 shards**, page-count sum 3,608, largest shard **339,971 bytes**
+- Compressed catalog: **1,122,047 bytes**, SHA-256 verified
+
+Run: https://github.com/rshure001/EverythingHub-Crawler/actions/runs/44062190723
+
+### Production verification
+- Browser run #34 passed: HTTP 200; one search form inside approved artwork; eight categories; 390px mobile viewport with no horizontal overflow; zero page errors.
+- Browser fetched the manifest and compressed catalog successfully (HTTP 200).
+- Images mode: **21** results and 21 rendered image previews. Videos mode: **2** results and four video indicators.
+- NASA: 1,825 public-index matches; Rolex independent fallback: 10 Bing RSS results.
+- Vercel search backend refreshed after its 5-minute cache and returned **indexedPages=3,608** (HTTP 200).
+- Search API smoke run #7 passed: 1,825 NASA results and 10 independent Rolex results.
+- Media results carry Commons source links and available license/attribution metadata; reuse still requires checking each item's license.
+
+Browser: https://github.com/rshure001/EverythingHub-Crawler/actions/runs/44062366775  
+Search smoke: https://github.com/rshure001/EverythingHub-Crawler/actions/runs/44062886710  
+Live diagnostics: https://github.com/rshure001/EverythingHub-Crawler/actions/runs/44062366820
+
+### Isolated importer test
+The temporary PostgreSQL 17 test environment created only the `eh_quad` test schema and imported **3,608 records** (0 skipped, 0 invalid lane rows). The 12 schema-isolation unit tests passed; authenticated search, 401 for unauthenticated requests, three-page pagination, and science-lane filtering passed. This was a disposable test database, **not production Supabase**.
+
+Run: https://github.com/rshure001/EverythingHub-Crawler/actions/runs/44062366732
+
+### Remaining blockers
+- Supabase project control plane reports `ACTIVE_HEALTHY`, but PostgreSQL is still replaying WAL. In the 15-minute log window ending 10:14 UTC: **173 SQLSTATE 57P03 connection refusals**, 55 redo-progress messages, and zero “ready to accept connections” messages. Latest log: 10:14:19 UTC; redo elapsed 2,030 seconds. Production `eh_quad` read-only inventory remains unavailable. The production crawler Edge Function v49 stays paused; web-search v20 and media-search v21 remain active. No production writes/imports/migrations/restores were made.
+- Publisher run #35 validated and uploaded its artifact, but GitHub Pages deployment was skipped: Pages site lookup returned 404 and creation returned `Resource not accessible by integration`. No repository settings were changed.
+- The custom-domain fetch probe for `everythinghub.ink` returned `deployment_fetch_failed`; the canonical Vercel homepage passed browser verification.
+- Dog Tag Day and Story Wall data were not accessed or modified. No AppDeploy was used.
