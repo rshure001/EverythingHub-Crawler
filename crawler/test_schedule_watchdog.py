@@ -92,6 +92,64 @@ class ScheduleWatchdogTests(unittest.TestCase):
         self.assertEqual(result["action"], "healthy")
         self.assertEqual(result["age_seconds"], 600)
 
+    def test_recent_success_with_fresh_manifest_is_healthy(self):
+        manifest_time = int(datetime(2026, 11, 16, 15, 30, tzinfo=timezone.utc).timestamp())
+        result = evaluate(
+            [{"status": "completed", "conclusion": "success", "created_at": "2026-11-16T15:50:00Z"}],
+            now=NOW,
+            manifest_updated_at=manifest_time,
+        )
+        self.assertEqual(result["action"], "healthy")
+        self.assertEqual(result["manifest_age_seconds"], 1800)
+
+    def test_recent_success_with_stale_manifest_waits_before_retry(self):
+        manifest_time = int(datetime(2026, 11, 16, 14, 0, tzinfo=timezone.utc).timestamp())
+        result = evaluate(
+            [{"status": "completed", "conclusion": "success", "created_at": "2026-11-16T15:50:00Z"}],
+            now=NOW,
+            manifest_updated_at=manifest_time,
+        )
+        self.assertEqual(result["action"], "wait")
+        self.assertEqual(result["manifest_age_seconds"], 7200)
+
+    def test_stale_success_with_stale_manifest_requests_recovery(self):
+        manifest_time = int(datetime(2026, 11, 16, 13, 30, tzinfo=timezone.utc).timestamp())
+        result = evaluate(
+            [{"status": "completed", "conclusion": "success", "created_at": "2026-11-16T14:00:00Z"}],
+            now=NOW,
+            manifest_updated_at=manifest_time,
+        )
+        self.assertEqual(result["action"], "dispatch")
+        self.assertEqual(result["manifest_age_seconds"], 9000)
+
+    def test_iso_manifest_timestamp_is_supported(self):
+        result = evaluate(
+            [{"status": "completed", "conclusion": "success", "created_at": "2026-11-16T15:50:00Z"}],
+            now=NOW,
+            manifest_updated_at="2026-11-16T15:30:00Z",
+        )
+        self.assertEqual(result["action"], "healthy")
+        self.assertEqual(result["manifest_age_seconds"], 1800)
+
+    def test_future_manifest_timestamp_is_clamped_to_zero(self):
+        result = evaluate(
+            [{"status": "completed", "conclusion": "success", "created_at": "2026-11-16T15:50:00Z"}],
+            now=NOW,
+            manifest_updated_at="2026-11-16T16:05:00Z",
+        )
+        self.assertEqual(result["action"], "healthy")
+        self.assertEqual(result["manifest_age_seconds"], 0)
+
+    def test_invalid_manifest_timestamp_is_rejected(self):
+        with self.assertRaises(ValueError):
+            evaluate([], now=NOW, manifest_updated_at="not-a-timestamp")
+
+    def test_workflow_passes_the_public_manifest_to_the_watchdog(self):
+        workflow = (Path(__file__).resolve().parents[1] / ".github" / "workflows" / "crawl-watchdog.yml").read_text(encoding="utf-8")
+        self.assertIn("public-search/manifest.json", workflow)
+        self.assertIn("base64.b64decode", workflow)
+        self.assertIn("schedule_watchdog.py /tmp/crawl-runs.json /tmp/public-manifest.json", workflow)
+
     def test_timezone_offsets_are_normalized(self):
         result = evaluate(
             [{"status": "completed", "conclusion": "success", "created_at": "2026-11-16T10:00:00-06:00"}],
