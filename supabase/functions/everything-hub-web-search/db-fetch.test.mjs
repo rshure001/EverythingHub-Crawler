@@ -31,10 +31,18 @@ test("timed fetch aborts a stalled database request at its deadline", async () =
     init.signal.addEventListener("abort", () => reject(init.signal.reason), { once: true });
   }), 5);
 
-  await assert.rejects(
-    timedFetch("https://database.example.test"),
-    (error) => error?.name === "TimeoutError",
-  );
+  // AbortSignal.timeout() uses an unref'ed timer in Node. Keep the test
+  // process alive until that deadline fires so node --test does not cancel
+  // the pending assertion before the abort is delivered.
+  const keepAlive = setTimeout(() => {}, 50);
+  try {
+    await assert.rejects(
+      timedFetch("https://database.example.test"),
+      (error) => error?.name === "TimeoutError",
+    );
+  } finally {
+    clearTimeout(keepAlive);
+  }
 });
 
 test("classifies PostgreSQL recovery and transport failures as transient", () => {
