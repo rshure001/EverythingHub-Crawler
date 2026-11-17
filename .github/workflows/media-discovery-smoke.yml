@@ -6,6 +6,8 @@ on:
       - ".github/workflows/media-discovery-smoke.yml"
       - "supabase/functions/everything-hub-media-search/index.ts"
       - "database/test_media_discovery.py"
+  schedule:
+    - cron: "41 */6 * * *"
   workflow_dispatch:
 permissions:
   contents: read
