@@ -1,4 +1,5 @@
 name: Publish and verify Everything Hub — in-house Supabase route
+# No-op change used to exercise the credential-gated publisher and end-to-end verification.
 on:
   workflow_dispatch:
   push:
