@@ -54,6 +54,8 @@ def main():
         f"- Parsed/indexed this run: **{indexed_this_run:,}**",
         f"- Not indexed this run: **{int(index.get('pages_not_indexed_this_run', 0) or 0):,}**",
         f"- Robots-blocked URLs this run: **{int(index.get('robots_blocked_this_run', 0) or 0):,}**",
+        f"- Noindex pages excluded this run: **{int(index.get('index_policy_blocked_this_run', 0) or 0):,}**",
+        f"- Nofollow pages not expanded this run: **{int(index.get('nofollow_pages_this_run', 0) or 0):,}**",
         f"- Robots.txt policy fetch failures (fail-closed): **{int(index.get('robots_policy_failures_this_run', 0) or 0):,}**",
         f"- Rate-limited responses this run: **{int(index.get('rate_limited_responses_this_run', 0) or 0):,}**",
         f"- Transient retries queued this run: **{int(index.get('transient_retries_queued_this_run', 0) or 0):,}**",
