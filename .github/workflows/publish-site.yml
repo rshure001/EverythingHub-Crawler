@@ -109,11 +109,14 @@ jobs:
             echo "- GitHub Pages access: available to this integration" >> "$GITHUB_STEP_SUMMARY"
           else
             echo "available=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::GitHub Pages is not accessible to this integration; the validated artifact is retained without deployment."
+            pages_error="$(head -c 300 /tmp/pages-error | tr '\n' ' ')"
+            if [ -z "$pages_error" ]; then pages_error="unavailable"; fi
+            echo "::warning::GitHub Pages API response: $pages_error"
+            echo "::warning::The validated artifact is retained without deployment."
             echo "## GitHub Pages deployment blocked" >> "$GITHUB_STEP_SUMMARY"
             echo "- Artifact: validated and uploaded." >> "$GITHUB_STEP_SUMMARY"
             echo "- Blocker: the repository Pages endpoint is not accessible to this GitHub Actions integration." >> "$GITHUB_STEP_SUMMARY"
-            echo "- API response: $(head -c 300 /tmp/pages-error | tr '\n' ' ')" >> "$GITHUB_STEP_SUMMARY"
+            echo "- API response: $pages_error" >> "$GITHUB_STEP_SUMMARY"
           fi
   deploy:
     if: needs.validate-and-build.outputs.pages_available == 'true'
