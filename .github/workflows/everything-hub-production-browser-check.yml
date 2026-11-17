@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     env:
-      TARGET_URL: https://everythinghub.ink/
+      TARGET_URL: https://everythinghub-homepage-fixed-qu1b0e7u0-rshure001-8053.vercel.app/
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -81,6 +81,18 @@ jobs:
                 throw new Error("Approved homepage structure check failed: " + JSON.stringify(report));
               }
               await page.screenshot({ path: "everything-hub-production-homepage.png", fullPage: true });
+
+              await page.locator("#homeLiveImages .live-media-card").first().waitFor({ state: "visible", timeout: 25000 });
+              await page.locator("#homeLiveVideos .live-media-card").first().waitFor({ state: "visible", timeout: 25000 });
+              report.mediaDiscovery = {
+                imageCards: await page.locator("#homeLiveImages .live-media-card").count(),
+                videoCards: await page.locator("#homeLiveVideos .live-media-card").count(),
+                imageProvider: await page.locator("#homeLiveImages .live-media-card small").first().innerText(),
+                videoProvider: await page.locator("#homeLiveVideos .live-media-card small").first().innerText()
+              };
+              if (report.mediaDiscovery.imageCards < 1 || report.mediaDiscovery.videoCards < 1) {
+                throw new Error("Homepage media discovery returned no visible cards: " + JSON.stringify(report.mediaDiscovery));
+              }
 
               report.crawlerApiProbe = await page.evaluate(async () => {
                 const url = new URL("https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-web-search");
