@@ -60,7 +60,7 @@ unauthenticated search endpoint.
 
 The deployed `everything-hub-web-search` version 20 and legacy `everything-hub-search` version 4 both explicitly select `eh_quad`. The web-search function calls `eh_search_pages` and uses the schema-qualified `eh_documents` fallback path; it also has database-independent fallbacks to the public crawler catalog and Bing RSS. The database RPC and authenticated Python search API both require `robots_allowed IS TRUE` in result and count queries, so soft-excluded documents cannot leak into result counts. The deployed function source is schema-scoped, but its database path and the production schema objects cannot currently be validated because PostgreSQL is rejecting connections with SQLSTATE `57P03`. Do not apply migrations or import data until database connections and schema inspection succeed.
 
-## Observed production deployment state (2026-11-17 12:27 UTC)
+## Observed production deployment state (2026-11-17 12:35 UTC)
 
 - Supabase Edge Function inspection shows `everything-hub-web-search` version **20** and legacy `everything-hub-search` version **4**. Both deployed sources explicitly use `.schema("eh_quad")`; the current web-search source also contains static public-crawler and independent Bing RSS fallbacks.
 - The separate Everything Hub crawler function is version **49** and explicitly returns HTTP 503 with status `paused` while database storage recovery is in progress. Sitemap discovery version **7** is paused for the same reason. These functions report that existing queue and indexed data were preserved.
@@ -72,9 +72,11 @@ The deployed `everything-hub-web-search` version 20 and legacy `everything-hub-s
 
 No migration or import has been run against Dog Tag Day; that separate project is not an Everything Hub target. The files alone do not publish or switch production traffic.
 
-## Latest repository snapshot and recovery status (2026-11-17 12:27 UTC)
+## Latest repository snapshot and recovery status (2026-11-17 12:35 UTC)
 
-The public crawler repository's latest `main` commit is `c18fecb` (2026-11-17 12:17:18 UTC). Its published public search catalog contains **3,667 pages across 20 SHA-256-listed shards**; the compressed catalog is **1,153,757 bytes**. These are public repository catalog counts, not production database row counts.
+The public crawler repository's latest `main` commit is `3086f3d` (2026-11-17 12:34:45 UTC), which hardens the Node timeout unit test; the public catalog itself remains at **3,667 pages across 20 SHA-256-listed shards**, with a **1,153,757-byte** compressed catalog. These are public repository catalog counts, not production database row counts.
+
+Local validation on Node 22.16.0 passed **19/19** tests across robots policy (7), database timeout/error classification (5), and static search ranking/pagination/robots filtering (7). The timeout test now keeps the Node process alive until `AbortSignal.timeout()` fires, avoiding a false cancellation by `node --test`.
 
 Production `eh_quad` remains unverified because the dedicated `everything-hub-control` PostgreSQL service is rejecting connections with SQLSTATE `57P03` and detail “Hot standby mode is disabled.” `list_tables` and `list_migrations` cannot complete while the database is unavailable. Do not apply `002_eh_quad_schema.sql`, run the importer, or attempt project reset/restore until direct database reads succeed.
 
