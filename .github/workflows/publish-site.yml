@@ -108,15 +108,23 @@ jobs:
             echo "available=true" >> "$GITHUB_OUTPUT"
             echo "- GitHub Pages access: available to this integration" >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "available=false" >> "$GITHUB_OUTPUT"
             pages_error="$(head -c 300 /tmp/pages-error | tr '\n' ' ')"
             if [ -z "$pages_error" ]; then pages_error="unavailable"; fi
-            echo "::warning::GitHub Pages API response: $pages_error"
-            echo "::warning::The validated artifact is retained without deployment."
-            echo "## GitHub Pages deployment blocked" >> "$GITHUB_STEP_SUMMARY"
-            echo "- Artifact: validated and uploaded." >> "$GITHUB_STEP_SUMMARY"
-            echo "- Blocker: the repository Pages endpoint is not accessible to this GitHub Actions integration." >> "$GITHUB_STEP_SUMMARY"
-            echo "- API response: $pages_error" >> "$GITHUB_STEP_SUMMARY"
+            if grep -qE 'HTTP 404|Not Found' /tmp/pages-error; then
+              # A 404 commonly means Pages has not been initialized yet. Let
+              # configure-pages@v5 make the narrowly scoped enablement attempt.
+              echo "available=true" >> "$GITHUB_OUTPUT"
+              echo "- GitHub Pages API returned 404; attempting initialization through configure-pages with pages:write." >> "$GITHUB_STEP_SUMMARY"
+              echo "::notice::GitHub Pages is not initialized; configure-pages will attempt to enable it."
+            else
+              echo "available=false" >> "$GITHUB_OUTPUT"
+              echo "::warning::GitHub Pages API response: $pages_error"
+              echo "::warning::The validated artifact is retained without deployment."
+              echo "## GitHub Pages deployment blocked" >> "$GITHUB_STEP_SUMMARY"
+              echo "- Artifact: validated and uploaded." >> "$GITHUB_STEP_SUMMARY"
+              echo "- Blocker: the repository Pages endpoint is not accessible to this GitHub Actions integration." >> "$GITHUB_STEP_SUMMARY"
+              echo "- API response: $pages_error" >> "$GITHUB_STEP_SUMMARY"
+            fi
           fi
   deploy:
     if: needs.validate-and-build.outputs.pages_available == 'true'
