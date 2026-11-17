@@ -24,6 +24,18 @@ class SchemaIsolationTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     IMPORTER.target_schema(schema)
 
+    def test_schema_selector_rejects_qualified_and_injected_names(self):
+        for schema in (
+            "public.eh_quad",
+            "eh_quad ",
+            "EH_QUAD",
+            "eh_quad; drop schema public cascade",
+            "eh_quad,public",
+        ):
+            with self.subTest(schema=schema):
+                with self.assertRaises(ValueError):
+                    IMPORTER.target_schema(schema)
+
     def test_upsert_is_schema_qualified(self):
         sql = IMPORTER.build_upsert_statement()
         self.assertIn('insert into "eh_quad".eh_documents', sql)
