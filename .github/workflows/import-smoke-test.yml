@@ -123,15 +123,15 @@ jobs:
           assert all(page["total"] == 3 and len(page["results"]) == 1 for page in pages), pages
           assert pages[0]["hasMore"] is True and pages[1]["hasMore"] is True and pages[2]["hasMore"] is False, pages
           assert len(set(urls)) == 3 and set(urls) == expected, urls
-          print("Pagination returned all three unique allowed fixture records; robots-denied fixture was exclu          rpc_count=$(psql "$DATABASE_URL" -tA -c "SELECT count(*) FROM eh_quad.eh_search_pages('quartz lantern', NULL, 20);")
+          print("Pagination returned all three unique allowed fixture records; robots-denied fixture was excluded.")
+          PY
+
+          rpc_count=$(psql "$DATABASE_URL" -tA -c "SELECT count(*) FROM eh_quad.eh_search_pages('quartz lantern', NULL, 20);")
           echo "eh_quad RPC visible rows: $rpc_count"
           test "$rpc_count" = "3"
           rpc_denied=$(psql "$DATABASE_URL" -tA -c "SELECT count(*) FROM eh_quad.eh_search_pages('quartz lantern', NULL, 20) WHERE url = 'https://everythinghub.test/search-smoke-robots-denied';")
           echo "eh_quad RPC robots-denied rows: $rpc_denied"
           test "$rpc_denied" = "0"
-
-ded.")
-          PY
 
           curl --silent --fail -H "Authorization: Bearer isolated-test-token" \
             'http://127.0.0.1:8080/search?q=quartz%20lantern&tentacle=science' \
