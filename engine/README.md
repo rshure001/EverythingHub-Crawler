@@ -1,18 +1,20 @@
 # Independent Search Core
 
-This is the first isolated component of Everything Hub's own search engine.
+The engine reads the existing published crawler catalog directly from `public-search/catalog-v1.json.gz`. It does not require Supabase, PostgreSQL, a hosted search provider, or paid services.
 
-- Reads the existing crawler's published page records; it does not own or mutate crawl state.
-- Uses Unicode-aware tokenization, weighted title/URL/description/body matching, phrase bonuses, lane filters, stable ranking and snippets.
-- Uses only Python's standard library.
-- Has no database, hosted search, paid API, or external service dependency.
-- Rejects non-HTTP(S) result URLs, de-duplicates URLs, bounds query length and result count.
-- Does not fetch pages or bypass robots.txt, access controls, or source restrictions.
+## Search the current catalog locally
 
-Run tests:
+```bash
+python engine/catalog_search.py "Rolex" --limit 20
+python engine/catalog_search.py "NASA" --lane science --limit 20
+```
+
+The loader validates catalog version and page structure. The ranking core uses Unicode-aware tokenization, weighted title/URL/description/body matches, phrase boosts, lane filters, deterministic ordering, snippets, URL de-duplication and bounded output.
+
+## Tests
 
 ```bash
 python -m unittest discover -s engine -p 'test_*.py' -v
 ```
 
-This is a standalone ranking core and testable foundation, not yet wired into the production homepage/API. Integration must be separately verified against the existing public catalog before any traffic switch.
+This is an independent, database-free search path for the committed public catalog. It is not yet the live HTTP API or homepage integration. That remains a separate release step after real-catalog tests and deployment verification.
