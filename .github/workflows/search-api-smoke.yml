@@ -5,6 +5,7 @@ on:
     paths:
       - ".github/workflows/search-api-smoke.yml"
       - "supabase/functions/everything-hub-web-search/**"
+      - "public-search/**"
   workflow_dispatch:
 permissions:
   contents: read
