@@ -1,5 +1,5 @@
 name: EverythingHub search API smoke test
-# Re-run the live API smoke on demand after crawler-published catalog snapshots.
+# Re-run the live API smoke after crawler run 118 published the 5,003-page catalog.
 on:
   push:
     branches: [main]
