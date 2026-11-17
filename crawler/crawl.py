@@ -92,6 +92,37 @@ def apply_snippet_policy(text, description, directives):
     limit = min(limits)
     return text[:limit], description[:limit]
 
+def build_page_record(url, title, description, text, depth, directives):
+    """Build a page record while retaining crawl depth for noindex pages."""
+    if "noindex" in directives:
+        # noindex suppresses publication, not link discovery; keep depth so
+        # permitted links on this page can still be queued safely.
+        return {"url": url, "_eh_noindex": True, "depth": depth}
+    return {
+        "url": url,
+        "title": title,
+        "lane": classify_lane(url),
+        "description": description,
+        "text": text,
+        "depth": depth,
+        "fetched_at": int(time.time()),
+        "robots_allowed": True,
+    }
+
+
+def enqueue_discovered_links(queue, seen, links, record, queue_limit=QUEUE_LIMIT):
+    """Queue unseen same-page discoveries using the fetched record's depth."""
+    depth = record.get("depth")
+    if not isinstance(depth, int) or depth < 0:
+        raise ValueError("page record is missing a valid crawl depth")
+    added = 0
+    for candidate in links:
+        if candidate not in seen and len(seen) < queue_limit:
+            seen.add(candidate)
+            queue.append((candidate, depth + 1))
+            added += 1
+    return added
+
 
 class RobotsAwareRedirectHandler(urllib.request.HTTPRedirectHandler):
     """Allow same-host redirects only after checking robots.txt for the target URL."""
@@ -728,14 +759,9 @@ def main():
                 text = re.sub(r"\s+", " ", " ".join(parser.text)).strip()[:4000]
                 description = parser.description[:500]
                 text, description = apply_snippet_policy(text, description, directives)
-                if "noindex" in directives:
-                    record = {"url": final, "_eh_noindex": True}
-                else:
-                    record = {
-                        "url": final, "title": title, "lane": classify_lane(final),
-                        "description": description,
-                        "text": text, "depth": depth, "fetched_at": int(time.time()), "robots_allowed": True
-                    }
+                record = build_page_record(
+                    final, title, description, text, depth, directives
+                )
                 links = []
                 if depth < MAX_DEPTH and "nofollow" not in directives:
                     host = urllib.parse.urlsplit(final).netloc
@@ -790,10 +816,7 @@ def main():
             else:
                 records[record["url"]] = record
                 depth_counts[str(record["depth"])] = depth_counts.get(str(record["depth"]), 0) + 1
-            for candidate in links:
-                if candidate not in seen and len(seen) < QUEUE_LIMIT:
-                    seen.add(candidate)
-                    queue.append((candidate, record["depth"] + 1))
+            enqueue_discovered_links(queue, seen, links, record)
 
     run_duration = round(time.monotonic() - run_started, 2)
     old = load_json(OUTPUT, {"version": 1, "pages": []})
