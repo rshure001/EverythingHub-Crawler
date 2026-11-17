@@ -30,5 +30,20 @@ class MediaDiscoveryComplianceTests(unittest.TestCase):
         self.assertIn("usageNote:", source)
 
 
+    def test_edge_responses_use_short_shared_cache_and_bounded_provider_timeouts(self):
+        source = SOURCE.read_text(encoding="utf-8")
+        self.assertIn('"Cache-Control": "public, max-age=180, s-maxage=180"', source)
+        self.assertEqual(source.count("AbortSignal.timeout(9000)"), 2)
+        self.assertIn('gsrlimit: "24"', source)
+        self.assertIn('.slice(0, 30)', source)
+
+    def test_live_media_smoke_covers_images_videos_and_reuse_rights(self):
+        workflow = (SOURCE.parents[3] / ".github" / "workflows" / "media-discovery-smoke.yml").read_text(encoding="utf-8")
+        self.assertIn('q=octopus', workflow)
+        self.assertIn('q=Apollo 11 NASA', workflow)
+        self.assertIn('cache-control: public, max-age=180, s-maxage=180', workflow)
+        self.assertIn('Unverified', workflow)
+
+
 if __name__ == "__main__":
     unittest.main()
