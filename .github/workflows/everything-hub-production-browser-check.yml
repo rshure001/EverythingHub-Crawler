@@ -84,10 +84,11 @@ jobs:
               await page.locator("#q").press("Enter");
               await page.locator("#results .result a").first().waitFor({ state: "visible", timeout: 35000 });
               report.rolexResultCount = await page.locator("#results .result").count();
-              report.rolexStatus = await page.locator("#status").innerText();
-              if (!report.rolexResultCount || !report.rolexStatus.includes("Bing RSS independent web fallback")) {
-                throw new Error("Rolex did not use the independent fallback: " + JSON.stringify({
-                  count: report.rolexResultCount, status: report.rolexStatus
+              report.rolexStatus = await page.locator("#results .result-count").innerText();
+              report.rolexSources = await page.locator("#results .result .source").allTextContents();
+              if (!report.rolexResultCount || !report.rolexSources.some(source => source.toLowerCase().includes("bing rss"))) {
+                throw new Error("Rolex did not use the independent Bing RSS fallback: " + JSON.stringify({
+                  count: report.rolexResultCount, status: report.rolexStatus, sources: report.rolexSources
                 }));
               }
               await page.screenshot({ path: "everything-hub-production-rolex.png", fullPage: true });
@@ -96,10 +97,14 @@ jobs:
               await page.locator("#q").press("Enter");
               await page.locator("#results .result a").first().waitFor({ state: "visible", timeout: 35000 });
               report.nasaResultCount = await page.locator("#results .result").count();
-              report.nasaStatus = await page.locator("#status").innerText();
-              if (!report.nasaResultCount || !report.nasaStatus.includes("Everything Hub public crawler index")) {
+              report.nasaStatus = await page.locator("#results .result-count").innerText();
+              report.nasaSources = await page.locator("#results .result .source").allTextContents();
+              if (!report.nasaResultCount || !report.nasaSources.some(source =>
+                source.toLowerCase().includes("everythinghub index") ||
+                source.toLowerCase().includes("everything hub public crawler index")
+              )) {
                 throw new Error("NASA did not return crawler-index results: " + JSON.stringify({
-                  count: report.nasaResultCount, status: report.nasaStatus
+                  count: report.nasaResultCount, status: report.nasaStatus, sources: report.nasaSources
                 }));
               }
               await page.screenshot({ path: "everything-hub-production-nasa.png", fullPage: true });
