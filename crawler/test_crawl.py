@@ -26,7 +26,61 @@ class FakeRobotsResponse:
         return self.body[:limit]
 
 
+class FakePageHeaders:
+    def get_all(self, _name):
+        return []
+
+    def get_content_type(self):
+        return "text/html"
+
+
+class FakePageResponse:
+    def __init__(self, body, url="https://example.com/page"):
+        self.body = body
+        self.url = url
+        self.headers = FakePageHeaders()
+        self.read_limit = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        return False
+
+    def geturl(self):
+        return self.url
+
+    def read(self, limit):
+        self.read_limit = limit
+        return self.body[:limit]
+
+
 class CrawlerTests(unittest.TestCase):
+    def test_request_accepts_response_at_exact_byte_limit(self):
+        response = FakePageResponse(b"1234")
+        opener = mock.Mock()
+        opener.open.return_value = response
+        with mock.patch.object(crawl.urllib.request, "build_opener", return_value=opener):
+            final_url, content_type, x_robots_tags, body = crawl.request(
+                "https://example.com/page", lambda _url: True, max_bytes=4
+            )
+        self.assertEqual(final_url, "https://example.com/page")
+        self.assertEqual(content_type, "text/html")
+        self.assertEqual(x_robots_tags, [])
+        self.assertEqual(body, b"1234")
+        self.assertEqual(response.read_limit, 5)
+
+    def test_request_rejects_oversized_response_instead_of_indexing_truncated_body(self):
+        response = FakePageResponse(b"12345")
+        opener = mock.Mock()
+        opener.open.return_value = response
+        with mock.patch.object(crawl.urllib.request, "build_opener", return_value=opener):
+            with self.assertRaisesRegex(ValueError, "exceeds safe size limit"):
+                crawl.request(
+                    "https://example.com/page", lambda _url: True, max_bytes=4
+                )
+        self.assertEqual(response.read_limit, 5)
+
     def test_clean_removes_tracking_and_fragment(self):
         self.assertEqual(
             crawl.clean("HTTPS://Example.com/a?utm_source=x&id=7#section"),
