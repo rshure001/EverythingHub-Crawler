@@ -156,10 +156,10 @@ jobs:
               // not the index provider. Index provenance is independently checked above
               // through crawlerApiProbe.source and below through manifest/catalog requests.
               const nasaIndexedCount = Number(
-                (report.nasaStatus.match(/([\\d,]+)\\s+indexed matches/i) || [])[1]?.replace(/,/g, "") || 0
+                (report.nasaStatus.match(/([\d,]+)\s+indexed matches/i) || [])[1]?.replace(/,/g, "") || 0
               );
               const hasNasaSource = report.nasaSources.some(source =>
-                /(^|\\.)nasa\\.gov$/i.test(source.trim())
+                /(^|\.)nasa\.gov$/i.test(source.trim())
               );
               if (!report.nasaResultCount || !nasaIndexedCount || !hasNasaSource) {
                 throw new Error("NASA UI did not show crawler-index matches: " + JSON.stringify({
