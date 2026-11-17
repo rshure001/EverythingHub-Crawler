@@ -392,8 +392,10 @@ main{width:min(900px,calc(100% - 28px))!important;margin:22px auto 40px!importan
  .hero-live-search button{min-height:24px!important;padding:0 8px!important;font-size:10px!important}
 }
 
-/* Final iPhone alignment: cover the artwork's printed search field cleanly. */
-@media(max-width:680px){.hero-live-search{transform:translateY(-26px)!important}}
+/* Approved octopus master artwork + live search alignment */
+.hero-art-wrap{position:relative!important;overflow:hidden!important}
+.hero-live-search{position:absolute!important;left:29%!important;top:46%!important;width:42%!important;height:7%!important;min-height:28px!important;margin:0!important;transform:none!important;z-index:8!important}
+@media(max-width:680px){.hero-live-search{left:29%!important;top:46%!important;width:42%!important;height:7%!important;min-height:22px!important;transform:none!important}}
 </style><link rel="canonical" href="https://everythinghub.ink/"><meta name="robots" content="index,follow,max-image-preview:large"><meta property="og:type" content="website"><meta property="og:title" content="Everything Hub — Everything within reach"><meta property="og:description" content="Search the web, discover pictures and videos, explore places, businesses, news, shopping and research."><meta property="og:url" content="https://everythinghub.ink/"><script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","name":"Everything Hub","url":"https://everythinghub.ink/","description":"A broad search and discovery engine for web pages, images, videos, news, places, businesses, shopping and research.","potentialAction":{"@type":"SearchAction","target":{"@type":"EntryPoint","urlTemplate":"https://everythinghub.ink/?q={search_term_string}"},"query-input":"required name=search_term_string"}}</script></head>
 <body>
 <header class="topbar">
@@ -412,7 +414,7 @@ main{width:min(900px,calc(100% - 28px))!important;margin:22px auto 40px!importan
 <main>
 <section class="hero">
   <div class="hero-art-wrap">
-    <img class="approved-master-art" src="/assets/everythinghub-approved.png" alt="Realistic emerald octopus with a glowing gold brain and eight detailed tentacles" />
+    <img class="approved-master-art" src="https://everythinghub-search-engine-4x25f8.v2.appdeploy.ai/resources/everythinghub-approved-green-octopus.png" alt="Realistic emerald octopus with a glowing gold brain and eight detailed tentacles" />
     <form class="search hero-live-search" id="search">
       
       <input id="q" type="search" aria-label="Search Everything Hub" placeholder="Search Everything within reach…" autocomplete="off" />
