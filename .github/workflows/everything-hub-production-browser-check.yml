@@ -50,7 +50,15 @@ jobs:
               report.httpStatus = response?.status();
               report.title = await page.title();
               report.searchInput = await page.locator("#q").count() === 1;
-              report.categoryCount = await page.locator(".categories button[data-mode]").count();
+              const categoryTiles = page.locator('.tile[href*="mode="]');
+              report.categoryCount = await categoryTiles.count();
+              report.categoryModes = await categoryTiles.evaluateAll(nodes =>
+                nodes.map(node => new URL(node.href).searchParams.get("mode")).sort()
+              );
+              const expectedModes = ["business", "images", "news", "places", "research", "shopping", "videos", "web"];
+              if (JSON.stringify(report.categoryModes) !== JSON.stringify(expectedModes)) {
+                throw new Error("Homepage search categories are incomplete or duplicated: " + JSON.stringify(report.categoryModes));
+              }
 
               const artwork = page.locator(".hero img").first();
               await artwork.waitFor({ state: "visible", timeout: 15000 });
@@ -102,7 +110,7 @@ jobs:
                 viewportWidth: document.documentElement.clientWidth,
                 documentWidth: document.documentElement.scrollWidth,
                 searchVisible: !!document.querySelector("#q")?.getClientRects().length,
-                categoryCount: document.querySelectorAll(".categories button[data-mode]").length
+                categoryCount: document.querySelectorAll('.tile[href*="mode="]').length
               }));
               if (report.mobile.documentWidth > report.mobile.viewportWidth + 2 ||
                   !report.mobile.searchVisible || report.mobile.categoryCount !== 8) {
