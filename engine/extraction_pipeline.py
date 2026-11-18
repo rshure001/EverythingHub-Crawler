@@ -176,8 +176,7 @@ def attach_extractions(
     rows = list(extractions or [])
     if len(rows) > MAX_SEGMENTS:
         raise ValueError("too many extractions for one asset")
-    if rows:
-        validate_extraction_authorization(asset)
+    authorization = validate_extraction_authorization(asset) if rows else None
 
     normalized = normalize_asset(asset)
     asset_url = _url(normalized["url"])
@@ -191,12 +190,20 @@ def attach_extractions(
         if item["source_url"] != asset_url:
             continue
         grouped.setdefault(item["field"], []).append(item["text"])
-        provenance.append({key: item[key] for key in (
-            "extraction_type", "provider", "model", "language",
-            "confidence", "extracted_at", "source_url")})
+        provenance.append({
+            key: item[key] for key in (
+                "extraction_type", "provider", "model", "language",
+                "confidence", "extracted_at", "source_url")
+        } | {
+            key: authorization[key] for key in (
+                "policy_basis", "robots_allowed", "extraction_permission",
+                "source_terms_status", "source_terms_url",
+                "source_terms_sha256", "source_terms_checked_at")
+        })
     for field, values in grouped.items():
         existing = _text(merged.get(field), MAX_RESULT_TEXT)
         merged[field] = _text(" ".join([existing, *values]), MAX_RESULT_TEXT)
     result = normalize_asset(merged)
+    result["policy_status"] = normalized.get("policy_status", "not_checked")
     result["extraction_provenance"] = provenance[-MAX_SEGMENTS:]
     return result
