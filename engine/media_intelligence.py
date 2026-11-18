@@ -204,9 +204,12 @@ def normalize_asset(record: Mapping[str, Any]) -> dict[str, Any]:
     license_url = _url(record.get("license_url") or record.get("licenseUrl"))
     credit = _text(record.get("credit"), 500)
     attribution = _text(record.get("attribution") or record.get("creator") or credit, 500)
-    attribution_required = _bool_or_none(
-        record.get("attribution_required") or record.get("attributionRequired")
+    attribution_value = (
+        record.get("attribution_required")
+        if "attribution_required" in record
+        else record.get("attributionRequired")
     )
+    attribution_required = _bool_or_none(attribution_value)
     status = _text(record.get("rights_status"), 30).casefold()
     if status not in {"verified", "unverified", "restricted", "unknown"}:
         status = "unknown"
