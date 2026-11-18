@@ -17,9 +17,9 @@ and improve ranking from explicit feedback.
   increases evidence; it does not establish truth.
 - **Score:** returns a 0–1 score, evidence band, component breakdown, and
   exact weight set for every eligible result.
-- **Search integration:** the independent Python search core now applies the
-  evidence score as a secondary ranking signal while retaining lexical
-  relevance as a tie-breaker. Public catalog shards preserve crawler fetch and
+- **Search integration:** the independent Python search core now blends 85% normalized lexical
+  relevance with 15% evidence score, so source freshness and corroboration
+  refine results without overruling strong text matches. Public catalog shards preserve crawler fetch and
   publication timestamps so freshness can be measured. Older catalog records
   without timestamps receive a conservative unknown-age value.
 - **Corroboration scope:** the current offline search adapter uses the active
