@@ -41,6 +41,30 @@ class SchemaIsolationTests(unittest.TestCase):
         for destructive in ("delete ", "truncate ", "drop "):
             self.assertNotIn(destructive, sql)
 
+    def test_public_http_url_rejects_credentials_and_malformed_authorities(self):
+        rejected = (
+            "https://user:secret@example.org/private",
+            "https://@example.org/private",
+            "https://example.org:invalid/path",
+            "https://example.org:99999/path",
+            "https://[2001:db8::1/path",
+            "https://example.org/with space",
+            " file:///tmp/private",
+            "ftp://example.org/resource",
+        )
+        for url in rejected:
+            with self.subTest(url=url):
+                self.assertFalse(IMPORTER.is_public_http_url(url))
+
+        accepted = (
+            "https://example.org/path",
+            "http://example.org:8080/path",
+            "https://[2001:db8::1]/path",
+        )
+        for url in accepted:
+            with self.subTest(url=url):
+                self.assertTrue(IMPORTER.is_public_http_url(url))
+
     def test_upsert_restores_allowed_flag_when_policy_allows_again(self):
         sql = IMPORTER.build_upsert_statement().lower()
         self.assertIn("robots_allowed = excluded.robots_allowed", sql)
