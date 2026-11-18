@@ -168,7 +168,46 @@ class ScheduleWatchdogTests(unittest.TestCase):
         workflow = (Path(__file__).resolve().parents[1] / ".github" / "workflows" / "crawl-watchdog.yml").read_text(encoding="utf-8")
         self.assertIn("public-search/manifest.json", workflow)
         self.assertIn("base64.b64decode", workflow)
-        self.assertIn("schedule_watchdog.py /tmp/crawl-runs.json /tmp/public-manifest.json", workflow)
+        self.assertIn("schedule_watchdog.py /tmp/crawl-runs-combined.json /tmp/public-manifest.json", workflow)
+
+    def test_schedule_health_is_independent_of_recent_manual_crawl(self):
+        result = evaluate(
+            [
+                {"status": "completed", "conclusion": "success", "event": "workflow_dispatch", "created_at": "2026-11-16T15:59:00Z"},
+                {"status": "completed", "conclusion": "success", "event": "schedule", "created_at": "2026-11-16T15:00:00Z"},
+            ],
+            now=NOW,
+        )
+        self.assertEqual(result["action"], "healthy")
+        self.assertEqual(result["schedule_status"], "stale")
+        self.assertEqual(result["schedule_age_seconds"], 3600)
+        self.assertEqual(result["last_scheduled_conclusion"], "success")
+
+    def test_recent_schedule_delivery_is_reported_separately(self):
+        result = evaluate(
+            [{"status": "completed", "conclusion": "success", "event": "schedule", "created_at": "2026-11-16T15:52:00Z"}],
+            now=NOW,
+        )
+        self.assertEqual(result["schedule_status"], "recent")
+        self.assertEqual(result["schedule_age_seconds"], 480)
+
+    def test_failed_scheduled_attempt_shows_recent_delivery_but_waits(self):
+        result = evaluate(
+            [{"status": "completed", "conclusion": "failure", "event": "schedule", "created_at": "2026-11-16T15:55:00Z"}],
+            now=NOW,
+        )
+        self.assertEqual(result["action"], "wait")
+        self.assertEqual(result["schedule_status"], "recent")
+        self.assertEqual(result["last_scheduled_conclusion"], "failure")
+
+    def test_missing_schedule_history_is_unobserved_not_healthy(self):
+        result = evaluate(
+            [{"status": "completed", "conclusion": "success", "event": "workflow_dispatch", "created_at": "2026-11-16T15:59:00Z"}],
+            now=NOW,
+        )
+        self.assertEqual(result["action"], "healthy")
+        self.assertEqual(result["schedule_status"], "unobserved")
+        self.assertIsNone(result["schedule_age_seconds"])
 
     def test_timezone_offsets_are_normalized(self):
         result = evaluate(
