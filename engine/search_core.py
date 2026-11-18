@@ -11,7 +11,7 @@ import unicodedata
 from collections import Counter
 from typing import Iterable, Mapping, Any
 
-from intelligence_core import score_evidence
+from intelligence_core import rank_evidence
 
 TOKEN_RE = re.compile(r"[^\W_]+", re.UNICODE)
 FIELD_WEIGHTS = {"title": 4.0, "url": 2.2, "description": 1.7, "text": 1.0}
@@ -120,8 +120,13 @@ def search(
             }
             for item in candidates
         ]
-        for item, evidence_page in zip(candidates, evidence_pages):
-            evidence = score_evidence(evidence_page, evidence_pages)
+        evidence_by_url = {
+            item["url"]: item for item in rank_evidence(evidence_pages, limit=MAX_LIMIT)
+        }
+        for item in candidates:
+            evidence = evidence_by_url.get(item["url"])
+            if not evidence:
+                continue
             item["intelligence_score"] = evidence["score"]
             item["evidence_band"] = evidence["evidence_band"]
             item["evidence_components"] = evidence["components"]
