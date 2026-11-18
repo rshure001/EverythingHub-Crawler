@@ -44,6 +44,11 @@ def main():
     indexed_this_run = int(index.get("pages_indexed_this_run", 0) or 0)
     indexed_rate = indexed_this_run / (duration / 60) if duration > 0 else 0
     host_requests = index.get("host_requests_this_run", {}) or {}
+    fetch_attempts = int(index.get("fetch_attempts_this_run", index.get("pages_crawled_this_run", 0)) or 0)
+    successful_http = int(index.get("successful_http_responses_this_run", 0) or 0)
+    html_parsed = int(index.get("html_pages_parsed_this_run", indexed_this_run) or 0)
+    non_html = int(index.get("non_html_responses_this_run", 0) or 0)
+    fetch_errors = int(index.get("fetch_or_parse_errors_this_run", 0) or 0)
     run_id = os.environ.get("GITHUB_RUN_ID", "local")
     run_number = os.environ.get("GITHUB_RUN_NUMBER", "local")
     run_attempt = os.environ.get("GITHUB_RUN_ATTEMPT", "1")
@@ -60,8 +65,12 @@ def main():
         f"- Unique indexed hosts: **{len(hosts):,}**",
         f"- URLs discovered (frontier seen): **{len(frontier.get('seen', [])):,}**",
         f"- URLs waiting in frontier: **{len(frontier.get('queue', [])):,}**",
-        f"- Fetched this run: **{index.get('pages_crawled_this_run', 0):,}**",
-        f"- Parsed/indexed this run: **{indexed_this_run:,}**",
+        f"- Fetch attempts this run: **{fetch_attempts:,}**",
+        f"- Successful HTTP responses: **{successful_http:,}**",
+        f"- HTML pages parsed: **{html_parsed:,}**",
+        f"- Non-HTML responses: **{non_html:,}**",
+        f"- Fetch or parse errors: **{fetch_errors:,}**",
+        f"- Indexed records this run: **{indexed_this_run:,}**",
         f"- Not indexed this run: **{int(index.get('pages_not_indexed_this_run', 0) or 0):,}**",
         f"- Robots-blocked URLs this run: **{int(index.get('robots_blocked_this_run', 0) or 0):,}**",
         f"- Noindex pages excluded this run: **{int(index.get('index_policy_blocked_this_run', 0) or 0):,}**",
