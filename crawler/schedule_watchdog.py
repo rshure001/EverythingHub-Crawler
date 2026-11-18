@@ -10,6 +10,7 @@ from typing import Any
 
 MAX_ATTEMPT_AGE_SECONDS = 10 * 60
 MAX_MANIFEST_AGE_SECONDS = MAX_ATTEMPT_AGE_SECONDS
+MAX_MANIFEST_FUTURE_SKEW_SECONDS = 60
 ACTIVE_STATUSES = {"queued", "in_progress", "pending", "waiting", "requested"}
 
 
@@ -43,10 +44,12 @@ def evaluate(runs: list[dict[str, Any]], now: datetime | None = None,
     manifest_time = parse_manifest_time(manifest_updated_at)
     if manifest_updated_at is not None and manifest_time is None:
         raise ValueError("public search manifest has an invalid updated_at timestamp")
-    manifest_age = (
-        max(0, int((now - manifest_time).total_seconds()))
-        if manifest_time is not None else None
-    )
+    manifest_age = None
+    if manifest_time is not None:
+        raw_manifest_age = (now - manifest_time).total_seconds()
+        if raw_manifest_age < -MAX_MANIFEST_FUTURE_SKEW_SECONDS:
+            raise ValueError("public search manifest updated_at timestamp is too far in the future")
+        manifest_age = max(0, int(raw_manifest_age))
 
     active = [run for run in runs if run.get("status") in ACTIVE_STATUSES]
     if active:
