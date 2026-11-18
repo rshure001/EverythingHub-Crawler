@@ -46,6 +46,25 @@ class SearchCoreTests(unittest.TestCase):
         results = search(PAGES, "Rolex")
         self.assertTrue(results[0]["snippet"])
 
+    def test_intelligence_evidence_is_attached(self):
+        results = search(PAGES, "Rolex")
+        self.assertIn("intelligence_score", results[0])
+        self.assertIn("evidence_band", results[0])
+        self.assertGreaterEqual(results[0]["intelligence_score"], 0)
+        self.assertLessEqual(results[0]["intelligence_score"], 1)
+
+    def test_independent_hosts_add_corroboration(self):
+        pages = [
+            {"url": "https://one.example/story", "title": "Apollo mission",
+             "description": "Apollo moon landing", "fetched_at": 1794960000},
+            {"url": "https://two.example/story", "title": "Apollo mission",
+             "description": "Apollo moon landing", "fetched_at": 1794960000},
+        ]
+        results = search(pages, "Apollo")
+        self.assertEqual(len(results), 2)
+        self.assertEqual(results[0]["corroborating_hosts"], 1)
+        self.assertGreater(results[0]["evidence_components"]["corroboration"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()
