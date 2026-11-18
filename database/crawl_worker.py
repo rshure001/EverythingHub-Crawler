@@ -2,6 +2,7 @@
 """Conservative database-native crawler locked to the Everything Hub eh_quad schema."""
 
 import hashlib
+import http.client
 import ipaddress
 import os
 import re
@@ -45,6 +46,10 @@ SKIP_TEXT_TAGS = {"script", "style", "noscript", "svg", "nav", "footer", "header
 
 
 class CrossOriginRedirectError(RuntimeError):
+    pass
+
+
+class UnsafeTargetError(RuntimeError):
     pass
 
 
@@ -95,32 +100,132 @@ def clean_url(value):
     return public_crawler.clean(value)
 
 
-def is_safe_target(url, test_mode=False):
-    """Reject private, loopback, link-local, and unresolved destinations."""
+def resolve_public_target(url, test_mode=False):
+    """Resolve once at connection time and return a public socket address to pin."""
     try:
         parsed = urllib.parse.urlsplit(url)
         host = parsed.hostname
         port = parsed.port or (443 if parsed.scheme.lower() == "https" else 80)
         if not host:
-            return False
+            raise UnsafeTargetError("URL has no hostname")
+        records = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+    except UnsafeTargetError:
+        raise
+    except (OSError, TypeError, ValueError) as error:
+        raise UnsafeTargetError("DNS resolution failed or URL authority is invalid") from error
+
+    candidates = []
+    for family, socktype, proto, _canonname, sockaddr in records:
+        if family not in (socket.AF_INET, socket.AF_INET6) or socktype != socket.SOCK_STREAM:
+            continue
         try:
-            addresses = [ipaddress.ip_address(host)]
-        except ValueError:
-            addresses = [
-                ipaddress.ip_address(item[4][0].split("%", 1)[0])
-                for item in socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
-            ]
-        if not addresses:
-            return False
-        for address in addresses:
-            if test_mode and address.is_loopback:
-                continue
-            if not address.is_global:
-                return False
+            address = ipaddress.ip_address(str(sockaddr[0]).split("%", 1)[0])
+        except (IndexError, TypeError, ValueError) as error:
+            raise UnsafeTargetError("DNS returned an invalid socket address") from error
+        if not address.is_global and not (test_mode and address.is_loopback):
+            raise UnsafeTargetError("DNS resolved to a non-public destination")
+        candidates.append((family, socktype, proto, sockaddr))
+
+    if not candidates:
+        raise UnsafeTargetError("DNS returned no usable public socket address")
+    return candidates[0]
+
+
+def is_safe_target(url, test_mode=False):
+    """Reject private destinations; the actual request pins its own fresh resolution."""
+    try:
+        resolve_public_target(url, test_mode=test_mode)
         return True
-    except (OSError, TypeError, ValueError):
+    except UnsafeTargetError:
         return False
 
+
+def _open_pinned_socket(pinned_target, timeout, source_address):
+    family, socktype, proto, sockaddr = pinned_target
+    sock = socket.socket(family, socktype, proto)
+    try:
+        if timeout is not socket._GLOBAL_DEFAULT_TIMEOUT:
+            sock.settimeout(timeout)
+        if source_address:
+            sock.bind(source_address)
+        # Connect to the exact sockaddr validated by resolve_public_target.
+        # No second hostname lookup occurs inside socket.connect().
+        sock.connect(sockaddr)
+        return sock
+    except Exception:
+        sock.close()
+        raise
+
+
+class PinnedHTTPConnection(http.client.HTTPConnection):
+    def __init__(self, host, pinned_target, **kwargs):
+        self._pinned_target = pinned_target
+        super().__init__(host, **kwargs)
+
+    def connect(self):
+        if self._tunnel_host:
+            raise OSError("proxy tunnels are disabled for pinned crawler requests")
+        self.sock = _open_pinned_socket(
+            self._pinned_target, self.timeout, self.source_address
+        )
+
+
+class PinnedHTTPSConnection(http.client.HTTPSConnection):
+    def __init__(self, host, pinned_target, **kwargs):
+        self._pinned_target = pinned_target
+        super().__init__(host, **kwargs)
+
+    def connect(self):
+        if self._tunnel_host:
+            raise OSError("proxy tunnels are disabled for pinned crawler requests")
+        raw_socket = _open_pinned_socket(
+            self._pinned_target, self.timeout, self.source_address
+        )
+        try:
+            # Keep the original hostname for certificate validation and TLS SNI.
+            self.sock = self._context.wrap_socket(
+                raw_socket, server_hostname=self.host
+            )
+        except Exception:
+            raw_socket.close()
+            raise
+
+
+class PinnedHTTPHandler(urllib.request.HTTPHandler):
+    def __init__(self, test_mode=False, debuglevel=0):
+        self.test_mode = test_mode
+        super().__init__(debuglevel)
+
+    def http_open(self, req):
+        pinned = resolve_public_target(req.full_url, test_mode=self.test_mode)
+        return self.do_open(
+            lambda host, **kwargs: PinnedHTTPConnection(host, pinned, **kwargs),
+            req,
+        )
+
+
+class PinnedHTTPSHandler(urllib.request.HTTPSHandler):
+    def __init__(self, test_mode=False, debuglevel=0, context=None, check_hostname=None):
+        self.test_mode = test_mode
+        super().__init__(debuglevel, context, check_hostname)
+
+    def https_open(self, req):
+        pinned = resolve_public_target(req.full_url, test_mode=self.test_mode)
+        return self.do_open(
+            lambda host, **kwargs: PinnedHTTPSConnection(host, pinned, **kwargs),
+            req,
+            context=self._context,
+        )
+
+
+def build_safe_opener(policy_callback, test_mode=False):
+    """Use direct, DNS-pinned HTTP(S); environment proxies cannot bypass IP checks."""
+    return urllib.request.build_opener(
+        urllib.request.ProxyHandler({}),
+        PinnedHTTPHandler(test_mode=test_mode),
+        PinnedHTTPSHandler(test_mode=test_mode),
+        SameOriginRobotsRedirectHandler(policy_callback),
+    )
 
 def validate_schema(value=None):
     requested = value if value is not None else os.environ.get("EH_DB_SCHEMA", SCHEMA)
@@ -254,10 +359,10 @@ def _pace(url, delay, last_request):
     last_request[host] = time.monotonic()
 
 
-def load_robots_policy(site, last_request, minimum_delay):
+def load_robots_policy(site, last_request, minimum_delay, test_mode=False):
     robots_url = site.rstrip("/") + "/robots.txt"
-    opener = urllib.request.build_opener(
-        SameOriginRobotsRedirectHandler(lambda target: same_origin(robots_url, target))
+    opener = build_safe_opener(
+        lambda target: same_origin(robots_url, target), test_mode=test_mode
     )
     _pace(robots_url, minimum_delay, last_request)
     request = urllib.request.Request(robots_url, headers={
@@ -276,30 +381,31 @@ def load_robots_policy(site, last_request, minimum_delay):
         raise RobotsUnavailable(f"robots.txt returned HTTP {error.code}", retry) from error
     except CrossOriginRedirectError as error:
         raise RobotsUnavailable(str(error), ROBOTS_FAILURE_RETRY_SECONDS) from error
+    except UnsafeTargetError:
+        raise
     except RobotsUnavailable:
         raise
     except Exception as error:
         raise RobotsUnavailable(f"robots.txt unavailable: {type(error).__name__}") from error
 
 
-def get_robots_policy(site, cache, last_request, minimum_delay):
+def get_robots_policy(site, cache, last_request, minimum_delay, test_mode=False):
     cached = cache.get(site)
     now = time.monotonic()
     if cached and now - cached[1] < ROBOTS_TTL_SECONDS:
         return cached[0]
-    parser = load_robots_policy(site, last_request, minimum_delay)
+    parser = load_robots_policy(site, last_request, minimum_delay, test_mode=test_mode)
     cache[site] = (parser, now)
     return parser
 
 
-def fetch_page(url, policy, last_request, minimum_delay):
+def fetch_page(url, policy, last_request, minimum_delay, test_mode=False):
     if not public_crawler.robots_can_fetch(policy, USER_AGENT, url):
         return {"blocked": True}
     delay = public_crawler.effective_host_delay(policy)
-    opener = urllib.request.build_opener(
-        SameOriginRobotsRedirectHandler(
-            lambda target: public_crawler.robots_can_fetch(policy, USER_AGENT, target)
-        )
+    opener = build_safe_opener(
+        lambda target: public_crawler.robots_can_fetch(policy, USER_AGENT, target),
+        test_mode=test_mode,
     )
     _pace(url, delay, last_request)
     request = urllib.request.Request(url, headers={
@@ -659,13 +765,13 @@ def main():
                         continue
                     parsed = urllib.parse.urlsplit(url)
                     site = f"{parsed.scheme}://{parsed.netloc}"
-                    policy = get_robots_policy(site, robots_cache, last_request, minimum_delay)
+                    policy = get_robots_policy(site, robots_cache, last_request, minimum_delay, test_mode=test_mode)
                     if not public_crawler.robots_can_fetch(policy, USER_AGENT, url):
                         _mark_existing_disallowed(conn, url)
                         _queue_finish(conn, queue_id, "skipped", "Disallowed by robots.txt")
                         _set_host_lease(conn, host, lane, worker_id, public_crawler.effective_host_delay(policy))
                         continue
-                    page = fetch_page(url, policy, last_request, minimum_delay)
+                    page = fetch_page(url, policy, last_request, minimum_delay, test_mode=test_mode)
                     if page.get("blocked"):
                         _mark_existing_disallowed(conn, url)
                         _mark_existing_disallowed(conn, page.get("final_url", url))
@@ -689,6 +795,14 @@ def main():
                     _run_increment(conn, run_id, indexed_count=1)
                     indexed += 1
                     _set_host_lease(conn, host, lane, worker_id, public_crawler.effective_host_delay(policy))
+                except UnsafeTargetError as error:
+                    conn.rollback()
+                    _queue_finish(conn, queue_id, "skipped", str(error))
+                    _set_host_lease(
+                        conn, host, lane, worker_id,
+                        public_crawler.effective_host_delay(policy) if policy is not None else minimum_delay,
+                    )
+                    continue
                 except RobotsUnavailable as error:
                     conn.rollback()
                     retry = error.retry_after
