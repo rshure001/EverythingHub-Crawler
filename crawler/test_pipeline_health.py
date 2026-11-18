@@ -56,13 +56,14 @@ class PipelineHealthTests(unittest.TestCase):
         self.assertEqual(result["search_smoke"]["status"], "failed")
         self.assertEqual(result["overall_status"], "failed")
 
-    def test_watchdog_runs_after_publisher_and_search_smoke_completion(self):
+    def test_downstream_completion_never_dispatches_an_extra_crawl(self):
         workflow = (
             Path(__file__).resolve().parents[1]
             / ".github" / "workflows" / "crawl-watchdog.yml"
         ).read_text(encoding="utf-8")
-        self.assertIn('"EverythingHub Publisher"', workflow)
-        self.assertIn('"EverythingHub search API smoke test"', workflow)
+        self.assertIn("github.event.workflow_run.name", workflow)
+        self.assertIn("EverythingHub Publisher", workflow)
+        self.assertIn("EverythingHub search API smoke test", workflow)
         self.assertIn("pipeline_health.py", workflow)
 
 
