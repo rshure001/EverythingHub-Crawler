@@ -39,7 +39,10 @@ source terms. The review process must actually establish that extraction is
 permitted before setting the fields. Missing, stale, ambiguous or denied
 permission fails closed. A permission to extract does not grant permission to
 redistribute media: existing license, attribution and rights fields are never
-upgraded by this gate.
+upgraded by this gate. Each attached extraction retains the policy basis, robots
+decision, terms URL, terms snapshot digest, and review timestamp in its
+extraction provenance. The normalized asset also retains its robots policy
+status after extraction text is attached.
 
 ## Evidence intelligence: intelligence_core.py
 
