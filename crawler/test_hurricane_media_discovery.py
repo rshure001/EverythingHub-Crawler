@@ -98,7 +98,6 @@ class MediaDiscoveryTests(unittest.TestCase):
         ])
         self.assertEqual(merged[0]["last_seen_at"], 200)
         self.assertEqual(merged[0]["robots_checked_at"], 200)
-        self.assertEqual(merged[0]["robots_checked_at"], 200)
 
     def test_legacy_candidate_gets_fresh_timestamp_when_rediscovered(self):
         legacy = {
