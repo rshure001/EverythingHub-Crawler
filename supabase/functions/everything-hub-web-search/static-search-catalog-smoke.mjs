@@ -2,11 +2,12 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { gunzipSync } from "node:zlib";
 import { searchStaticPages } from "./static-search.mjs";
+import { isValidStaticManifest } from "./static-manifest.mjs";
 
 const root = new URL("../../../", import.meta.url);
 const manifest = JSON.parse(await readFile(new URL("public-search/manifest.json", root), "utf8"));
-if (manifest.version !== 1 || manifest.integrity !== "sha256") {
-  throw new Error("unsupported public catalog manifest");
+if (!isValidStaticManifest(manifest)) {
+  throw new Error("unsupported or out-of-bounds public catalog manifest");
 }
 const meta = manifest.catalog_gzip;
 if (!meta || meta.file !== "catalog-v1.json.gz" || meta.pages !== manifest.total_pages) {
