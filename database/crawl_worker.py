@@ -531,19 +531,40 @@ def _record_page(conn, item, page, max_depth):
 
 
 def _recover_stale_claims(conn):
+    """Requeue abandoned claims and release their host leases atomically."""
     with conn.cursor() as cur:
         cur.execute(
             """
-            update eh_quad.eh_crawl_queue
-            set status='pending', locked_at=null, next_attempt_at=now(),
-                last_error='Recovered stale in-progress claim'
-            where status='in_progress'
-              and locked_at < now() - (%s * interval '1 second')
+            with stale as materialized (
+              select id, host
+              from eh_quad.eh_crawl_queue
+              where status='in_progress'
+                and locked_at < now() - (%s * interval '1 second')
+              for update
+            ),
+            recovered as (
+              update eh_quad.eh_crawl_queue q
+              set status='pending', locked_at=null, next_attempt_at=now(),
+                  last_error='Recovered stale in-progress claim'
+              from stale s
+              where q.id=s.id
+              returning q.host
+            ),
+            released as (
+              delete from eh_quad.eh_host_leases h
+              using (select distinct host from recovered) r
+              where h.host=r.host
+              returning h.host
+            )
+            select
+              (select count(*) from recovered),
+              (select count(*) from released)
             """,
             (STALE_CLAIM_SECONDS,),
         )
-        recovered = cur.rowcount
+        recovered, released = cur.fetchone()
     conn.commit()
+    print(f"Recovered stale claims: {recovered}; released host leases: {released}")
     return recovered
 
 
