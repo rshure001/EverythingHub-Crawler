@@ -4,6 +4,7 @@ import { boundedInteger, normalizeLane, normalizeQuery } from "./params.mjs";
 import { createTimedFetch, isTransientDatabaseError } from "./db-fetch.mjs";
 import { searchStaticPages } from "./static-search.mjs";
 import { normalizeManifestTimestamp } from "./manifest-time.mjs";
+import { isValidStaticManifest } from "./static-manifest.mjs";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -28,7 +29,6 @@ const db = supabase.schema("eh_quad");
 const STATIC_INDEX_BASE =
   "https://raw.githubusercontent.com/rshure001/EverythingHub-Crawler/main/public-search";
 const STATIC_INDEX_CACHE_MS = 60_000;
-const MAX_STATIC_INDEX_PAGES = 10_000;
 const MAX_STATIC_SHARD_BYTES = 350_000;
 const MAX_STATIC_CATALOG_GZIP_BYTES = 5_000_000;
 
@@ -62,17 +62,7 @@ async function loadStaticCatalog(): Promise<StaticCatalog> {
     }
 
     const manifest: any = await manifestResponse.json();
-    if (
-      manifest?.version !== 1 ||
-      manifest?.integrity !== "sha256" ||
-      !Array.isArray(manifest?.shards) ||
-      manifest.shards.length < 1 ||
-      manifest.shards.length > 32 ||
-      manifest.shard_count !== manifest.shards.length ||
-      !Number.isInteger(manifest.total_pages) ||
-      manifest.total_pages < 1 ||
-      manifest.total_pages > MAX_STATIC_INDEX_PAGES
-    ) {
+    if (!isValidStaticManifest(manifest)) {
       throw new Error("Public crawler manifest failed structural validation");
     }
 
