@@ -68,12 +68,9 @@ def validate_profile_name(profile_name: Any) -> str:
 
 
 def validate_batch_size(batch_size: Any) -> int:
-    if isinstance(batch_size, bool):
+    if isinstance(batch_size, bool) or not isinstance(batch_size, int):
         raise ValueError("batch_size must be an integer")
-    try:
-        value = int(batch_size)
-    except (TypeError, ValueError, OverflowError) as error:
-        raise ValueError("batch_size must be an integer") from error
+    value = batch_size
     if value < 1:
         raise ValueError("batch_size must be at least 1")
     return min(value, MAX_BATCH_SIZE)
