@@ -13,7 +13,7 @@
 
   const DEFAULT_CATALOG_URL =
     "https://raw.githubusercontent.com/rshure001/EverythingHub-Crawler/main/public-search/catalog-v1.json.gz";
-  const TOKEN_RE = /[^\W_]+/gu;
+  const TOKEN_RE = /[\p{L}\p{N}]+/gu;
   const WEIGHTS = { title: 4, url: 2.2, description: 1.7, text: 1 };
 
   function tokenize(value) {
