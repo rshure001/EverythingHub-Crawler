@@ -50,8 +50,22 @@ class SearchCoreTests(unittest.TestCase):
         results = search(PAGES, "Rolex")
         self.assertIn("intelligence_score", results[0])
         self.assertIn("evidence_band", results[0])
+        self.assertIn("rank_score", results[0])
         self.assertGreaterEqual(results[0]["intelligence_score"], 0)
         self.assertLessEqual(results[0]["intelligence_score"], 1)
+        self.assertGreaterEqual(results[0]["rank_score"], 0)
+        self.assertLessEqual(results[0]["rank_score"], 1)
+
+    def test_evidence_is_a_secondary_rank_signal(self):
+        results = search(PAGES, "Rolex")
+        max_lexical = max(item["score"] for item in results)
+        for item in results:
+            expected = round(
+                0.85 * (item["score"] / max_lexical)
+                + 0.15 * item["intelligence_score"],
+                6,
+            )
+            self.assertEqual(item["rank_score"], expected)
 
     def test_independent_hosts_add_corroboration(self):
         pages = [
