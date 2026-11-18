@@ -17,11 +17,18 @@ and improve ranking from explicit feedback.
   increases evidence; it does not establish truth.
 - **Score:** returns a 0–1 score, evidence band, component breakdown, and
   exact weight set for every eligible result.
-- **Search integration:** the independent Python search core now blends 85% normalized lexical
-  relevance with 15% evidence score, so source freshness and corroboration
-  refine results without overruling strong text matches. Public catalog shards preserve crawler fetch and
-  publication timestamps so freshness can be measured. Older catalog records
-  without timestamps receive a conservative unknown-age value.
+- **Search integration:** both the independent Python search core and the
+  JavaScript static Edge fallback blend 85% normalized lexical relevance with
+  15% evidence score. The live fallback returns an auditable rank score,
+  evidence band, component breakdown, and distinct-host corroboration count.
+  Strong text matches remain dominant.
+- **Freshness:** prefer a captured `published_at` value when available and
+  otherwise use `fetched_at`. The public catalog preserves both fields, but
+  the current crawler reliably records crawl time; publication-date extraction
+  is a separate follow-up. Unknown dates receive a conservative score.
+- **Corroboration scope:** the offline and static fallback adapters currently
+  use the active query as a temporary topic key. Distinct matching hostnames
+  add evidence but do not prove a shared entity or establish truth.
 - **Corroboration scope:** the current offline search adapter uses the active
   search phrase as its temporary topic key. It only counts distinct hostnames
   among pages matching that query; it does not claim semantic entity resolution.
