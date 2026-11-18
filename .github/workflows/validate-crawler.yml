@@ -10,6 +10,7 @@ on:
       - "README.md"
       - "SCALABLE-ARCHITECTURE.md"
       - ".github/workflows/crawl.yml"
+      - ".github/workflows/crawl-watchdog.yml"
       - ".github/workflows/validate-crawler.yml"
   pull_request:
     paths:
@@ -19,6 +20,7 @@ on:
       - "supabase/functions/**"
       - "README.md"
       - "SCALABLE-ARCHITECTURE.md"
+      - ".github/workflows/crawl-watchdog.yml"
       - ".github/workflows/validate-crawler.yml"
   workflow_dispatch:
 permissions:
