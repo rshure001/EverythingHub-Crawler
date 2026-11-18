@@ -11,6 +11,7 @@ on:
     branches: [main]
     paths:
       - "engine/**"
+      - "crawler/**"
       - "public-search/**"
       - "supabase/functions/everything-hub-web-search/static-search.mjs"
       - "supabase/functions/everything-hub-web-search/static-search.test.mjs"
