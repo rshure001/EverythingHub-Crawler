@@ -19,7 +19,8 @@ const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   {
-    global: { fetch: createTimedFetch(fetch, 2500) },
+    // Keep database recovery from delaying the verified static-index fallback.
+    global: { fetch: createTimedFetch(fetch, 1200) },
     auth: { persistSession: false, autoRefreshToken: false },
   },
 );
