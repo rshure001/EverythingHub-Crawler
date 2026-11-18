@@ -307,10 +307,14 @@ class PageParser(HTMLParser):
                     self.published_at = candidate
                     self._published_at_priority = priority
         if tag == "time" and a.get("itemprop", "").strip().lower() == "datepublished":
+            priority = PUBLISHED_DATE_META_PRIORITY["datepublished"]
             candidate = parse_published_at(a.get("datetime"))
-            if candidate and self._published_at_priority is None:
+            if candidate and (
+                self._published_at_priority is None
+                or priority < self._published_at_priority
+            ):
                 self.published_at = candidate
-                self._published_at_priority = PUBLISHED_DATE_META_PRIORITY["datepublished"]
+                self._published_at_priority = priority
         if tag == "a" and a.get("href"):
             rel = {item.lower() for item in a.get("rel", "").split()}
             if "nofollow" not in rel:
