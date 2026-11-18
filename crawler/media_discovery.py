@@ -209,7 +209,12 @@ def merge_media_candidates(existing: Iterable[Mapping[str, Any]],
                            incoming: Iterable[Mapping[str, Any]],
                            now: int,
                            limit: int = MAX_STORED_CANDIDATES) -> tuple[list[dict[str, Any]], int]:
-    """Add deduplicated, policy-checked candidates without deleting prior records."""
+    """Add deduplicated, policy-checked candidates without deleting prior records.
+
+    robots_checked_at records when the crawler most recently confirmed that the
+    media URL itself was allowed by the source origin's current robots policy.
+    """
+    checked_at = int(now)
     merged: list[dict[str, Any]] = []
     positions: dict[tuple[str, str], int] = {}
     for raw in existing:
@@ -243,7 +248,10 @@ def merge_media_candidates(existing: Iterable[Mapping[str, Any]],
         if key in positions:
             row = merged[positions[key]]
             row["seen_count"] = min(1_000_000, int(row.get("seen_count", 1) or 1) + 1)
-            row["last_seen_at"] = now
+            row["last_seen_at"] = checked_at
+            row["robots_allowed"] = True
+            row["robots_checked_at"] = checked_at
+            row["policy_status"] = "robots_allowed_not_fetched"
             raw_sources = row.get("source_pages")
             sources = list(raw_sources) if isinstance(raw_sources, (list, tuple)) else []
             if not sources and row.get("source_page_url"):
@@ -266,11 +274,12 @@ def merge_media_candidates(existing: Iterable[Mapping[str, Any]],
             "alt_text": _text(raw.get("alt_text")),
             "thumbnail_url": safe_media_url("", raw.get("thumbnail_url")) if raw.get("thumbnail_url") else "",
             "robots_allowed": True,
+            "robots_checked_at": checked_at,
             "policy_status": "robots_allowed_not_fetched",
             "rights_status": "unknown",
             "usage_rights": "Unknown",
-            "first_seen_at": now,
-            "last_seen_at": now,
+            "first_seen_at": checked_at,
+            "last_seen_at": checked_at,
             "seen_count": 1,
         }
         positions[key] = len(merged)
