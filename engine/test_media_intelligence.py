@@ -183,6 +183,7 @@ class MultimodalIntelligenceTests(unittest.TestCase):
             "title": "Apollo 11 documentary",
             "pageUrl": "https://www.example.org/watch/apollo",
             "videoUrl": "",
+            "imageUrl": "https://cdn.example.org/apollo-thumb.jpg",
             "thumbnailUrl": "https://cdn.example.org/apollo-thumb.jpg",
             "mediaType": "video",
             "source": "Bing Videos",
