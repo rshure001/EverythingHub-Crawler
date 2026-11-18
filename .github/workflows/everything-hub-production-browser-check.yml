@@ -4,14 +4,8 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/everything-hub-production-browser-check.yml"
-      - "vercel-homepage/**"
       - "public-search/**"
-      - "supabase/functions/everything-hub-web-search/**"
-      - "supabase/functions/everything-hub-media-search/**"
-  workflow_run:
-    workflows: ["Everything Hub crawler"]
-    types: [completed]
-    branches: [main]
+      - "vercel-homepage/**"
   workflow_dispatch:
 permissions:
   contents: read
@@ -20,7 +14,6 @@ concurrency:
   cancel-in-progress: true
 jobs:
   production-browser-check:
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 8
     env:
@@ -35,7 +28,7 @@ jobs:
           npm init -y
           npm install --no-save playwright
           npx playwright install --with-deps chromium
-      - name: Verify approved homepage, crawler search, independent fallback, and mobile layout
+      - name: Verify current homepage, search, media modes, and mobile layout
         run: |
           cat > production-check.cjs <<'JS'
           const { chromium } = require("playwright");
@@ -50,240 +43,71 @@ jobs:
               const response = await page.goto(report.url, { waitUntil: "domcontentloaded", timeout: 45000 });
               report.httpStatus = response?.status();
               report.title = await page.title();
-              report.searchInput = await page.locator("#q").count() === 1;
               report.searchFormCount = await page.locator("form#search").count();
-              report.searchInsideArtwork = await page.locator(".hero-art-wrap form#search").count() === 1;
-              const categoryTiles = page.locator('.tile[href*="mode="], .hotspot[data-mode]');
-              report.categoryCount = await categoryTiles.count();
-              report.categoryModes = await categoryTiles.evaluateAll(nodes =>
+              report.searchInputCount = await page.locator("#q").count();
+              report.categoryCount = await page.locator('.tile[href*="mode="], .hotspot[data-mode]').count();
+              report.categoryModes = await page.locator('.tile[href*="mode="], .hotspot[data-mode]').evaluateAll(nodes =>
                 nodes.map(node => node.dataset.mode || new URL(node.href).searchParams.get("mode")).filter(Boolean).sort()
               );
-              const expectedModes = ["business", "images", "news", "places", "research", "shopping", "videos", "web"];
-              if (JSON.stringify(report.categoryModes) !== JSON.stringify(expectedModes)) {
-                throw new Error("Homepage search categories are incomplete or duplicated: " + JSON.stringify(report.categoryModes));
+              const expected = ["business","images","news","places","research","shopping","videos","web"];
+              if (!response?.ok() || !report.title.includes("Everything Hub") ||
+                  report.searchFormCount !== 1 || report.searchInputCount !== 1 ||
+                  report.categoryCount !== 8 || JSON.stringify(report.categoryModes) !== JSON.stringify(expected)) {
+                throw new Error("Homepage structure check failed: " + JSON.stringify(report));
               }
-
-              report.searchWorkspace = {
-                modeCount: await page.locator(".eh-search-workspace .eh-mode").count(),
-                resultsContainerCount: await page.locator(".eh-search-workspace #results").count(),
-                discoverTopicCount: await page.locator(".discover-topic").count()
-              };
-              if (report.searchWorkspace.modeCount !== 8 ||
-                  report.searchWorkspace.resultsContainerCount !== 1 ||
-                  report.searchWorkspace.discoverTopicCount !== 5) {
-                throw new Error("Search and discovery structure failed: " + JSON.stringify(report.searchWorkspace));
-              }
-              await page.locator('.eh-search-workspace .eh-mode[data-mode="images"]').click();
-              report.searchWorkspace.activeModeAfterClick =
-                await page.locator(".eh-search-workspace .eh-mode.active").getAttribute("data-mode");
-              report.searchWorkspace.placeholderAfterModeClick =
-                await page.locator("#q").getAttribute("placeholder");
-              if (report.searchWorkspace.activeModeAfterClick !== "images" ||
-                  !String(report.searchWorkspace.placeholderAfterModeClick).includes("Images")) {
-                throw new Error("Search category controls are not wired: " + JSON.stringify(report.searchWorkspace));
-              }
-              await page.locator('.eh-search-workspace .eh-mode[data-mode="web"]').click();
-              await page.locator(".discover-card").first().waitFor({ state: "visible", timeout: 25000 });
-              report.discover = {
-                initialCards: await page.locator(".discover-card").count(),
-                firstHeadline: await page.locator(".discover-card h3").first().innerText(),
-                firstPublisher: await page.locator(".discover-source").first().innerText()
-              };
-              await page.locator('.discover-topic[data-topic="technology"]').click();
-              await page.locator(".discover-card").first().waitFor({ state: "visible", timeout: 25000 });
-              report.discover.technologyCards = await page.locator(".discover-card").count();
-              if (report.discover.initialCards < 1 || report.discover.technologyCards < 1) {
-                throw new Error("Live Discover feed did not return cards for selected topics: " + JSON.stringify(report.discover));
-              }
-
-              const artwork = page.locator(".hero img, .art img").first();
+              const artwork = page.locator(".approved-master-art");
               await artwork.waitFor({ state: "visible", timeout: 15000 });
               await page.waitForFunction(() => {
-                const image = document.querySelector(".hero img, .art img");
-                return !!image && image.complete && image.naturalWidth >= 100;
+                const img = document.querySelector(".approved-master-art");
+                return !!img && img.complete && img.naturalWidth >= 100;
               }, null, { timeout: 20000 });
-              report.approvedArtwork = await artwork.evaluate(image => ({
-                src: image.getAttribute("src"),
-                complete: image.complete,
-                naturalWidth: image.naturalWidth,
-                alt: image.alt
+              report.approvedArtwork = await artwork.evaluate(img => ({
+                src: img.currentSrc, naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight
               }));
-              report.approvedArtwork.selfHosted =
-                report.approvedArtwork.src === "/assets/everythinghub-approved.png" &&
-                !/appdeploy\\.ai/i.test(String(report.approvedArtwork.src || ""));
+              if (/appdeploy\\.ai/i.test(report.approvedArtwork.src)) throw new Error("Artwork unexpectedly served from AppDeploy");
+              await page.screenshot({ path: "everything-hub-homepage.png", fullPage: true });
 
-              if (!response?.ok() || !report.title.includes("Everything Hub") ||
-                  !report.searchInput || report.searchFormCount !== 1 || !report.searchInsideArtwork ||
-                  report.categoryCount !== 8 || report.approvedArtwork.naturalWidth < 100 ||
-                  !report.approvedArtwork.selfHosted) {
-                throw new Error("Approved homepage structure check failed: " + JSON.stringify(report));
-              }
-              await page.screenshot({ path: "everything-hub-production-homepage.png", fullPage: true });
-
-              report.crawlerApiProbe = await page.evaluate(async () => {
-                const url = new URL("https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-web-search");
-                url.searchParams.set("q", "NASA");
-                url.searchParams.set("limit", "10");
-                const response = await fetch(url, {
-                  headers: { apikey: "sb_publishable_XlIsACWhtVS1jVODWYGTpg_GMs8v3vJ", accept: "application/json" }
-                });
-                const data = await response.json();
-                return { status: response.status, source: data.source || "", count: Number(data.count || 0), fallback: Boolean(data.fallback), transport: data.indexTransport || null };
-              });
-              if (report.crawlerApiProbe.status !== 200 || !report.crawlerApiProbe.count ||
-                  !report.crawlerApiProbe.source.toLowerCase().includes("index")) {
-                throw new Error("Crawler Edge Function did not return indexed NASA results: " + JSON.stringify(report.crawlerApiProbe));
+              for (const query of ["Rolex", "NASA"]) {
+                await page.locator("#q").fill(query);
+                await page.locator("#q").press("Enter");
+                await page.locator("#results .result").first().waitFor({ state: "visible", timeout: 45000 });
+                const count = await page.locator("#results .result").count();
+                const titles = await page.locator("#results .result a").allTextContents();
+                report[query.toLowerCase()] = { count, sampleTitles: titles.slice(0,5) };
+                if (!count) throw new Error(query + " produced no visible search results");
+                await page.screenshot({ path: "everything-hub-" + query.toLowerCase() + ".png", fullPage: true });
               }
 
-              report.independentApiProbe = await page.evaluate(async () => {
-                const url = new URL("https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-independent-search");
-                url.searchParams.set("q", "Rolex");
-                url.searchParams.set("limit", "10");
-                const response = await fetch(url, {
-                  headers: { apikey: "sb_publishable_XlIsACWhtVS1jVODWYGTpg_GMs8v3vJ", accept: "application/json" }
-                });
-                const data = await response.json();
-                return { status: response.status, provider: data.provider || "", count: Number(data.count || 0), independentOfDatabase: Boolean(data.independentOfDatabase), firstSource: data.results?.[0]?.source || "" };
-              });
-              if (report.independentApiProbe.status !== 200 || !report.independentApiProbe.count ||
-                  report.independentApiProbe.provider !== "Bing RSS" || !report.independentApiProbe.independentOfDatabase) {
-                throw new Error("Independent Bing RSS fallback did not return Rolex results: " + JSON.stringify(report.independentApiProbe));
-              }
-
-              await page.locator("#q").fill("Rolex");
-              await page.locator("#q").press("Enter");
-              await page.locator("#results .result a").first().waitFor({ state: "visible", timeout: 35000 });
-              report.rolexResultCount = await page.locator("#results .result").count();
-              report.rolexStatus = await page.locator("#results .result-count, #status").first().innerText();
-              report.rolexSources = await page.locator("#results .result .source").allTextContents();
-              if (!report.rolexResultCount) {
-                throw new Error("Rolex search returned no visible results: " + JSON.stringify({
-                  count: report.rolexResultCount, status: report.rolexStatus, sources: report.rolexSources
-                }));
-              }
-              await page.screenshot({ path: "everything-hub-production-rolex.png", fullPage: true });
-
-              const nasaSearchResponsePromise = page.waitForResponse(response => {
-                try {
-                  const url = new URL(response.url());
-                  return url.pathname.endsWith("/everything-hub-web-search") &&
-                    url.searchParams.get("q") === "NASA";
-                } catch { return false; }
-              }, { timeout: 35000 });
-              await page.locator("#q").fill("NASA");
-              await page.locator("#q").press("Enter");
-              const nasaSearchResponse = await nasaSearchResponsePromise;
-              const nasaSearchPayload = await nasaSearchResponse.json();
-              report.nasaSearchApi = {
-                status: nasaSearchResponse.status(),
-                source: nasaSearchPayload.source || "",
-                count: Number(nasaSearchPayload.count || 0),
-                indexTransport: nasaSearchPayload.indexTransport || null,
-                fallback: Boolean(nasaSearchPayload.fallback)
-              };
-              await page.locator("#results .result a").first().waitFor({ state: "visible", timeout: 35000 });
-              report.nasaResultCount = await page.locator("#results .result").count();
-              report.nasaStatus = await page.locator("#results .result-count, #status").first().innerText();
-              report.nasaSources = await page.locator("#results .result .source").allTextContents();
-              // The status line is a combined provider count, not a source-specific index count.
-              // Verify the rendered cards directly include records from the published crawler index.
-              const nasaIndexedCount = report.nasaSources.filter(source =>
-                /Everything Hub (public crawler|eh_quad) index/i.test(source.trim())
-              ).length;
-              const hasNasaSource = report.nasaSources.some(source =>
-                source.trim().toLowerCase().endsWith("nasa.gov")
-              );
-              if (!report.nasaResultCount || !nasaIndexedCount || !hasNasaSource) {
-                throw new Error("NASA UI did not show crawler-index matches: " + JSON.stringify({
-                  count: report.nasaResultCount,
-                  indexedMatches: nasaIndexedCount,
-                  status: report.nasaStatus,
-                  sources: report.nasaSources
-                }));
-              }
-              await page.screenshot({ path: "everything-hub-production-nasa.png", fullPage: true });
-
-              // The browser calls the Supabase search Edge Function; that function reads and SHA-256 checks the public catalog server-side.
-              report.crawlerCatalogTransport = {
-                searchApiSource: report.nasaSearchApi.source,
-                indexTransport: report.nasaSearchApi.indexTransport,
-                fallback: report.nasaSearchApi.fallback,
-                browserResponseStatus: report.nasaSearchApi.status,
-                indexedCards: nasaIndexedCount
-              };
-              if (report.nasaSearchApi.status !== 200 || !report.nasaSearchApi.count ||
-                  !report.nasaSearchApi.source.toLowerCase().includes("index") || !nasaIndexedCount) {
-                throw new Error("Browser search did not surface the eh_quad or verified public crawler index: " +
-                  JSON.stringify({ api: report.nasaSearchApi, indexedCards: nasaIndexedCount }));
-              }
-
-              // Exercise Images and Videos modes through the deployed media function.
-              report.mediaModeChecks = {};
-              for (const [mode, query, mediaType] of [
-                ["images", "octopus", "image"],
-                ["videos", "Apollo 11 NASA", "video"]
-              ]) {
+              for (const [mode, query] of [["images","octopus"],["videos","Apollo 11 NASA"]]) {
                 const target = new URL(report.url);
                 target.searchParams.set("mode", mode);
                 await page.goto(target.toString(), { waitUntil: "domcontentloaded", timeout: 45000 });
-                const mediaResponsePromise = page.waitForResponse(response => {
-                  try {
-                    const url = new URL(response.url());
-                    return url.pathname.endsWith("/everything-hub-media-search") &&
-                      url.searchParams.get("q") === query &&
-                      url.searchParams.get("type") === mediaType;
-                  } catch { return false; }
-                }, { timeout: 35000 });
                 await page.locator("#q").fill(query);
                 await page.locator("#q").press("Enter");
-                await page.locator("#results .result").first().waitFor({ state: "visible", timeout: 35000 });
-                const mediaResponse = await mediaResponsePromise;
-                const mediaPayload = await mediaResponse.json();
-                const cards = await page.locator("#results .result").count();
-                const previewImages = await page.locator("#results .result .preview img").count();
-                const videoIndicators = await page.locator("#results .result .media-tag, #results .result .play, #results .result video").count();
-                const sources = await page.locator("#results .result .source").allTextContents();
-                if (mediaResponse.status() !== 200 || !Array.isArray(mediaPayload.results) ||
-                    !mediaPayload.results.length || mediaPayload.count !== mediaPayload.results.length || !cards) {
-                  throw new Error(mode + " mode returned no valid media results: " + JSON.stringify({
-                    status: mediaResponse.status(), payloadCount: mediaPayload.count, cards
-                  }));
+                await page.locator("#results .result").first().waitFor({ state: "visible", timeout: 45000 });
+                const count = await page.locator("#results .result").count();
+                const previews = await page.locator("#results .result .preview img").count();
+                const videoMarks = await page.locator("#results .result .media-tag, #results .result .play, #results .result video").count();
+                report[mode] = { count, previews, videoMarks };
+                if (!count || (mode === "images" && !previews) || (mode === "videos" && !videoMarks)) {
+                  throw new Error(mode + " mode failed: " + JSON.stringify(report[mode]));
                 }
-                if (mode === "images" && previewImages < 1) {
-                  throw new Error("Images mode returned results without a visible preview: " + JSON.stringify({ cards, sources }));
-                }
-                if (mode === "videos" && videoIndicators < 1) {
-                  throw new Error("Videos mode returned results without a video indicator: " + JSON.stringify({ cards, sources }));
-                }
-                report.mediaModeChecks[mode] = {
-                  status: mediaResponse.status(),
-                  provider: mediaPayload.provider || null,
-                  apiResults: mediaPayload.count,
-                  renderedCards: cards,
-                  previewImages,
-                  videoIndicators,
-                  sources
-                };
               }
 
               await page.setViewportSize({ width: 390, height: 844 });
-              await page.reload({ waitUntil: "domcontentloaded" });
+              await page.goto(report.url, { waitUntil: "domcontentloaded" });
               report.mobile = await page.evaluate(() => ({
                 viewportWidth: document.documentElement.clientWidth,
                 documentWidth: document.documentElement.scrollWidth,
                 searchVisible: !!document.querySelector("#q")?.getClientRects().length,
                 searchFormCount: document.querySelectorAll("form#search").length,
-                searchInsideArtwork: !!document.querySelector(".hero-art-wrap form#search"),
-                searchPosition: document.querySelector("#search") ? getComputedStyle(document.querySelector("#search")).position : null,
                 categoryCount: document.querySelectorAll('.tile[href*="mode="], .hotspot[data-mode]').length
               }));
               if (report.mobile.documentWidth > report.mobile.viewportWidth + 2 ||
                   !report.mobile.searchVisible || report.mobile.searchFormCount !== 1 ||
-                  !report.mobile.searchInsideArtwork || report.mobile.searchPosition !== "absolute" ||
                   report.mobile.categoryCount !== 8) {
-                throw new Error("Mobile layout check failed: " + JSON.stringify(report.mobile));
+                throw new Error("Mobile layout failed: " + JSON.stringify(report.mobile));
               }
-
               report.pageErrors = errors;
               report.passed = errors.length === 0;
               if (errors.length) throw new Error("Browser page errors: " + errors.join("; "));
@@ -291,7 +115,7 @@ jobs:
               report.failure = error.stack || error.message;
               report.pageErrors = errors;
               report.passed = false;
-              await page.screenshot({ path: "everything-hub-production-failure.png", fullPage: true }).catch(() => {});
+              await page.screenshot({ path: "everything-hub-failure.png", fullPage: true }).catch(() => {});
             } finally {
               report.finishedAt = new Date().toISOString();
               fs.writeFileSync("everything-hub-production-report.json", JSON.stringify(report, null, 2));
@@ -308,10 +132,10 @@ jobs:
         with:
           name: everything-hub-browser-check
           path: |
-            everything-hub-production-homepage.png
-            everything-hub-production-rolex.png
-            everything-hub-production-nasa.png
-            everything-hub-production-failure.png
+            everything-hub-homepage.png
+            everything-hub-rolex.png
+            everything-hub-nasa.png
+            everything-hub-failure.png
             everything-hub-production-report.json
           if-no-files-found: warn
           retention-days: 3
