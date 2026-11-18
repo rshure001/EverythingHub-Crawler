@@ -22,6 +22,12 @@ class EhQuadCrawlerSafetyTests(unittest.TestCase):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 WORKER.validate_schema(value)
 
+    def test_loopback_test_mode_requires_exact_isolated_database_name(self):
+        self.assertTrue(WORKER.validate_test_database("everythinghub_test"))
+        for name in ("production", "everythinghub-control", "everythinghub_test_copy"):
+            with self.subTest(name=name), self.assertRaises(ValueError):
+                WORKER.validate_test_database(name)
+
     def test_url_validation_rejects_credentials_bad_ports_and_non_http(self):
         rejected = (
             "https://user:secret@example.org/private",
