@@ -64,7 +64,7 @@ def main():
         f"- Total indexed page records: **{len(pages):,}**",
         f"- Unique indexed hosts: **{len(hosts):,}**",
         f"- Robots-allowed media candidates retained (not fetched): **{int(index.get('media_candidates_total', 0) or 0):,}**",
-        f"- Media candidates discovered this run: **{int(index.get('media_candidates_discovered_this_run', 0) or 0):,}**",
+        f"- Same-origin, robots-allowed media candidates admitted this run: **{int(index.get('media_candidates_discovered_this_run', 0) or 0):,}**",
         f"- New unique media candidates this run: **{int(index.get('media_candidates_added_this_run', 0) or 0):,}**",
         f"- Media candidates blocked by robots.txt: **{int(index.get('media_candidates_robots_blocked_this_run', 0) or 0):,}**",
         f"- Cross-origin media candidates deferred: **{int(index.get('media_external_candidates_deferred_this_run', 0) or 0):,}**",
