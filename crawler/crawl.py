@@ -13,7 +13,6 @@ import urllib.robotparser
 import xml.etree.ElementTree as ET
 from collections import deque
 from datetime import datetime, timezone
-from datetime import datetime, timezone
 from html.parser import HTMLParser
 from pathlib import Path
 
