@@ -48,14 +48,25 @@ def is_robots_allowed(page):
 
 
 def is_public_http_url(value):
-    """Accept only absolute HTTP(S) URLs with a hostname."""
-    if not isinstance(value, str):
+    """Accept absolute HTTP(S) URLs with a valid authority and no embedded credentials."""
+    if not isinstance(value, str) or not value or value != value.strip():
+        return False
+    if any(character.isspace() or ord(character) < 0x20 for character in value):
         return False
     try:
         parsed = urlsplit(value)
+        hostname = parsed.hostname
+        # Accessing .port validates malformed and out-of-range port values.
+        _ = parsed.port
     except ValueError:
         return False
-    return parsed.scheme in ("http", "https") and bool(parsed.hostname)
+    return (
+        parsed.scheme.lower() in ("http", "https")
+        and bool(hostname)
+        and not any(character.isspace() for character in hostname)
+        and parsed.username is None
+        and parsed.password is None
+    )
 
 
 def collect_robots_denied_urls(pages):
