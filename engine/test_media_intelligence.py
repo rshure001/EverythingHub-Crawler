@@ -159,7 +159,11 @@ class MultimodalIntelligenceTests(unittest.TestCase):
         self.assertEqual(result["thumbnail_url"], "https://upload.wikimedia.org/thumb.jpg")
         self.assertEqual(result["source"], "Wikimedia Commons")
         self.assertEqual(result["rights_status"], "unknown")
+        self.assertEqual(result["license"], "CC BY 4.0")
         self.assertEqual(result["license_url"], "https://creativecommons.org/licenses/by/4.0/")
+        self.assertEqual(result["credit"], "NASA")
+        self.assertEqual(result["attribution"], "NASA")
+        self.assertTrue(result["attribution_required"])
 
     def test_video_thumbnail_is_not_misrepresented_as_a_direct_video_asset(self):
         result = normalize_discovery_result({
