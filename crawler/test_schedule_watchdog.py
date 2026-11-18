@@ -169,6 +169,8 @@ class ScheduleWatchdogTests(unittest.TestCase):
         self.assertIn("public-search/manifest.json", workflow)
         self.assertIn("base64.b64decode", workflow)
         self.assertIn("schedule_watchdog.py /tmp/crawl-runs-combined.json /tmp/public-manifest.json", workflow)
+        self.assertIn("actions/workflows/crawl.yml/runs?event=schedule&per_page=5", workflow)
+        self.assertIn("Schedule trigger status", workflow)
 
     def test_schedule_health_is_independent_of_recent_manual_crawl(self):
         result = evaluate(
