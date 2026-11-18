@@ -56,10 +56,13 @@ class IntelligenceCoreTests(unittest.TestCase):
             {"label": "unknown", "feature_snapshot": {
                 "relevance": 1, "source_quality": 1,
                 "freshness": 0, "corroboration": 0}},
+            {"label": "helpful", "feature_snapshot": {
+                "relevance": 2, "source_quality": 1,
+                "freshness": 0, "corroboration": 0}},
         ]
         result = learn_weights(events)
         self.assertEqual(result["feedback_used"], 1)
-        self.assertEqual(result["feedback_ignored"], 1)
+        self.assertEqual(result["feedback_ignored"], 2)
         self.assertGreater(result["weights"]["relevance"], 0.45)
 
     def test_learning_is_bounded_and_does_not_mutate_prior(self):
