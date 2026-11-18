@@ -1,5 +1,5 @@
 name: EverythingHub search API smoke test
-# Re-run the live API smoke after crawler run 118 published the 5,003-page catalog.
+# Verify the live crawler index and database-independent fallback after every published catalog.
 on:
   push:
     branches: [main]
@@ -23,7 +23,7 @@ jobs:
       BASE: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1
       KEY: sb_publishable_XlIsACWhtVS1jVODWYGTpg_GMs8v3vJ
     steps:
-      - name: Check indexed search and database-independent fallback
+      - name: Check indexed ranking and database-independent fallback
         run: |
           python - <<'PY'
           import json
@@ -34,8 +34,9 @@ jobs:
           base = os.environ["BASE"]
           key = os.environ["KEY"]
 
-          def get(function, query):
-              url = base + "/" + function + "?" + urllib.parse.urlencode({"q": query, "limit": 10})
+          def get(function, query, **extra):
+              params = {"q": query, "limit": 10, **extra}
+              url = base + "/" + function + "?" + urllib.parse.urlencode(params)
               request = urllib.request.Request(url, headers={
                   "Accept": "application/json",
                   "apikey": key,
@@ -51,7 +52,24 @@ jobs:
           for result in indexed["results"]:
               assert result.get("url", "").startswith(("https://", "http://")), result
               assert result.get("title"), result
-          print("Indexed search passed:", indexed["count"], "NASA results")
+
+          if indexed.get("source") == "Everything Hub public crawler index":
+              assert indexed.get("indexIntegrity") == "sha256", indexed
+              assert indexed.get("indexTransport") in ("gzip", "shards"), indexed
+              urls = [result["url"] for result in indexed["results"]]
+              assert len(urls) == len(set(urls)), indexed
+              scores = [result.get("relevance") for result in indexed["results"]]
+              assert all(isinstance(score, (int, float)) for score in scores), indexed
+              assert scores == sorted(scores, reverse=True), scores
+              print("Static index ranking passed:", indexed["count"], "NASA matches;",
+                    "transport=", indexed["indexTransport"])
+
+              science = get("everything-hub-web-search", "NASA", tentacle="science")
+              assert science.get("count", 0) > 0, science
+              assert all(item.get("tentacle") == "science" for item in science["results"]), science
+              print("Science lane filter passed:", science["count"], "matches")
+          else:
+              print("Database-backed search passed:", indexed.get("source"), indexed["count"])
 
           independent = get("everything-hub-independent-search", "Rolex")
           assert independent.get("count", 0) > 0, independent
