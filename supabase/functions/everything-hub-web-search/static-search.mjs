@@ -175,8 +175,13 @@ export function searchStaticPages(pages, query, lane = null, limit = 10, offset 
   }
 
   const matches = [...matchesByUrl.values()];
-  const maxLexicalScore = Math.max(0, ...matches.map((match) => match.score)) || 1;
-  const distinctHosts = new Set(matches.map((match) => match.hostname));
+  let maxLexicalScore = 0;
+  const distinctHosts = new Set();
+  for (const match of matches) {
+    if (match.score > maxLexicalScore) maxLexicalScore = match.score;
+    distinctHosts.add(match.hostname);
+  }
+  if (maxLexicalScore <= 0) maxLexicalScore = 1;
   for (const match of matches) {
     const normalizedRelevance = unit(match.score / maxLexicalScore);
     const sourceQuality = unit(match.sourceQuality, 0.5);
