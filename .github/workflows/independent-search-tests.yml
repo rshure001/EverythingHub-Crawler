@@ -6,6 +6,7 @@ on:
     paths:
       - "engine/**"
       - "crawler/**"
+      - "supabase/functions/everything-hub-web-search/**"
       - ".github/workflows/independent-search-tests.yml"
   push:
     branches: [main]
