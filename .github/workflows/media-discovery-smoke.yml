@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
-      - name: Verify live image and video discovery metadata
+      - name: Verify live image and video discovery metadata and reuse terms
         env:
           BASE: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-media-search
         run: |
@@ -48,32 +48,35 @@ jobs:
             if (!d.results.length) {
               throw new Error(type + ": no discoverable media returned; provider=" + (d.provider || "unknown") + "; warning=" + (d.warning || "none"));
             }
-            if (d.results.length) {
-              const first = d.results[0];
-              if (!first.source || !first.usageRights || !first.pageUrl?.startsWith("https://")) {
-                throw new Error(type + ": result lacks source, usage rights, or source page");
+            if (!["Wikimedia Commons", "Bing Images", "Bing Videos"].includes(d.provider)) {
+              throw new Error(type + ": unexpected provider " + d.provider);
+            }
+            for (const [index, item] of d.results.entries()) {
+              if (!item.source || !item.usageRights || !item.pageUrl?.startsWith("https://")) {
+                throw new Error(type + ": result " + index + " lacks source, usage rights, or HTTPS source page");
+              }
+              if (type === "images" && !item.imageUrl?.startsWith("https://")) {
+                throw new Error("images: result " + index + " lacks an HTTPS image URL");
               }
               if (d.provider === "Wikimedia Commons") {
                 for (const field of ["license", "licenseUrl", "creator", "credit", "attributionRequired"]) {
-                  if (!(field in first)) throw new Error(type + ": Commons result missing " + field);
+                  if (!(field in item)) throw new Error(type + ": Commons result " + index + " missing " + field);
                 }
-              } else if (/^Bing/.test(d.provider || "")) {
-                if (!String(first.usageRights).includes("Unverified")) {
-                  throw new Error(type + ": Bing result must not imply reuse permission");
-                }
+              } else if (!String(item.usageRights).includes("Unverified")) {
+                throw new Error(type + ": Bing result " + index + " must not imply reuse permission");
               }
             }
             console.log(JSON.stringify({
               type,
-              provider: d.provider || null,
+              provider: d.provider,
               count: d.count,
-              warning: d.warning || null,
-              firstResult: d.results[0] ? {
+              usageNote: d.usageNote,
+              firstResult: {
                 title: d.results[0].title,
                 source: d.results[0].source,
                 license: d.results[0].license || null,
                 attributionRequired: d.results[0].attributionRequired ?? null
-              } : null
+              }
             }, null, 2));
           }
           NODE
