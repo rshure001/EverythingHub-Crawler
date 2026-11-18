@@ -45,5 +45,11 @@ jobs:
           node --test supabase/functions/everything-hub-web-search/params.test.mjs supabase/functions/everything-hub-web-search/db-fetch.test.mjs supabase/functions/everything-hub-web-search/static-search.test.mjs supabase/functions/everything-hub-web-search/manifest-time.test.mjs supabase/functions/everything-hub-media-search/merge-results.test.mjs
           python crawler/build_search_shards.py
           python crawler/validate_public_index.py
+      - name: Set up Deno for Edge Function type checking
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Type-check Everything Hub media discovery Edge Function
+        run: deno check supabase/functions/everything-hub-media-search/index.ts
       - name: Validate static release manifest
         run: python publisher/publish.py --check
