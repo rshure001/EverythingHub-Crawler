@@ -37,11 +37,12 @@ jobs:
           python-version: "3.12"
       - name: Compile crawler and database tools
         run: |
-          python -m py_compile crawler/crawl.py crawler/report.py crawler/build_search_shards.py crawler/validate_public_index.py database/import_repository_index.py
+          python -m py_compile crawler/crawl.py crawler/report.py crawler/build_search_shards.py crawler/validate_public_index.py database/import_repository_index.py publisher/release_health.py
       - name: Run crawler, schema-isolation, and edge-search tests
         run: |
           python -m unittest discover -s crawler -p 'test_*.py' -v
           python -m unittest discover -s database -p 'test_*.py' -v
+          python -m unittest discover -s publisher -p 'test_*.py' -v
           node --test supabase/functions/everything-hub-web-search/params.test.mjs supabase/functions/everything-hub-web-search/db-fetch.test.mjs supabase/functions/everything-hub-web-search/static-search.test.mjs supabase/functions/everything-hub-web-search/manifest-time.test.mjs supabase/functions/everything-hub-media-search/merge-results.test.mjs
           python crawler/build_search_shards.py
           python crawler/validate_public_index.py
