@@ -6,7 +6,6 @@ filesystem, crawler, publishing, or database side effects.
 """
 from __future__ import annotations
 
-from collections import defaultdict
 from datetime import datetime, timezone
 from math import log1p
 from typing import Any, Iterable, Mapping
@@ -120,7 +119,7 @@ def score_evidence(
     return {
         "eligible": True,
         "score": round(max(0.0, min(1.0, score)), 6),
-        "confidence_band": ("high" if score >= 0.75 else
+        "evidence_band": ("high" if score >= 0.75 else
                             "medium" if score >= 0.45 else "low"),
         "components": {key: round(value, 6) for key, value in components.items()},
         "weights": {key: round(value, 6) for key, value in selected_weights.items()},
@@ -194,10 +193,17 @@ def learn_weights(
         if not isinstance(snapshot, Mapping) or any(key not in snapshot for key in FEATURES):
             ignored += 1
             continue
-        features = {key: _unit(snapshot[key], -1.0) for key in FEATURES}
-        if any(value < 0 for value in features.values()):
+        try:
+            raw_features = {key: float(snapshot[key]) for key in FEATURES}
+        except (TypeError, ValueError, OverflowError):
             ignored += 1
             continue
+        if any(value != value or value < 0 or value > 1
+               or value in (float("inf"), float("-inf"))
+               for value in raw_features.values()):
+            ignored += 1
+            continue
+        features = raw_features
         label = event["label"]
         direction = 1.0 if label in {"helpful", "verified"} else -1.0
         # Center features so feedback reinforces discriminating signals rather
