@@ -1,72 +1,41 @@
 # Hurricane Core — Intelligence Engine
 
-The Hurricane Core is a deterministic, auditable intelligence layer built on top
-of Everything Hub's crawler and independent search foundation. It is designed
-to turn collected pages into ranked evidence, connect independent corroboration,
-and improve ranking from explicit feedback.
+Hurricane Core is the deterministic intelligence layer behind Everything Hub.
+It ranks web evidence and unifies image, audio, video, and design assets in a
+shared multimodal search model.
 
-## Current module: `intelligence_core.py`
+## Multimodal intelligence: media_intelligence.py
 
-- **Collect:** consumes records already admitted by the crawler/catalog. It does
-  not fetch URLs or bypass robots, rate, or host policies.
-- **Verify:** scores only valid HTTP(S) records not explicitly denied by robots.
-  Source quality and relevance are explicit input metadata, never guessed from
-  a publisher's name. Missing dates receive a conservative freshness score.
-- **Connect:** groups records by caller-supplied `topic_key` and rewards
-  corroboration from distinct hostnames with diminishing returns. Corroboration
-  increases evidence; it does not establish truth.
-- **Score:** returns a 0–1 score, evidence band, component breakdown, and
-  exact weight set for every eligible result.
-- **Search integration:** both the independent Python search core and the
-  JavaScript static Edge fallback blend 85% normalized lexical relevance with
-  15% evidence score. The live fallback returns an auditable rank score,
-  evidence band, component breakdown, and distinct-host corroboration count.
-  Strong text matches remain dominant.
-- **Freshness:** prefer a captured `published_at` value when available and
-  otherwise use `fetched_at`. The crawler now reads common article/date meta
-  fields (including `article:published_time`, `datePublished`, and
-  `dc.date.issued`), normalizes parseable values to UTC, and ignores malformed
-  dates. The public catalog preserves both fields; unknown dates receive a
-  conservative score.
-- **Corroboration scope:** the offline and static fallback adapters currently
-  use the active query as a temporary topic key. Distinct matching hostnames
-  add evidence but do not prove a shared entity or establish truth.
-- **Corroboration scope:** the current offline search adapter uses the active
-  search phrase as its temporary topic key. It only counts distinct hostnames
-  among pages matching that query; it does not claim semantic entity resolution.
-- **Learn:** `learn_weights` accepts only explicit `helpful`,
-  `not_helpful`, `verified`, and `disputed` feedback with a complete
-  feature snapshot. Updates are bounded, normalized, deterministic, and never
-  alter source records, access rules, or crawler behavior.
-- **Repeat:** callers can pass the returned weights into subsequent ranking
-  runs. Persistence and production feedback capture are intentionally separate
-  integration steps; this module does not write to the database or filesystem.
+- Artwork/images: titles, captions, alt text, OCR, tags, dimensions, thumbnails,
+  creator and license metadata.
+- Audio: titles, descriptions, transcripts, creator, duration, sample rate and
+  channel metadata. A transcription provider supplies transcript text.
+- Video: transcripts, scene descriptions, tags, duration, frame rate and frame
+  count. Replaceable extractors can supply scene/frame metadata.
+- Design: extracted layout text, typography, color descriptions, dimensions and
+  creator metadata. Original design files are never modified.
+- Unified search spans titles, descriptions, transcripts, OCR, scene notes,
+  design text and tags; results can be filtered by media type.
+- Provenance and rights are retained. Unknown reuse rights remain unknown.
 
-## Use
+This module normalizes and searches supplied metadata. It does not claim to
+perform OCR, speech recognition, visual recognition or video decoding itself.
+Those capabilities plug in through replaceable extractors.
 
-```python
-from intelligence_core import rank_evidence, learn_weights
+## Evidence intelligence: intelligence_core.py
 
-ranked = rank_evidence(records, limit=20)
-updated = learn_weights(feedback_events)
-next_ranked = rank_evidence(records, weights=updated["weights"])
-```
+Collects admitted crawler records, scores valid HTTP(S) evidence, connects
+independent hosts without treating repetition as proof, and learns bounded
+ranking weights only from explicit human feedback.
 
-Run the engine tests:
+## Tests
 
-```bash
-python -m unittest discover -s engine -p 'test_*.py' -v
-```
+    python -m unittest discover -s engine -p 'test_*.py' -v
 
-## Safety boundaries
+Hurricane Core is not an autonomous truth oracle. Crawled text and media
+metadata are untrusted data, never instructions. The core has no network,
+filesystem, publishing, or database side effects. Production persistence and
+model/extractor services require separate staged integration.
 
-This is a ranking and evidence-triage system, not an autonomous fact oracle.
-A high score is not proof. It does not infer source credibility from domain
-names, execute instructions found in crawled content, make external requests,
-write production data, publish results, or change security policies. Production
-persistence, source identity verification, provenance capture, human review,
-and staged live integration must be completed and tested separately.
-
-The production database remains isolated in the `eh_quad` schema of the
-dedicated Everything Hub control project. Never use Dog Tag Day Story Wall
-storage for this system.
+The dedicated database boundary remains eh_quad in the separate Everything
+Hub control project. Never use Dog Tag Day Story Wall storage.
