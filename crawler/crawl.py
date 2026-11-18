@@ -42,6 +42,8 @@ ROBOTS_MAX_BYTES = 512_000
 TIMEOUT = 15
 UA = "EverythingHubCrawler/1.1 (+https://github.com/rshure001/EverythingHub-Crawler)"
 ACCESS_CHALLENGE_MAX_TEXT = 1200
+MAX_JSONLD_DATE_BYTES = 262144
+
 PUBLISHED_DATE_META_PRIORITY = {
     "article:published_time": 0,
     "og:published_time": 0,
@@ -188,6 +190,31 @@ def parse_published_at(value):
         return None
 
 
+def extract_jsonld_published_at(raw):
+    """Read datePublished from bounded JSON-LD without executing page scripts."""
+    if not isinstance(raw, str) or not raw.strip() or len(raw) > MAX_JSONLD_DATE_BYTES:
+        return None
+    try:
+        payload = json.loads(raw)
+    except (TypeError, ValueError, RecursionError):
+        return None
+    pending = [payload]
+    while pending:
+        node = pending.pop()
+        if isinstance(node, dict):
+            # Inspect direct datePublished fields before descending into children.
+            for key, value in node.items():
+                if str(key).casefold() == "datepublished":
+                    candidate = parse_published_at(value)
+                    if candidate:
+                        return candidate
+            children = [value for value in node.values() if isinstance(value, (dict, list))]
+            pending.extend(reversed(children))
+        elif isinstance(node, list):
+            pending.extend(reversed(node))
+    return None
+
+
 def build_page_record(url, title, description, text, depth, directives, published_at=None):
     """Build a page record while retaining crawl depth for noindex pages."""
     if "noindex" in directives:
@@ -270,6 +297,9 @@ class PageParser(HTMLParser):
         self.description = ""
         self.published_at = None
         self._published_at_priority = None
+        self.jsonld_on = False
+        self.jsonld_buffer = []
+        self._jsonld_length = 0
         self.text = []
         self.links = []
         self.robots_directives = set()
@@ -280,6 +310,10 @@ class PageParser(HTMLParser):
         a = dict(attrs)
         if tag == "title":
             self.title_on = True
+        if tag == "script" and a.get("type", "").split(";", 1)[0].strip().lower() == "application/ld+json":
+            self.jsonld_on = True
+            self.jsonld_buffer = []
+            self._jsonld_length = 0
         if tag == "meta":
             meta_name = a.get("name", "").strip().lower()
             if meta_name == "description":
@@ -325,10 +359,26 @@ class PageParser(HTMLParser):
         tag = tag.lower()
         if tag == "title":
             self.title_on = False
+        if tag == "script" and self.jsonld_on:
+            candidate = extract_jsonld_published_at("".join(self.jsonld_buffer))
+            priority = PUBLISHED_DATE_META_PRIORITY["datepublished"]
+            if candidate and (
+                self._published_at_priority is None
+                or priority < self._published_at_priority
+            ):
+                self.published_at = candidate
+                self._published_at_priority = priority
+            self.jsonld_on = False
+            self.jsonld_buffer = []
+            self._jsonld_length = 0
         if tag in ("script", "style", "noscript", "svg", "nav", "footer", "header") and self.skip_depth:
             self.skip_depth -= 1
 
     def handle_data(self, data):
+        if self.jsonld_on and self._jsonld_length < MAX_JSONLD_DATE_BYTES:
+            chunk = data[:MAX_JSONLD_DATE_BYTES - self._jsonld_length]
+            self.jsonld_buffer.append(chunk)
+            self._jsonld_length += len(chunk)
         if self.title_on:
             self.title.append(data)
         if not self.skip_depth and data.strip():
