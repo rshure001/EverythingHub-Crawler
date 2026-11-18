@@ -58,6 +58,19 @@ def _origin(value: Any):
         return None
 
 
+def _review_origin(value: Any):
+    """Require a bare origin, not a path, query, fragment, or credential-bearing URL."""
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = urlsplit(value)
+        if parsed.path not in {"", "/"} or parsed.query or parsed.fragment:
+            return None
+    except ValueError:
+        return None
+    return _origin(value)
+
+
 def _public_canonical_url(value: Any) -> bool:
     if not isinstance(value, str) or not value or len(value) > 2048:
         return False
@@ -102,7 +115,7 @@ def _compile_reviews(registry: Any, now: datetime) -> tuple[dict, set, set, set,
         if not isinstance(row, Mapping):
             counts["invalid_reviews"] += 1
             continue
-        origin = _origin(row.get("origin"))
+        origin = _review_origin(row.get("origin"))
         if origin is None:
             counts["invalid_reviews"] += 1
             continue
@@ -202,8 +215,9 @@ def evaluate_preflight(catalog: Any, registry: Any, *, now: datetime | None = No
             continue
 
         robots_checked = _epoch(row.get("robots_checked_at"))
-        if robots_checked is None:
-            deferred["missing_robots_check_timestamp"] += 1
+        last_seen = _epoch(row.get("last_seen_at"))
+        if robots_checked is None or last_seen is None or robots_checked > last_seen:
+            deferred["invalid_robots_check_timestamp"] += 1
             continue
         robots_age = current.timestamp() - robots_checked
         if robots_age < -MAX_FUTURE_SKEW_SECONDS:
