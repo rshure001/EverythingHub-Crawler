@@ -138,9 +138,9 @@ def fallback_page_title(url):
     raw_url = str(url or "")
     parsed = urllib.parse.urlsplit(raw_url)
     segment = urllib.parse.unquote((parsed.path or "").rstrip("/").rsplit("/", 1)[-1])
-    segment = re.sub(r"\\.[A-Za-z0-9]{1,8}$", "", segment)
+    segment = re.sub(r"\.[A-Za-z0-9]{1,8}$", "", segment)
     segment = re.sub(r"[-_]+", " ", segment)
-    segment = re.sub(r"\\s+", " ", segment).strip(" ._-")
+    segment = re.sub(r"\s+", " ", segment).strip(" ._-")
     return segment or parsed.hostname or raw_url or "Untitled page"
 
 
@@ -150,7 +150,7 @@ def build_page_record(url, title, description, text, depth, directives):
         # noindex suppresses publication, not link discovery; keep depth so
         # permitted links on this page can still be queued safely.
         return {"url": url, "_eh_noindex": True, "depth": depth}
-    display_title = re.sub(r"\\s+", " ", str(title or "")).strip() or fallback_page_title(url)
+    display_title = re.sub(r"\s+", " ", str(title or "")).strip() or fallback_page_title(url)
     return {
         "url": url,
         "title": display_title,
