@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create a machine-readable health record for the verified Everything Hub catalog."""
+"""Create a machine-readable health record for the verified web and media catalogs."""
 from __future__ import annotations
 
 import argparse
