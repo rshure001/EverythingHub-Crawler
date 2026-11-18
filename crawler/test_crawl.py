@@ -140,12 +140,99 @@ class CrawlerTests(unittest.TestCase):
         self.assertNotIn("secret()", text)
         self.assertIn("/next", parser.links)
 
+    def test_parser_extracts_publication_date_and_prefers_specific_article_metadata(self):
+        parser = crawl.PageParser()
+        parser.feed(
+            '<meta name="date" content="2020-01-01">'
+            '<meta property="article:published_time" content="2024-05-01T12:30:00-04:00">'
+            '<meta property="article:modified_time" content="2024-06-01T00:00:00Z">'
+        )
+        self.assertEqual(parser.published_at, "2024-05-01T16:30:00Z")
+
+    def test_parser_extracts_itemprop_and_rfc_publication_dates(self):
+        parser = crawl.PageParser()
+        parser.feed('<meta itemprop="datePublished" content="Wed, 01 May 2024 12:30:00 -0400">')
+        self.assertEqual(parser.published_at, "2024-05-01T16:30:00Z")
+
+    def test_parser_extracts_itemprop_time_element_publication_date(self):
+        parser = crawl.PageParser()
+        parser.feed('<time itemprop="datePublished" datetime="2024-05-01T12:30:00-04:00">May 1</time>')
+        self.assertEqual(parser.published_at, "2024-05-01T16:30:00Z")
+
+    def test_specific_time_itemprop_overrides_generic_date_meta(self):
+        parser = crawl.PageParser()
+        parser.feed(
+            '<meta name="date" content="2020-01-01">'
+            '<time itemprop="datePublished" datetime="2024-05-01T12:30:00-04:00">May 1</time>'
+        )
+        self.assertEqual(parser.published_at, "2024-05-01T16:30:00Z")
+
+    def test_parse_published_at_rejects_unparseable_values(self):
+        self.assertIsNone(crawl.parse_published_at("not-a-date"))
+        self.assertIsNone(crawl.parse_published_at(""))
+
+    def test_build_page_record_preserves_only_valid_publication_dates(self):
+        record = crawl.build_page_record(
+            "https://example.com/story", "Story", "", "Useful content", 1, set(),
+            "2024-05-01T12:30:00-04:00",
+        )
+        self.assertEqual(record["published_at"], "2024-05-01T16:30:00Z")
+        invalid = crawl.build_page_record(
+            "https://example.com/unknown", "Unknown", "", "Useful content", 1, set(),
+            "not-a-date",
+        )
+        self.assertNotIn("published_at", invalid)
+        noindex = crawl.build_page_record(
+            "https://example.com/noindex", "Hidden", "", "", 1, {"noindex"},
+            "2024-05-01T12:30:00Z",
+        )
+        self.assertTrue(noindex["_eh_noindex"])
+        self.assertNotIn("published_at", noindex)
+
     def test_build_page_record_uses_readable_url_title_when_source_title_is_blank(self):
         record = crawl.build_page_record(
             "https://example.com/resources/veteran-resources.html",
             "   ", "", "Useful resource content", 1, set(),
         )
         self.assertEqual(record["title"], "veteran resources")
+
+    def test_merge_index_records_preserves_publication_date_when_recrawl_omits_it(self):
+        existing = [{
+            "url": "https://example.com/story",
+            "title": "Old title",
+            "published_at": "2024-05-01T16:30:00Z",
+        }]
+        new_records = {
+            "https://example.com/story": {
+                "url": "https://example.com/story",
+                "title": "Updated title",
+                "fetched_at": 1794960000,
+            }
+        }
+        merged = crawl.merge_index_records(existing, new_records)
+        self.assertEqual(merged["https://example.com/story"]["title"], "Updated title")
+        self.assertEqual(
+            merged["https://example.com/story"]["published_at"],
+            "2024-05-01T16:30:00Z",
+        )
+
+    def test_merge_index_records_replaces_publication_date_when_new_one_is_available(self):
+        existing = [{
+            "url": "https://example.com/story",
+            "published_at": "2024-05-01T16:30:00Z",
+        }]
+        new_records = {
+            "https://example.com/story": {
+                "url": "https://example.com/story",
+                "title": "Updated title",
+                "published_at": "2025-06-02T10:00:00Z",
+            }
+        }
+        merged = crawl.merge_index_records(existing, new_records)
+        self.assertEqual(
+            merged["https://example.com/story"]["published_at"],
+            "2025-06-02T10:00:00Z",
+        )
 
     def test_merge_index_records_backfills_legacy_blank_titles_without_dropping_pages(self):
         existing = [{
