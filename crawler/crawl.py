@@ -42,7 +42,7 @@ ROBOTS_MAX_BYTES = 512_000
 TIMEOUT = 15
 UA = "EverythingHubCrawler/1.1 (+https://github.com/rshure001/EverythingHub-Crawler)"
 ACCESS_CHALLENGE_MAX_TEXT = 1200
-MAX_JSONLD_DATE_BYTES = 262144
+MAX_JSONLD_DATE_CHARS = 262144
 
 PUBLISHED_DATE_META_PRIORITY = {
     "article:published_time": 0,
@@ -192,7 +192,7 @@ def parse_published_at(value):
 
 def extract_jsonld_published_at(raw):
     """Read datePublished from bounded JSON-LD without executing page scripts."""
-    if not isinstance(raw, str) or not raw.strip() or len(raw) > MAX_JSONLD_DATE_BYTES:
+    if not isinstance(raw, str) or not raw.strip() or len(raw) > MAX_JSONLD_DATE_CHARS:
         return None
     try:
         payload = json.loads(raw)
@@ -375,8 +375,8 @@ class PageParser(HTMLParser):
             self.skip_depth -= 1
 
     def handle_data(self, data):
-        if self.jsonld_on and self._jsonld_length < MAX_JSONLD_DATE_BYTES:
-            chunk = data[:MAX_JSONLD_DATE_BYTES - self._jsonld_length]
+        if self.jsonld_on and self._jsonld_length < MAX_JSONLD_DATE_CHARS:
+            chunk = data[:MAX_JSONLD_DATE_CHARS - self._jsonld_length]
             self.jsonld_buffer.append(chunk)
             self._jsonld_length += len(chunk)
         if self.title_on:
