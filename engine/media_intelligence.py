@@ -158,10 +158,16 @@ def normalize_asset(record: Mapping[str, Any]) -> dict[str, Any]:
         record.get("source_page_url") or record.get("pageUrl")
         or record.get("page_url") or record.get("source_url")
     )
-    raw_asset = (
-        record.get("asset_url") or record.get("media_url")
-        or record.get("imageUrl") or record.get("audioUrl")
-        or record.get("videoUrl") or record.get("designUrl")
+    asset_fields = {
+        "image": ("asset_url", "media_url", "imageUrl", "image_url"),
+        "audio": ("asset_url", "media_url", "audioUrl", "audio_url"),
+        "video": ("asset_url", "media_url", "videoUrl", "video_url"),
+        "design": ("asset_url", "media_url", "designUrl", "design_url"),
+    }[kind]
+    raw_asset = next(
+        (record.get(field) for field in asset_fields
+         if isinstance(record.get(field), str) and record.get(field).strip()),
+        None,
     )
     raw_url = record.get("url")
     source_page_url = _url(raw_page) if raw_page else ""
