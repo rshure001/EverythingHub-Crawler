@@ -81,6 +81,15 @@ class ExtractionPipelineTests(unittest.TestCase):
         self.assertEqual(result["usage_rights"], "Unknown")
         self.assertEqual(result["rights_status"], "unknown")
         self.assertEqual(len(result["extraction_provenance"]), 1)
+        self.assertEqual(result["policy_status"], "robots_allowed")
+        provenance = result["extraction_provenance"][0]
+        self.assertEqual(provenance["policy_basis"],
+                         "explicit_source_terms_attestation_and_robots_permission")
+        self.assertTrue(provenance["robots_allowed"])
+        self.assertTrue(provenance["extraction_permission"])
+        self.assertEqual(provenance["source_terms_status"], "allow_extraction")
+        self.assertEqual(provenance["source_terms_url"], "https://media.example.org/terms")
+        self.assertEqual(provenance["source_terms_sha256"], "a" * 64)
 
     def test_scheme_and_host_case_are_normalized(self):
         row = self.record(source_url="HTTPS://MEDIA.EXAMPLE.ORG/mission.mp4")
