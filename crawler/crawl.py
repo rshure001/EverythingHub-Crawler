@@ -17,6 +17,7 @@ from html.parser import HTMLParser
 from pathlib import Path
 
 from lane_classifier import VALID_LANES, classify_lane
+from safe_http import UnsafeTargetError, build_pinned_opener
 
 ROOT = Path(__file__).resolve().parents[1]
 SEEDS = ROOT / "crawler" / "seeds.txt"
@@ -177,19 +178,35 @@ def enqueue_discovered_links(queue, seen, links, record, queue_limit=QUEUE_LIMIT
     return added
 
 
+def same_origin(left, right):
+    try:
+        a = urllib.parse.urlsplit(left)
+        b = urllib.parse.urlsplit(right)
+        a_port = a.port or (443 if a.scheme.lower() == "https" else 80)
+        b_port = b.port or (443 if b.scheme.lower() == "https" else 80)
+        return (
+            a.scheme.lower() in ("http", "https")
+            and a.scheme.lower() == b.scheme.lower()
+            and (a.hostname or "").lower() == (b.hostname or "").lower()
+            and a_port == b_port
+            and a.username is None and a.password is None
+            and b.username is None and b.password is None
+        )
+    except (TypeError, ValueError):
+        return False
+
+
 class RobotsAwareRedirectHandler(urllib.request.HTTPRedirectHandler):
-    """Allow same-host redirects only after checking robots.txt for the target URL."""
+    """Allow same-origin redirects only after checking robots.txt for the target URL."""
     def __init__(self, is_allowed):
         super().__init__()
         self.is_allowed = is_allowed
 
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         target = urllib.parse.urljoin(req.full_url, newurl)
-        old_host = (urllib.parse.urlsplit(req.full_url).hostname or "").lower()
-        new_host = (urllib.parse.urlsplit(target).hostname or "").lower()
-        if old_host != new_host:
+        if not same_origin(req.full_url, target):
             raise urllib.error.HTTPError(
-                req.full_url, code, "cross-host redirect blocked", headers, fp
+                req.full_url, code, "cross-origin redirect blocked", headers, fp
             )
         if not self.is_allowed(target):
             raise urllib.error.HTTPError(
@@ -266,7 +283,7 @@ def request(url, is_allowed, max_bytes=2_000_000):
     req = urllib.request.Request(url, headers={
         "User-Agent": UA, "Accept": "text/html,application/xml,*/*"
     })
-    opener = urllib.request.build_opener(RobotsAwareRedirectHandler(is_allowed))
+    opener = build_pinned_opener(RobotsAwareRedirectHandler(is_allowed))
     with opener.open(req, timeout=TIMEOUT) as response:
         x_robots_tags = response.headers.get_all("X-Robots-Tag") or []
         body = response.read(max_bytes + 1)
@@ -282,12 +299,16 @@ def origin(url):
 def load_robots_policy(site):
     """Fetch robots.txt with a bounded read; deny the host if policy cannot be read."""
     parser = urllib.robotparser.RobotFileParser()
-    parser.set_url(site.rstrip("/") + "/robots.txt")
+    robots_url = site.rstrip("/") + "/robots.txt"
+    parser.set_url(robots_url)
     try:
-        req = urllib.request.Request(site.rstrip("/") + "/robots.txt", headers={
+        req = urllib.request.Request(robots_url, headers={
             "User-Agent": UA, "Accept": "text/plain,*/*"
         })
-        with urllib.request.urlopen(req, timeout=TIMEOUT) as response:
+        opener = build_pinned_opener(
+            RobotsAwareRedirectHandler(lambda target: same_origin(robots_url, target))
+        )
+        with opener.open(req, timeout=TIMEOUT) as response:
             if response.status >= 400:
                 raise RuntimeError(f"robots.txt returned HTTP {response.status}")
             raw = response.read(ROBOTS_MAX_BYTES + 1)

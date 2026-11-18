@@ -116,7 +116,9 @@ class EhQuadCrawlerSafetyTests(unittest.TestCase):
         socket_factory.assert_not_called()
 
     def test_safe_opener_disables_environment_proxies(self):
-        opener = WORKER.build_safe_opener(lambda _target: True)
+        opener = WORKER.build_pinned_opener(
+            WORKER.SameOriginRobotsRedirectHandler(lambda _target: True)
+        )
         # An empty ProxyHandler tells build_opener to suppress its default
         # environment-derived proxy handler; the empty handler itself is omitted.
         self.assertFalse(any(

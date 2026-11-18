@@ -1,4 +1,5 @@
 import importlib.util
+from contextlib import contextmanager
 import unittest
 import urllib.robotparser
 from collections import deque
@@ -53,6 +54,17 @@ class FakePageResponse:
     def read(self, limit):
         self.read_limit = limit
         return self.body[:limit]
+
+
+@contextmanager
+def patched_pinned_opener(response=None, side_effect=None):
+    opener = mock.Mock()
+    if side_effect is not None:
+        opener.open.side_effect = side_effect
+    else:
+        opener.open.return_value = response
+    with mock.patch.object(crawl, "build_pinned_opener", return_value=opener):
+        yield opener
 
 
 class CrawlerTests(unittest.TestCase):
@@ -310,17 +322,26 @@ class CrawlerTests(unittest.TestCase):
                 request, None, 302, "Found", {}, "https://other.example/target"
             )
 
-    def test_page_redirect_handler_checks_robots_before_same_host_scheme_redirect(self):
+    def test_page_redirect_handler_checks_robots_before_same_origin_redirect(self):
         handler = crawl.RobotsAwareRedirectHandler(lambda _url: True)
-        request = crawl.urllib.request.Request("http://example.com/start")
+        request = crawl.urllib.request.Request("https://example.com/start")
         redirected = handler.redirect_request(
             request, None, 301, "Moved", {}, "https://example.com/next"
         )
         self.assertEqual(redirected.full_url, "https://example.com/next")
 
-    def test_page_redirect_handler_blocks_same_host_redirect_disallowed_by_robots(self):
+    def test_page_redirect_handler_rejects_same_host_scheme_or_port_change(self):
+        handler = crawl.RobotsAwareRedirectHandler(lambda _url: True)
+        request = crawl.urllib.request.Request("https://example.com/start")
+        for target in ("http://example.com/downgrade", "https://example.com:8443/other-port"):
+            with self.subTest(target=target), self.assertRaises(crawl.urllib.error.HTTPError):
+                handler.redirect_request(
+                    request, None, 302, "Found", {}, target
+                )
+
+    def test_page_redirect_handler_blocks_same_origin_redirect_disallowed_by_robots(self):
         handler = crawl.RobotsAwareRedirectHandler(lambda _url: False)
-        request = crawl.urllib.request.Request("http://example.com/start")
+        request = crawl.urllib.request.Request("https://example.com/start")
         with self.assertRaises(crawl.urllib.error.HTTPError):
             handler.redirect_request(
                 request, None, 301, "Moved", {}, "https://example.com/private"
@@ -338,25 +359,25 @@ class CrawlerTests(unittest.TestCase):
 
     def test_robots_policy_fetch_parses_allow_and_disallow_rules(self):
         body = b"User-agent: *\nAllow: /\nDisallow: /private\n"
-        with mock.patch.object(crawl.urllib.request, "urlopen", return_value=FakeRobotsResponse(body)):
+        with patched_pinned_opener(response=FakeRobotsResponse(body)):
             parser = crawl.load_robots_policy("https://example.com")
         self.assertTrue(crawl.robots_can_fetch(parser, crawl.UA, "https://example.com/public"))
         self.assertFalse(crawl.robots_can_fetch(parser, crawl.UA, "https://example.com/private"))
 
     def test_robots_longest_match_and_allow_tie_break_are_order_independent(self):
         body = b"User-agent: *\nAllow: /\nDisallow: /private\n"
-        with mock.patch.object(crawl.urllib.request, "urlopen", return_value=FakeRobotsResponse(body)):
+        with patched_pinned_opener(response=FakeRobotsResponse(body)):
             parser = crawl.load_robots_policy("https://example.com")
         self.assertFalse(crawl.robots_can_fetch(parser, crawl.UA, "https://example.com/private"))
 
         tied = b"User-agent: *\nDisallow: /private\nAllow: /private\n"
-        with mock.patch.object(crawl.urllib.request, "urlopen", return_value=FakeRobotsResponse(tied)):
+        with patched_pinned_opener(response=FakeRobotsResponse(tied)):
             parser = crawl.load_robots_policy("https://example.com")
         self.assertTrue(crawl.robots_can_fetch(parser, crawl.UA, "https://example.com/private"))
 
     def test_robots_wildcard_and_end_anchor_are_respected(self):
         body = b"User-agent: *\nDisallow: /private*\nAllow: /private/public$\n"
-        with mock.patch.object(crawl.urllib.request, "urlopen", return_value=FakeRobotsResponse(body)):
+        with patched_pinned_opener(response=FakeRobotsResponse(body)):
             parser = crawl.load_robots_policy("https://example.com")
         self.assertTrue(crawl.robots_can_fetch(parser, crawl.UA, "https://example.com/private/public"))
         self.assertFalse(crawl.robots_can_fetch(parser, crawl.UA, "https://example.com/private/public/child"))
@@ -367,7 +388,7 @@ class CrawlerTests(unittest.TestCase):
             b"User-agent: *\nDisallow: /\n\n"
             b"User-agent: EverythingHubCrawler\nDisallow: /private\n"
         )
-        with mock.patch.object(crawl.urllib.request, "urlopen", return_value=FakeRobotsResponse(body)):
+        with patched_pinned_opener(response=FakeRobotsResponse(body)):
             parser = crawl.load_robots_policy("https://example.com")
         self.assertTrue(crawl.robots_can_fetch(parser, crawl.UA, "https://example.com/public"))
         self.assertFalse(crawl.robots_can_fetch(parser, crawl.UA, "https://example.com/private"))
@@ -377,7 +398,7 @@ class CrawlerTests(unittest.TestCase):
             b"User-agent: EverythingHubCrawler\nDisallow: /private\n\n"
             b"User-agent: EverythingHubCrawler\nAllow: /private/public\n"
         )
-        with mock.patch.object(crawl.urllib.request, "urlopen", return_value=FakeRobotsResponse(body)):
+        with patched_pinned_opener(response=FakeRobotsResponse(body)):
             parser = crawl.load_robots_policy("https://example.com")
         self.assertTrue(crawl.robots_can_fetch(parser, crawl.UA, "https://example.com/private/public"))
         self.assertFalse(crawl.robots_can_fetch(parser, crawl.UA, "https://example.com/private/other"))
@@ -386,7 +407,7 @@ class CrawlerTests(unittest.TestCase):
         error = crawl.urllib.error.HTTPError(
             "https://example.com/robots.txt", 404, "Not Found", {}, None
         )
-        with mock.patch.object(crawl.urllib.request, "urlopen", side_effect=error):
+        with patched_pinned_opener(side_effect=error):
             parser = crawl.load_robots_policy("https://example.com")
         self.assertTrue(parser.disallow_all)
         self.assertEqual(parser.everythinghub_policy_error, "http_404")
@@ -398,7 +419,7 @@ class CrawlerTests(unittest.TestCase):
                 error = crawl.urllib.error.HTTPError(
                     "https://example.com/robots.txt", status, "Unavailable", {}, None
                 )
-                with mock.patch.object(crawl.urllib.request, "urlopen", side_effect=error):
+                with patched_pinned_opener(side_effect=error):
                     parser = crawl.load_robots_policy("https://example.com")
                 self.assertTrue(parser.disallow_all)
                 self.assertEqual(parser.everythinghub_policy_error, f"http_{status}")
@@ -407,9 +428,7 @@ class CrawlerTests(unittest.TestCase):
                 )
 
     def test_robots_policy_fails_closed_on_network_timeout(self):
-        with mock.patch.object(
-            crawl.urllib.request, "urlopen", side_effect=TimeoutError("robots timeout")
-        ):
+        with patched_pinned_opener(side_effect=TimeoutError("robots timeout")):
             parser = crawl.load_robots_policy("https://example.com")
         self.assertTrue(parser.disallow_all)
         self.assertEqual(parser.everythinghub_policy_error, "unavailable")
@@ -419,11 +438,17 @@ class CrawlerTests(unittest.TestCase):
 
     def test_robots_policy_fails_closed_on_oversized_file(self):
         body = b"#" * (crawl.ROBOTS_MAX_BYTES + 1)
-        with mock.patch.object(crawl.urllib.request, "urlopen", return_value=FakeRobotsResponse(body)):
+        with patched_pinned_opener(response=FakeRobotsResponse(body)):
             parser = crawl.load_robots_policy("https://example.com")
         self.assertTrue(parser.disallow_all)
         self.assertEqual(parser.everythinghub_policy_error, "too_large")
         self.assertFalse(parser.can_fetch(crawl.UA, "https://example.com/public"))
+
+    def test_robots_policy_fails_closed_on_dns_pinning_error(self):
+        with patched_pinned_opener(side_effect=crawl.UnsafeTargetError("private DNS target")):
+            parser = crawl.load_robots_policy("https://example.com")
+        self.assertTrue(parser.disallow_all)
+        self.assertEqual(parser.everythinghub_policy_error, "unavailable")
 
     def test_sitemap_urlset_extracts_bounded_same_host_pages(self):
         body = b"""<?xml version="1.0" encoding="UTF-8"?>
@@ -514,7 +539,7 @@ class CrawlerTests(unittest.TestCase):
             b"User-agent: EverythingHubCrawler\nCrawl-delay: 4\nRequest-rate: 1/6\n\n"
             b"User-agent: EverythingHubCrawler\nCrawl-delay: 7\nRequest-rate: 2/3\n"
         )
-        with mock.patch.object(crawl.urllib.request, "urlopen", return_value=FakeRobotsResponse(body)):
+        with patched_pinned_opener(response=FakeRobotsResponse(body)):
             parser = crawl.load_robots_policy("https://example.com")
         self.assertEqual(crawl.effective_host_delay(parser), 7.0)
 
