@@ -159,6 +159,14 @@ class CrawlerTests(unittest.TestCase):
         parser.feed('<time itemprop="datePublished" datetime="2024-05-01T12:30:00-04:00">May 1</time>')
         self.assertEqual(parser.published_at, "2024-05-01T16:30:00Z")
 
+    def test_specific_time_itemprop_overrides_generic_date_meta(self):
+        parser = crawl.PageParser()
+        parser.feed(
+            '<meta name="date" content="2020-01-01">'
+            '<time itemprop="datePublished" datetime="2024-05-01T12:30:00-04:00">May 1</time>'
+        )
+        self.assertEqual(parser.published_at, "2024-05-01T16:30:00Z")
+
     def test_parse_published_at_rejects_unparseable_values(self):
         self.assertIsNone(crawl.parse_published_at("not-a-date"))
         self.assertIsNone(crawl.parse_published_at(""))
