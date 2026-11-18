@@ -2,6 +2,7 @@ import unittest
 
 from media_intelligence import (
     index_assets,
+    is_safe_public_url,
     normalize_asset,
     normalize_discovery_result,
     search_assets,
@@ -54,6 +55,18 @@ class MultimodalIntelligenceTests(unittest.TestCase):
         self.assertEqual(search_assets("Saturn V Moon", self.assets, media_type="audio")[0]["asset_id"], "audio-1")
         self.assertEqual(search_assets("Saturn V lifts off", self.assets, media_type="video")[0]["asset_id"], "video-1")
         self.assertEqual(search_assets("gold lettering", self.assets, media_type="design")[0]["asset_id"], "design-1")
+
+    def test_shared_url_policy_rejects_unsafe_hosts_and_urls(self):
+        self.assertTrue(is_safe_public_url("https://media.example.org/a.mp4"))
+        for url in (
+            "javascript:alert(1)",
+            "https://@example.org/a",
+            "https://example.org:bad/a",
+            "http://127.0.0.1/a",
+            "http://localhost/a",
+        ):
+            with self.subTest(url=url):
+                self.assertFalse(is_safe_public_url(url))
 
     def test_unknown_rights_never_upgraded(self):
         asset = normalize_asset({"type": "image", "url": "https://example.org/a.jpg"})
