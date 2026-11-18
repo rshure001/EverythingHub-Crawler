@@ -122,6 +122,14 @@ class MediaExtractionPreflightTests(unittest.TestCase):
                 self.assertEqual(result["eligible_for_extraction_preflight"], 0)
                 self.assertEqual(result["registry_reviews"]["invalid_reviews"], 1)
 
+    def test_source_terms_url_requires_https(self):
+        result = evaluate_preflight(
+            catalog(candidate()), registry(review(source_terms_url="http://media.example.org/terms")),
+            now=NOW,
+        )
+        self.assertEqual(result["eligible_for_extraction_preflight"], 0)
+        self.assertEqual(result["registry_reviews"]["invalid_reviews"], 1)
+
     def test_unsafe_terms_url_and_bad_digest_fail_closed(self):
         bad = review(
             source_terms_url="https://user:pass@media.example.org/terms",
