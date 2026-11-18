@@ -1,4 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { mergeMediaResults, mediaProviderLabel } from "./merge-results.mjs";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -143,30 +144,30 @@ Deno.serve(async (request: Request) => {
     usageNote: "Bing media results are discovery links only; verify reuse rights on the source page. Wikimedia Commons results include available license and attribution metadata."
   }, { headers: cors });
 
-  try {
-    let results = await bing(query, type);
-    let provider = type === "video" ? "Bing Videos" : "Bing Images";
-    if (!results.length) {
-      results = await commons(query, type);
-      provider = "Wikimedia Commons";
-    }
-    return Response.json({
-      results, count: results.length, query, type, provider,
-      usageNote: "Bing media results are discovery links only; verify reuse rights on the source page. Wikimedia Commons results include available license and attribution metadata."
-    }, { headers: cors });
-  } catch {
-    try {
-      const results = await commons(query, type);
-      return Response.json({
-        results, count: results.length, query, type, provider: "Wikimedia Commons",
-        usageNote: "Review each file's license and attribution requirements before reuse."
-      }, { headers: cors });
-    } catch {
-      return Response.json({
-        results: [], count: 0, query, type,
-        warning: "Free media sources are temporarily unavailable",
-        usageNote: "No media results are currently available. Check each original source's terms before reuse."
-      }, { status: 200, headers: cors });
-    }
+  const [bingOutcome, commonsOutcome] = await Promise.allSettled([
+    bing(query, type),
+    commons(query, type),
+  ]);
+  const bingResults = bingOutcome.status === "fulfilled" ? bingOutcome.value : [];
+  const commonsResults = commonsOutcome.status === "fulfilled" ? commonsOutcome.value : [];
+
+  if (bingOutcome.status === "rejected") {
+    console.error("Bing media discovery failed:", bingOutcome.reason);
+  }
+  if (commonsOutcome.status === "rejected") {
+    console.error("Wikimedia Commons media discovery failed:", commonsOutcome.reason);
+  }
+
+  const results = mergeMediaResults(bingResults, commonsResults);
+  const provider = mediaProviderLabel(results, type);
+  return Response.json({
+    results,
+    count: results.length,
+    query,
+    type,
+    provider: results.length ? provider : null,
+    warning: results.length ? undefined : "Free media sources are temporarily unavailable",
+    usageNote: "Bing media results are discovery links only; verify reuse rights on the source page. Wikimedia Commons results include available license and attribution metadata."
+  }, { headers: cors });
   }
 });
