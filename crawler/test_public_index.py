@@ -77,6 +77,21 @@ class PublicIndexValidationTests(unittest.TestCase):
         self.assertTrue(is_publishable(allowed))
         self.assertTrue(is_publishable(legacy))
 
+    def test_credential_bearing_urls_are_not_publishable(self):
+        for url in (
+            "https://user:secret@example.com/private",
+            "https://@example.com/private",
+        ):
+            with self.subTest(url=url):
+                self.assertFalse(is_publishable({"url": url}))
+
+    def test_credential_bearing_urls_are_rejected_from_public_shards(self):
+        url = "https://user:secret@example.com/private"
+        page = {"url": url, "title": "Credential-bearing URL"}
+        self.write_fixture([page], [page])
+        errors = validate(self.root)
+        self.assertTrue(any("credential-bearing URL" in error for error in errors))
+
     def test_duplicate_urls_are_rejected(self):
         source = [{"url": "https://example.com/a", "title": "A"}]
         shards = [
