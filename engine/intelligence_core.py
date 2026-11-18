@@ -42,6 +42,11 @@ def _host(url: str) -> str:
 
 
 def _timestamp(value: Any) -> datetime | None:
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        try:
+            return datetime.fromtimestamp(value, timezone.utc)
+        except (ValueError, OverflowError, OSError):
+            return None
     if not isinstance(value, str) or not value.strip():
         return None
     try:
