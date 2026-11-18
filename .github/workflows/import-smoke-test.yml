@@ -62,9 +62,38 @@ jobs:
         run: python database/import_repository_index.py
       - name: Verify imported records and lane distribution
         run: |
+          expected=$(python - <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          sys.path.insert(0, str(Path("database").resolve()))
+          from import_repository_index import (
+              collect_robots_denied_urls,
+              is_public_http_url,
+              is_robots_allowed,
+          )
+
+          pages = json.loads(Path("data/index.json").read_text(encoding="utf-8")).get("pages", [])
+          denied_urls = set(collect_robots_denied_urls(pages))
+          allowed_urls = {
+              page["url"]
+              for page in pages
+              if isinstance(page, dict)
+              and is_public_http_url(page.get("url"))
+              and is_robots_allowed(page)
+              and page["url"] not in denied_urls
+          }
+          print(len(allowed_urls))
+          PY
+          )
           count=$(psql "$DATABASE_URL" -tA -c "SELECT count(*) FROM eh_quad.eh_documents;")
+          echo "Expected unique allowed records: $expected"
           echo "Imported records: $count"
-          test "$count" -gt 0
+          test "$count" = "$expected"
+          robots_denied=$(psql "$DATABASE_URL" -tA -c "SELECT count(*) FROM eh_quad.eh_documents WHERE robots_allowed IS NOT TRUE;")
+          echo "Unexpected robots-denied stored records: $robots_denied"
+          test "$robots_denied" = "0"
           invalid_lanes=$(psql "$DATABASE_URL" -tA -c "SELECT count(*) FROM eh_quad.eh_documents WHERE lane NOT IN ('general','science','news','technology','business','government','culture','nature');")
           echo "Invalid lane rows: $invalid_lanes"
           test "$invalid_lanes" = "0"
