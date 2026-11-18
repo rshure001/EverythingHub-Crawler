@@ -114,3 +114,59 @@ test("snippets and response fields remain compatible", () => {
   assert.ok(result.results[0].snippet.length > 0);
   assert.ok(Number.isFinite(result.results[0].relevance));
 });
+
+test("Hurricane evidence score refines lexical relevance without replacing it", () => {
+  const result = searchStaticPages(pages, "Rolex", null, 10, 0, Date.parse("2026-11-18T00:00:00Z"));
+  const maxLexical = Math.max(...result.results.map((item) => item.relevance));
+  assert.ok(result.results.every((item) => Number.isFinite(item.intelligenceScore)));
+  assert.ok(result.results.every((item) => Number.isFinite(item.rankScore)));
+  assert.ok(result.results.every((item) => ["high", "medium", "low"].includes(item.evidenceBand)));
+  assert.ok(result.results.every((item) => item.evidenceComponents?.relevance !== undefined));
+  const expected = result.results.map((item) => Number((
+    0.85 * (item.relevance / maxLexical) + 0.15 * item.intelligenceScore
+  ).toFixed(6)));
+  assert.deepEqual(result.results.map((item) => item.rankScore), expected);
+  assert.deepEqual(result.results.map((item) => item.rankScore), [...expected].sort((a, b) => b - a));
+});
+
+test("publication time takes precedence over crawl time for freshness", () => {
+  const now = Date.parse("2026-11-18T00:00:00Z");
+  const result = searchStaticPages([
+    {
+      url: "https://a.example/nasa",
+      title: "NASA Mars mission",
+      description: "NASA mission",
+      fetched_at: now / 1000,
+      published_at: (now - 365 * 86400000) / 1000,
+    },
+    {
+      url: "https://b.example/nasa",
+      title: "NASA Mars mission",
+      description: "NASA mission",
+      fetched_at: now / 1000,
+      published_at: now / 1000,
+    },
+  ], "NASA", null, 10, 0, now);
+  const old = result.results.find((item) => item.url.includes("a.example"));
+  const recent = result.results.find((item) => item.url.includes("b.example"));
+  assert.ok(old.evidenceComponents.freshness < recent.evidenceComponents.freshness);
+  assert.equal(recent.evidenceComponents.freshness, 1);
+  assert.ok(recent.rankScore > old.rankScore);
+});
+
+test("corroboration counts distinct hosts rather than repeated pages", () => {
+  const result = searchStaticPages([
+    { url: "https://a.example/one", title: "Apollo mission", description: "Apollo space" },
+    { url: "https://a.example/two", title: "Apollo mission", description: "Apollo space" },
+    { url: "https://b.example/three", title: "Apollo mission", description: "Apollo space" },
+  ], "Apollo", null, 10, 0, Date.parse("2026-11-18T00:00:00Z"));
+  assert.equal(result.count, 3);
+  assert.ok(result.results.every((item) => item.corroboratingHosts === 1));
+});
+
+test("unknown page age receives a conservative freshness value", () => {
+  const result = searchStaticPages([
+    { url: "https://example.org/nasa", title: "NASA mission" },
+  ], "NASA", null, 10, 0, Date.parse("2026-11-18T00:00:00Z"));
+  assert.equal(result.results[0].evidenceComponents.freshness, 0.35);
+});
