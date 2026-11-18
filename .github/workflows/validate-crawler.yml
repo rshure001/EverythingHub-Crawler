@@ -22,6 +22,8 @@ on:
       - "SCALABLE-ARCHITECTURE.md"
       - ".github/workflows/crawl-watchdog.yml"
       - ".github/workflows/validate-crawler.yml"
+      - ".github/workflows/crawl.yml"
+      - ".github/workflows/publish-site.yml"
   workflow_dispatch:
 permissions:
   contents: read
@@ -37,9 +39,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Validate crawler and publisher workflow YAML
+        run: |
+          ruby -e 'require "yaml"; ARGV.each { |path| YAML.load_file(path, aliases: true); puts "YAML-valid #{path}" }' .github/workflows/crawl.yml .github/workflows/publish-site.yml
       - name: Compile crawler and database tools
         run: |
-          python -m py_compile crawler/crawl.py crawler/report.py crawler/build_search_shards.py crawler/validate_public_index.py database/import_repository_index.py database/crawl_worker.py database/crawl_worker_smoke.py publisher/release_health.py
+          python -m py_compile crawler/crawl.py crawler/report.py crawler/build_search_shards.py crawler/validate_public_index.py crawler/validate_media_catalog.py database/import_repository_index.py database/crawl_worker.py database/crawl_worker_smoke.py publisher/release_health.py
       - name: Run crawler, schema-isolation, and edge-search tests
         run: |
           python -m unittest discover -s crawler -p 'test_*.py' -v
@@ -48,6 +53,7 @@ jobs:
           node --test supabase/functions/everything-hub-web-search/params.test.mjs supabase/functions/everything-hub-web-search/db-fetch.test.mjs supabase/functions/everything-hub-web-search/static-search.test.mjs supabase/functions/everything-hub-web-search/static-manifest.test.mjs supabase/functions/everything-hub-web-search/manifest-time.test.mjs supabase/functions/everything-hub-media-search/merge-results.test.mjs
           python crawler/build_search_shards.py
           python crawler/validate_public_index.py
+          python crawler/validate_media_catalog.py
           node supabase/functions/everything-hub-web-search/static-search-catalog-smoke.mjs
       - name: Set up Deno for Edge Function type checking
         uses: denoland/setup-deno@v2

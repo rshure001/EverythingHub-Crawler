@@ -30,6 +30,7 @@ jobs:
         run: |
           python crawler/build_search_shards.py
           python crawler/validate_public_index.py
+          python crawler/validate_media_catalog.py
       - name: Validate immutable release manifest
         run: python publisher/publish.py --check
       - name: Validate and stage the crawler search catalog
