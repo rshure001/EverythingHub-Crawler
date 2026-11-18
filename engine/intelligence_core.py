@@ -33,7 +33,10 @@ def _unit(value: Any, default: float = 0.0) -> float:
 
 def _host(url: str) -> str:
     try:
-        return (urlsplit(url).hostname or "").casefold().rstrip(".")
+        parsed = urlsplit(url)
+        if parsed.scheme.casefold() not in {"http", "https"} or not parsed.hostname:
+            return ""
+        return parsed.hostname.casefold().rstrip(".")
     except ValueError:
         return ""
 
@@ -101,7 +104,7 @@ def score_evidence(
     from a domain name. Robots-denied and invalid-URL records are excluded.
     """
     url = str(page.get("url") or "").strip()
-    if not url.startswith(("https://", "http://")) or page.get("robots_allowed") is False:
+    if not _host(url) or page.get("robots_allowed") is False:
         return {"eligible": False, "score": 0.0, "components": {},
                 "reason": "invalid_url_or_robots_denied"}
     current = now or datetime.now(timezone.utc)
