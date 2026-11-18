@@ -2,7 +2,7 @@ import unittest
 from datetime import datetime, timezone
 from pathlib import Path
 
-from pipeline_health import evaluate_deploy_job, evaluate_pipeline, evaluate_workflow
+from crawler.pipeline_health import evaluate_deploy_job, evaluate_pipeline, evaluate_workflow
 
 NOW = datetime(2026, 11, 18, 21, 10, tzinfo=timezone.utc)
 
