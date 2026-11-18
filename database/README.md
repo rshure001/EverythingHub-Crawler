@@ -112,3 +112,29 @@ Publisher run **#66** successfully validated and uploaded a **7,770,151-byte** G
 Scheduled GitHub Actions delivery is inconsistent. In the latest 100 workflow runs inspected, only three `schedule` events appeared; the most recent was at 11:30 UTC, with no later scheduled event visible through 14:58 UTC. Re-running watchdog job #169 at 15:00 UTC caused it to detect a 3,373-second-old crawler attempt and dispatch run #142, which then completed successfully. The recovery logic works; normal scheduled-event delivery remains an operational risk.
 
 No production migration, import, reset, restore, or write was attempted. The separate Dog Tag Day Story Wall Supabase project was not queried for this work and remains outside the Everything Hub target. The files and isolated tests do not publish or switch production traffic.
+
+## Hurricane Core intelligence storage
+
+`003_eh_quad_intelligence.sql` is the additive storage layer for the Hurricane
+Core. Apply it only after PostgreSQL accepts connections and only after
+`002_eh_quad_schema.sql` has been verified in the dedicated
+`everything-hub-control` project.
+
+It adds:
+- An explicit source registry with neutral defaults; publisher domains are not
+  assigned credibility automatically.
+- Topic assignments with method, confidence, and verification status.
+- Evidence links that preserve corroboration, contradiction, updates, and
+  references as separate relationship types.
+- Append-only feedback events with no account identifiers or email addresses.
+- A versioned rank profile for the bounded learning weights.
+- A source-quality score column on documents, defaulting to neutral 0.500.
+
+All new tables have RLS enabled. Only the server-side service role receives
+access. Feedback events are insert/read only; the migration grants no update or
+delete permission on that table. The migration does not create policies or
+grants for anon/authenticated/public.
+
+The migration is prepared and statically tested but **not applied**. Do not
+apply it, import feedback, or write production rows while the PostgreSQL
+recovery error SQLSTATE `57P03` persists. Never use Dog Tag Day Story Wall.

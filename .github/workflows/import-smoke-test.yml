@@ -55,7 +55,9 @@ jobs:
       - name: Create isolated test service role
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "CREATE ROLE service_role NOLOGIN BYPASSRLS;"
       - name: Create isolated eh_quad test schema
-        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f database/002_eh_quad_schema.sql
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f database/002_eh_quad_schema.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f database/003_eh_quad_intelligence.sql
       - name: Run schema-isolation unit tests
         run: python -m unittest discover -s database -p 'test_*.py' -v
       - name: Import crawler snapshot into temporary database
