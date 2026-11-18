@@ -183,6 +183,44 @@ class CrawlerTests(unittest.TestCase):
         )
         self.assertEqual(record["title"], "veteran resources")
 
+    def test_merge_index_records_preserves_publication_date_when_recrawl_omits_it(self):
+        existing = [{
+            "url": "https://example.com/story",
+            "title": "Old title",
+            "published_at": "2024-05-01T16:30:00Z",
+        }]
+        new_records = {
+            "https://example.com/story": {
+                "url": "https://example.com/story",
+                "title": "Updated title",
+                "fetched_at": 1794960000,
+            }
+        }
+        merged = crawl.merge_index_records(existing, new_records)
+        self.assertEqual(merged["https://example.com/story"]["title"], "Updated title")
+        self.assertEqual(
+            merged["https://example.com/story"]["published_at"],
+            "2024-05-01T16:30:00Z",
+        )
+
+    def test_merge_index_records_replaces_publication_date_when_new_one_is_available(self):
+        existing = [{
+            "url": "https://example.com/story",
+            "published_at": "2024-05-01T16:30:00Z",
+        }]
+        new_records = {
+            "https://example.com/story": {
+                "url": "https://example.com/story",
+                "title": "Updated title",
+                "published_at": "2025-06-02T10:00:00Z",
+            }
+        }
+        merged = crawl.merge_index_records(existing, new_records)
+        self.assertEqual(
+            merged["https://example.com/story"]["published_at"],
+            "2025-06-02T10:00:00Z",
+        )
+
     def test_merge_index_records_backfills_legacy_blank_titles_without_dropping_pages(self):
         existing = [{
             "url": "https://example.com/about-us",
