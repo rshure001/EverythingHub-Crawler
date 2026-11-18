@@ -23,9 +23,11 @@ and improve ranking from explicit feedback.
   evidence band, component breakdown, and distinct-host corroboration count.
   Strong text matches remain dominant.
 - **Freshness:** prefer a captured `published_at` value when available and
-  otherwise use `fetched_at`. The public catalog preserves both fields, but
-  the current crawler reliably records crawl time; publication-date extraction
-  is a separate follow-up. Unknown dates receive a conservative score.
+  otherwise use `fetched_at`. The crawler now reads common article/date meta
+  fields (including `article:published_time`, `datePublished`, and
+  `dc.date.issued`), normalizes parseable values to UTC, and ignores malformed
+  dates. The public catalog preserves both fields; unknown dates receive a
+  conservative score.
 - **Corroboration scope:** the offline and static fallback adapters currently
   use the active query as a temporary topic key. Distinct matching hostnames
   add evidence but do not prove a shared entity or establish truth.
