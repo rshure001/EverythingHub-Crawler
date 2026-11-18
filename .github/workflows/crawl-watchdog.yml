@@ -135,8 +135,14 @@ jobs:
         run: |
           set -euo pipefail
           gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/publish-site.yml/runs?per_page=5" > /tmp/publisher-runs.json
+          publisher_run_id="$(python -c 'import json; runs=json.load(open("/tmp/publisher-runs.json")).get("workflow_runs") or []; print(runs[0].get("id", "") if runs else "")')"
+          if [ -n "$publisher_run_id" ]; then
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${publisher_run_id}/jobs?per_page=100" > /tmp/publisher-jobs.json
+          else
+            echo '{"jobs":[]}' > /tmp/publisher-jobs.json
+          fi
           gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/search-api-smoke.yml/runs?per_page=5" > /tmp/search-smoke-runs.json
-          python crawler/pipeline_health.py /tmp/publisher-runs.json /tmp/search-smoke-runs.json > /tmp/pipeline-health.json
+          python crawler/pipeline_health.py /tmp/publisher-runs.json /tmp/publisher-jobs.json /tmp/search-smoke-runs.json > /tmp/pipeline-health.json
           cat /tmp/pipeline-health.json
           python - <<'PY'
           import json
@@ -148,14 +154,14 @@ jobs:
               "### Everything Hub downstream pipeline health",
               f"- Overall status: {report['overall_status']}",
           ]
-          for key, label in (("publisher", "Publisher"), ("search_smoke", "Live search smoke")):
+          for key, label in (("publisher", "Publisher workflow"), ("deploy_job", "Pages deployment job"), ("search_smoke", "Live search smoke")):
               item = report[key]
               lines.append(
                   f"- {label}: {item['status']} "
-                  f"(run #{item['run_number'] or 'none'}, "
-                  f"conclusion={item['conclusion'] or 'pending'}, "
-                  f"age_seconds={item['age_seconds'] if item['age_seconds'] is not None else 'unknown'})"
+                  f"(run #{item.get('run_number') or 'n/a'}, "
+                  f"conclusion={item.get('conclusion') or 'pending'})"
               )
+          lines.append("- A successful deploy job is not treated as live-domain verification.")
           with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as handle:
               handle.write("\n".join(lines) + "\n")
           PY
