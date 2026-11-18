@@ -154,6 +154,35 @@ class CrawlerTests(unittest.TestCase):
         parser.feed('<meta itemprop="datePublished" content="Wed, 01 May 2024 12:30:00 -0400">')
         self.assertEqual(parser.published_at, "2024-05-01T16:30:00Z")
 
+    def test_parser_extracts_jsonld_datepublished_from_nested_graph(self):
+        parser = crawl.PageParser()
+        parser.feed(
+            '<script type="application/ld+json">'
+            '{"@context":"https://schema.org","@graph":['
+            '{"@type":"WebPage","name":"Story"},'
+            '{"@type":"NewsArticle","datePublished":"2024-05-01T12:30:00-04:00"}'
+            ']}'
+            '</script>'
+        )
+        self.assertEqual(parser.published_at, "2024-05-01T16:30:00Z")
+        self.assertNotIn("datePublished", " ".join(parser.text))
+
+    def test_jsonld_publication_date_overrides_generic_meta_date(self):
+        parser = crawl.PageParser()
+        parser.feed(
+            '<meta name="date" content="2020-01-01">'
+            '<script type="application/ld+json">'
+            '{"@type":"NewsArticle","datePublished":"2024-05-01T12:30:00Z"}'
+            '</script>'
+        )
+        self.assertEqual(parser.published_at, "2024-05-01T12:30:00Z")
+
+    def test_invalid_jsonld_is_ignored_without_failing_page_parse(self):
+        parser = crawl.PageParser()
+        parser.feed('<script type="application/ld+json">{not-json</script><title>Safe page</title>')
+        self.assertIsNone(parser.published_at)
+        self.assertEqual("".join(parser.title), "Safe page")
+
     def test_parser_extracts_itemprop_time_element_publication_date(self):
         parser = crawl.PageParser()
         parser.feed('<time itemprop="datePublished" datetime="2024-05-01T12:30:00-04:00">May 1</time>')
