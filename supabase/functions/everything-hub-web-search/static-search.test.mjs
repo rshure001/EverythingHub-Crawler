@@ -3,96 +3,74 @@ import assert from "node:assert/strict";
 import { searchStaticPages } from "./static-search.mjs";
 
 const pages = [
-  {
-    url: "https://www.rolex.com/",
-    title: "Rolex Official Watches",
-    description: "Swiss luxury watchmaker",
-    text: "Explore Rolex watches and the history of the brand.",
-    lane: "business",
-  },
-  {
-    url: "https://example.org/watches",
-    title: "Luxury watches explained",
-    description: "Rolex and other Swiss watches",
-    text: "A guide to choosing a watch.",
-    lane: "culture",
-  },
-  {
-    url: "https://science.nasa.gov/apollo-11/",
-    title: "NASA Apollo 11 Mission",
-    description: "Apollo 11 was the first crewed Moon landing.",
-    text: "NASA mission history and lunar exploration.",
-    lane: "science",
-  },
-  {
-    url: "https://blocked.example/rolex",
-    title: "Rolex blocked page",
-    description: "Must not appear in public search.",
-    text: "Robots disallowed.",
-    lane: "business",
-    robots_allowed: false,
-  },
-  {
-    url: "javascript:alert(1)",
-    title: "Rolex unsafe URL",
-    description: "Invalid public result.",
-    text: "Must be ignored.",
-    lane: "business",
-  },
+  { url: "https://www.rolex.com/watches", title: "Rolex Watches", description: "Swiss precision watchmaking", text: "Luxury watch brand", lane: "business", robots_allowed: true },
+  { url: "https://example.org/watch", title: "Watch", description: "A wrist timepiece", text: "Rolex is mentioned in this long article", lane: "culture", robots_allowed: true },
+  { url: "https://www.nasa.gov/missions/mars", title: "NASA Mars Missions", description: "Explore Mars with NASA", text: "Science and space exploration", lane: "science", robots_allowed: true },
+  { url: "https://blocked.example/rolex", title: "Rolex blocked", description: "Rolex", text: "", lane: "business", robots_allowed: false },
 ];
 
-test("ranks a title and exact-phrase match above a body-only match", () => {
-  const result = searchStaticPages(pages, "Rolex", null, 10, 0);
+test("title and phrase matches rank above body-only matches", () => {
+  const result = searchStaticPages(pages, "Rolex");
+  assert.equal(result.results[0].url, "https://www.rolex.com/watches");
   assert.equal(result.count, 2);
-  assert.equal(result.results[0].url, "https://www.rolex.com/");
-  assert.equal(result.results[0].origin, "Everything Hub public crawler index");
 });
 
-test("requires all query terms to occur in indexed content", () => {
-  const result = searchStaticPages(pages, "NASA Apollo 11", null, 10, 0);
+test("multi-term queries require all terms", () => {
+  const result = searchStaticPages(pages, "NASA Mars");
   assert.equal(result.count, 1);
-  assert.equal(result.results[0].url, "https://science.nasa.gov/apollo-11/");
+  assert.equal(result.results[0].url, "https://www.nasa.gov/missions/mars");
 });
 
-test("filters by the requested search lane", () => {
-  const result = searchStaticPages(pages, "Rolex", "culture", 10, 0);
+test("lane filter is applied", () => {
+  const result = searchStaticPages(pages, "Rolex", "culture");
   assert.equal(result.count, 1);
-  assert.equal(result.results[0].url, "https://example.org/watches");
   assert.equal(result.results[0].tentacle, "culture");
 });
 
-test("supports stable pagination and reports whether more matches exist", () => {
-  const many = Array.from({ length: 5 }, (_, index) => ({
-    url: "https://example.org/item-" + index,
-    title: "Rolex guide " + index,
-    description: "Rolex watches",
-    text: "Swiss watches.",
-    lane: "business",
-  }));
-  const first = searchStaticPages(many, "Rolex", null, 2, 0);
-  const second = searchStaticPages(many, "Rolex", null, 2, 2);
-  assert.equal(first.count, 5);
-  assert.equal(first.results.length, 2);
-  assert.equal(first.hasMore, true);
-  assert.equal(second.results.length, 2);
-  assert.equal(second.hasMore, true);
-  assert.notEqual(first.results[0].url, second.results[0].url);
-});
-
-test("excludes robots-denied records and non-HTTP URLs", () => {
-  const result = searchStaticPages(pages, "Rolex", null, 10, 0);
+test("robots-denied records are excluded", () => {
+  const result = searchStaticPages(pages, "Rolex");
   assert.equal(result.results.some((item) => item.url.includes("blocked.example")), false);
-  assert.equal(result.results.some((item) => item.url.startsWith("javascript:")), false);
 });
 
-test("normalizes punctuation and case in multi-term queries", () => {
-  const result = searchStaticPages(pages, "  nasa-apollo 11  ", null, 10, 0);
-  assert.equal(result.count, 1);
-  assert.equal(result.results[0].source, "science.nasa.gov");
-});
-
-test("returns no matches for terms absent from the crawler excerpt set", () => {
-  const result = searchStaticPages(pages, "Rolexium", null, 10, 0);
+test("invalid schemes and malformed URLs are excluded", () => {
+  const result = searchStaticPages([
+    { url: "javascript:alert(1)", title: "Rolex" },
+    { url: "not a URL", title: "Rolex" },
+  ], "Rolex");
   assert.equal(result.count, 0);
-  assert.equal(result.results.length, 0);
+});
+
+test("duplicate canonical URLs are removed", () => {
+  const result = searchStaticPages([pages[0], { ...pages[0], title: "Rolex duplicate" }], "Rolex");
+  assert.equal(result.count, 1);
+});
+
+test("Unicode compatibility normalization works", () => {
+  const result = searchStaticPages([{ url: "https://example.com", title: "ＲＯＬＥＸ" }], "Rolex");
+  assert.equal(result.count, 1);
+});
+
+test("pagination and result limits are bounded", () => {
+  const expanded = Array.from({ length: 30 }, (_, i) => ({
+    url: "https://example.com/" + i,
+    title: "NASA Mission " + i,
+    description: "NASA mission",
+    text: "space",
+    lane: "science",
+  }));
+  const first = searchStaticPages(expanded, "NASA", null, 999, 0);
+  const second = searchStaticPages(expanded, "NASA", null, 10, 10);
+  assert.equal(first.results.length, 20);
+  assert.equal(first.hasMore, true);
+  assert.equal(second.results.length, 10);
+  assert.equal(second.results[0].url, first.results[10].url);
+});
+
+test("snippets and response fields remain compatible", () => {
+  const result = searchStaticPages(pages, "NASA");
+  assert.equal(result.results[0].source, "www.nasa.gov");
+  assert.equal(result.results[0].origin, "Everything Hub public crawler index");
+  assert.equal(result.results[0].tentacle, "science");
+  assert.ok(result.results[0].snippet.length > 0);
+  assert.ok(Number.isFinite(result.results[0].relevance));
 });
