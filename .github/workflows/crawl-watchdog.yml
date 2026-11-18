@@ -13,6 +13,7 @@ on:
     workflows:
       - "Everything Hub crawler"
       - "Everything Hub live diagnostics"
+      - "EverythingHub isolated importer smoke test"
     types:
       - completed
     branches: [main]
