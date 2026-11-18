@@ -20,10 +20,11 @@ test("deduplicates source pages after removing fragments", () => {
   assert.equal(results[0].pageUrl, "https://example.org/item");
 });
 
-test("rejects invalid source-page schemes and malformed URLs", () => {
+test("rejects invalid schemes, malformed URLs, and credential-bearing source pages", () => {
   const results = mergeMediaResults([
     { pageUrl: "javascript:alert(1)", source: "Bing Images" },
     { pageUrl: "not a URL", source: "Bing Images" },
+    { pageUrl: "https://user:secret@example.org/item", source: "Bing Images" },
   ], []);
   assert.equal(results.length, 0);
 });
