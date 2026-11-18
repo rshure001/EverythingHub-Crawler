@@ -140,6 +140,42 @@ class CrawlerTests(unittest.TestCase):
         self.assertNotIn("secret()", text)
         self.assertIn("/next", parser.links)
 
+    def test_parser_extracts_publication_date_and_prefers_specific_article_metadata(self):
+        parser = crawl.PageParser()
+        parser.feed(
+            '<meta name="date" content="2020-01-01">'
+            '<meta property="article:published_time" content="2024-05-01T12:30:00-04:00">'
+            '<meta property="article:modified_time" content="2024-06-01T00:00:00Z">'
+        )
+        self.assertEqual(parser.published_at, "2024-05-01T16:30:00Z")
+
+    def test_parser_extracts_itemprop_and_rfc_publication_dates(self):
+        parser = crawl.PageParser()
+        parser.feed('<meta itemprop="datePublished" content="Wed, 01 May 2024 12:30:00 -0400">')
+        self.assertEqual(parser.published_at, "2024-05-01T16:30:00Z")
+
+    def test_parse_published_at_rejects_unparseable_values(self):
+        self.assertIsNone(crawl.parse_published_at("not-a-date"))
+        self.assertIsNone(crawl.parse_published_at(""))
+
+    def test_build_page_record_preserves_only_valid_publication_dates(self):
+        record = crawl.build_page_record(
+            "https://example.com/story", "Story", "", "Useful content", 1, set(),
+            "2024-05-01T12:30:00-04:00",
+        )
+        self.assertEqual(record["published_at"], "2024-05-01T16:30:00Z")
+        invalid = crawl.build_page_record(
+            "https://example.com/unknown", "Unknown", "", "Useful content", 1, set(),
+            "not-a-date",
+        )
+        self.assertNotIn("published_at", invalid)
+        noindex = crawl.build_page_record(
+            "https://example.com/noindex", "Hidden", "", "", 1, {"noindex"},
+            "2024-05-01T12:30:00Z",
+        )
+        self.assertTrue(noindex["_eh_noindex"])
+        self.assertNotIn("published_at", noindex)
+
     def test_build_page_record_uses_readable_url_title_when_source_title_is_blank(self):
         record = crawl.build_page_record(
             "https://example.com/resources/veteran-resources.html",
