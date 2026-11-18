@@ -24,7 +24,7 @@ class MediaDiscoveryTests(unittest.TestCase):
         self.assertIn("https://media.example.org/images/mission.jpg", urls)
         self.assertIn("https://media.example.org/video/launch.webm", urls)
         self.assertIn("https://media.example.org/audio/voice.ogg", urls)
-        video = next(row for row in rows if row["url"].endswith("/video/launch.mp4"))
+        video = next(row for row in rows if row["url"].endswith("/video/launch.webm"))
         self.assertEqual(video["thumbnail_url"], "https://media.example.org/thumb/launch.jpg")
 
     def test_deduplicates_candidates_and_bounds_per_page(self):
