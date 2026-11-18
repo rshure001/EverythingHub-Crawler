@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { isValidStaticManifest, MAX_STATIC_INDEX_SHARDS } from "./static-manifest.mjs";
+import { isValidStaticManifest, MAX_STATIC_INDEX_PAGES, MAX_STATIC_INDEX_SHARDS } from "./static-manifest.mjs";
 
 function makeManifest(shardCount = 35, totalPages = 6350) {
   return {
