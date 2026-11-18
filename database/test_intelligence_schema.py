@@ -43,6 +43,11 @@ class IntelligenceSchemaSafetyTests(unittest.TestCase):
         self.assertIn("grant select, insert on eh_quad.eh_intelligence_feedback", SQL)
         self.assertNotIn("update on eh_quad.eh_intelligence_feedback", SQL)
         self.assertNotIn("delete on eh_quad.eh_intelligence_feedback", SQL)
+        feedback_table = SQL.split(
+            "create table if not exists eh_quad.eh_intelligence_feedback", 1
+        )[1].split(");", 1)[0]
+        self.assertIn("on delete restrict", feedback_table)
+        self.assertNotIn("on delete set null", feedback_table)
         self.assertNotIn("email_address", SQL)
         self.assertNotIn("user_id", SQL)
 
