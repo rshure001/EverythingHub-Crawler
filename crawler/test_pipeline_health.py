@@ -2,7 +2,7 @@ import unittest
 from datetime import datetime, timezone
 from pathlib import Path
 
-from pipeline_health import evaluate_pipeline, evaluate_workflow
+from pipeline_health import evaluate_deploy_job, evaluate_pipeline, evaluate_workflow
 
 NOW = datetime(2026, 11, 18, 21, 10, tzinfo=timezone.utc)
 
@@ -46,15 +46,34 @@ class PipelineHealthTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             evaluate_workflow({}, "publisher", now=NOW)
 
-    def test_pipeline_reports_each_downstream_workflow_independently(self):
+    def test_skipped_pages_deploy_is_reported_as_blocked_not_live(self):
+        result = evaluate_deploy_job({"jobs": [
+            {"name": "validate-and-build", "status": "completed", "conclusion": "success"},
+            {"name": "deploy", "status": "completed", "conclusion": "skipped"},
+        ]})
+        self.assertEqual(result["status"], "skipped")
+        self.assertEqual(result["conclusion"], "skipped")
+
+    def test_successful_deploy_job_is_still_unverified(self):
+        result = evaluate_deploy_job({"jobs": [
+            {"name": "deploy", "status": "completed", "conclusion": "success"},
+        ]})
+        self.assertEqual(result["status"], "job_succeeded_unverified")
+
+    def test_missing_deploy_job_is_unobserved(self):
+        self.assertEqual(evaluate_deploy_job({"jobs": []})["status"], "unobserved")
+
+    def test_pipeline_reports_build_deploy_and_search_independently(self):
         result = evaluate_pipeline(
             self.payload(),
-            self.payload(status="completed", conclusion="failure", run_id=11),
+            {"jobs": [{"name": "deploy", "status": "completed", "conclusion": "skipped"}]},
+            self.payload(run_id=11),
             now=NOW,
         )
         self.assertEqual(result["publisher"]["status"], "healthy")
-        self.assertEqual(result["search_smoke"]["status"], "failed")
-        self.assertEqual(result["overall_status"], "failed")
+        self.assertEqual(result["deploy_job"]["status"], "skipped")
+        self.assertEqual(result["search_smoke"]["status"], "healthy")
+        self.assertEqual(result["overall_status"], "blocked")
 
     def test_downstream_completion_never_dispatches_an_extra_crawl(self):
         workflow = (
