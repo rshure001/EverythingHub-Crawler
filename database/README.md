@@ -101,9 +101,9 @@ The worker rejected cross-origin redirects, skipped oversized/non-HTML resources
 
 ### Isolated database validation
 
-The latest successful isolated importer run before crawler #142 was **#154**. It processed the then-current **8,736-record** snapshot in a temporary PostgreSQL database using `eh_quad`: 8,736 expected and imported, 0 skipped, 0 robots-denied stored rows, and 0 invalid lane rows. The same run's isolated database-native crawler integration processed 5 queue items, indexed 2 fixture pages, and reported 0 failures; it verified robots denial, noindex handling, same-host queueing, cross-origin redirect rejection, media references, stale-claim lease recovery, run accounting, schema locking, authenticated search, lane filtering and pagination.
+The isolated importer runs **#155 and #156** both passed against the exact **8,761-record** snapshot in a temporary PostgreSQL database using `eh_quad`: 8,761 expected and imported, 0 skipped, 0 unexpected robots-denied stored rows, and 0 invalid lane rows. The same run's database-native crawler integration processed 5 queue items, indexed 2 fixture pages, and reported 0 failures; it verified robots denial, noindex handling, same-host queueing, cross-origin redirect rejection, media references, stale-claim lease recovery, run accounting, schema locking, authenticated search, lane filtering and pagination. The RPC returned 0 robots-denied rows, pagination returned three unique allowed fixtures, and the science filter returned only the science fixture.
 
-That import predates the current 8,761-page snapshot. The 8,761-record snapshot has passed public catalog validation and live search smoke testing, but a fresh isolated importer run against that exact snapshot is still pending. None of these temporary PostgreSQL tests are production imports.
+These are temporary PostgreSQL tests, not production imports. A main-branch repeat (run **#157**) was queued after the status-documentation merge; no production database writes have been made.
 
 ### Publishing and scheduling status
 
