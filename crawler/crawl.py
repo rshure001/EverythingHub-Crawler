@@ -13,6 +13,7 @@ import urllib.robotparser
 import xml.etree.ElementTree as ET
 from collections import deque
 from datetime import datetime, timezone
+from datetime import datetime, timezone
 from html.parser import HTMLParser
 from pathlib import Path
 
@@ -42,6 +43,19 @@ ROBOTS_MAX_BYTES = 512_000
 TIMEOUT = 15
 UA = "EverythingHubCrawler/1.1 (+https://github.com/rshure001/EverythingHub-Crawler)"
 ACCESS_CHALLENGE_MAX_TEXT = 1200
+PUBLISHED_DATE_META_PRIORITY = {
+    "article:published_time": 0,
+    "og:published_time": 0,
+    "datepublished": 0,
+    "dc.date.issued": 1,
+    "dcterms.issued": 1,
+    "parsely-pub-date": 1,
+    "sailthru.date": 1,
+    "pubdate": 2,
+    "publishdate": 2,
+    "date": 3,
+}
+
 ACCESS_CHALLENGE_MARKERS = (
     "powered and protected by privacy",
     "checking your browser before accessing",
@@ -145,14 +159,42 @@ def fallback_page_title(url):
     return segment or parsed.hostname or raw_url or "Untitled page"
 
 
-def build_page_record(url, title, description, text, depth, directives):
+def parse_published_at(value):
+    """Normalize an explicitly labeled publication date to UTC ISO-8601."""
+    raw = str(value or "").strip()
+    if not raw or len(raw) > 100:
+        return None
+    parsed = None
+    try:
+        if re.fullmatch(r"\d{10,13}", raw):
+            number = int(raw)
+            seconds = number / 1000 if len(raw) == 13 else number
+            parsed = datetime.fromtimestamp(seconds, timezone.utc)
+        else:
+            try:
+                parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+            except ValueError:
+                parsed = email.utils.parsedate_to_datetime(raw)
+    except (TypeError, ValueError, OverflowError, OSError):
+        return None
+    if parsed is None:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    try:
+        return parsed.astimezone(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    except (ValueError, OverflowError):
+        return None
+
+
+def build_page_record(url, title, description, text, depth, directives, published_at=None):
     """Build a page record while retaining crawl depth for noindex pages."""
     if "noindex" in directives:
         # noindex suppresses publication, not link discovery; keep depth so
         # permitted links on this page can still be queued safely.
         return {"url": url, "_eh_noindex": True, "depth": depth}
     display_title = re.sub(r"\s+", " ", str(title or "")).strip() or fallback_page_title(url)
-    return {
+    record = {
         "url": url,
         "title": display_title,
         "lane": classify_lane(url),
@@ -162,6 +204,10 @@ def build_page_record(url, title, description, text, depth, directives):
         "fetched_at": int(time.time()),
         "robots_allowed": True,
     }
+    normalized_published_at = parse_published_at(published_at)
+    if normalized_published_at:
+        record["published_at"] = normalized_published_at
+    return record
 
 
 def enqueue_discovered_links(queue, seen, links, record, queue_limit=QUEUE_LIMIT):
@@ -221,6 +267,8 @@ class PageParser(HTMLParser):
         self.title_on = False
         self.title = []
         self.description = ""
+        self.published_at = None
+        self._published_at_priority = None
         self.text = []
         self.links = []
         self.robots_directives = set()
@@ -237,6 +285,25 @@ class PageParser(HTMLParser):
                 self.description = a.get("content", "")
             elif meta_name in ("robots", UA.split("/", 1)[0].lower()):
                 self.robots_directives.update(parse_indexing_directives([a.get("content", "")]))
+            meta_keys = (
+                a.get("property", "").strip().lower(),
+                meta_name,
+                a.get("itemprop", "").strip().lower(),
+            )
+            priorities = [
+                PUBLISHED_DATE_META_PRIORITY[key]
+                for key in meta_keys
+                if key in PUBLISHED_DATE_META_PRIORITY
+            ]
+            if priorities:
+                priority = min(priorities)
+                candidate = parse_published_at(a.get("content") or a.get("datetime"))
+                if candidate and (
+                    self._published_at_priority is None
+                    or priority < self._published_at_priority
+                ):
+                    self.published_at = candidate
+                    self._published_at_priority = priority
         if tag == "a" and a.get("href"):
             rel = {item.lower() for item in a.get("rel", "").split()}
             if "nofollow" not in rel:
@@ -882,7 +949,7 @@ def main():
                     access_challenge_pages_count[0] += 1
                 text, description = apply_snippet_policy(text, description, directives)
                 record = build_page_record(
-                    final, title, description, text, depth, directives
+                    final, title, description, text, depth, directives, parser.published_at
                 )
                 links = []
                 if depth < MAX_DEPTH and "nofollow" not in directives:
