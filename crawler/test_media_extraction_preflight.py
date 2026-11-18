@@ -13,6 +13,7 @@ def candidate(**changes):
         "source_page_url": "https://media.example.org/story",
         "robots_allowed": True,
         "robots_checked_at": int(NOW.timestamp()),
+        "last_seen_at": int(NOW.timestamp()),
         "policy_status": "robots_allowed_not_fetched",
         "rights_status": "unknown",
         "usage_rights": "Unknown",
@@ -63,7 +64,7 @@ class MediaExtractionPreflightTests(unittest.TestCase):
         ]
         result = evaluate_preflight(catalog(*rows), registry(review()), now=NOW)
         self.assertEqual(result["deferred_by_reason"]["robots_not_allowed"], 1)
-        self.assertEqual(result["deferred_by_reason"]["missing_robots_check_timestamp"], 1)
+        self.assertEqual(result["deferred_by_reason"]["invalid_robots_check_timestamp"], 1)
 
     def test_stale_and_future_robots_decisions_are_rejected(self):
         old = int((NOW - timedelta(hours=25)).timestamp())
@@ -74,6 +75,13 @@ class MediaExtractionPreflightTests(unittest.TestCase):
         )
         self.assertEqual(result["deferred_by_reason"]["stale_robots_check"], 1)
         self.assertEqual(result["deferred_by_reason"]["future_robots_check"], 1)
+
+    def test_robot_check_cannot_postdate_candidate_last_seen(self):
+        result = evaluate_preflight(
+            catalog(candidate(last_seen_at=int(NOW.timestamp()) - 1)),
+            registry(review()), now=NOW,
+        )
+        self.assertEqual(result["deferred_by_reason"]["invalid_robots_check_timestamp"], 1)
 
     def test_metadata_must_remain_unfetched_and_same_origin(self):
         result = evaluate_preflight(
@@ -104,6 +112,15 @@ class MediaExtractionPreflightTests(unittest.TestCase):
         )
         self.assertEqual(duplicate_result["deferred_by_reason"]["ambiguous_source_terms_reviews"], 1)
         self.assertEqual(duplicate_result["registry_reviews"]["duplicate_origins"], 1)
+
+    def test_registry_origin_must_be_a_bare_origin(self):
+        for origin in ("https://media.example.org/path", "https://media.example.org?x=1"):
+            with self.subTest(origin=origin):
+                result = evaluate_preflight(
+                    catalog(candidate()), registry(review(origin=origin)), now=NOW
+                )
+                self.assertEqual(result["eligible_for_extraction_preflight"], 0)
+                self.assertEqual(result["registry_reviews"]["invalid_reviews"], 1)
 
     def test_unsafe_terms_url_and_bad_digest_fail_closed(self):
         bad = review(
