@@ -1,6 +1,7 @@
 import email.message
 import importlib.util
 import os
+import socket
 import unittest
 import urllib.error
 import urllib.request
@@ -59,6 +60,74 @@ class EhQuadCrawlerSafetyTests(unittest.TestCase):
         fake = [(None, None, None, None, ("10.20.30.40", 443))]
         with mock.patch.object(WORKER.socket, "getaddrinfo", return_value=fake):
             self.assertFalse(WORKER.is_safe_target("https://example.org/path"))
+
+    def test_dns_resolution_rejects_mixed_public_and_private_answers(self):
+        records = [
+            (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("8.8.8.8", 443)),
+            (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("10.20.30.40", 443)),
+        ]
+        with mock.patch.object(WORKER.socket, "getaddrinfo", return_value=records):
+            with self.assertRaises(WORKER.UnsafeTargetError):
+                WORKER.resolve_public_target("https://example.org/")
+
+    def test_pinned_http_connection_uses_sockaddr_without_a_second_dns_lookup(self):
+        pinned = (
+            socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, ("8.8.8.8", 80)
+        )
+        fake_socket = mock.Mock()
+        with (
+            mock.patch.object(WORKER.socket, "socket", return_value=fake_socket),
+            mock.patch.object(WORKER.socket, "getaddrinfo", side_effect=AssertionError("unexpected DNS lookup")),
+        ):
+            connection = WORKER.PinnedHTTPConnection("example.org", pinned, timeout=3)
+            connection.connect()
+        fake_socket.connect.assert_called_once_with(pinned[3])
+
+    def test_pinned_https_connection_preserves_hostname_for_tls_sni(self):
+        pinned = (
+            socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, ("8.8.8.8", 443)
+        )
+        raw_socket = mock.Mock()
+        wrapped_socket = mock.Mock()
+        context = mock.Mock()
+        context.wrap_socket.return_value = wrapped_socket
+        with mock.patch.object(WORKER.socket, "socket", return_value=raw_socket):
+            connection = WORKER.PinnedHTTPSConnection(
+                "example.org", pinned, timeout=3, context=context
+            )
+            connection.connect()
+        context.wrap_socket.assert_called_once_with(
+            raw_socket, server_hostname="example.org"
+        )
+        self.assertIs(connection.sock, wrapped_socket)
+
+    def test_pinned_handler_rejects_private_dns_before_opening_socket(self):
+        records = [
+            (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("10.0.0.7", 80))
+        ]
+        handler = WORKER.PinnedHTTPHandler()
+        request = urllib.request.Request("http://example.org/")
+        with (
+            mock.patch.object(WORKER.socket, "getaddrinfo", return_value=records),
+            mock.patch.object(WORKER.socket, "socket") as socket_factory,
+        ):
+            with self.assertRaises(WORKER.UnsafeTargetError):
+                handler.http_open(request)
+        socket_factory.assert_not_called()
+
+    def test_safe_opener_disables_environment_proxies(self):
+        opener = WORKER.build_safe_opener(lambda _target: True)
+        proxy = next(
+            handler for handler in opener.handlers
+            if isinstance(handler, urllib.request.ProxyHandler)
+        )
+        self.assertEqual(proxy.proxies, {})
+        self.assertTrue(any(
+            isinstance(handler, WORKER.PinnedHTTPHandler) for handler in opener.handlers
+        ))
+        self.assertTrue(any(
+            isinstance(handler, WORKER.PinnedHTTPSHandler) for handler in opener.handlers
+        ))
 
     def test_robots_404_allows_but_503_and_429_fail_closed(self):
         parser = WORKER.parse_robots_policy(404, b"")
