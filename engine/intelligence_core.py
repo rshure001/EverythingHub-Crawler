@@ -102,6 +102,7 @@ def score_evidence(
     *,
     weights: Mapping[str, Any] | None = None,
     now: datetime | None = None,
+    _corroborating_hosts: int | None = None,
 ) -> dict[str, Any]:
     """Return a transparent 0..1 evidence score and its component breakdown.
 
@@ -120,7 +121,11 @@ def score_evidence(
         "relevance": _unit(page.get("relevance_score")),
         "source_quality": _unit(page.get("source_quality"), 0.5),
         "freshness": _freshness(page.get("fetched_at"), current),
-        "corroboration": _corroboration(page, pages),
+        "corroboration": (
+            min(1.0, log1p(max(0, _corroborating_hosts)) / log1p(5))
+            if _corroborating_hosts is not None
+            else _corroboration(page, pages)
+        ),
     }
     selected_weights = _normalise_weights(weights)
     score = sum(components[key] * selected_weights[key] for key in FEATURES)
@@ -131,16 +136,19 @@ def score_evidence(
                             "medium" if score >= 0.45 else "low"),
         "components": {key: round(value, 6) for key, value in components.items()},
         "weights": {key: round(value, 6) for key, value in selected_weights.items()},
-        "corroborating_hosts": len({
-            _host(item.get("url", "")) for item in pages
-            if isinstance(item, Mapping)
-            and str(item.get("topic_key") or "").strip().casefold()
-                == str(page.get("topic_key") or "").strip().casefold()
-            and page.get("topic_key")
-            and _host(str(item.get("url") or ""))
-            and _host(str(item.get("url") or "")) != _host(url)
-            and item.get("robots_allowed") is not False
-        }),
+        "corroborating_hosts": (
+            max(0, _corroborating_hosts) if _corroborating_hosts is not None
+            else len({
+                _host(item.get("url", "")) for item in pages
+                if isinstance(item, Mapping)
+                and str(item.get("topic_key") or "").strip().casefold()
+                    == str(page.get("topic_key") or "").strip().casefold()
+                and page.get("topic_key")
+                and _host(str(item.get("url") or ""))
+                and _host(str(item.get("url") or "")) != _host(url)
+                and item.get("robots_allowed") is not False
+            })
+        ),
         "reason": "scored_from_explicit_metadata",
     }
 
@@ -155,6 +163,17 @@ def rank_evidence(
     """Score and deterministically rank eligible evidence records."""
     corpus = [page for page in pages if isinstance(page, Mapping)]
     safe_limit = max(1, min(int(limit), 50))
+    # Precompute distinct hosts per topic once; avoid quadratic URL parsing
+    # when scoring a large result set.
+    hosts_by_topic: dict[str, set[str]] = {}
+    for item in corpus:
+        if item.get("robots_allowed") is False:
+            continue
+        topic = str(item.get("topic_key") or "").strip().casefold()
+        host = _host(str(item.get("url") or ""))
+        if topic and host:
+            hosts_by_topic.setdefault(topic, set()).add(host)
+
     results = []
     seen = set()
     for page in corpus:
@@ -162,7 +181,13 @@ def rank_evidence(
         if url in seen:
             continue
         seen.add(url)
-        evidence = score_evidence(page, corpus, weights=weights, now=now)
+        topic = str(page.get("topic_key") or "").strip().casefold()
+        host = _host(url)
+        corroborating_hosts = max(0, len(hosts_by_topic.get(topic, set())) - (1 if host in hosts_by_topic.get(topic, set()) else 0))
+        evidence = score_evidence(
+            page, (), weights=weights, now=now,
+            _corroborating_hosts=corroborating_hosts,
+        )
         if not evidence["eligible"]:
             continue
         results.append({
