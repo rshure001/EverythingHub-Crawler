@@ -31,6 +31,52 @@ class HurricaneStrengthTests(unittest.TestCase):
         stale = self.make_index(10000, 49, updated=1, feedback=100, extractions=1)
         self.assertEqual(evaluate(stale, frontier, now=1000)["category"], 4)
 
+    def test_discovered_candidates_are_not_counted_as_extractions(self):
+        index = self.make_index(100, 5)
+        index.update({
+            "media_candidates_total": 3,
+            "media_candidates_discovered_this_run": 8,
+            "media_candidates_added_this_run": 3,
+            "media_candidates_robots_blocked_this_run": 2,
+            "media_external_candidates_deferred_this_run": 4,
+        })
+        result = evaluate(index, {"seen": list(range(100))}, now=1000)
+        self.assertEqual(result["media_candidates_total"], 3)
+        self.assertEqual(result["media_extractions"], 0)
+        self.assertEqual(result["media_candidates_discovered_this_run"], 8)
+        self.assertIn("metadata records, not completed media extractions", result["measurement_note"])
+
+    def test_catalog_reports_media_types_unknown_rights_and_robots_allowance(self):
+        index = self.make_index(10, 2)
+        index["media_candidates_total"] = 2
+        catalog = {"candidates": [
+            {"media_type": "image", "rights_status": "unknown", "robots_allowed": True},
+            {"media_type": "video", "usage_rights": "Unknown", "robots_allowed": True},
+        ]}
+        result = evaluate(index, {"seen": list(range(10))}, now=1000, media_catalog=catalog)
+        self.assertEqual(result["media_catalog_by_type"], {"image": 1, "video": 1})
+        self.assertEqual(result["media_catalog_unknown_rights"], 2)
+        self.assertEqual(result["media_catalog_robots_allowed"], 2)
+        self.assertFalse(result["media_catalog_count_mismatch"])
+        self.assertIn("Media catalog by type", render(result))
+
+    def test_invalid_telemetry_and_urls_fail_closed_without_crashing(self):
+        result = evaluate(
+            {"pages": [{"url": "https://[invalid"}, {"url": "not a url"}],
+             "updated_at": "not-a-date", "feedback_events_total": "bad",
+             "media_extractions_total": None, "media_candidates_total": -4},
+            {"seen": "not-a-list", "queue": None},
+            now=1000,
+        )
+        self.assertEqual(result["indexed_pages"], 2)
+        self.assertEqual(result["unique_hosts"], 0)
+        self.assertIsNone(result["index_age_seconds"])
+        self.assertEqual(result["feedback_events"], 0)
+        self.assertEqual(result["media_extractions"], 0)
+        self.assertEqual(result["media_candidates_total"], 0)
+        self.assertEqual(result["urls_discovered"], 0)
+        self.assertEqual(result["frontier_waiting"], 0)
+
     def test_report_names_next_gate(self):
         result = evaluate(self.make_index(1, 1), {"seen": [1], "queue": [2]}, now=1000)
         self.assertIn("Next milestone", render(result))
