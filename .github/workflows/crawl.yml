@@ -47,17 +47,17 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          # A competing homepage/artwork commit can advance main during a crawl.
-          # If that happens, discard only this runner's generated index/frontier
-          # snapshot, restart from the new main, and repeat the bounded crawl.
-          for attempt in 1 2 3; do
-            git add data/index.json data/frontier.json public-search/
-            if git diff --cached --quiet; then
-              echo "Crawler output already matches the current repository."
-              exit 0
-            fi
+          git add data/index.json data/frontier.json public-search/
+          if git diff --cached --quiet; then
+            echo "Crawler output already matches the current repository."
+            exit 0
+          fi
+          git commit -m "Update crawler index, search shards, and frontier"
 
-            git commit -m "Update crawler index, search shards, and frontier"
+          # Other Everything Hub workflows may advance main while a crawl runs.
+          # Rebase this one isolated crawler commit instead of discarding its
+          # fetched work and crawling the same hosts again. Never force-push.
+          for attempt in 1 2 3; do
             if git push origin HEAD:main; then
               echo "Crawler index and frontier committed successfully."
               exit 0
@@ -68,15 +68,16 @@ jobs:
               echo "Push failed without a remote branch advance; check repository write permission or branch protection."
               exit 1
             fi
+
             if [ "$attempt" -eq 3 ]; then
-              echo "main kept advancing during three bounded publish attempts; leaving the remote untouched."
+              echo "main kept advancing during three bounded rebase attempts; leaving the remote untouched."
               exit 1
             fi
 
-            echo "main advanced during crawl; replaying from latest main (attempt $((attempt + 1))/3)."
-            git reset --hard origin/main
-            python crawler/crawl.py
-            python crawler/build_search_shards.py
-            python crawler/validate_public_index.py
-            python crawler/report.py
+            echo "main advanced during crawl; rebasing the crawler commit (attempt $((attempt + 1))/3)."
+            if ! git rebase origin/main; then
+              git rebase --abort || true
+              echo "Crawler commit conflicts with newer main data; no remote changes were made."
+              exit 1
+            fi
           done
