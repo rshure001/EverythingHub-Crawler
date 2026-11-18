@@ -12,7 +12,6 @@ on:
       - "crawler/media_discovery.py"
       - "crawler/test_hurricane_media_discovery.py"
       - "crawler/report.py"
-      - "data/media-discovery.json"
   schedule:
     # Run every 5 minutes; the durable frontier resumes work and concurrency prevents overlapping crawls.
     - cron: "*/5 * * * *"
