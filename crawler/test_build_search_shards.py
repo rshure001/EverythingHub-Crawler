@@ -21,6 +21,25 @@ class SearchShardBatchBoundaryTests(unittest.TestCase):
         self.assertTrue(batch_fits([page], len(raw)))
         self.assertFalse(batch_fits([page], len(raw) - 1))
 
+    def test_compact_preserves_crawl_timestamps(self):
+        page = compact({
+            "url": "https://example.com/fresh",
+            "title": "Fresh page",
+            "fetched_at": 1794960000,
+            "published_at": "2026-11-18T08:00:00Z",
+        })
+        self.assertEqual(page["fetched_at"], 1794960000)
+        self.assertEqual(page["published_at"], "2026-11-18T08:00:00Z")
+
+    def test_compact_omits_malformed_timestamps(self):
+        page = compact({
+            "url": "https://example.com/no-date",
+            "fetched_at": "   ",
+            "published_at": -10,
+        })
+        self.assertNotIn("fetched_at", page)
+        self.assertNotIn("published_at", page)
+
     def test_builder_serialization_is_utf8_and_deterministic(self):
         page = compact({
             "url": "https://example.com/caf%C3%A9",
