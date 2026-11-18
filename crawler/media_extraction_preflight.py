@@ -170,6 +170,7 @@ def _compile_reviews(registry: Any, now: datetime) -> tuple[dict, set, set, set,
         approved.pop(origin, None)
         denied.discard(origin)
         invalid.discard(origin)
+    counts["valid_approvals"] = len(approved)
     return approved, denied, invalid, ambiguous, counts
 
 
