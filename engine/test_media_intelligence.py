@@ -153,7 +153,7 @@ class MultimodalIntelligenceTests(unittest.TestCase):
             "attributionRequired": True,
             "usageRights": "Review the linked license and attribution requirements before reuse",
         })
-        self.assertEqual(result["url"], "https://commons.wikimedia.org/wiki/File/Apollo.jpg")
+        self.assertEqual(result["url"], "https://commons.wikimedia.org/wiki/File:Apollo.jpg")
         self.assertEqual(result["source_page_url"], result["url"])
         self.assertEqual(result["asset_url"], "https://upload.wikimedia.org/apollo.jpg")
         self.assertEqual(result["thumbnail_url"], "https://upload.wikimedia.org/thumb.jpg")
