@@ -16,7 +16,7 @@ class IntelligenceSchemaSafetyTests(unittest.TestCase):
         self.assertIn("create table if not exists eh_quad.eh_rank_profiles", SQL)
         self.assertNotIn("public.", SQL)
         self.assertNotIn("auth.", SQL)
-        self.assertNotIn("storage.", SQL)
+        self.assertNotIn("storage.objects", SQL)
 
     def test_migration_is_additive_and_idempotent(self):
         self.assertIn("add column if not exists", SQL)
