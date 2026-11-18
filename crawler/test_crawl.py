@@ -445,7 +445,7 @@ class CrawlerTests(unittest.TestCase):
         self.assertFalse(parser.can_fetch(crawl.UA, "https://example.com/public"))
 
     def test_robots_policy_fails_closed_on_dns_pinning_error(self):
-        with patched_pinned_opener(side_effect=UnsafeTargetError("private DNS target")):
+        with patched_pinned_opener(side_effect=crawl.UnsafeTargetError("private DNS target")):
             parser = crawl.load_robots_policy("https://example.com")
         self.assertTrue(parser.disallow_all)
         self.assertEqual(parser.everythinghub_policy_error, "unavailable")
