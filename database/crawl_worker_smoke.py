@@ -22,6 +22,7 @@ class FixtureHandler(BaseHTTPRequestHandler):
     child_hits = 0
     media_hits = 0
     target_hits = 0
+    stale_hits = 0
 
     def do_GET(self):
         if self.path == "/robots.txt":
@@ -60,6 +61,10 @@ class FixtureHandler(BaseHTTPRequestHandler):
         elif self.path == "/child":
             type(self).child_hits += 1
             body = b"<html><title>Child fixture</title><body>Child page</body></html>"
+            content_type = "text/html; charset=utf-8"
+        elif self.path == "/stale":
+            type(self).stale_hits += 1
+            body = b"<html><title>Recovered stale claim</title><body>Recovered lease fixture</body></html>"
             content_type = "text/html; charset=utf-8"
         elif self.path in ("/image.png", "/clip.mp4"):
             type(self).media_hits += 1
@@ -104,6 +109,7 @@ def main():
         "noindex": f"http://{host}/noindex",
         "child": f"http://{host}/child",
         "redirect": f"http://{host}/redirect",
+        "stale": f"http://{host}/stale",
     }
 
     try:
@@ -132,6 +138,27 @@ def main():
                     """,
                     (urls[key], host, priority),
                 )
+            cur.execute(
+                """
+                insert into eh_quad.eh_crawl_queue
+                  (url,host,lane,depth,priority,status,attempts,next_attempt_at,locked_at)
+                values (%s,%s,'general',0,4,'in_progress',1,now(),now() - interval '16 minutes')
+                on conflict (url,lane) do update set
+                  status='in_progress', attempts=1, next_attempt_at=now(),
+                  locked_at=now() - interval '16 minutes', last_error='simulated abandoned worker'
+                """,
+                (urls["stale"], host),
+            )
+            cur.execute(
+                """
+                insert into eh_quad.eh_host_leases(host,lane,lease_owner,leased_until)
+                values (%s,'general','simulated-crashed-worker',now() + interval '1 hour')
+                on conflict (host) do update set
+                  lease_owner=excluded.lease_owner, leased_until=excluded.leased_until,
+                  updated_at=now()
+                """,
+                (host,),
+            )
 
         env = os.environ.copy()
         env.update({
@@ -140,7 +167,7 @@ def main():
             "EH_CRAWL_ALLOW_LOOPBACK_TEST": "1",
             "EH_CRAWL_SEED": "0",
             "EH_CRAWL_MAX_PAGES": "4",
-            "EH_CRAWL_MAX_ITEMS": "4",
+            "EH_CRAWL_MAX_ITEMS": "5",
             "EH_CRAWL_MAX_DEPTH": "1",
             "EH_CRAWL_HOST_DELAY": "0",
         })
@@ -187,6 +214,7 @@ def main():
                 ("blocked", "skipped"),
                 ("noindex", "skipped"),
                 ("redirect", "skipped"),
+                ("stale", "done"),
             ):
                 actual = scalar(
                     conn,
@@ -209,16 +237,22 @@ def main():
                     """
                 )
                 run_stats = cur.fetchone()
-            assert run_stats == (4, 2, 1, 0, "succeeded"), f"unexpected run stats: {run_stats}"
+            assert run_stats == (5, 3, 2, 0, "succeeded"), f"unexpected run stats: {run_stats}"
+            assert scalar(
+                conn,
+                "select count(*) from eh_quad.eh_host_leases where host=%s and lease_owner='simulated-crashed-worker'",
+                (host,),
+            ) == 0, "stale host lease was not released"
 
         assert FixtureHandler.blocked_hits == 0, "robots-disallowed URL was fetched"
         assert FixtureHandler.child_hits == 0, "queued child was fetched beyond the bounded run"
         assert FixtureHandler.media_hits == 0, "media assets were fetched instead of discovery-only"
         assert FixtureHandler.target_hits == 0, "cross-host redirect target was fetched"
+        assert FixtureHandler.stale_hits == 1, "stale in-progress claim was not recovered and fetched"
         print(
             "eh_quad crawler integration smoke passed: indexing, robots denial, noindex, "
-            "same-host queue, cross-host redirect rejection, media references, run accounting, "
-            "and schema lock."
+            "same-host queue, cross-host redirect rejection, media references, stale-claim host-lease "
+            "recovery, run accounting, and schema lock."
         )
         print(completed.stdout.strip())
     finally:
