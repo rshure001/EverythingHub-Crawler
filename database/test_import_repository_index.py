@@ -124,6 +124,13 @@ class SchemaIsolationTests(unittest.TestCase):
         self.assertNotIn("auth.", sql)
         self.assertNotIn("storage.", sql)
 
+    def test_import_smoke_workflow_checks_exact_allowed_snapshot_count(self):
+        workflow = (HERE.parent / ".github" / "workflows" / "import-smoke-test.yml").read_text(encoding="utf-8")
+        self.assertIn('EH_DB_SCHEMA: eh_quad', workflow)
+        self.assertIn('test "$count" = "$expected"', workflow)
+        self.assertIn("collect_robots_denied_urls", workflow)
+        self.assertIn("WHERE robots_allowed IS NOT TRUE", workflow)
+
     def test_search_api_defaults_to_and_enforces_eh_quad(self):
         source = (HERE / "search_api.py").read_text(encoding="utf-8")
         self.assertIn('os.environ.get("EH_DB_SCHEMA", "eh_quad")', source)
