@@ -12,6 +12,7 @@ on:
   workflow_run:
     workflows:
       - "Everything Hub crawler"
+      - "Everything Hub live diagnostics"
     types:
       - completed
     branches: [main]
