@@ -13,6 +13,7 @@ on:
   workflow_run:
     workflows:
       - "Everything Hub crawler"
+      - "EverythingHub isolated importer smoke test"
     types:
       - completed
     branches: [main]
@@ -24,6 +25,9 @@ concurrency:
   cancel-in-progress: false
 jobs:
   diagnose:
+    # The importer also runs after crawler completions; run diagnostics from this
+    # trigger only when the importer itself was the hourly scheduled run.
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.event == 'schedule' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
