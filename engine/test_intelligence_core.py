@@ -86,6 +86,23 @@ class IntelligenceCoreTests(unittest.TestCase):
         self.assertAlmostEqual(sum(result["weights"].values()), 1.0, places=5)
         self.assertTrue(all(0.0 < value < 1.0 for value in result["weights"].values()))
 
+    def test_publication_date_takes_precedence_over_crawl_time(self):
+        recent_crawl = {
+            "url": "https://example.org/old-story",
+            "relevance_score": 1,
+            "fetched_at": "2026-11-17T00:00:00Z",
+            "published_at": "2020-01-01T00:00:00Z",
+        }
+        crawl_only = {
+            "url": "https://example.net/recent-story",
+            "relevance_score": 1,
+            "fetched_at": "2026-11-17T00:00:00Z",
+        }
+        old_score = score_evidence(recent_crawl, now=NOW)
+        crawl_score = score_evidence(crawl_only, now=NOW)
+        self.assertLess(old_score["components"]["freshness"],
+                        crawl_score["components"]["freshness"])
+
     def test_unknown_age_is_not_assumed_fresh(self):
         result = score_evidence({"url": "https://example.org",
                                  "relevance_score": 1}, now=NOW)
