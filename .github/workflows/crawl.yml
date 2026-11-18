@@ -8,10 +8,11 @@ on:
       - "crawler/seeds.txt"
       - "crawler/build_search_shards.py"
       - "crawler/validate_public_index.py"
+      - "crawler/hurricane_strength.py"
   schedule:
     # Run every 5 minutes; the durable frontier resumes work and concurrency prevents overlapping crawls.
     - cron: "*/5 * * * *"
-  workflow_dispatch:
+  workflow_dispatch
 permissions:
   actions: write
   contents: write
@@ -29,7 +30,7 @@ jobs:
           python-version: "3.12"
       - name: Validate crawler configuration and tests
         run: |
-          python -m py_compile crawler/crawl.py crawler/report.py crawler/build_search_shards.py crawler/validate_public_index.py
+          python -m py_compile crawler/crawl.py crawler/report.py crawler/build_search_shards.py crawler/validate_public_index.py crawler/hurricane_strength.py
           test "$(grep -c '^https://' crawler/seeds.txt)" -eq 49
           python -m unittest discover -s crawler -p 'test_*.py' -v
       # Validate bounded sitemap discovery, Retry-After backoff, and the strict 1,600-page fetch cap.
@@ -41,6 +42,8 @@ jobs:
         run: python crawler/validate_public_index.py
       - name: Publish crawler health summary
         run: python crawler/report.py
+      - name: Measure Hurricane Core strength
+        run: python crawler/hurricane_strength.py
       - name: Commit updated index and frontier
         shell: bash
         run: |
