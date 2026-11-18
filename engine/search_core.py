@@ -18,6 +18,7 @@ FIELD_WEIGHTS = {"title": 4.0, "url": 2.2, "description": 1.7, "text": 1.0}
 DEFAULT_LIMIT = 20
 MAX_LIMIT = 50
 MAX_QUERY_CHARS = 240
+EVIDENCE_RANK_WEIGHT = 0.15
 
 
 def tokenize(value: Any) -> list[str]:
@@ -131,9 +132,15 @@ def search(
             item["evidence_band"] = evidence["evidence_band"]
             item["evidence_components"] = evidence["components"]
             item["corroborating_hosts"] = evidence["corroborating_hosts"]
+            normalized_relevance = item["score"] / max_lexical_score
+            item["rank_score"] = round(
+                (1.0 - EVIDENCE_RANK_WEIGHT) * normalized_relevance
+                + EVIDENCE_RANK_WEIGHT * evidence["score"],
+                6,
+            )
 
     candidates.sort(key=lambda item: (
-        -item.get("intelligence_score", item["score"]),
+        -item.get("rank_score", item["score"]),
         -item["score"],
         item["title"].casefold(),
         item["url"],
