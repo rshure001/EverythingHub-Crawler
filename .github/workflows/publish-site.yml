@@ -93,7 +93,7 @@ jobs:
           print(json.dumps({'status':'validated-and-staged','pages':total,'shards':len(shards),'unique_urls':len(seen),'catalog_gzip_bytes':len(catalog_raw),'integrity':'sha256'}, indent=2))
           PY
       - name: Write machine-readable crawler release health
-        run: python publisher/release_health.py --manifest public-search/manifest.json --output site/search-index/health.json
+        run: python publisher/release_health.py --manifest public-search/manifest.json --output site/search-index/health.json --media-catalog data/media-discovery.json
       - name: Upload validated release artifact
         uses: actions/upload-pages-artifact@v3
         with:
@@ -176,6 +176,22 @@ jobs:
               or health.get('catalog_gzip') != expected_catalog
           ):
               raise SystemExit('Published crawler health file does not match the catalog manifest')
+          media = health.get('media_discovery')
+          if not isinstance(media, dict) or media.get('schema') != 1:
+              raise SystemExit('Published crawler health file is missing media discovery metrics')
+          media_total = media.get('total_candidates')
+          media_types = media.get('by_type')
+          if not isinstance(media_total, int) or not isinstance(media_types, dict):
+              raise SystemExit('Published media discovery metrics are malformed')
+          if sum(media_types.values()) != media_total:
+              raise SystemExit('Published media type counts do not match the candidate total')
+          if (
+              media.get('robots_allowed') != media_total
+              or media.get('metadata_only_not_fetched') != media_total
+              or media.get('rights_unknown') != media_total
+              or media.get('extraction_status') != 'not_performed_by_discovery_crawler'
+          ):
+              raise SystemExit('Published media health incorrectly implies fetch, extraction, or reuse permission')
           shards = manifest.get('shards')
           if manifest.get('integrity') != 'sha256' or not isinstance(shards, list) or len(shards) != int(manifest.get('shard_count', -1)):
               raise SystemExit('Published search manifest is invalid')
