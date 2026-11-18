@@ -1,6 +1,11 @@
 name: Independent and static search tests
 
 on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "engine/**"
+      - ".github/workflows/independent-search-tests.yml"
   push:
     branches: [main]
     paths:
@@ -34,7 +39,7 @@ jobs:
 
       - name: Run independent search unit tests
         working-directory: engine
-        run: python -m unittest -v test_search_core test_catalog_search
+        run: python -m unittest -v test_search_core test_catalog_search test_intelligence_core
 
       - name: Search the committed public catalog with the Python core
         working-directory: engine
