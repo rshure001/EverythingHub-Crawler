@@ -79,7 +79,7 @@ def validate_document(document: Any) -> tuple[list[str], dict[str, Any]]:
             continue
 
         kind = row.get("media_type")
-        if kind not in MEDIA_TYPES:
+        if not isinstance(kind, str) or kind not in MEDIA_TYPES:
             errors.append(f"{prefix} has an unsupported media_type")
             continue
         types[kind] += 1
@@ -113,14 +113,17 @@ def validate_document(document: Any) -> tuple[list[str], dict[str, Any]]:
         ):
             errors.append(f"{prefix} source_pages must contain 1 to {MAX_SOURCE_PAGES} URLs")
         else:
-            if len(set(source_pages)) != len(source_pages):
-                errors.append(f"{prefix} source_pages contains duplicates")
-            if source_url not in source_pages:
-                errors.append(f"{prefix} source_pages must include source_page_url")
-            for source_page in source_pages:
-                if not _canonical_public_url(source_page) or _origin(source_page) != media_origin:
-                    errors.append(f"{prefix} contains an unsafe or cross-origin source page")
-                    break
+            if not all(isinstance(source_page, str) for source_page in source_pages):
+                errors.append(f"{prefix} source_pages entries must be strings")
+            else:
+                if len(set(source_pages)) != len(source_pages):
+                    errors.append(f"{prefix} source_pages contains duplicates")
+                if source_url not in source_pages:
+                    errors.append(f"{prefix} source_pages must include source_page_url")
+                for source_page in source_pages:
+                    if not _canonical_public_url(source_page) or _origin(source_page) != media_origin:
+                        errors.append(f"{prefix} contains an unsafe or cross-origin source page")
+                        break
 
         title = row.get("title", "")
         alt_text = row.get("alt_text", "")
