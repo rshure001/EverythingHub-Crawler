@@ -1,4 +1,4 @@
-name: Independent search engine tests
+name: Independent and static search tests
 
 on:
   push:
@@ -6,6 +6,9 @@ on:
     paths:
       - "engine/**"
       - "public-search/**"
+      - "supabase/functions/everything-hub-web-search/static-search.mjs"
+      - "supabase/functions/everything-hub-web-search/static-search.test.mjs"
+      - "supabase/functions/everything-hub-web-search/static-search-catalog-smoke.mjs"
       - ".github/workflows/independent-search-tests.yml"
   workflow_dispatch:
 
@@ -33,7 +36,7 @@ jobs:
         working-directory: engine
         run: python -m unittest -v test_search_core test_catalog_search
 
-      - name: Search the committed public catalog
+      - name: Search the committed public catalog with the Python core
         working-directory: engine
         run: |
           python catalog_search.py "NASA" --limit 5
@@ -47,3 +50,9 @@ jobs:
       - name: Test browser search client
         working-directory: public-search
         run: node test-search.js
+
+      - name: Test static fallback search ranking
+        run: node --test supabase/functions/everything-hub-web-search/static-search.test.mjs
+
+      - name: Search and verify the committed public catalog with production ranking
+        run: node supabase/functions/everything-hub-web-search/static-search-catalog-smoke.mjs
