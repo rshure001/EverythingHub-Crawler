@@ -53,10 +53,16 @@ jobs:
               assert indexed.get("indexTransport") in ("gzip", "shards"), indexed
               urls = [result["url"] for result in indexed["results"]]
               assert len(urls) == len(set(urls)), indexed
-              scores = [result.get("relevance") for result in indexed["results"]]
-              assert all(isinstance(score, (int, float)) for score in scores), indexed
-              assert scores == sorted(scores, reverse=True), scores
-              print("Static index ranking passed:", indexed["count"], "NASA matches;",
+              lexical_scores = [result.get("relevance") for result in indexed["results"]]
+              assert all(isinstance(score, (int, float)) for score in lexical_scores), indexed
+              rank_scores = [result.get("rankScore") for result in indexed["results"]]
+              assert all(isinstance(score, (int, float)) for score in rank_scores), indexed
+              assert rank_scores == sorted(rank_scores, reverse=True), rank_scores
+              assert all(result.get("evidenceBand") in ("high", "medium", "low")
+                         for result in indexed["results"]), indexed
+              assert all(isinstance(result.get("evidenceComponents"), dict)
+                         for result in indexed["results"]), indexed
+              print("Static index Hurricane ranking passed:", indexed["count"], "NASA matches;",
                     "transport=", indexed["indexTransport"])
 
               science = get("everything-hub-web-search", "NASA", tentacle="science")
