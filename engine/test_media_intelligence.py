@@ -87,6 +87,14 @@ class MultimodalIntelligenceTests(unittest.TestCase):
         self.assertEqual(no_license_url["rights_status"], "unknown")
         self.assertEqual(normalize_asset(self.assets[0])["rights_status"], "verified")
 
+    def test_attribution_required_preserves_explicit_false(self):
+        asset = normalize_asset({
+            "type": "image",
+            "url": "https://example.org/a.jpg",
+            "attribution_required": False,
+        })
+        self.assertIs(asset["attribution_required"], False)
+
     def test_invalid_types_and_unsafe_urls_rejected(self):
         invalid = (
             {"type": "document", "url": "https://example.org/a"},
