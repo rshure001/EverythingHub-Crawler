@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Report publisher and live-search smoke health without triggering retries."""
+"""Report publisher, Pages deploy-job, and live-search smoke health without retries."""
 from __future__ import annotations
 
 import json
@@ -75,35 +75,80 @@ def evaluate_workflow(
     }
 
 
+def evaluate_deploy_job(payload: dict[str, Any]) -> dict[str, Any]:
+    """Report the Pages deploy job separately; success is not live-domain verification."""
+    if not isinstance(payload, dict) or not isinstance(payload.get("jobs"), list):
+        raise ValueError("publisher jobs response must contain a jobs array")
+    deploy_jobs = [
+        job for job in payload["jobs"]
+        if isinstance(job, dict) and str(job.get("name", "")).strip().lower() in {"deploy", "deployment"}
+    ]
+    if not deploy_jobs:
+        return {"status": "unobserved", "conclusion": None, "job_name": None}
+
+    latest = deploy_jobs[-1]
+    status = latest.get("status")
+    conclusion = latest.get("conclusion")
+    if status in ACTIVE_STATUSES:
+        result = "running"
+    elif status == "completed" and conclusion == "success":
+        result = "job_succeeded_unverified"
+    elif status == "completed" and conclusion == "skipped":
+        result = "skipped"
+    elif status == "completed":
+        result = "failed"
+    else:
+        result = "unobserved"
+    return {
+        "status": result,
+        "conclusion": conclusion,
+        "job_name": latest.get("name"),
+    }
+
+
 def evaluate_pipeline(
     publisher_payload: dict[str, Any],
+    publisher_jobs_payload: dict[str, Any],
     search_payload: dict[str, Any],
     now: datetime | None = None,
     max_age_seconds: int = MAX_RELEASE_AGE_SECONDS,
 ) -> dict[str, Any]:
-    """Report downstream release checks separately from crawler freshness."""
+    """Report artifact build, deploy-job state, and live-search smoke independently."""
     publisher = evaluate_workflow(publisher_payload, "publisher", now, max_age_seconds)
+    deploy_job = evaluate_deploy_job(publisher_jobs_payload)
     search = evaluate_workflow(search_payload, "search_smoke", now, max_age_seconds)
-    states = {publisher["status"], search["status"]}
+    states = {publisher["status"], deploy_job["status"], search["status"]}
     if "failed" in states:
         overall = "failed"
+    elif "skipped" in states:
+        overall = "blocked"
     elif "running" in states:
         overall = "running"
     elif "stale" in states:
         overall = "stale"
     elif "unobserved" in states:
         overall = "unobserved"
+    elif "job_succeeded_unverified" in states:
+        overall = "unverified"
     else:
         overall = "healthy"
-    return {"overall_status": overall, "publisher": publisher, "search_smoke": search}
+    return {
+        "overall_status": overall,
+        "publisher": publisher,
+        "deploy_job": deploy_job,
+        "search_smoke": search,
+    }
 
 
 def main() -> None:
-    if len(sys.argv) != 3:
-        raise SystemExit("usage: pipeline_health.py <publisher-runs.json> <search-smoke-runs.json>")
+    if len(sys.argv) != 4:
+        raise SystemExit(
+            "usage: pipeline_health.py <publisher-runs.json> <publisher-jobs.json> <search-smoke-runs.json>"
+        )
     publisher = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
-    search = json.loads(Path(sys.argv[2]).read_text(encoding="utf-8"))
-    print(json.dumps(evaluate_pipeline(publisher, search), sort_keys=True))
+    publisher_jobs = json.loads(Path(sys.argv[2]).read_text(encoding="utf-8"))
+    search = json.loads(Path(sys.argv[3]).read_text(encoding="utf-8"))
+    print(json.dumps(evaluate_pipeline(publisher, publisher_jobs, search), sort_keys=True))
 
 
 if __name__ == "__main__":
