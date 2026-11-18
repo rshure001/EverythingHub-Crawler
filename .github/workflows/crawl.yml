@@ -9,6 +9,10 @@ on:
       - "crawler/build_search_shards.py"
       - "crawler/validate_public_index.py"
       - "crawler/hurricane_strength.py"
+      - "crawler/media_discovery.py"
+      - "crawler/test_hurricane_media_discovery.py"
+      - "crawler/report.py"
+      - "data/media-discovery.json"
   schedule:
     # Run every 5 minutes; the durable frontier resumes work and concurrency prevents overlapping crawls.
     - cron: "*/5 * * * *"
@@ -30,7 +34,7 @@ jobs:
           python-version: "3.12"
       - name: Validate crawler configuration and tests
         run: |
-          python -m py_compile crawler/crawl.py crawler/report.py crawler/build_search_shards.py crawler/validate_public_index.py crawler/hurricane_strength.py
+          python -m py_compile crawler/crawl.py crawler/report.py crawler/build_search_shards.py crawler/validate_public_index.py crawler/hurricane_strength.py crawler/media_discovery.py
           test "$(grep -c '^https://' crawler/seeds.txt)" -eq 49
           python -m unittest discover -s crawler -p 'test_*.py' -v
       # Validate bounded sitemap discovery, Retry-After backoff, and the strict 1,600-page fetch cap.
@@ -51,7 +55,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add data/index.json data/frontier.json public-search/
+          git add data/index.json data/frontier.json data/media-discovery.json public-search/
           if git diff --cached --quiet; then
             echo "Crawler output already matches the current repository."
             exit 0
