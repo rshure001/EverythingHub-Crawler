@@ -18,11 +18,13 @@ from pathlib import Path
 
 from lane_classifier import VALID_LANES, classify_lane
 from safe_http import UnsafeTargetError, build_pinned_opener
+from media_discovery import discover_media, merge_media_candidates
 
 ROOT = Path(__file__).resolve().parents[1]
 SEEDS = ROOT / "crawler" / "seeds.txt"
 OUTPUT = ROOT / "data" / "index.json"
 FRONTIER = ROOT / "data" / "frontier.json"
+MEDIA_DISCOVERY = ROOT / "data" / "media-discovery.json"
 WORKERS = 16
 QUEUE_LIMIT = 50000
 MAX_DEPTH = 3
@@ -752,6 +754,9 @@ def main():
     nofollow_pages_count = [0]
     rate_limited_count = [0]
     access_challenge_pages_count = [0]
+    media_candidates_this_run = []
+    media_robots_blocked_count = 0
+    media_external_deferred_count = 0
 
     def policy(site):
         if site not in robots:
@@ -950,8 +955,9 @@ def main():
                         "non_html": True, "failed": False,
                     }
                     return None, None, delay, False, outcome
+                html = body.decode("utf-8", "replace")
                 parser = PageParser()
-                parser.feed(body.decode("utf-8", "replace"))
+                parser.feed(html)
                 html_parsed = True
                 directives = set(parser.robots_directives)
                 directives.update(parse_indexing_directives(x_robots_tags))
@@ -962,6 +968,19 @@ def main():
                 description = parser.description[:500]
                 if apply_access_challenge_policy(title, description, text, directives):
                     access_challenge_pages_count[0] += 1
+                page_media = []
+                page_media_robots_blocked = 0
+                page_media_external_deferred = 0
+                if "noindex" not in directives and "nofollow" not in directives:
+                    for candidate in discover_media(html, final, title, description):
+                        if not same_origin(final, candidate["url"]):
+                            page_media_external_deferred += 1
+                            continue
+                        if robots_can_fetch(policy(origin(final)), UA, candidate["url"]):
+                            candidate["robots_allowed"] = True
+                            page_media.append(candidate)
+                        else:
+                            page_media_robots_blocked += 1
                 text, description = apply_snippet_policy(text, description, directives)
                 record = build_page_record(
                     final, title, description, text, depth, directives, parser.published_at
@@ -976,6 +995,9 @@ def main():
                 outcome = {
                     "http_success": True, "html_parsed": True,
                     "non_html": False, "failed": False,
+                    "media_candidates": page_media,
+                    "media_robots_blocked": page_media_robots_blocked,
+                    "media_external_deferred": page_media_external_deferred,
                 }
                 return record, links, delay, False, outcome
             except Exception as error:
@@ -1018,7 +1040,11 @@ def main():
                 transient_retries_queued += 1
             requests_by_host[host] = requests_by_host.get(host, 0) + 1
             if result and len(result) > 4 and isinstance(result[4], dict):
-                fetch_outcomes.append(result[4])
+                outcome = result[4]
+                fetch_outcomes.append(outcome)
+                media_candidates_this_run.extend(outcome.get("media_candidates", []))
+                media_robots_blocked_count += int(outcome.get("media_robots_blocked", 0) or 0)
+                media_external_deferred_count += int(outcome.get("media_external_deferred", 0) or 0)
 
         for result in results:
             if not result or not result[0]:
@@ -1048,8 +1074,19 @@ def main():
         old_challenge_urls - set(records) - noindex_urls
     )
     merged = merge_index_records(old.get("pages", []), records, noindex_urls)
+    media_old = load_json(MEDIA_DISCOVERY, {"version": 1, "candidates": []})
+    media_existing = media_old.get("candidates", []) if isinstance(media_old, dict) else []
+    updated_at = int(time.time())
+    media_merged, media_added = merge_media_candidates(
+        media_existing if isinstance(media_existing, list) else [],
+        media_candidates_this_run, updated_at,
+    )
+    save_json(MEDIA_DISCOVERY, {
+        "version": 1, "updated_at": updated_at,
+        "total_candidates": len(media_merged), "candidates": media_merged,
+    })
     save_json(OUTPUT, {
-        "version": 1, "updated_at": int(time.time()),
+        "version": 1, "updated_at": updated_at,
         "pages_crawled_this_run": fetched,
         "fetch_attempts_this_run": fetch_metrics["fetch_attempts"],
         "successful_http_responses_this_run": fetch_metrics["successful_http_responses"],
@@ -1073,6 +1110,11 @@ def main():
         "sitemap_hosts_checked_this_run": sitemap_hosts_checked,
         "sitemap_fetches_this_run": sitemap_fetches,
         "sitemap_urls_added_this_run": sitemap_urls_added,
+        "media_candidates_discovered_this_run": len(media_candidates_this_run),
+        "media_candidates_added_this_run": media_added,
+        "media_candidates_robots_blocked_this_run": media_robots_blocked_count,
+        "media_external_candidates_deferred_this_run": media_external_deferred_count,
+        "media_candidates_total": len(media_merged),
         "run_duration_seconds": run_duration,
         "host_requests_this_run": requests_by_host,
         "depth_counts_this_run": depth_counts,
