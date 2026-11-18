@@ -93,13 +93,13 @@ class _MediaParser(HTMLParser):
         self.page_url = page_url
         self.page_title = _text(page_title, 300)
         self.description = _text(description, 500)
-        self.context: list[str] = []
+        self.context: list[tuple[str, str]] = []
         self.candidates: list[dict[str, str]] = []
         self.seen: dict[tuple[str, str], int] = {}
 
     def add(self, raw_url: Any, media_type: str, alt: Any = "",
             title: Any = "", thumbnail_url: Any = "") -> None:
-        if media_type not in MEDIA_TYPES or len(self.candidates) >= MAX_MEDIA_PER_PAGE:
+        if media_type not in MEDIA_TYPES:
             return
         url = safe_media_url(self.page_url, raw_url)
         if not url:
@@ -111,6 +111,8 @@ class _MediaParser(HTMLParser):
             row["alt_text"] = row["alt_text"] or _text(alt)
             row["title"] = row["title"] or _text(title, 300) or self.page_title
             row["thumbnail_url"] = row["thumbnail_url"] or thumbnail
+            return
+        if len(self.candidates) >= MAX_MEDIA_PER_PAGE:
             return
         self.seen[key] = len(self.candidates)
         self.candidates.append({
@@ -159,15 +161,16 @@ class _MediaParser(HTMLParser):
                      thumbnail_url=poster)
             if poster:
                 self.add(poster, "image", alt="Video poster", title=values.get("title", ""))
-            self.context.append("video")
+            self.context.append(("video", poster))
         elif tag == "audio":
             self.add(values.get("src"), "audio", title=values.get("title", ""))
-            self.context.append("audio")
+            self.context.append(("audio", ""))
         elif tag == "picture":
-            self.context.append("picture")
+            self.context.append(("picture", ""))
         elif tag == "source":
-            parent = next((item for item in reversed(self.context)
-                           if item in {"video", "audio", "picture"}), "")
+            parent_entry = next((item for item in reversed(self.context)
+                                 if item[0] in {"video", "audio", "picture"}), ("", ""))
+            parent, parent_poster = parent_entry
             mime = values.get("type", "").casefold()
             if parent == "video" or mime.startswith("video/"):
                 media_type = "video"
@@ -178,15 +181,16 @@ class _MediaParser(HTMLParser):
             else:
                 media_type = ""
             if media_type:
-                self.add(values.get("src"), media_type)
+                self.add(values.get("src"), media_type,
+                         thumbnail_url=parent_poster if media_type == "video" else "")
                 if media_type == "image":
                     self.add_srcset(values.get("srcset"), "image")
 
     def handle_endtag(self, tag: str) -> None:
         tag = tag.casefold()
-        if tag in self.context:
-            index = len(self.context) - 1 - self.context[::-1].index(tag)
-            del self.context[index:]
+        matches = [index for index, item in enumerate(self.context) if item[0] == tag]
+        if matches:
+            del self.context[matches[-1]:]
 
 
 def discover_media(html: str, page_url: str, page_title: str = "",
@@ -240,7 +244,10 @@ def merge_media_candidates(existing: Iterable[Mapping[str, Any]],
             row = merged[positions[key]]
             row["seen_count"] = min(1_000_000, int(row.get("seen_count", 1) or 1) + 1)
             row["last_seen_at"] = now
-            sources = list(row.get("source_pages") or [])
+            raw_sources = row.get("source_pages")
+            sources = list(raw_sources) if isinstance(raw_sources, (list, tuple)) else []
+            if not sources and row.get("source_page_url"):
+                sources = [row["source_page_url"]]
             if source_page not in sources and len(sources) < MAX_SOURCE_PAGES:
                 sources.append(source_page)
             row["source_pages"] = sources
