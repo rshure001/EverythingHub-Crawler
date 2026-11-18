@@ -40,7 +40,8 @@ jobs:
         with:
           python-version: "3.12"
       - name: Validate crawler and publisher workflow YAML
-        run: ruby -e 'require "yaml"; ARGV.each { |path| YAML.load_file(path, aliases: true); puts "YAML valid: #{path}" }' .github/workflows/crawl.yml .github/workflows/publish-site.yml
+        run: |
+          ruby -e 'require "yaml"; ARGV.each { |path| YAML.load_file(path, aliases: true); puts "YAML-valid #{path}" }' .github/workflows/crawl.yml .github/workflows/publish-site.yml
       - name: Compile crawler and database tools
         run: |
           python -m py_compile crawler/crawl.py crawler/report.py crawler/build_search_shards.py crawler/validate_public_index.py crawler/validate_media_catalog.py database/import_repository_index.py database/crawl_worker.py database/crawl_worker_smoke.py publisher/release_health.py
