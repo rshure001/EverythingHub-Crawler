@@ -90,7 +90,7 @@ create index if not exists eh_evidence_links_topic
 -- are eligible for the bounded learning function.
 create table if not exists eh_quad.eh_intelligence_feedback (
   id bigserial primary key,
-  document_id bigint references eh_quad.eh_documents(id) on delete set null,
+  document_id bigint references eh_quad.eh_documents(id) on delete restrict,
   feedback_label text not null
     check (feedback_label in ('helpful','not_helpful','verified','disputed')),
   feature_snapshot jsonb not null
