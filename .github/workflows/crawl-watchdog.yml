@@ -6,6 +6,8 @@ on:
       - ".github/workflows/crawl-watchdog.yml"
       - "crawler/schedule_watchdog.py"
       - "crawler/test_schedule_watchdog.py"
+      - "crawler/pipeline_health.py"
+      - "crawler/test_pipeline_health.py"
   schedule:
     # Stagger lightweight 15-minute checks away from quarter-hour and top-of-hour Actions peaks.
     - cron: "7,22,37,52 * * * *"
@@ -14,6 +16,8 @@ on:
       - "Everything Hub crawler"
       - "Everything Hub live diagnostics"
       - "EverythingHub isolated importer smoke test"
+      - "EverythingHub Publisher"
+      - "EverythingHub search API smoke test"
     types:
       - completed
     branches: [main]
@@ -34,8 +38,11 @@ jobs:
         with:
           python-version: "3.12"
       - name: Test watchdog decision logic
-        run: python -m unittest crawler.test_schedule_watchdog -v
+        run: |
+          python -m unittest crawler.test_schedule_watchdog -v
+          python -m unittest crawler.test_pipeline_health -v
       - name: Check recent crawler runs and recover missed schedules
+        if: ${{ github.event_name != 'workflow_run' || (github.event.workflow_run.name != 'EverythingHub Publisher' && github.event.workflow_run.name != 'EverythingHub search API smoke test') }}
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -111,13 +118,50 @@ jobs:
               echo "Dispatched one recovery crawl through workflow_dispatch."
               ;;
             wait)
-              echo "An existing crawler run is queued or active; no duplicate dispatch."
+              echo "An existing crawler run is queued or running; no duplicate dispatch."
               ;;
             healthy)
-              echo "The most recent crawler run and public manifest are within the 10-minute freshness window."
+              echo "The most recent crawler attempt and public manifest are within the 10-minute freshness window."
               ;;
             *)
               echo "Unexpected watchdog decision: $action" >&2
               exit 1
               ;;
           esac
+      - name: Report publisher and live-search smoke health
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/publish-site.yml/runs?per_page=5" > /tmp/publisher-runs.json
+          publisher_run_id="$(python -c 'import json; runs=json.load(open("/tmp/publisher-runs.json")).get("workflow_runs") or []; print(runs[0].get("id", "") if runs else "")')"
+          if [ -n "$publisher_run_id" ]; then
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${publisher_run_id}/jobs?per_page=100" > /tmp/publisher-jobs.json
+          else
+            echo '{"jobs":[]}' > /tmp/publisher-jobs.json
+          fi
+          gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/search-api-smoke.yml/runs?per_page=5" > /tmp/search-smoke-runs.json
+          python crawler/pipeline_health.py /tmp/publisher-runs.json /tmp/publisher-jobs.json /tmp/search-smoke-runs.json > /tmp/pipeline-health.json
+          cat /tmp/pipeline-health.json
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          report = json.loads(Path("/tmp/pipeline-health.json").read_text(encoding="utf-8"))
+          lines = [
+              "### Everything Hub downstream pipeline health",
+              f"- Overall status: {report['overall_status']}",
+          ]
+          for key, label in (("publisher", "Publisher workflow"), ("deploy_job", "Pages deployment job"), ("search_smoke", "Live search smoke")):
+              item = report[key]
+              lines.append(
+                  f"- {label}: {item['status']} "
+                  f"(run #{item.get('run_number') or 'n/a'}, "
+                  f"conclusion={item.get('conclusion') or 'pending'})"
+              )
+          lines.append("- A successful deploy job is not treated as live-domain verification.")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as handle:
+              handle.write("\n".join(lines) + "\n")
+          PY
