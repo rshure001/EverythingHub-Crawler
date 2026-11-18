@@ -5,7 +5,7 @@ const MAX_BING_RESULTS = 16;
 function canonicalPageUrl(value) {
   try {
     const url = new URL(String(value ?? ""));
-    if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+    if ((url.protocol !== "http:" && url.protocol !== "https:") || !url.hostname || url.username || url.password) return null;
     url.hash = "";
     return url.href;
   } catch {
