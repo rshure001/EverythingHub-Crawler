@@ -1,6 +1,9 @@
 const FIELD_WEIGHTS = { title: 4, url: 2.2, description: 1.7, text: 1 };
 const MAX_QUERY_CHARS = 240;
 const MAX_TERMS = 12;
+const EVIDENCE_WEIGHTS = { relevance: 0.45, sourceQuality: 0.25, freshness: 0.15, corroboration: 0.15 };
+const EVIDENCE_RANK_WEIGHT = 0.15;
+const UNKNOWN_FRESHNESS = 0.35;
 const TRACKING_PARAMS = new Set(["fbclid", "gclid", "mc_cid", "mc_eid"]);
 
 function normalize(value) {
@@ -15,6 +18,33 @@ function occurrences(tokens, term) {
   let count = 0;
   for (const token of tokens) if (token === term) count += 1;
   return count;
+}
+
+function unit(value, fallback = 0) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.max(0, Math.min(1, number));
+}
+
+function timestampMs(value) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value < 1e12 ? value * 1000 : value;
+  }
+  if (typeof value !== "string" || !value.trim()) return null;
+  const trimmed = value.trim();
+  if (/^\d+(?:\.\d+)?$/.test(trimmed)) {
+    const number = Number(trimmed);
+    return Number.isFinite(number) ? (number < 1e12 ? number * 1000 : number) : null;
+  }
+  const parsed = Date.parse(trimmed);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function freshness(value, nowMs) {
+  const stamp = timestampMs(value);
+  if (stamp === null) return UNKNOWN_FRESHNESS;
+  const ageDays = Math.max(0, (nowMs - stamp) / 86400000);
+  return Math.max(0.05, Math.min(1, 2 ** (-ageDays / 180)));
 }
 
 function canonicalHttpUrl(value) {
@@ -65,8 +95,9 @@ function snippetFor(page, terms, maxChars = 320) {
  * @param {string | null} [lane=null]
  * @param {number} [limit=10]
  * @param {number} [offset=0]
+ * @param {number | Date} [now=Date.now()] Current time for deterministic freshness scoring.
  */
-export function searchStaticPages(pages, query, lane = null, limit = 10, offset = 0) {
+export function searchStaticPages(pages, query, lane = null, limit = 10, offset = 0, now = Date.now()) {
   const rawQuery = String(query ?? "").trim().slice(0, MAX_QUERY_CHARS);
   const terms = [...new Set(tokenize(rawQuery))].slice(0, MAX_TERMS);
   const safeLimit = Number.isInteger(limit) ? Math.min(20, Math.max(1, limit)) : 10;
@@ -76,6 +107,8 @@ export function searchStaticPages(pages, query, lane = null, limit = 10, offset 
   }
 
   const laneFilter = lane ? String(lane).toLowerCase() : null;
+  const suppliedNow = now instanceof Date ? now.getTime() : Number(now);
+  const nowMs = Number.isFinite(suppliedNow) ? suppliedNow : Date.now();
   const phrase = terms.join(" ");
   const matchesByUrl = new Map();
 
@@ -126,6 +159,9 @@ export function searchStaticPages(pages, query, lane = null, limit = 10, offset 
       description: String(page.description || "").slice(0, 500),
       text: String(page.text || ""),
       lane: pageLane,
+      sourceQuality: page.source_quality_score,
+      fetchedAt: page.fetched_at,
+      publishedAt: page.published_at,
       terms,
     };
 
@@ -139,7 +175,53 @@ export function searchStaticPages(pages, query, lane = null, limit = 10, offset 
   }
 
   const matches = [...matchesByUrl.values()];
+  let maxLexicalScore = 0;
+  const distinctHosts = new Set();
+  for (const match of matches) {
+    if (match.score > maxLexicalScore) maxLexicalScore = match.score;
+    distinctHosts.add(match.hostname);
+  }
+  if (maxLexicalScore <= 0) maxLexicalScore = 1;
+  for (const match of matches) {
+    const normalizedRelevance = unit(match.score / maxLexicalScore);
+    const sourceQuality = unit(match.sourceQuality, 0.5);
+    // Prefer a real publication timestamp when available; otherwise use crawl freshness.
+    const freshnessValue = timestampMs(match.publishedAt) !== null
+      ? match.publishedAt
+      : match.fetchedAt;
+    const freshnessScore = freshness(freshnessValue, nowMs);
+    const corroboratingHosts = Math.max(0, distinctHosts.size - 1);
+    const corroboration = Math.min(
+      1,
+      Math.log1p(corroboratingHosts) / Math.log1p(5),
+    );
+    const components = {
+      relevance: normalizedRelevance,
+      source_quality: sourceQuality,
+      freshness: freshnessScore,
+      corroboration,
+    };
+    const intelligenceScore =
+      components.relevance * EVIDENCE_WEIGHTS.relevance +
+      components.source_quality * EVIDENCE_WEIGHTS.sourceQuality +
+      components.freshness * EVIDENCE_WEIGHTS.freshness +
+      components.corroboration * EVIDENCE_WEIGHTS.corroboration;
+    match.intelligenceScore = Number(intelligenceScore.toFixed(6));
+    match.evidenceBand = intelligenceScore >= 0.75
+      ? "high"
+      : intelligenceScore >= 0.45 ? "medium" : "low";
+    match.evidenceComponents = Object.fromEntries(
+      Object.entries(components).map(([key, value]) => [key, Number(value.toFixed(6))]),
+    );
+    match.corroboratingHosts = corroboratingHosts;
+    match.rankScore = Number((
+      (1 - EVIDENCE_RANK_WEIGHT) * normalizedRelevance +
+      EVIDENCE_RANK_WEIGHT * intelligenceScore
+    ).toFixed(6));
+  }
+
   matches.sort((a, b) =>
+    b.rankScore - a.rankScore ||
     b.score - a.score ||
     a.title.localeCompare(b.title, "en", { sensitivity: "base" }) ||
     a.url.localeCompare(b.url),
@@ -154,6 +236,11 @@ export function searchStaticPages(pages, query, lane = null, limit = 10, offset 
     origin: "Everything Hub public crawler index",
     tentacle: match.lane,
     relevance: Number(match.score.toFixed(6)),
+    rankScore: match.rankScore,
+    intelligenceScore: match.intelligenceScore,
+    evidenceBand: match.evidenceBand,
+    evidenceComponents: match.evidenceComponents,
+    corroboratingHosts: match.corroboratingHosts,
   }));
 
   return {
