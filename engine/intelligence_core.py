@@ -120,7 +120,7 @@ def score_evidence(
     components = {
         "relevance": _unit(page.get("relevance_score")),
         "source_quality": _unit(page.get("source_quality"), 0.5),
-        "freshness": _freshness(page.get("fetched_at"), current),
+        "freshness": _freshness(page.get("published_at") or page.get("fetched_at"), current),
         "corroboration": (
             min(1.0, log1p(max(0, _corroborating_hosts)) / log1p(5))
             if _corroborating_hosts is not None
