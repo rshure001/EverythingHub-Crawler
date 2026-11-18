@@ -1,10 +1,11 @@
+import gzip
 import json
 import tempfile
 import unittest
 from pathlib import Path
 
 from build_search_shards import is_publishable
-from validate_public_index import validate
+from validate_public_index import bounded_gzip_decompress, validate
 
 
 class PublicIndexValidationTests(unittest.TestCase):
@@ -60,6 +61,23 @@ class PublicIndexValidationTests(unittest.TestCase):
             json.dumps(manifest),
             encoding="utf-8",
         )
+
+
+    def test_bounded_gzip_decompression_accepts_valid_payload(self):
+        raw = gzip.compress(b"valid catalog", mtime=0)
+        self.assertEqual(bounded_gzip_decompress(raw, 32), b"valid catalog")
+
+    def test_bounded_gzip_decompression_rejects_oversized_output(self):
+        raw = gzip.compress(b"x" * 100, mtime=0)
+        with self.assertRaisesRegex(ValueError, "safety limit"):
+            bounded_gzip_decompress(raw, 50)
+
+    def test_bounded_gzip_decompression_rejects_truncated_or_trailing_data(self):
+        raw = gzip.compress(b"valid catalog", mtime=0)
+        with self.assertRaisesRegex(ValueError, "incomplete or invalid"):
+            bounded_gzip_decompress(raw[:-2], 100)
+        with self.assertRaisesRegex(ValueError, "trailing data"):
+            bounded_gzip_decompress(raw + b"extra", 100)
 
     def test_valid_shards_match_canonical_index(self):
         pages = [

@@ -18,7 +18,7 @@ if (compressed.length !== meta.bytes) throw new Error("catalog compressed byte c
 if (createHash("sha256").update(compressed).digest("hex") !== meta.sha256) {
   throw new Error("catalog SHA-256 mismatch");
 }
-const payload = JSON.parse(gunzipSync(compressed).toString("utf8"));
+const payload = JSON.parse(gunzipSync(compressed, { maxOutputLength: 30_000_000 }).toString("utf8"));
 if (payload.version !== 1 || !Array.isArray(payload.pages) || payload.pages.length !== manifest.total_pages) {
   throw new Error("catalog payload does not match manifest page count");
 }

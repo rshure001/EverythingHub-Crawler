@@ -5,6 +5,7 @@ import { createTimedFetch, isTransientDatabaseError } from "./db-fetch.mjs";
 import { searchStaticPages } from "./static-search.mjs";
 import { normalizeManifestTimestamp } from "./manifest-time.mjs";
 import { isValidStaticManifest } from "./static-manifest.mjs";
+import { readBoundedText } from "./bounded-stream.mjs";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -31,7 +32,8 @@ const STATIC_INDEX_BASE =
   "https://raw.githubusercontent.com/rshure001/EverythingHub-Crawler/main/public-search";
 const STATIC_INDEX_CACHE_MS = 60_000;
 const MAX_STATIC_SHARD_BYTES = 350_000;
-const MAX_STATIC_CATALOG_GZIP_BYTES = 5_000_000;
+const MAX_STATIC_CATALOG_GZIP_BYTES = 6_000_000;
+const MAX_STATIC_CATALOG_UNCOMPRESSED_BYTES = 30_000_000;
 
 type StaticCatalog = {
   pages: any[];
@@ -105,7 +107,7 @@ async function loadStaticCatalog(): Promise<StaticCatalog> {
         }
 
         const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
-        const decoded = await new Response(stream).text();
+        const decoded = await readBoundedText(stream, MAX_STATIC_CATALOG_UNCOMPRESSED_BYTES);
         const payload: any = JSON.parse(decoded);
         if (
           payload?.version !== 1 ||
