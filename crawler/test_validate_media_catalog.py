@@ -101,6 +101,12 @@ class MediaCatalogValidationTests(unittest.TestCase):
         )))
         self.assertTrue(any("reuse rights" in error for error in errors))
 
+    def test_rejects_malformed_media_type_and_source_page_entries(self):
+        errors, _ = validate_document(document(candidate(media_type=[])))
+        self.assertTrue(any("unsupported media_type" in error for error in errors))
+        errors, _ = validate_document(document(candidate(source_pages=[{"url": "bad"}])))
+        self.assertTrue(any("entries must be strings" in error for error in errors))
+
     def test_rejects_invalid_timestamps_and_seen_count(self):
         errors, _ = validate_document(document(candidate(
             first_seen_at=200,
