@@ -69,6 +69,7 @@ def validate_document(document: Any) -> tuple[list[str], dict[str, Any]]:
     types: Counter[str] = Counter()
     origins: set[tuple[str, str, int]] = set()
     robots_allowed = 0
+    robots_timestamped = 0
     rights_unknown = 0
     not_fetched = 0
 
@@ -145,6 +146,15 @@ def validate_document(document: Any) -> tuple[list[str], dict[str, Any]]:
         else:
             not_fetched += 1
 
+        if "robots_checked_at" in row:
+            checked_at = row.get("robots_checked_at")
+            if not _nonnegative_integer(checked_at) or checked_at == 0:
+                errors.append(f"{prefix} robots_checked_at must be a positive integer when present")
+            elif _nonnegative_integer(row.get("last_seen_at")) and checked_at > row["last_seen_at"]:
+                errors.append(f"{prefix} robots_checked_at cannot be later than last_seen_at")
+            else:
+                robots_timestamped += 1
+
         if row.get("rights_status") != "unknown" or row.get("usage_rights") != "Unknown":
             errors.append(f"{prefix} must not claim unverified reuse rights")
         else:
@@ -172,6 +182,7 @@ def validate_document(document: Any) -> tuple[list[str], dict[str, Any]]:
         "media_hosts": len(origins),
         "by_type": dict(sorted(types.items())),
         "robots_allowed": robots_allowed,
+        "robots_timestamped": robots_timestamped,
         "metadata_only_not_fetched": not_fetched,
         "unknown_rights": rights_unknown,
     }
@@ -206,6 +217,7 @@ def main() -> None:
         f"- Unique candidates: **{metrics['unique_candidates']:,}**",
         f"- Media hosts represented: **{metrics['media_hosts']:,}**",
         f"- Robots-allowed candidates: **{metrics['robots_allowed']:,}**",
+        f"- Candidates with a timestamped robots decision: **{metrics['robots_timestamped']:,}**",
         f"- Metadata-only, not fetched: **{metrics['metadata_only_not_fetched']:,}**",
         f"- Rights still unknown: **{metrics['unknown_rights']:,}**",
         f"- By type: **{json.dumps(metrics['by_type'], sort_keys=True)}**",

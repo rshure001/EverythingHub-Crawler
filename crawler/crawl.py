@@ -978,6 +978,7 @@ def main():
                             continue
                         if robots_can_fetch(policy(origin(final)), UA, candidate["url"]):
                             candidate["robots_allowed"] = True
+                            candidate["robots_checked_at"] = int(time.time())
                             page_media.append(candidate)
                         else:
                             page_media_robots_blocked += 1

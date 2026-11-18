@@ -209,7 +209,13 @@ def merge_media_candidates(existing: Iterable[Mapping[str, Any]],
                            incoming: Iterable[Mapping[str, Any]],
                            now: int,
                            limit: int = MAX_STORED_CANDIDATES) -> tuple[list[dict[str, Any]], int]:
-    """Add deduplicated, policy-checked candidates without deleting prior records."""
+    """Add deduplicated, policy-checked candidates without deleting prior records.
+
+    robots_checked_at is copied from the timestamp captured immediately after
+    the candidate media URL passed the current robots policy check. Run-end
+    time is used only for catalog seen metadata, never as a substitute check.
+    """
+    observed_at = int(now)
     merged: list[dict[str, Any]] = []
     positions: dict[tuple[str, str], int] = {}
     for raw in existing:
@@ -237,13 +243,25 @@ def merge_media_candidates(existing: Iterable[Mapping[str, Any]],
         kind = str(raw.get("media_type") or "")
         url = safe_media_url("", raw.get("url"))
         source_page = safe_media_url("", raw.get("source_page_url"))
-        if kind not in MEDIA_TYPES or not url or not source_page:
+        robots_checked_at = raw.get("robots_checked_at")
+        if (
+            kind not in MEDIA_TYPES
+            or not url
+            or not source_page
+            or isinstance(robots_checked_at, bool)
+            or not isinstance(robots_checked_at, int)
+            or robots_checked_at <= 0
+            or robots_checked_at > observed_at
+        ):
             continue
         key = (kind, url)
         if key in positions:
             row = merged[positions[key]]
             row["seen_count"] = min(1_000_000, int(row.get("seen_count", 1) or 1) + 1)
-            row["last_seen_at"] = now
+            row["last_seen_at"] = observed_at
+            row["robots_allowed"] = True
+            row["robots_checked_at"] = robots_checked_at
+            row["policy_status"] = "robots_allowed_not_fetched"
             raw_sources = row.get("source_pages")
             sources = list(raw_sources) if isinstance(raw_sources, (list, tuple)) else []
             if not sources and row.get("source_page_url"):
@@ -266,11 +284,12 @@ def merge_media_candidates(existing: Iterable[Mapping[str, Any]],
             "alt_text": _text(raw.get("alt_text")),
             "thumbnail_url": safe_media_url("", raw.get("thumbnail_url")) if raw.get("thumbnail_url") else "",
             "robots_allowed": True,
+            "robots_checked_at": robots_checked_at,
             "policy_status": "robots_allowed_not_fetched",
             "rights_status": "unknown",
             "usage_rights": "Unknown",
-            "first_seen_at": now,
-            "last_seen_at": now,
+            "first_seen_at": observed_at,
+            "last_seen_at": observed_at,
             "seen_count": 1,
         }
         positions[key] = len(merged)
