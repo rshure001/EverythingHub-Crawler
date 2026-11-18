@@ -3,6 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.49.1";
 import { boundedInteger, normalizeLane, normalizeQuery } from "./params.mjs";
 import { createTimedFetch, isTransientDatabaseError } from "./db-fetch.mjs";
 import { searchStaticPages } from "./static-search.mjs";
+import { normalizeManifestTimestamp } from "./manifest-time.mjs";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -191,7 +192,7 @@ async function loadStaticCatalog(): Promise<StaticCatalog> {
 
     const catalog: StaticCatalog = {
       pages,
-      updatedAt: typeof manifest.updated_at === "string" ? manifest.updated_at : null,
+      updatedAt: normalizeManifestTimestamp(manifest.updated_at),
       mode: catalogMode,
       expiresAt: Date.now() + STATIC_INDEX_CACHE_MS,
     };
