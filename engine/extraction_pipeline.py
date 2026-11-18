@@ -111,6 +111,9 @@ def validate_extraction_authorization(
 
     return {
         "allowed": True,
+        "robots_allowed": True,
+        "extraction_permission": True,
+        "source_terms_status": "allow_extraction",
         "source_terms_url": terms_url,
         "source_terms_sha256": digest,
         "source_terms_checked_at": checked_at.isoformat(),
