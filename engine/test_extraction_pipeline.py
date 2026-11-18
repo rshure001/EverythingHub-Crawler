@@ -65,9 +65,11 @@ class ExtractionPipelineTests(unittest.TestCase):
         wrong_query = self.record(source_url="https://media.example.org/mission.mp4?token=abc")
         asset_with_query = {**self.asset, "url": "https://media.example.org/mission.mp4?Token=ABC"}
         wrong_query_result = attach_extractions(asset_with_query, [wrong_query])
-        self.assertNotIn("transcript", wrong_query_result)
+        self.assertEqual(wrong_query_result["transcript"], "")
+        self.assertEqual(wrong_query_result["extraction_provenance"], [])
         wrong_path_result = attach_extractions(self.asset, [wrong_path])
-        self.assertNotIn("transcript", wrong_path_result)
+        self.assertEqual(wrong_path_result["transcript"], "")
+        self.assertEqual(wrong_path_result["extraction_provenance"], [])
 
     def test_matching_query_keeps_exact_case(self):
         asset = {**self.asset, "url": "https://media.example.org/mission.mp4?Token=ABC"}
