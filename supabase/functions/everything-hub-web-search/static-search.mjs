@@ -8,7 +8,7 @@ function normalize(value) {
 }
 
 function tokenize(value) {
-  return normalize(value).match(/[\\p{L}\\p{N}]+/gu) ?? [];
+  return normalize(value).match(/[\p{L}\p{N}]+/gu) ?? [];
 }
 
 function occurrences(tokens, term) {
@@ -47,7 +47,7 @@ function canonicalHttpUrl(value) {
 }
 
 function snippetFor(page, terms, maxChars = 320) {
-  const source = String(page.description || page.text || "").replace(/\\s+/g, " ").trim();
+  const source = String(page.description || page.text || "").replace(/\s+/g, " ").trim();
   if (!source) return "";
   const words = source.split(" ");
   const index = words.findIndex((word) => tokenize(word).some((token) => terms.includes(token)));
