@@ -43,7 +43,7 @@ jobs:
 
       - name: Run independent search and intelligence unit tests
         working-directory: engine
-        run: python -m unittest -v test_search_core test_catalog_search test_intelligence_core test_media_intelligence
+        run: python -m unittest -v test_search_core test_catalog_search test_intelligence_core test_media_intelligence test_extraction_pipeline
 
       - name: Validate public catalog timestamp compaction
         working-directory: crawler
