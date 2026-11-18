@@ -34,7 +34,7 @@ def _tokens(value: str) -> set[str]:
 
 
 def _url(value: Any) -> str:
-    """Accept public HTTP(S) URLs; actual fetches must still use safe_http."""
+    """Reject unsafe URL forms and non-public IP literals; fetches must still use safe_http."""
     raw = _text(value, 2048)
     if not raw:
         return ""
@@ -93,7 +93,7 @@ def _tags(value: Any) -> list[str]:
 
 
 def _is_explicit_false(value: Any) -> bool:
-    if value is False:
+    if value is False or (not isinstance(value, bool) and value == 0):
         return True
     return isinstance(value, str) and value.strip().casefold() in {
         "false", "no", "0", "blocked", "disallowed", "denied",
@@ -101,11 +101,23 @@ def _is_explicit_false(value: Any) -> bool:
 
 
 def _is_explicit_true(value: Any) -> bool:
-    if value is True:
+    if value is True or (not isinstance(value, bool) and value == 1):
         return True
     return isinstance(value, str) and value.strip().casefold() in {
         "true", "yes", "1", "noindex", "none",
     }
+
+
+def _bool_or_none(value: Any) -> bool | None:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        lowered = value.strip().casefold()
+        if lowered in {"true", "yes", "1", "required"}:
+            return True
+        if lowered in {"false", "no", "0", "not required"}:
+            return False
+    return None
 
 
 def _dedupe_key(asset: Mapping[str, Any]) -> tuple[str, str, str]:
@@ -176,14 +188,13 @@ def normalize_asset(record: Mapping[str, Any]) -> dict[str, Any]:
     fps = _number(record.get("frame_rate"), 1000)
     frames = _number(record.get("frame_count"), 10000000)
 
-    rights = _text(
-        record.get("usage_rights") or record.get("usageRights") or record.get("license"),
-        300,
-    )
+    license_name = _text(record.get("license") or record.get("license_name"), 300)
+    rights = _text(record.get("usage_rights") or record.get("usageRights"), 300) or license_name
     license_url = _url(record.get("license_url") or record.get("licenseUrl"))
-    attribution = _text(
-        record.get("attribution") or record.get("creator") or record.get("credit"),
-        500,
+    credit = _text(record.get("credit"), 500)
+    attribution = _text(record.get("attribution") or record.get("creator") or credit, 500)
+    attribution_required = _bool_or_none(
+        record.get("attribution_required") or record.get("attributionRequired")
     )
     status = _text(record.get("rights_status"), 30).casefold()
     if status not in {"verified", "unverified", "restricted", "unknown"}:
@@ -222,8 +233,11 @@ def normalize_asset(record: Mapping[str, Any]) -> dict[str, Any]:
         "frame_rate": fps,
         "frame_count": int(frames) if frames is not None else None,
         "usage_rights": rights or "Unknown — verify on the original source",
+        "license": license_name or None,
         "license_url": license_url,
         "attribution": attribution,
+        "credit": credit or None,
+        "attribution_required": attribution_required,
         "rights_status": status,
         "policy_status": policy_status,
         "source": _text(record.get("source") or record.get("provider"), 200),
