@@ -10,7 +10,7 @@ on:
       - "crawler/validate_public_index.py"
       - "crawler/hurricane_strength.py"
       - "crawler/media_discovery.py"
-      - "crawler/test_media_discovery.py"
+      - "crawler/test_hurricane_media_discovery.py"
       - "crawler/report.py"
       - "data/media-discovery.json"
   schedule:
