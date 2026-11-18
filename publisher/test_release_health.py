@@ -29,6 +29,66 @@ class ReleaseHealthTests(unittest.TestCase):
         self.assertEqual(health["shard_count"], 32)
         self.assertEqual(health["catalog_gzip"]["sha256"], "a" * 64)
 
+
+    def valid_media_catalog(self):
+        return {
+            "version": 1,
+            "updated_at": 1794974899,
+            "total_candidates": 2,
+            "candidates": [
+                {
+                    "media_type": "image",
+                    "url": "https://media.example.org/image.jpg",
+                    "source_page_url": "https://media.example.org/story",
+                    "source_pages": ["https://media.example.org/story"],
+                    "title": "Example image",
+                    "alt_text": "An image",
+                    "thumbnail_url": "",
+                    "robots_allowed": True,
+                    "policy_status": "robots_allowed_not_fetched",
+                    "rights_status": "unknown",
+                    "usage_rights": "Unknown",
+                    "first_seen_at": 100,
+                    "last_seen_at": 100,
+                    "seen_count": 1,
+                },
+                {
+                    "media_type": "video",
+                    "url": "https://media.example.org/video.mp4",
+                    "source_page_url": "https://media.example.org/story",
+                    "source_pages": ["https://media.example.org/story"],
+                    "title": "Example video",
+                    "alt_text": "",
+                    "thumbnail_url": "",
+                    "robots_allowed": True,
+                    "policy_status": "robots_allowed_not_fetched",
+                    "rights_status": "unknown",
+                    "usage_rights": "Unknown",
+                    "first_seen_at": 100,
+                    "last_seen_at": 100,
+                    "seen_count": 1,
+                },
+            ],
+        }
+
+    def test_health_includes_validated_media_inventory_without_urls(self):
+        health = build_health(self.valid_manifest(), generated_at=1794975000,
+                              media_catalog=self.valid_media_catalog())
+        media = health["media_discovery"]
+        self.assertEqual(media["total_candidates"], 2)
+        self.assertEqual(media["by_type"], {"image": 1, "video": 1})
+        self.assertEqual(media["robots_allowed"], 2)
+        self.assertEqual(media["metadata_only_not_fetched"], 2)
+        self.assertEqual(media["rights_unknown"], 2)
+        self.assertEqual(media["extraction_status"], "not_performed_by_discovery_crawler")
+        self.assertNotIn("url", media)
+
+    def test_health_rejects_invalid_media_catalog(self):
+        catalog = self.valid_media_catalog()
+        catalog["candidates"][0]["rights_status"] = "licensed"
+        with self.assertRaisesRegex(ValueError, "media catalog failed validation"):
+            build_health(self.valid_manifest(), media_catalog=catalog)
+
     def test_health_rejects_shard_count_mismatch(self):
         manifest = self.valid_manifest()
         manifest["shard_count"] = 31
