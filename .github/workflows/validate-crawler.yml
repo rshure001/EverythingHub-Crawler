@@ -53,5 +53,7 @@ jobs:
           deno-version: v2.x
       - name: Type-check Everything Hub media discovery Edge Function
         run: deno check supabase/functions/everything-hub-media-search/index.ts
+      - name: Type-check Everything Hub web search Edge Function
+        run: deno check supabase/functions/everything-hub-web-search/index.ts
       - name: Validate static release manifest
         run: python publisher/publish.py --check
