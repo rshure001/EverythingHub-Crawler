@@ -129,6 +129,12 @@ def validate_schema(value=None):
     return SCHEMA
 
 
+def validate_test_database(database_name):
+    if database_name != "everythinghub_test":
+        raise ValueError("Loopback test mode is restricted to the isolated everythinghub_test database.")
+    return True
+
+
 def bounded_int(name, default, minimum, maximum):
     try:
         value = int(os.environ.get(name, str(default)))
@@ -598,8 +604,7 @@ def main():
             with conn.cursor() as cur:
                 cur.execute("select current_database()")
                 db_name = cur.fetchone()[0]
-            if "test" not in db_name.lower():
-                raise SystemExit("EH_CRAWL_TEST_MODE is restricted to a database whose name contains 'test'.")
+            validate_test_database(db_name)
         with conn.cursor() as cur:
             cur.execute("select pg_try_advisory_lock(%s)", (LOCK_KEY,))
             locked = cur.fetchone()[0]
