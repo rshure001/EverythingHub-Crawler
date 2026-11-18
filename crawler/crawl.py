@@ -920,7 +920,7 @@ def main():
         for result in results:
             if not result or not result[0]:
                 continue
-            record, links, _delay, _retryable = result
+            record, links, _delay, _retryable, _outcome = result
             if record.get("_eh_noindex"):
                 index_policy_blocked_count[0] += 1
                 noindex_urls.add(record["url"])
