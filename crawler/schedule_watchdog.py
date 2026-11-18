@@ -11,6 +11,7 @@ from typing import Any
 MAX_ATTEMPT_AGE_SECONDS = 10 * 60
 MAX_MANIFEST_AGE_SECONDS = MAX_ATTEMPT_AGE_SECONDS
 MAX_MANIFEST_FUTURE_SKEW_SECONDS = 60
+MAX_SCHEDULE_AGE_SECONDS = 25 * 60
 ACTIVE_STATUSES = {"queued", "in_progress", "pending", "waiting", "requested"}
 
 
@@ -35,12 +36,48 @@ def parse_manifest_time(value: Any) -> datetime | None:
     return None
 
 
+def schedule_health(runs: list[dict[str, Any]], now: datetime,
+                    max_schedule_age_seconds: int = MAX_SCHEDULE_AGE_SECONDS) -> dict[str, Any]:
+    """Measure schedule delivery separately from manual, push, and workflow-run crawls."""
+    scheduled = []
+    for run in runs:
+        if not isinstance(run, dict) or run.get("event") != "schedule":
+            continue
+        created_at = run.get("created_at")
+        if not isinstance(created_at, str):
+            continue
+        try:
+            scheduled.append((parse_time(created_at), run))
+        except ValueError:
+            continue
+
+    if not scheduled:
+        return {
+            "schedule_status": "unobserved",
+            "schedule_age_seconds": None,
+            "last_scheduled_run": None,
+            "last_scheduled_conclusion": None,
+        }
+
+    created_at, latest = max(scheduled, key=lambda item: item[0])
+    age = max(0, int((now - created_at).total_seconds()))
+    return {
+        "schedule_status": "recent" if age <= max_schedule_age_seconds else "stale",
+        "schedule_age_seconds": age,
+        "last_scheduled_run": latest.get("created_at"),
+        "last_scheduled_conclusion": latest.get("conclusion"),
+    }
+
+
 def evaluate(runs: list[dict[str, Any]], now: datetime | None = None,
              max_age_seconds: int = MAX_ATTEMPT_AGE_SECONDS,
              manifest_updated_at: Any | None = None,
-             max_manifest_age_seconds: int = MAX_MANIFEST_AGE_SECONDS) -> dict[str, Any]:
-    """Return wait, healthy, or dispatch; require both a recent run and fresh index."""
+             max_manifest_age_seconds: int = MAX_MANIFEST_AGE_SECONDS,
+             max_schedule_age_seconds: int = MAX_SCHEDULE_AGE_SECONDS) -> dict[str, Any]:
+    """Return wait, healthy, or dispatch; report schedule delivery independently."""
     now = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+    runs = runs if isinstance(runs, list) else []
+    schedule = schedule_health(runs, now, max_schedule_age_seconds)
     manifest_time = parse_manifest_time(manifest_updated_at)
     if manifest_updated_at is not None and manifest_time is None:
         raise ValueError("public search manifest has an invalid updated_at timestamp")
@@ -51,29 +88,35 @@ def evaluate(runs: list[dict[str, Any]], now: datetime | None = None,
             raise ValueError("public search manifest updated_at timestamp is too far in the future")
         manifest_age = max(0, int(raw_manifest_age))
 
-    active = [run for run in runs if run.get("status") in ACTIVE_STATUSES]
+    active = [run for run in runs if isinstance(run, dict) and run.get("status") in ACTIVE_STATUSES]
     if active:
         return {
             "action": "wait",
             "reason": "a crawler run is already queued or running",
             "active_runs": len(active),
             "manifest_age_seconds": manifest_age,
+            **schedule,
         }
 
-    attempts = [
-        run for run in runs
-        if isinstance(run.get("created_at"), str)
-    ]
+    attempts = []
+    for run in runs:
+        if not isinstance(run, dict) or not isinstance(run.get("created_at"), str):
+            continue
+        try:
+            attempts.append((parse_time(run["created_at"]), run))
+        except ValueError:
+            continue
     if not attempts:
         return {
             "action": "dispatch",
             "reason": "no crawler attempt is present in the recent run history",
             "age_seconds": None,
             "manifest_age_seconds": manifest_age,
+            **schedule,
         }
 
-    latest = max(attempts, key=lambda run: parse_time(run["created_at"]))
-    age = max(0, int((now - parse_time(latest["created_at"])).total_seconds()))
+    created_at, latest = max(attempts, key=lambda item: item[0])
+    age = max(0, int((now - created_at).total_seconds()))
     if age <= max_age_seconds:
         if latest.get("conclusion") == "success":
             if manifest_age is not None and manifest_age > max_manifest_age_seconds:
@@ -83,6 +126,7 @@ def evaluate(runs: list[dict[str, Any]], now: datetime | None = None,
                     "age_seconds": age,
                     "last_attempt": latest["created_at"],
                     "manifest_age_seconds": manifest_age,
+                    **schedule,
                 }
             return {
                 "action": "healthy",
@@ -90,6 +134,7 @@ def evaluate(runs: list[dict[str, Any]], now: datetime | None = None,
                 "age_seconds": age,
                 "last_attempt": latest["created_at"],
                 "manifest_age_seconds": manifest_age,
+                **schedule,
             }
         return {
             "action": "wait",
@@ -98,6 +143,7 @@ def evaluate(runs: list[dict[str, Any]], now: datetime | None = None,
             "last_attempt": latest["created_at"],
             "last_conclusion": latest.get("conclusion"),
             "manifest_age_seconds": manifest_age,
+            **schedule,
         }
 
     return {
@@ -107,6 +153,7 @@ def evaluate(runs: list[dict[str, Any]], now: datetime | None = None,
         "last_attempt": latest["created_at"],
         "last_conclusion": latest.get("conclusion"),
         "manifest_age_seconds": manifest_age,
+        **schedule,
     }
 
 
