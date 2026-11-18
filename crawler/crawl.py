@@ -133,15 +133,27 @@ def apply_access_challenge_policy(title, description, text, directives):
     return True
 
 
+def fallback_page_title(url):
+    """Build a readable title from the URL when a source omits its page title."""
+    raw_url = str(url or "")
+    parsed = urllib.parse.urlsplit(raw_url)
+    segment = urllib.parse.unquote((parsed.path or "").rstrip("/").rsplit("/", 1)[-1])
+    segment = re.sub(r"\.[A-Za-z0-9]{1,8}$", "", segment)
+    segment = re.sub(r"[-_]+", " ", segment)
+    segment = re.sub(r"\s+", " ", segment).strip(" ._-")
+    return segment or parsed.hostname or raw_url or "Untitled page"
+
+
 def build_page_record(url, title, description, text, depth, directives):
     """Build a page record while retaining crawl depth for noindex pages."""
     if "noindex" in directives:
         # noindex suppresses publication, not link discovery; keep depth so
         # permitted links on this page can still be queued safely.
         return {"url": url, "_eh_noindex": True, "depth": depth}
+    display_title = re.sub(r"\s+", " ", str(title or "")).strip() or fallback_page_title(url)
     return {
         "url": url,
-        "title": title,
+        "title": display_title,
         "lane": classify_lane(url),
         "description": description,
         "text": text,
@@ -592,6 +604,8 @@ def merge_index_records(existing_pages, new_records, noindex_urls=()):
         )
     }
     for page in merged.values():
+        if not str(page.get("title") or "").strip():
+            page["title"] = fallback_page_title(page["url"])
         lane = page.get("lane")
         if not isinstance(lane, str) or lane not in VALID_LANES:
             page["lane"] = classify_lane(page.get("url", ""))

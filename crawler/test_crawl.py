@@ -107,6 +107,30 @@ class CrawlerTests(unittest.TestCase):
         self.assertNotIn("secret()", text)
         self.assertIn("/next", parser.links)
 
+    def test_build_page_record_uses_readable_url_title_when_source_title_is_blank(self):
+        record = crawl.build_page_record(
+            "https://example.com/resources/veteran-resources.html",
+            "   ", "", "Useful resource content", 1, set(),
+        )
+        self.assertEqual(record["title"], "veteran resources")
+
+    def test_merge_index_records_backfills_legacy_blank_titles_without_dropping_pages(self):
+        existing = [{
+            "url": "https://example.com/about-us",
+            "title": "",
+            "description": "",
+            "text": "A substantive page that should remain in the public index.",
+        }]
+        merged = crawl.merge_index_records(existing, {})
+        self.assertEqual(len(merged), 1)
+        self.assertEqual(merged["https://example.com/about-us"]["title"], "about us")
+
+    def test_fallback_page_title_uses_host_for_root_pages(self):
+        self.assertEqual(
+            crawl.fallback_page_title("https://example.com/"),
+            "example.com",
+        )
+
     def test_access_challenge_policy_excludes_short_privacy_stub_and_disables_following(self):
         directives = set()
         detected = crawl.apply_access_challenge_policy(
