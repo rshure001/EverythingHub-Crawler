@@ -62,6 +62,11 @@ def _url(value: Any) -> str:
         return ""
 
 
+def is_safe_public_url(value: Any) -> bool:
+    """Return whether a URL passes the core's conservative URL checks."""
+    return bool(_url(value))
+
+
 def _number(value: Any, maximum: float = 1_000_000) -> float | None:
     if isinstance(value, bool):
         return None
