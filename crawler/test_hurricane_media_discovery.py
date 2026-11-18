@@ -69,6 +69,7 @@ class MediaDiscoveryTests(unittest.TestCase):
             "title": "Image",
             "alt_text": "A picture",
             "robots_allowed": True,
+            "robots_checked_at": 100,
         }
         denied = {**candidate, "url": "https://media.example.org/denied.jpg",
                   "robots_allowed": False}
@@ -84,10 +85,11 @@ class MediaDiscoveryTests(unittest.TestCase):
         first = {
             "media_type": "image", "url": "https://media.example.org/image.jpg",
             "source_page_url": "https://media.example.org/one",
-            "robots_allowed": True,
+            "robots_allowed": True, "robots_checked_at": 100,
         }
         existing, added = merge_media_candidates([], [first], now=100)
-        second = {**first, "source_page_url": "https://media.example.org/two"}
+        second = {**first, "source_page_url": "https://media.example.org/two",
+                  "robots_checked_at": 200}
         merged, new_count = merge_media_candidates(existing, [second], now=200)
         self.assertEqual(added, 1)
         self.assertEqual(new_count, 0)
@@ -106,11 +108,28 @@ class MediaDiscoveryTests(unittest.TestCase):
             "robots_allowed": True, "last_seen_at": 50,
             "source_pages": ["https://media.example.org/one"],
         }
-        incoming = {**legacy, "source_page_url": "https://media.example.org/two"}
+        incoming = {**legacy, "source_page_url": "https://media.example.org/two",
+                    "robots_checked_at": 300}
         merged, added = merge_media_candidates([legacy], [incoming], now=300)
         self.assertEqual(added, 0)
         self.assertEqual(merged[0]["robots_checked_at"], 300)
         self.assertEqual(merged[0]["last_seen_at"], 300)
+
+    def test_merge_rejects_missing_or_future_robots_check_timestamps(self):
+        candidate = {
+            "media_type": "image",
+            "url": "https://media.example.org/image.jpg",
+            "source_page_url": "https://media.example.org/story",
+            "robots_allowed": True,
+        }
+        missing, missing_count = merge_media_candidates([], [candidate], now=100)
+        future, future_count = merge_media_candidates(
+            [], [{**candidate, "robots_checked_at": 101}], now=100
+        )
+        self.assertEqual(missing, [])
+        self.assertEqual(missing_count, 0)
+        self.assertEqual(future, [])
+        self.assertEqual(future_count, 0)
 
 
 if __name__ == "__main__":
