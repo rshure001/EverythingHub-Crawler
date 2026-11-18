@@ -608,6 +608,29 @@ main{width:min(900px,calc(100% - 28px))!important;margin:22px auto 40px!importan
  .discover-meta{font-size:10px;flex-wrap:wrap}
  .discover-footer{font-size:10px}
 }
+
+/* Approved reference layout: artwork first, live controls aligned over its printed controls. */
+body{background:#020811!important;color:#f3fff8!important;min-height:100vh}
+.topbar,.discover-feed,.divisions,.dashboard,.dogtag-link,footer{display:none!important}
+main{width:100%!important;max-width:100%!important;margin:0 auto!important;padding:0 10px 32px!important}
+.hero{display:block!important;width:100%!important;max-width:900px!important;margin:0 auto!important;padding:0!important;border:0!important;border-radius:0!important;box-shadow:none!important;background:transparent!important;overflow:visible!important}
+.hero-art-wrap{position:relative!important;display:block!important;width:min(100%,720px)!important;max-width:720px!important;height:auto!important;margin:0 auto!important;overflow:visible!important;line-height:0}
+.approved-master-art{display:block!important;width:100%!important;height:auto!important;max-height:none!important;object-fit:contain!important;border:0!important;border-radius:0!important}
+.hero-live-search{position:absolute!important;left:5%!important;top:53.5%!important;width:90%!important;height:7.5%!important;min-height:0!important;margin:0!important;padding:0 2%!important;z-index:30!important;display:flex!important;align-items:center!important;gap:8px!important;border:0!important;border-radius:999px!important;background:transparent!important;box-shadow:none!important}
+.hero-live-search input{flex:1!important;min-width:0!important;width:100%!important;height:100%!important;padding:0 8px!important;background:transparent!important;color:#153321!important;font-size:clamp(12px,2vw,17px)!important}
+.hero-live-search input::placeholder{color:transparent!important}
+.hero-live-search button{flex:0 0 19%!important;min-width:0!important;height:100%!important;padding:0!important;border:0!important;border-radius:999px!important;background:transparent!important;color:transparent!important;box-shadow:none!important}
+.hero-art-wrap>.eh-modebar{position:absolute!important;left:6%!important;top:64%!important;width:88%!important;height:25%!important;margin:0!important;padding:0!important;display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;grid-template-rows:repeat(2,minmax(0,1fr))!important;gap:3% 3%!important;overflow:visible!important;border:0!important;background:transparent!important;z-index:31!important}
+.hero-art-wrap>.eh-modebar .eh-mode{display:block!important;min-width:0!important;min-height:0!important;width:100%!important;height:100%!important;margin:0!important;padding:0!important;border:0!important;border-radius:12px!important;background:transparent!important;color:transparent!important;font-size:0!important;box-shadow:none!important}
+.hero-art-wrap>.eh-modebar .eh-mode.active,.hero-art-wrap>.eh-modebar .eh-mode:hover{border:0!important;background:#aaff3720!important;box-shadow:inset 0 0 0 2px #aaff3766!important}
+.hero-art-wrap>.eh-modebar .eh-mode:focus-visible{outline:3px solid #fff!important;outline-offset:2px!important}
+.tagline{display:block!important;margin:12px auto 0!important;padding:0 12px!important;text-align:center!important;color:#baffd0!important;font-size:13px!important;line-height:1.45!important;letter-spacing:.2px!important;font-weight:600!important}
+.eh-search-workspace{display:block!important;width:min(900px,100%)!important;max-width:900px!important;margin:12px auto 28px!important;padding:0 14px 24px!important;border:0!important;border-radius:0!important;background:#fff!important;color:#202124!important;box-shadow:none!important}
+.eh-search-workspace .eh-modebar{display:none!important}
+.eh-search-workspace #results:empty{display:none!important}
+.eh-search-workspace #results{width:100%!important;max-width:760px!important;margin:0 auto!important;padding:0!important;background:#fff!important;color:#202124!important}
+@media(max-width:700px){main{padding:0 8px 26px!important}.hero{width:100%!important}.hero-art-wrap{width:100%!important;max-width:620px!important}.hero-live-search{left:5%!important;top:53.5%!important;width:90%!important;height:7.5%!important}.hero-art-wrap>.eh-modebar{left:6%!important;top:64%!important;width:88%!important;height:25%!important}.tagline{margin-top:9px!important;font-size:12px!important}.eh-search-workspace{width:100%!important;margin:8px auto 20px!important;padding:0 10px 20px!important}}
+
 </style><link rel="canonical" href="https://everythinghub.ink/"><meta name="robots" content="index,follow,max-image-preview:large"><meta property="og:type" content="website"><meta property="og:title" content="Everything Hub — Everything within reach"><meta property="og:description" content="Search the web, discover pictures and videos, explore places, businesses, news, shopping and research."><meta property="og:url" content="https://everythinghub.ink/"><script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","name":"Everything Hub","url":"https://everythinghub.ink/","description":"A broad search and discovery engine for web pages, images, videos, news, places, businesses, shopping and research.","potentialAction":{"@type":"SearchAction","target":{"@type":"EntryPoint","urlTemplate":"https://everythinghub.ink/?q={search_term_string}"},"query-input":"required name=search_term_string"}}</script></head>
 <body>
 <header class="topbar">
@@ -632,13 +655,14 @@ main{width:min(900px,calc(100% - 28px))!important;margin:22px auto 40px!importan
       <input id="q" type="search" aria-label="Search Everything Hub" placeholder="Search Everything within reach…" autocomplete="off" />
       <button type="submit">Search</button>
     </form>
-  </div>
-<div class="tagline">EVERYTHING HUB · EVERYTHING WITHIN REACH</div>
-</section>
-<section class="eh-search-workspace eh-compact-search" aria-label="Search categories and results">
- <nav class="eh-modebar" aria-label="Search categories">
+    <nav class="eh-modebar" aria-label="Search categories">
   <button class="eh-mode active" type="button" data-mode="web">Web</button><button class="eh-mode" type="button" data-mode="news">News</button><button class="eh-mode" type="button" data-mode="images">Images</button><button class="eh-mode" type="button" data-mode="videos">Videos</button><button class="eh-mode" type="button" data-mode="shopping">Shopping</button><button class="eh-mode" type="button" data-mode="places">Places</button><button class="eh-mode" type="button" data-mode="business">Business</button><button class="eh-mode" type="button" data-mode="research">Research</button>
  </nav>
+  </div>
+<div class="tagline">Search the web or choose one of the eight categories.</div>
+</section>
+<section class="eh-search-workspace eh-compact-search" aria-label="Search categories and results">
+ 
  <section id="results" class="eh-results" aria-live="polite"></section>
 </section>
 
