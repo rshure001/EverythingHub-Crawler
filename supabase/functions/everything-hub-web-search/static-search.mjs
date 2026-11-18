@@ -60,6 +60,11 @@ function snippetFor(page, terms, maxChars = 320) {
 /**
  * Search verified public crawler records without PostgreSQL.
  * Preserves the web-search function's response contract and lane semantics.
+ * @param {Array<Record<string, any>>} pages
+ * @param {string} query
+ * @param {string | null} [lane=null]
+ * @param {number} [limit=10]
+ * @param {number} [offset=0]
  */
 export function searchStaticPages(pages, query, lane = null, limit = 10, offset = 0) {
   const rawQuery = String(query ?? "").trim().slice(0, MAX_QUERY_CHARS);
