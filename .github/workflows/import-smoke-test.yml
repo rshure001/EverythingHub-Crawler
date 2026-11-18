@@ -99,6 +99,16 @@ jobs:
           test "$invalid_lanes" = "0"
           echo "Imported records by search lane:"
           psql "$DATABASE_URL" -P pager=off -c "SELECT lane, count(*) AS records FROM eh_quad.eh_documents GROUP BY lane ORDER BY lane;"
+      - name: Smoke-test the database crawler in isolated eh_quad
+        env:
+          EH_CRAWL_TEST_MODE: "1"
+          EH_CRAWL_ALLOW_LOOPBACK_TEST: "1"
+          EH_CRAWL_SEED: "0"
+          EH_CRAWL_MAX_PAGES: "4"
+          EH_CRAWL_MAX_ITEMS: "4"
+          EH_CRAWL_MAX_DEPTH: "1"
+          EH_CRAWL_HOST_DELAY: "0"
+        run: python database/crawl_worker_smoke.py
       - name: Verify authenticated search, lane filters, and pagination
         env:
           EH_SEARCH_API_TOKEN: isolated-test-token
