@@ -169,5 +169,4 @@ Deno.serve(async (request: Request) => {
     warning: results.length ? undefined : "Free media sources are temporarily unavailable",
     usageNote: "Bing media results are discovery links only; verify reuse rights on the source page. Wikimedia Commons results include available license and attribution metadata."
   }, { headers: cors });
-  }
 });
