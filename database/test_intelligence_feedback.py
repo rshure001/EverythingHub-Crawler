@@ -71,8 +71,10 @@ class IntelligenceFeedbackValidationTests(unittest.TestCase):
         self.assertEqual(validate_batch_size(20000), MAX_BATCH_SIZE)
         with self.assertRaises(ValueError):
             validate_batch_size(0)
-        with self.assertRaises(ValueError):
-            validate_batch_size(True)
+        for invalid in (True, 1.5, "5"):
+            with self.subTest(invalid=invalid):
+                with self.assertRaises(ValueError):
+                    validate_batch_size(invalid)
 
     def test_feedback_cursor_migration_is_additive_and_eh_quad_only(self):
         sql = (Path(__file__).with_name("004_eh_quad_feedback_cursor.sql")
