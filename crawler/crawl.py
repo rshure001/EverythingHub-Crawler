@@ -627,6 +627,17 @@ def merge_index_records(existing_pages, new_records, noindex_urls=()):
     return merged
 
 
+def summarize_fetch_outcomes(outcomes):
+    """Separate HTTP success, HTML parsing, non-HTML responses, and errors."""
+    return {
+        "fetch_attempts": len(outcomes),
+        "successful_http_responses": sum(1 for item in outcomes if item.get("http_success")),
+        "html_pages_parsed": sum(1 for item in outcomes if item.get("html_parsed")),
+        "non_html_responses": sum(1 for item in outcomes if item.get("non_html")),
+        "fetch_or_parse_errors": sum(1 for item in outcomes if item.get("failed")),
+    }
+
+
 def main():
     seeds = [clean(x.strip()) for x in SEEDS.read_text(encoding="utf-8").splitlines()
              if x.strip() and not x.startswith("#")]
@@ -800,6 +811,7 @@ def main():
     fetched = 0
     depth_counts = {}
     requests_by_host = {}
+    fetch_outcomes = []
 
     while queue and fetched < MAX_FETCH_PER_RUN:
         elapsed = time.monotonic() - run_started
@@ -821,13 +833,23 @@ def main():
 
         def fetch(item):
             url, depth = item
+            http_success = False
+            html_parsed = False
+            non_html = False
             try:
                 final, content_type, x_robots_tags, body = request(url, allowed)
+                http_success = True
                 delay = max(host_delay(origin(url)), host_delay(origin(final)))
                 if content_type != "text/html":
-                    return None, None, delay, False
+                    non_html = True
+                    outcome = {
+                        "http_success": True, "html_parsed": False,
+                        "non_html": True, "failed": False,
+                    }
+                    return None, None, delay, False, outcome
                 parser = PageParser()
                 parser.feed(body.decode("utf-8", "replace"))
+                html_parsed = True
                 directives = set(parser.robots_directives)
                 directives.update(parse_indexing_directives(x_robots_tags))
                 if "nofollow" in directives:
@@ -848,7 +870,11 @@ def main():
                         candidate = clean(urllib.parse.urljoin(final, href))
                         if candidate and urllib.parse.urlsplit(candidate).netloc == host:
                             links.append(candidate)
-                return record, links, delay, False
+                outcome = {
+                    "http_success": True, "html_parsed": True,
+                    "non_html": False, "failed": False,
+                }
+                return record, links, delay, False, outcome
             except Exception as error:
                 status = getattr(error, "code", None)
                 if status in (429, 503):
@@ -869,7 +895,11 @@ def main():
                 ) or isinstance(error, TimeoutError)
                 delay = max(host_delay(origin(url)), backoff)
                 print(f"skip {url}: {error}; host cooldown {delay:.0f}s")
-                return None, None, delay, retryable
+                outcome = {
+                    "http_success": http_success, "html_parsed": html_parsed,
+                    "non_html": non_html, "failed": True,
+                }
+                return None, None, delay, retryable, outcome
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=min(WORKERS, len(batch))) as pool:
             results = list(pool.map(fetch, batch))
@@ -884,11 +914,13 @@ def main():
                 queue.append((url, depth))
                 transient_retries_queued += 1
             requests_by_host[host] = requests_by_host.get(host, 0) + 1
+            if result and len(result) > 4 and isinstance(result[4], dict):
+                fetch_outcomes.append(result[4])
 
         for result in results:
             if not result or not result[0]:
                 continue
-            record, links, _delay, _retryable = result
+            record, links, _delay, _retryable, _outcome = result
             if record.get("_eh_noindex"):
                 index_policy_blocked_count[0] += 1
                 noindex_urls.add(record["url"])
@@ -898,6 +930,7 @@ def main():
             enqueue_discovered_links(queue, seen, links, record)
 
     run_duration = round(time.monotonic() - run_started, 2)
+    fetch_metrics = summarize_fetch_outcomes(fetch_outcomes)
     old = load_json(OUTPUT, {"version": 1, "pages": []})
     old_challenge_urls = {
         page.get("url")
@@ -915,6 +948,11 @@ def main():
     save_json(OUTPUT, {
         "version": 1, "updated_at": int(time.time()),
         "pages_crawled_this_run": fetched,
+        "fetch_attempts_this_run": fetch_metrics["fetch_attempts"],
+        "successful_http_responses_this_run": fetch_metrics["successful_http_responses"],
+        "html_pages_parsed_this_run": fetch_metrics["html_pages_parsed"],
+        "non_html_responses_this_run": fetch_metrics["non_html_responses"],
+        "fetch_or_parse_errors_this_run": fetch_metrics["fetch_or_parse_errors"],
         "pages_indexed_this_run": len(records),
         "pages_not_indexed_this_run": fetched - len(records),
         "robots_blocked_this_run": robots_blocked_count[0],

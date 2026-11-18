@@ -56,6 +56,24 @@ class FakePageResponse:
 
 
 class CrawlerTests(unittest.TestCase):
+    def test_summarize_fetch_outcomes_separates_http_html_and_failures(self):
+        outcomes = [
+            {"http_success": True, "html_parsed": True, "non_html": False, "failed": False},
+            {"http_success": True, "html_parsed": False, "non_html": True, "failed": False},
+            {"http_success": False, "html_parsed": False, "non_html": False, "failed": True},
+            {"http_success": True, "html_parsed": False, "non_html": False, "failed": True},
+        ]
+        self.assertEqual(
+            crawl.summarize_fetch_outcomes(outcomes),
+            {
+                "fetch_attempts": 4,
+                "successful_http_responses": 3,
+                "html_pages_parsed": 1,
+                "non_html_responses": 1,
+                "fetch_or_parse_errors": 2,
+            },
+        )
+
     def test_request_accepts_response_at_exact_byte_limit(self):
         response = FakePageResponse(b"1234")
         opener = mock.Mock()
