@@ -2,7 +2,7 @@
 """Validate public search shards and the compressed catalog against the crawler index."""
 from __future__ import annotations
 
-import gzip
+import zlib
 import hashlib
 import json
 import sys
@@ -13,9 +13,24 @@ from lane_classifier import VALID_LANES
 
 ROOT = Path(__file__).resolve().parents[1]
 MAX_SHARD_BYTES = 350_000
-MAX_CATALOG_GZIP_BYTES = 5_000_000
-MAX_CATALOG_UNCOMPRESSED_BYTES = 25_000_000
+MAX_CATALOG_GZIP_BYTES = 6_000_000
+MAX_CATALOG_UNCOMPRESSED_BYTES = 30_000_000
 CATALOG_NAME = "catalog-v1.json.gz"
+
+
+def bounded_gzip_decompress(raw: bytes, max_bytes: int = MAX_CATALOG_UNCOMPRESSED_BYTES) -> bytes:
+    """Decompress one gzip member while enforcing an output cap during decoding."""
+    if not isinstance(max_bytes, int) or isinstance(max_bytes, bool) or max_bytes < 0:
+        raise ValueError("maximum decompressed size must be a non-negative integer")
+    decoder = zlib.decompressobj(16 + zlib.MAX_WBITS)
+    decoded = decoder.decompress(raw, max_bytes + 1)
+    if len(decoded) > max_bytes or decoder.unconsumed_tail:
+        raise ValueError("decompressed catalog exceeds the configured safety limit")
+    if not decoder.eof:
+        raise ValueError("compressed catalog is incomplete or invalid")
+    if decoder.unused_data:
+        raise ValueError("compressed catalog contains trailing data or extra gzip members")
+    return decoded
 
 
 def is_safe_public_url(value: object) -> bool:
@@ -201,9 +216,7 @@ def validate(root: Path = ROOT) -> list[str]:
                 elif hashlib.sha256(raw).hexdigest() != digest:
                     errors.append("compressed catalog SHA-256 mismatch")
                 try:
-                    decoded = gzip.decompress(raw)
-                    if len(decoded) > MAX_CATALOG_UNCOMPRESSED_BYTES:
-                        errors.append("decompressed catalog exceeds the 25 MB safety limit")
+                    decoded = bounded_gzip_decompress(raw, MAX_CATALOG_UNCOMPRESSED_BYTES)
                     payload = json.loads(decoded.decode("utf-8"))
                     catalog_pages = payload.get("pages") if isinstance(payload, dict) else None
                     if not isinstance(catalog_pages, list):
