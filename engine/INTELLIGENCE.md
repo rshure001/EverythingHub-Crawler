@@ -5,14 +5,14 @@ of Everything Hub's crawler and independent search foundation. It is designed
 to turn collected pages into ranked evidence, connect independent corroboration,
 and improve ranking from explicit feedback.
 
-## Current module: `intelligence_core.py`
+## Current module: \`intelligence_core.py\`
 
 - **Collect:** consumes records already admitted by the crawler/catalog. It does
   not fetch URLs or bypass robots, rate, or host policies.
 - **Verify:** scores only valid HTTP(S) records not explicitly denied by robots.
   Source quality and relevance are explicit input metadata, never guessed from
   a publisher's name. Missing dates receive a conservative freshness score.
-- **Connect:** groups records by caller-supplied `topic_key` and rewards
+- **Connect:** groups records by caller-supplied \`topic_key\` and rewards
   corroboration from distinct hostnames with diminishing returns. Corroboration
   increases evidence; it does not establish truth.
 - **Score:** returns a 0–1 score, evidence band, component breakdown, and
@@ -22,41 +22,70 @@ and improve ranking from explicit feedback.
   15% evidence score. The live fallback returns an auditable rank score,
   evidence band, component breakdown, and distinct-host corroboration count.
   Strong text matches remain dominant.
-- **Freshness:** prefer a captured `published_at` value when available and
-  otherwise use `fetched_at`. The crawler now reads common article/date meta
-  fields (including `article:published_time`, `datePublished`, and
-  `dc.date.issued`), normalizes parseable values to UTC, and ignores malformed
+- **Freshness:** prefer a captured \`published_at\` value when available and
+  otherwise use \`fetched_at\`. The crawler now reads common article/date meta
+  fields (including \`article:published_time\`, \`datePublished\`, and
+  \`dc.date.issued\`), normalizes parseable values to UTC, and ignores malformed
   dates. The public catalog preserves both fields; unknown dates receive a
   conservative score.
 - **Corroboration scope:** the offline and static fallback adapters currently
   use the active query as a temporary topic key. Distinct matching hostnames
   add evidence but do not prove a shared entity or establish truth.
-- **Corroboration scope:** the current offline search adapter uses the active
-  search phrase as its temporary topic key. It only counts distinct hostnames
-  among pages matching that query; it does not claim semantic entity resolution.
-- **Learn:** `learn_weights` accepts only explicit `helpful`,
-  `not_helpful`, `verified`, and `disputed` feedback with a complete
+- **Learn:** \`learn_weights\` accepts only explicit \`helpful\`,
+  \`not_helpful\`, \`verified\`, and \`disputed\` feedback with a complete
   feature snapshot. Updates are bounded, normalized, deterministic, and never
   alter source records, access rules, or crawler behavior.
 - **Repeat:** callers can pass the returned weights into subsequent ranking
   runs. Persistence and production feedback capture are intentionally separate
   integration steps; this module does not write to the database or filesystem.
 
+## Multimodal metadata layer: \`media_intelligence.py\`
+
+The multimodal layer provides one local, auditable contract for four asset
+families: **artwork, audio, video, and design**.
+
+- Normalizes media records from approved discovery providers while preserving
+  source-page URLs, direct media URLs, previews, provider names, creator/credit,
+  license labels, license URLs, and attribution requirements.
+- Infers a modality only from explicit type, MIME type, or recognized file
+  extension. Design asset kinds such as templates, mockups, vectors, fonts,
+  wireframes, and UI kits are handled separately from ordinary artwork.
+- Rejects non-HTTP(S) URLs, credential-bearing URLs, malformed URLs, records
+  explicitly denied by robots, and audio records without a direct audio URL.
+- Ranks already-supplied metadata locally by title, tags, description, and
+  creator. Results are deduplicated and bounded; no asset bytes are downloaded.
+- Keeps reuse rights conservative. A license label and link mean
+  \`review_required\`, not automatic permission. Missing or explicitly
+  unverified terms remain \`unverified\`.
+- Produces modality and rights inventory counts without exposing media content.
+
+**Live-provider boundary:** the deployed media-discovery Edge Function currently
+searches images and videos through Bing and Wikimedia Commons. This new module
+supports ingestion and ranking contracts for all four modalities, but it does
+not add an audio/design provider, transcription, scene analysis, image editing,
+or media generation. Those require separate, terms-compliant adapters or
+processing workers and must pass their own live smoke tests before being called
+live.
+
 ## Use
 
-```python
+\`\`\`python
 from intelligence_core import rank_evidence, learn_weights
+from media_intelligence import media_inventory, rank_media
 
 ranked = rank_evidence(records, limit=20)
 updated = learn_weights(feedback_events)
 next_ranked = rank_evidence(records, weights=updated["weights"])
-```
+
+media = rank_media(media_records, "Apollo 11", media_type="video")
+inventory = media_inventory(media_records)
+\`\`\`
 
 Run the engine tests:
 
-```bash
+\`\`\`bash
 python -m unittest discover -s engine -p 'test_*.py' -v
-```
+\`\`\`
 
 ## Safety boundaries
 
@@ -67,6 +96,6 @@ write production data, publish results, or change security policies. Production
 persistence, source identity verification, provenance capture, human review,
 and staged live integration must be completed and tested separately.
 
-The production database remains isolated in the `eh_quad` schema of the
+The production database remains isolated in the \`eh_quad\` schema of the
 dedicated Everything Hub control project. Never use Dog Tag Day Story Wall
 storage for this system.
