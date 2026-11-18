@@ -2,9 +2,13 @@
 """Evidence-based Hurricane Core maturity and operating metrics."""
 from __future__ import annotations
 
-from collections import Counter
+import json
+import os
 from datetime import datetime, timezone
+from pathlib import Path
 from urllib.parse import urlsplit
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def evaluate(index: dict, frontier: dict, now: int | None = None) -> dict:
@@ -59,7 +63,7 @@ def render(metrics: dict) -> str:
         f"- Persisted feedback events: **{metrics['feedback_events']:,}**",
         f"- Media extractions completed: **{metrics['media_extractions']:,}**",
         f"- Index age (seconds): **{metrics['index_age_seconds'] if metrics['index_age_seconds'] is not None else 'unknown'}**",
-        f"- **Next milestone:** {metrics['next_gate}",
+        f"- **Next milestone:** {metrics['next_gate']}",
         "",
         metrics["measurement_note"],
         "",
@@ -68,3 +72,18 @@ def render(metrics: dict) -> str:
     ]
     lines.extend(f"- Category {g['category']}: {'PASS' if g['passed'] else 'not yet met'} — {g['requirement']}" for g in metrics["gates"])
     return "\n".join(lines) + "\n"
+
+
+def main():
+    index = json.loads((ROOT / "data" / "index.json").read_text(encoding="utf-8"))
+    frontier = json.loads((ROOT / "data" / "frontier.json").read_text(encoding="utf-8"))
+    report = render(evaluate(index, frontier))
+    print(report, end="")
+    summary = os.environ.get("GITHUB_STEP_SUMMARY")
+    if summary:
+        with open(summary, "a", encoding="utf-8") as handle:
+            handle.write(report)
+
+
+if __name__ == "__main__":
+    main()
