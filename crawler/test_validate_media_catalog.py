@@ -39,8 +39,20 @@ class MediaCatalogValidationTests(unittest.TestCase):
         self.assertEqual(errors, [])
         self.assertEqual(metrics["candidates"], 1)
         self.assertEqual(metrics["robots_allowed"], 1)
+        self.assertEqual(metrics["robots_timestamped"], 0)
         self.assertEqual(metrics["metadata_only_not_fetched"], 1)
         self.assertEqual(metrics["unknown_rights"], 1)
+
+    def test_valid_timestamped_robots_decision(self):
+        errors, metrics = validate_document(document(candidate(robots_checked_at=100)))
+        self.assertEqual(errors, [])
+        self.assertEqual(metrics["robots_timestamped"], 1)
+
+    def test_rejects_invalid_or_future_relative_robots_timestamp(self):
+        for value in (0, -1, True, "100", 101):
+            with self.subTest(value=value):
+                errors, _ = validate_document(document(candidate(robots_checked_at=value)))
+                self.assertTrue(any("robots_checked_at" in error for error in errors))
 
     def test_valid_image_audio_and_video_types(self):
         rows = [
