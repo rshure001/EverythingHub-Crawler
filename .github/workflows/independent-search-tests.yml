@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "engine/**"
+      # Crawler metadata feeds both the offline engine and static catalog freshness tests.
       - "crawler/**"
       - "supabase/functions/everything-hub-web-search/**"
       - ".github/workflows/independent-search-tests.yml"
