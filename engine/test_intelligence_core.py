@@ -40,8 +40,10 @@ class IntelligenceCoreTests(unittest.TestCase):
         self.assertEqual(result["score"], 0)
 
     def test_invalid_url_is_never_scored(self):
-        result = score_evidence({"url": "javascript:alert(1)"}, now=NOW)
-        self.assertFalse(result["eligible"])
+        for url in ("javascript:alert(1)", "https://", "ftp://example.org/file"):
+            with self.subTest(url=url):
+                result = score_evidence({"url": url}, now=NOW)
+                self.assertFalse(result["eligible"])
 
     def test_rank_is_deterministic_and_deduplicated(self):
         ranked = rank_evidence(self.pages + [self.pages[0]], now=NOW)
