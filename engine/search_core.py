@@ -107,6 +107,7 @@ def search(
             "snippet": _snippet(page, set(terms)),
             "score": round(score, 6),
             "fetched_at": page.get("fetched_at"),
+            "published_at": page.get("published_at"),
         })
 
     if candidates:
@@ -117,6 +118,7 @@ def search(
                 "topic_key": phrase,
                 "relevance_score": item["score"] / max_lexical_score,
                 "fetched_at": item.get("fetched_at"),
+                "published_at": item.get("published_at"),
                 "robots_allowed": True,
             }
             for item in candidates
