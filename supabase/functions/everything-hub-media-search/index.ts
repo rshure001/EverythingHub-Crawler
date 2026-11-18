@@ -45,7 +45,10 @@ async function bing(q: string, type: "image" | "video") {
     const pageUrl = tag(block, "link");
     const description = tag(block, "description");
     const mediaTags = [...block.matchAll(/<(?:media:content|media:thumbnail|enclosure)\b[^>]*>/gi)].map((x) => x[0]);
-    const parsed = mediaTags.map((raw) => ({ raw, ...attrs(raw) }));
+    const parsed = mediaTags.map((raw) => {
+      const values = attrs(raw);
+      return { raw, type: values.type || "", url: values.url || "" };
+    });
     const image = parsed.find((x) => (x.type || "").startsWith("image/") || x.raw.toLowerCase().includes("thumbnail"));
     const video = parsed.find((x) => (x.type || "").startsWith("video/"));
     const anyContent = parsed.find((x) => (x.url || "").startsWith("http"));
@@ -169,5 +172,4 @@ Deno.serve(async (request: Request) => {
     warning: results.length ? undefined : "Free media sources are temporarily unavailable",
     usageNote: "Bing media results are discovery links only; verify reuse rights on the source page. Wikimedia Commons results include available license and attribution metadata."
   }, { headers: cors });
-  }
 });
