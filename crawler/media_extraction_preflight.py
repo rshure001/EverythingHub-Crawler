@@ -78,6 +78,15 @@ def _public_canonical_url(value: Any) -> bool:
     return bool(normalized) and normalized == value
 
 
+def _https_canonical_url(value: Any) -> bool:
+    if not _public_canonical_url(value):
+        return False
+    try:
+        return urlsplit(value).scheme.casefold() == "https"
+    except ValueError:
+        return False
+
+
 def _aware_timestamp(value: Any) -> datetime | None:
     if not isinstance(value, str) or not value.strip():
         return None
@@ -137,7 +146,7 @@ def _compile_reviews(registry: Any, now: datetime) -> tuple[dict, set, set, set,
         digest = row.get("source_terms_sha256")
         checked_at = _aware_timestamp(row.get("source_terms_checked_at"))
         if (
-            not _public_canonical_url(terms_url)
+            not _https_canonical_url(terms_url)
             or not isinstance(digest, str)
             or not SHA256_RE.fullmatch(digest)
             or checked_at is None
@@ -301,7 +310,7 @@ def main() -> None:
         "No media was downloaded, no extractor was invoked, and no redistribution permission was granted.",
         "",
     ])
-    rendered = "\n".join(lines)
+    rendered = "\\n".join(lines)
     print(rendered, end="")
     summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary_path:
