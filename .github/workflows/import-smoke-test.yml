@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - "database/**"
+      - "engine/intelligence_core.py"
       - ".github/workflows/import-smoke-test.yml"
   pull_request:
     paths:
@@ -58,6 +59,9 @@ jobs:
         run: |
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f database/002_eh_quad_schema.sql
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f database/003_eh_quad_intelligence.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f database/004_eh_quad_feedback_cursor.sql
+      - name: Smoke-test append-only feedback learning in isolated eh_quad
+        run: python database/intelligence_feedback_smoke.py
       - name: Run schema-isolation unit tests
         run: python -m unittest discover -s database -p 'test_*.py' -v
       - name: Import crawler snapshot into temporary database
