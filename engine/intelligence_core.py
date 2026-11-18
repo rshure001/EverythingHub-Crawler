@@ -153,18 +153,14 @@ def score_evidence(
     }
 
 
-def rank_evidence(
+def score_evidence_batch(
     pages: Iterable[Mapping[str, Any]],
     *,
     weights: Mapping[str, Any] | None = None,
     now: datetime | None = None,
-    limit: int = 20,
 ) -> list[dict[str, Any]]:
-    """Score and deterministically rank eligible evidence records."""
+    """Score every eligible record with linear-time host corroboration setup."""
     corpus = [page for page in pages if isinstance(page, Mapping)]
-    safe_limit = max(1, min(int(limit), 50))
-    # Precompute distinct hosts per topic once; avoid quadratic URL parsing
-    # when scoring a large result set.
     hosts_by_topic: dict[str, set[str]] = {}
     for item in corpus:
         if item.get("robots_allowed") is False:
@@ -175,30 +171,48 @@ def rank_evidence(
             hosts_by_topic.setdefault(topic, set()).add(host)
 
     results = []
-    seen = set()
     for page in corpus:
         url = str(page.get("url") or "").strip()
-        if url in seen:
-            continue
-        seen.add(url)
         topic = str(page.get("topic_key") or "").strip().casefold()
         host = _host(url)
-        corroborating_hosts = max(0, len(hosts_by_topic.get(topic, set())) - (1 if host in hosts_by_topic.get(topic, set()) else 0))
+        topic_hosts = hosts_by_topic.get(topic, set())
+        corroborating_hosts = max(0, len(topic_hosts) - (1 if host in topic_hosts else 0))
         evidence = score_evidence(
             page, (), weights=weights, now=now,
             _corroborating_hosts=corroborating_hosts,
         )
-        if not evidence["eligible"]:
+        if evidence["eligible"]:
+            results.append({"url": url, **evidence})
+    return results
+
+
+def rank_evidence(
+    pages: Iterable[Mapping[str, Any]],
+    *,
+    weights: Mapping[str, Any] | None = None,
+    now: datetime | None = None,
+    limit: int = 20,
+) -> list[dict[str, Any]]:
+    """Score and deterministically rank eligible evidence records."""
+    corpus = [page for page in pages if isinstance(page, Mapping)]
+    safe_limit = max(1, min(int(limit), 50))
+    metadata = {str(page.get("url") or "").strip(): page for page in corpus}
+    results = []
+    seen = set()
+    for evidence in score_evidence_batch(corpus, weights=weights, now=now):
+        url = evidence["url"]
+        if url in seen:
             continue
+        seen.add(url)
+        page = metadata[url]
         results.append({
             "url": url,
             "title": str(page.get("title") or url)[:500],
             "topic_key": str(page.get("topic_key") or "")[:160],
-            **evidence,
+            **{key: value for key, value in evidence.items() if key != "url"},
         })
     results.sort(key=lambda item: (-item["score"], item["url"]))
     return results[:safe_limit]
-
 
 def learn_weights(
     events: Iterable[Mapping[str, Any]],
