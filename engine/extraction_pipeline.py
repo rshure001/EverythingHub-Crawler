@@ -7,7 +7,7 @@ from __future__ import annotations
 import math
 import re
 from typing import Any, Iterable, Mapping
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, urlunsplit
 
 from media_intelligence import normalize_asset
 
@@ -28,11 +28,13 @@ def _text(value: Any, limit: int) -> str:
     return re.sub(r"\s+", " ", str(value)).strip()[:limit]
 
 def _url(value: Any) -> str:
+    """Canonicalize only case-insensitive URL parts; preserve path and query case."""
     raw = _text(value, 2048)
     try:
         p = urlsplit(raw)
         if p.scheme.casefold() not in {"http", "https"} or not p.hostname or p.username or p.password: return ""
-        return raw.split("#", 1)[0].rstrip("/").casefold()
+        _ = p.port  # Reject malformed ports instead of silently matching them.
+        return urlunsplit((p.scheme.casefold(), p.netloc.casefold(), p.path, p.query, ""))
     except ValueError: return ""
 
 def _finite(value: Any, *, default: float | None = None) -> float | None:
