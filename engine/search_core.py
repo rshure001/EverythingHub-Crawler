@@ -11,6 +11,8 @@ import unicodedata
 from collections import Counter
 from typing import Iterable, Mapping, Any
 
+from intelligence_core import score_evidence_batch
+
 TOKEN_RE = re.compile(r"[^\W_]+", re.UNICODE)
 FIELD_WEIGHTS = {"title": 4.0, "url": 2.2, "description": 1.7, "text": 1.0}
 DEFAULT_LIMIT = 20
@@ -103,7 +105,37 @@ def search(
             "lane": str(page.get("lane") or ""),
             "snippet": _snippet(page, set(terms)),
             "score": round(score, 6),
+            "fetched_at": page.get("fetched_at"),
         })
 
-    candidates.sort(key=lambda item: (-item["score"], item["title"].casefold(), item["url"]))
+    if candidates:
+        max_lexical_score = max(item["score"] for item in candidates) or 1.0
+        evidence_pages = [
+            {
+                "url": item["url"],
+                "topic_key": phrase,
+                "relevance_score": item["score"] / max_lexical_score,
+                "fetched_at": item.get("fetched_at"),
+                "robots_allowed": True,
+            }
+            for item in candidates
+        ]
+        evidence_by_url = {
+            item["url"]: item for item in score_evidence_batch(evidence_pages)
+        }
+        for item in candidates:
+            evidence = evidence_by_url.get(item["url"])
+            if not evidence:
+                continue
+            item["intelligence_score"] = evidence["score"]
+            item["evidence_band"] = evidence["evidence_band"]
+            item["evidence_components"] = evidence["components"]
+            item["corroborating_hosts"] = evidence["corroborating_hosts"]
+
+    candidates.sort(key=lambda item: (
+        -item.get("intelligence_score", item["score"]),
+        -item["score"],
+        item["title"].casefold(),
+        item["url"],
+    ))
     return candidates[:safe_limit]

@@ -5,11 +5,13 @@ on:
     branches: [main]
     paths:
       - "engine/**"
+      - "crawler/**"
       - ".github/workflows/independent-search-tests.yml"
   push:
     branches: [main]
     paths:
       - "engine/**"
+      - "crawler/**"
       - "public-search/**"
       - "supabase/functions/everything-hub-web-search/static-search.mjs"
       - "supabase/functions/everything-hub-web-search/static-search.test.mjs"
@@ -37,9 +39,13 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Run independent search unit tests
+      - name: Run independent search and intelligence unit tests
         working-directory: engine
         run: python -m unittest -v test_search_core test_catalog_search test_intelligence_core
+
+      - name: Validate public catalog timestamp compaction
+        working-directory: crawler
+        run: python -m unittest -v test_build_search_shards
 
       - name: Search the committed public catalog with the Python core
         working-directory: engine

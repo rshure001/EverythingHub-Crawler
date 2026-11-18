@@ -1,7 +1,7 @@
 import unittest
 from datetime import datetime, timezone
 
-from intelligence_core import score_evidence, rank_evidence, learn_weights
+from intelligence_core import score_evidence, score_evidence_batch, rank_evidence, learn_weights
 
 NOW = datetime(2026, 11, 18, tzinfo=timezone.utc)
 
@@ -49,6 +49,14 @@ class IntelligenceCoreTests(unittest.TestCase):
         ranked = rank_evidence(self.pages + [self.pages[0]], now=NOW)
         self.assertEqual(len(ranked), 3)
         self.assertEqual(ranked, rank_evidence(self.pages, now=NOW))
+
+    def test_batch_scoring_matches_individual_scores(self):
+        batch = score_evidence_batch(self.pages, now=NOW)
+        self.assertEqual(len(batch), len(self.pages))
+        for page, result in zip(self.pages, batch):
+            individual = score_evidence(page, self.pages, now=NOW)
+            self.assertAlmostEqual(result["score"], individual["score"], places=6)
+            self.assertEqual(result["corroborating_hosts"], individual["corroborating_hosts"])
 
     def test_learning_uses_only_explicit_valid_feedback(self):
         events = [

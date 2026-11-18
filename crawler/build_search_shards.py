@@ -39,13 +39,25 @@ def compact(doc):
     lane = doc.get("lane")
     if not isinstance(lane, str) or lane not in VALID_LANES:
         lane = classify_lane(url)
-    return {
+    compact_page = {
         "url": url,
         "title": str(doc.get("title", ""))[:500],
         "description": str(doc.get("description", ""))[:500],
         "text": str(doc.get("text", ""))[:1600],
         "lane": lane,
     }
+    # Preserve crawl timestamps for freshness scoring; omit malformed values.
+    fetched_at = doc.get("fetched_at")
+    if isinstance(fetched_at, (int, float)) and fetched_at > 0:
+        compact_page["fetched_at"] = int(fetched_at)
+    elif isinstance(fetched_at, str) and fetched_at.strip():
+        compact_page["fetched_at"] = fetched_at.strip()[:64]
+    published_at = doc.get("published_at")
+    if isinstance(published_at, (int, float)) and published_at > 0:
+        compact_page["published_at"] = int(published_at)
+    elif isinstance(published_at, str) and published_at.strip():
+        compact_page["published_at"] = published_at.strip()[:64]
+    return compact_page
 
 
 def encode_batch(items):

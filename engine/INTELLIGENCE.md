@@ -15,8 +15,16 @@ and improve ranking from explicit feedback.
 - **Connect:** groups records by caller-supplied `topic_key` and rewards
   corroboration from distinct hostnames with diminishing returns. Corroboration
   increases evidence; it does not establish truth.
-- **Score:** returns a 0–1 score, confidence band, component breakdown, and
+- **Score:** returns a 0–1 score, evidence band, component breakdown, and
   exact weight set for every eligible result.
+- **Search integration:** the independent Python search core now applies the
+  evidence score as a secondary ranking signal while retaining lexical
+  relevance as a tie-breaker. Public catalog shards preserve crawler fetch and
+  publication timestamps so freshness can be measured. Older catalog records
+  without timestamps receive a conservative unknown-age value.
+- **Corroboration scope:** the current offline search adapter uses the active
+  search phrase as its temporary topic key. It only counts distinct hostnames
+  among pages matching that query; it does not claim semantic entity resolution.
 - **Learn:** `learn_weights` accepts only explicit `helpful`,
   `not_helpful`, `verified`, and `disputed` feedback with a complete
   feature snapshot. Updates are bounded, normalized, deterministic, and never
