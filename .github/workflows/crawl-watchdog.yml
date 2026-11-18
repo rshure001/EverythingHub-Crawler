@@ -12,10 +12,6 @@ on:
   workflow_run:
     workflows:
       - "Everything Hub crawler"
-      - "Everything Hub live diagnostics"
-      - "Validate Everything Hub crawler and schema"
-      - "EverythingHub isolated importer smoke test"
-      - "EverythingHub search API smoke test"
     types:
       - completed
     branches: [main]
