@@ -442,6 +442,19 @@ class CrawlerTests(unittest.TestCase):
             headers = {"Retry-After": "120"}
         self.assertEqual(crawl.retry_after_seconds(FakeError(), 30), 120.0)
 
+    def test_retry_after_seconds_parses_http_date_and_clamps_past_dates(self):
+        class FutureError:
+            headers = {"Retry-After": "Tue, 17 Nov 2026 12:01:30 GMT"}
+
+        class PastError:
+            headers = {"Retry-After": "Tue, 17 Nov 2026 11:59:30 GMT"}
+
+        fixed_now = crawl.datetime(2026, 11, 17, 12, 0, 0, tzinfo=crawl.timezone.utc)
+        with mock.patch.object(crawl, "datetime") as datetime_mock:
+            datetime_mock.now.return_value = fixed_now
+            self.assertEqual(crawl.retry_after_seconds(FutureError(), 30), 90.0)
+            self.assertEqual(crawl.retry_after_seconds(PastError(), 30), 0.0)
+
     def test_retry_after_seconds_uses_default_for_invalid_header(self):
         class FakeError:
             headers = {"Retry-After": "later"}
