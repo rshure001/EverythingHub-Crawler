@@ -143,14 +143,22 @@ class ScheduleWatchdogTests(unittest.TestCase):
         self.assertEqual(result["action"], "healthy")
         self.assertEqual(result["manifest_age_seconds"], 300)
 
-    def test_future_manifest_timestamp_is_clamped_to_zero(self):
+    def test_manifest_timestamp_within_clock_skew_tolerance_is_clamped_to_zero(self):
         result = evaluate(
             [{"status": "completed", "conclusion": "success", "created_at": "2026-11-16T15:50:00Z"}],
             now=NOW,
-            manifest_updated_at="2026-11-16T16:05:00Z",
+            manifest_updated_at="2026-11-16T16:00:30Z",
         )
         self.assertEqual(result["action"], "healthy")
         self.assertEqual(result["manifest_age_seconds"], 0)
+
+    def test_future_manifest_timestamp_beyond_clock_skew_tolerance_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "too far in the future"):
+            evaluate(
+                [{"status": "completed", "conclusion": "success", "created_at": "2026-11-16T15:50:00Z"}],
+                now=NOW,
+                manifest_updated_at="2026-11-16T16:05:00Z",
+            )
 
     def test_invalid_manifest_timestamp_is_rejected(self):
         with self.assertRaises(ValueError):
