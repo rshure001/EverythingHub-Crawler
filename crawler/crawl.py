@@ -241,9 +241,20 @@ class PageParser(HTMLParser):
             self.text.append(data.strip())
 
 def clean(url):
-    p = urllib.parse.urlsplit(url)
-    if p.scheme not in ("http", "https") or not p.netloc:
+    try:
+        p = urllib.parse.urlsplit(url)
+        hostname = p.hostname
+    except (TypeError, ValueError):
         return None
+    if (
+        p.scheme not in ("http", "https")
+        or not p.netloc
+        or not hostname
+        or p.username is not None
+        or p.password is not None
+    ):
+        return None
+    # Never retain userinfo in crawler URLs; public search links must not carry credentials.
     # Remove fragments and common tracking parameters; retain meaningful query parameters.
     query = urllib.parse.parse_qsl(p.query, keep_blank_values=True)
     query = [(k, v) for k, v in query if not k.lower().startswith("utm_")

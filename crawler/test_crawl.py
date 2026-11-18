@@ -87,9 +87,12 @@ class CrawlerTests(unittest.TestCase):
             "https://example.com/a?id=7",
         )
 
-    def test_clean_rejects_non_web_urls(self):
+    def test_clean_rejects_non_web_and_credential_bearing_urls(self):
         self.assertIsNone(crawl.clean("javascript:alert(1)"))
         self.assertIsNone(crawl.clean("mailto:test@example.com"))
+        self.assertIsNone(crawl.clean("https://user:secret@example.com/private"))
+        self.assertIsNone(crawl.clean("https://@example.com/private"))
+        self.assertIsNone(crawl.clean("https://[invalid-ipv6"))
 
     def test_parser_extracts_title_description_text_and_links(self):
         parser = crawl.PageParser()

@@ -18,6 +18,22 @@ MAX_CATALOG_UNCOMPRESSED_BYTES = 25_000_000
 CATALOG_NAME = "catalog-v1.json.gz"
 
 
+def is_safe_public_url(value: object) -> bool:
+    """Accept only HTTP(S) source URLs without userinfo or malformed hosts."""
+    if not isinstance(value, str):
+        return False
+    try:
+        parsed = urlsplit(value)
+        return (
+            parsed.scheme in ("http", "https")
+            and bool(parsed.hostname)
+            and parsed.username is None
+            and parsed.password is None
+        )
+    except ValueError:
+        return False
+
+
 def validate(root: Path = ROOT) -> list[str]:
     errors: list[str] = []
     source_path = root / "data" / "index.json"
@@ -57,8 +73,7 @@ def validate(root: Path = ROOT) -> list[str]:
         for page in source_pages
         if isinstance(page, dict)
         and page.get("robots_allowed") is not False
-        and isinstance(page.get("url"), str)
-        and page["url"].startswith(("http://", "https://"))
+        and is_safe_public_url(page.get("url"))
     }
 
     seen_urls: set[str] = set()
@@ -132,9 +147,8 @@ def validate(root: Path = ROOT) -> list[str]:
             if not isinstance(url, str):
                 errors.append(f"missing URL in {name}")
                 continue
-            parsed = urlsplit(url)
-            if parsed.scheme not in ("http", "https") or not parsed.hostname:
-                errors.append(f"non-public-web URL in {name}: {url[:160]}")
+            if not is_safe_public_url(url):
+                errors.append(f"non-public-web URL or credential-bearing URL in {name}: {url[:160]}")
                 continue
             lane = page.get("lane")
             if not isinstance(lane, str) or lane not in VALID_LANES:
