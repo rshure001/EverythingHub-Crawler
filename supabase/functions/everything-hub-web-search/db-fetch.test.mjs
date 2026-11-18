@@ -65,3 +65,67 @@ test("does not classify a missing search RPC as a transport outage", () => {
     message: "Could not find the function eh_search_pages",
   }), false);
 });
+
+test("opens a short circuit after a database 503 and skips repeated probes", async () => {
+  let calls = 0;
+  const timedFetch = createTimedFetch(async () => {
+    calls += 1;
+    return new Response("database recovering", { status: 503 });
+  }, 1000, 1000);
+
+  const response = await timedFetch("https://database.example.test");
+  assert.equal(response.status, 503);
+  await assert.rejects(
+    timedFetch("https://database.example.test"),
+    /Database circuit open/,
+  );
+  assert.equal(calls, 1);
+  assert.equal(isTransientDatabaseError(new Error("Database circuit open after recent transient failure")), true);
+});
+
+test("opens the circuit after a transient transport failure", async () => {
+  let calls = 0;
+  const timedFetch = createTimedFetch(async () => {
+    calls += 1;
+    throw new Error("fetch failed");
+  }, 1000, 1000);
+
+  await assert.rejects(timedFetch("https://database.example.test"), /fetch failed/);
+  await assert.rejects(timedFetch("https://database.example.test"), /Database circuit open/);
+  assert.equal(calls, 1);
+});
+
+test("allows a half-open probe after cooldown and closes after a successful response", async () => {
+  let calls = 0;
+  const timedFetch = createTimedFetch(async () => {
+    calls += 1;
+    return calls === 1
+      ? new Response("database recovering", { status: 503 })
+      : new Response("ok", { status: 200 });
+  }, 1000, 10);
+
+  assert.equal((await timedFetch("https://database.example.test")).status, 503);
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(await (await timedFetch("https://database.example.test")).text(), "ok");
+  assert.equal(await (await timedFetch("https://database.example.test")).text(), "ok");
+  assert.equal(calls, 3);
+});
+
+test("does not open the circuit for a non-transient client response", async () => {
+  let calls = 0;
+  const timedFetch = createTimedFetch(async () => {
+    calls += 1;
+    return new Response("not found", { status: 404 });
+  }, 1000, 1000);
+
+  assert.equal((await timedFetch("https://database.example.test")).status, 404);
+  assert.equal((await timedFetch("https://database.example.test")).status, 404);
+  assert.equal(calls, 2);
+});
+
+test("validates circuit cooldown configuration", () => {
+  assert.throws(
+    () => createTimedFetch(fetch, 1000, -1),
+    /cooldownMs must be a non-negative safe integer/,
+  );
+});
