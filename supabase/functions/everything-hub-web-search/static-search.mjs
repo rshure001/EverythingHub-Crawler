@@ -1,6 +1,7 @@
 const FIELD_WEIGHTS = { title: 4, url: 2.2, description: 1.7, text: 1 };
 const MAX_QUERY_CHARS = 240;
 const MAX_TERMS = 12;
+const TRACKING_PARAMS = new Set(["fbclid", "gclid", "mc_cid", "mc_eid"]);
 
 function normalize(value) {
   return String(value ?? "").normalize("NFKC").toLowerCase();
@@ -14,6 +15,35 @@ function occurrences(tokens, term) {
   let count = 0;
   for (const token of tokens) if (token === term) count += 1;
   return count;
+}
+
+function canonicalHttpUrl(value) {
+  let parsed;
+  try {
+    parsed = new URL(String(value ?? "").trim());
+  } catch {
+    return null;
+  }
+
+  if (
+    (parsed.protocol !== "http:" && parsed.protocol !== "https:") ||
+    !parsed.hostname ||
+    parsed.username ||
+    parsed.password
+  ) {
+    return null;
+  }
+
+  // Match the crawler's URL cleanup: discard fragments and common tracking
+  // parameters, while preserving meaningful query parameters.
+  parsed.hash = "";
+  for (const key of [...parsed.searchParams.keys()]) {
+    const normalizedKey = key.toLowerCase();
+    if (normalizedKey.startsWith("utm_") || TRACKING_PARAMS.has(normalizedKey)) {
+      parsed.searchParams.delete(key);
+    }
+  }
+  return parsed;
 }
 
 function snippetFor(page, terms, maxChars = 320) {
@@ -42,20 +72,12 @@ export function searchStaticPages(pages, query, lane = null, limit = 10, offset 
 
   const laneFilter = lane ? String(lane).toLowerCase() : null;
   const phrase = terms.join(" ");
-  const matches = [];
-  const seen = new Set();
+  const matchesByUrl = new Map();
 
   for (const page of pages) {
     if (!page || typeof page !== "object" || page.robots_allowed === false) continue;
-    const url = String(page.url ?? "").trim();
-    let parsed;
-    try {
-      parsed = new URL(url);
-      if (parsed.protocol !== "http:" && parsed.protocol !== "https:") continue;
-      if (!parsed.hostname || seen.has(parsed.href)) continue;
-    } catch {
-      continue;
-    }
+    const parsed = canonicalHttpUrl(page.url);
+    if (!parsed) continue;
 
     const pageLane = typeof page.lane === "string" && page.lane ? page.lane : "general";
     if (laneFilter && pageLane.toLowerCase() !== laneFilter) continue;
@@ -89,20 +111,29 @@ export function searchStaticPages(pages, query, lane = null, limit = 10, offset 
     const urlPhrase = fields.url.join(" ");
     if (titlePhrase.includes(phrase)) score += 5;
     if (urlPhrase.includes(phrase)) score += 2;
+    if (score <= 0) continue;
 
-    seen.add(parsed.href);
-    matches.push({
+    const candidate = {
       score,
-      title: String(page.title || url).slice(0, 500),
+      title: String(page.title || parsed.href).slice(0, 500),
       url: parsed.href,
       hostname: parsed.hostname,
       description: String(page.description || "").slice(0, 500),
       text: String(page.text || ""),
       lane: pageLane,
       terms,
-    });
+    };
+
+    // A non-matching duplicate must not hide a later matching record. If
+    // multiple indexed variants collapse to one canonical URL, retain the
+    // strongest match for this query.
+    const previous = matchesByUrl.get(parsed.href);
+    if (!previous || candidate.score > previous.score) {
+      matchesByUrl.set(parsed.href, candidate);
+    }
   }
 
+  const matches = [...matchesByUrl.values()];
   matches.sort((a, b) =>
     b.score - a.score ||
     a.title.localeCompare(b.title, "en", { sensitivity: "base" }) ||

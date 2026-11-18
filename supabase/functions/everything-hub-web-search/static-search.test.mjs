@@ -32,10 +32,11 @@ test("robots-denied records are excluded", () => {
   assert.equal(result.results.some((item) => item.url.includes("blocked.example")), false);
 });
 
-test("invalid schemes and malformed URLs are excluded", () => {
+test("invalid schemes, malformed URLs, and credential-bearing URLs are excluded", () => {
   const result = searchStaticPages([
     { url: "javascript:alert(1)", title: "Rolex" },
     { url: "not a URL", title: "Rolex" },
+    { url: "https://user:secret@example.com/rolex", title: "Rolex" },
   ], "Rolex");
   assert.equal(result.count, 0);
 });
@@ -43,6 +44,45 @@ test("invalid schemes and malformed URLs are excluded", () => {
 test("duplicate canonical URLs are removed", () => {
   const result = searchStaticPages([pages[0], { ...pages[0], title: "Rolex duplicate" }], "Rolex");
   assert.equal(result.count, 1);
+});
+
+test("tracking parameters, fragments, host case, and default ports canonicalize", () => {
+  const result = searchStaticPages([
+    {
+      url: "HTTPS://EXAMPLE.COM:443/rolex?utm_source=newsletter&ref=watch#details",
+      title: "Rolex Watch",
+      description: "Swiss watchmaking",
+      lane: "business",
+    },
+    {
+      url: "https://example.com/rolex?ref=watch",
+      title: "Rolex Rolex Watchmaking",
+      description: "Swiss watchmaking",
+      lane: "business",
+    },
+  ], "Rolex");
+  assert.equal(result.count, 1);
+  assert.equal(result.results[0].url, "https://example.com/rolex?ref=watch");
+  assert.equal(result.results[0].title, "Rolex Rolex Watchmaking");
+});
+
+test("a non-matching duplicate cannot hide a later matching record", () => {
+  const result = searchStaticPages([
+    {
+      url: "https://example.com/shared?utm_campaign=one",
+      title: "General information",
+      description: "A page about something else",
+      lane: "general",
+    },
+    {
+      url: "https://example.com/shared#section",
+      title: "Rolex service centers",
+      description: "Find a Rolex service center",
+      lane: "business",
+    },
+  ], "Rolex");
+  assert.equal(result.count, 1);
+  assert.equal(result.results[0].title, "Rolex service centers");
 });
 
 test("Unicode compatibility normalization works", () => {
