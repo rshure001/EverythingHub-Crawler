@@ -60,24 +60,55 @@ unauthenticated search endpoint.
 
 The deployed `everything-hub-web-search` version 20 and legacy `everything-hub-search` version 4 both explicitly select `eh_quad`. The web-search function calls `eh_search_pages` and uses the schema-qualified `eh_documents` fallback path; it also has database-independent fallbacks to the public crawler catalog and Bing RSS. The database RPC and authenticated Python search API both require `robots_allowed IS TRUE` in result and count queries, so soft-excluded documents cannot leak into result counts. The deployed function source is schema-scoped, but its database path and the production schema objects cannot currently be validated because PostgreSQL is rejecting connections with SQLSTATE `57P03`. Do not apply migrations or import data until database connections and schema inspection succeed.
 
-## Observed production deployment state (2026-11-17 12:35 UTC)
+## Observed production deployment state (2026-11-18 15:03 UTC)
 
-- Supabase Edge Function inspection shows `everything-hub-web-search` version **20** and legacy `everything-hub-search` version **4**. Both deployed sources explicitly use `.schema("eh_quad")`; the current web-search source also contains static public-crawler and independent Bing RSS fallbacks.
-- The separate Everything Hub crawler function is version **49** and its deployed source marks it `paused` while database storage recovery is in progress. Sitemap discovery version **7** is paused for the same reason. Their responses identify the recovery pause and state that existing queue and indexed data were preserved.
-- The database control plane reports `ACTIVE_HEALTHY`, but direct SQL and PostgREST connections are currently failing with PostgreSQL SQLSTATE `57P03`: “the database system is not accepting connections” / “Hot standby mode is disabled.” Table and migration listings therefore cannot be verified.
-- Recent Edge request logs show media discovery and independent search returning HTTP 200. The database-backed search RPC is timing out during the PostgreSQL outage; a successful web-search fallback response does not prove that the database path is healthy.
-- GitHub Pages publishing is permission-gated: `publish-site.yml` validates and uploads the release artifact, but skips deployment when the repository Pages endpoint returns 404. The workflow records that a previous `configure-pages` site-creation attempt was rejected with `Resource not accessible by integration`. The required capability is repository Pages site creation/administration permission for the GitHub Actions integration; no repository setting was changed.
-- The alternate Supabase static-publisher workflow requires the repository secret `SUPABASE_PUBLISHER_USER_JWT` containing a signed-in Supabase user token. The connected GitHub tools do not expose secret-presence metadata, so availability is unverified; no token value was requested or used.
-- The canonical homepage's separate public search path remains independent of the database-backed `eh_quad` search. No database migration, import, reset, or restore was attempted during this inspection.
+The dedicated Supabase project is `everything-hub-control` (PostgreSQL 17.11). The Supabase control plane reports `ACTIVE_HEALTHY`, but a read-only inventory query restricted to `information_schema.tables` with `table_schema = 'eh_quad'` still fails with PostgreSQL SQLSTATE `57P03`: “the database system is not accepting connections” / “Hot standby mode is disabled.” In the 13:58–14:58 UTC log window, 793 PostgreSQL log events were returned and 606 carried SQLSTATE `57P03`; the latest observed refusal was at 14:56:36 UTC. This is a database recovery/availability blocker, not proof that the schema is empty. Do not apply migrations, import production rows, reset, restore, or restart the project while direct SQL is unavailable.
 
-No migration or import has been run against Dog Tag Day; that separate project is not an Everything Hub target. The files alone do not publish or switch production traffic.
+### Deployed Edge Function registry
 
-## Latest repository snapshot and recovery status (2026-11-17 12:35 UTC)
+- `everything-hub-web-search`: version **26**, active. Its source explicitly targets `eh_quad` and retains the database-independent public-catalog and Bing RSS fallbacks. Current live smoke tests prove the static catalog and independent fallback paths; they do **not** prove the PostgreSQL search path is healthy.
+- `everything-hub-media-search`: version **22**, active.
+- `everything-hub-independent-search`: version **3**, active.
+- `everything-hub-crawler`: version **49**, registered active but its deployed handler intentionally returns HTTP 503 with status `paused` while database storage recovery is in progress.
+- `everything-hub-sitemap-discovery`: version **7**, registered active but its deployed handler intentionally returns HTTP 503 with status `paused`.
+- `everything-hub-site`: version **54**, active.
+- `everything-hub-browser`: version **11**, active.
 
-The public crawler catalog was last refreshed by commit `c18fecb` (2026-11-17 12:17:18 UTC). The current `main` branch also includes the `3086f3d` Node timeout-test hardening and subsequent operational documentation updates. The catalog remains at **3,667 pages across 20 SHA-256-listed shards**, with a **1,153,757-byte** compressed catalog. These are public repository catalog counts, not production database row counts.
+The paused crawler and sitemap handlers explicitly state that existing queue/index data are preserved. The production database-native worker in GitHub is not enabled against production.
 
-Local validation on Node 22.16.0 passed **19/19** tests across robots policy (7), database timeout/error classification (5), and static search ranking/pagination/robots filtering (7). The timeout test now keeps the Node process alive until `AbortSignal.timeout()` fires, avoiding a false cancellation by `node --test`.
+### Latest public crawler snapshot (2026-11-18 15:02 UTC)
 
-Production `eh_quad` remains unverified because the dedicated `everything-hub-control` PostgreSQL service is rejecting connections with SQLSTATE `57P03` and detail “Hot standby mode is disabled.” `list_tables` and `list_migrations` cannot complete while the database is unavailable. Do not apply `002_eh_quad_schema.sql`, run the importer, or attempt project reset/restore until direct database reads succeed.
+Crawler run **#142** completed successfully at 15:01 UTC after the watchdog detected a stale run and dispatched one recovery crawl. The new catalog was committed to `main` as `b12ea28`; the manifest timestamp is 15:01:01 UTC.
 
-The public GitHub crawler remains separately scheduled hourly and has published the latest catalog snapshot. The Supabase database-backed crawler and sitemap-discovery Edge Functions are paused; their deployed responses explicitly state that existing queue and index data were preserved. Dog Tag Day Story Wall remains in its separate Supabase project and is not a migration or import target.
+- Public catalog: **8,761 pages across 49 SHA-256-verified shards**.
+- Compressed catalog: **3,868,575 bytes**.
+- Discovered URLs: **38,324**; frontier waiting: **20,030**.
+- Run #142: 41 fetch attempts; 33 successful HTTP responses; 30 HTML pages parsed; 3 non-HTML responses; 8 fetch/parse errors.
+- Indexed this run: **26**; not indexed: 15; robots-blocked: 1; noindex excluded: 4; nofollow not expanded: 0.
+- Robots-policy retrieval failures: 2, handled fail-closed.
+- Rate-limited responses: 1; the crawler honored the returned policy/backoff.
+- Sitemap discovery: 3 hosts and 3 files checked; 0 additional URLs.
+- Duration: 13.97 seconds; measured indexing rate: 111.7 pages/minute.
+
+The worker rejected cross-origin redirects, skipped oversized/non-HTML resources within its configured limits, and preserved the frontier for later work. These are public repository catalog metrics, not production `eh_quad` row counts.
+
+### Live search, media, and homepage verification
+
+- Search smoke test **#49** passed against the new catalog: **1,969 NASA matches**, **1,946 science-lane matches**, and **10 Rolex results** from the independent Bing RSS fallback.
+- Media smoke test **#15, attempt 2** passed on 2026-11-18 15:02 UTC: **21 image results** and **2 video results**. Wikimedia Commons results included source pages, creators, license URLs, credit/attribution fields and usage notes. The sampled image license was CC BY-SA 3.0 with attribution required; the sampled Apollo 11 video was marked public domain. Bing media results remain discovery links only and are not treated as reuse permission.
+- Live diagnostics **#68, attempt 2** passed on 2026-11-18 15:02 UTC: canonical Vercel homepage HTTP 200, eight category tiles, exactly one search form inside the approved artwork, artwork served as PNG, and the custom browser endpoint HTTP 200 with navigation controls. The web-search endpoint returned the public crawler fallback and independent Bing fallback; database-backed search remained unavailable. Image/video checks again returned 21/2.
+- `https://everythinghub.ink` remained unreachable during the 12-second diagnostic. The verified homepage target remains `https://everythinghub-homepage-fixed.vercel.app/`.
+
+### Isolated database validation
+
+The latest successful isolated importer run before crawler #142 was **#154**. It processed the then-current **8,736-record** snapshot in a temporary PostgreSQL database using `eh_quad`: 8,736 expected and imported, 0 skipped, 0 robots-denied stored rows, and 0 invalid lane rows. The same run's isolated database-native crawler integration processed 5 queue items, indexed 2 fixture pages, and reported 0 failures; it verified robots denial, noindex handling, same-host queueing, cross-origin redirect rejection, media references, stale-claim lease recovery, run accounting, schema locking, authenticated search, lane filtering and pagination.
+
+That import predates the current 8,761-page snapshot. The 8,761-record snapshot has passed public catalog validation and live search smoke testing, but a fresh isolated importer run against that exact snapshot is still pending. None of these temporary PostgreSQL tests are production imports.
+
+### Publishing and scheduling status
+
+Publisher run **#66** successfully validated and uploaded a **7,770,151-byte** GitHub Pages artifact (artifact ID `14439272914`, SHA-256 `ed0b48c6e62b2699dfafa6b8b884bf4cf39fe95d858796e34f1f4782bdca559a`). The Pages site lookup returned HTTP 404; a previous site-creation attempt was rejected with `Resource not accessible by integration`. The workflow already declares `pages: write` and `id-token: write`; the remaining blocker is repository Pages site creation/administration access for the GitHub Actions integration. The validated artifact is retained and the deploy job is skipped. No repository settings were changed.
+
+Scheduled GitHub Actions delivery is inconsistent. In the latest 100 workflow runs inspected, only three `schedule` events appeared; the most recent was at 11:30 UTC, with no later scheduled event visible through 14:58 UTC. Re-running watchdog job #169 at 15:00 UTC caused it to detect a 3,373-second-old crawler attempt and dispatch run #142, which then completed successfully. The recovery logic works; normal scheduled-event delivery remains an operational risk.
+
+No production migration, import, reset, restore, or write was attempted. The separate Dog Tag Day Story Wall Supabase project was not queried for this work and remains outside the Everything Hub target. The files and isolated tests do not publish or switch production traffic.
