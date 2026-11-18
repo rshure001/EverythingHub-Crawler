@@ -51,5 +51,15 @@ class MediaDiscoveryComplianceTests(unittest.TestCase):
         self.assertIn("loadHomepageMedia('video','Apollo 11 NASA','homeLiveVideos')", homepage)
 
 
+    def test_bing_and_commons_are_queried_independently_and_merged(self):
+        source = SOURCE.read_text(encoding="utf-8")
+        self.assertIn('import { mergeMediaResults, mediaProviderLabel } from "./merge-results.mjs";', source)
+        self.assertIn("Promise.allSettled([", source)
+        self.assertIn("bing(query, type)", source)
+        self.assertIn("commons(query, type)", source)
+        self.assertIn("mergeMediaResults(bingResults, commonsResults)", source)
+        self.assertIn("mediaProviderLabel(results, type)", source)
+
+
 if __name__ == "__main__":
     unittest.main()

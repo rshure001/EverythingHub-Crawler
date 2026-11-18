@@ -5,6 +5,8 @@ on:
     paths:
       - ".github/workflows/media-discovery-smoke.yml"
       - "supabase/functions/everything-hub-media-search/index.ts"
+      - "supabase/functions/everything-hub-media-search/merge-results.mjs"
+      - "supabase/functions/everything-hub-media-search/merge-results.test.mjs"
       - "database/test_media_discovery.py"
   schedule:
     - cron: "41 */6 * * *"
@@ -48,8 +50,15 @@ jobs:
             if (!d.results.length) {
               throw new Error(type + ": no discoverable media returned; provider=" + (d.provider || "unknown") + "; warning=" + (d.warning || "none"));
             }
-            if (!["Wikimedia Commons", "Bing Images", "Bing Videos"].includes(d.provider)) {
-              throw new Error(type + ": unexpected provider " + d.provider);
+            const allowedSources = new Set(["Wikimedia Commons", type === "images" ? "Bing Images" : "Bing Videos"]);
+            const sources = new Set(d.results.map(item => item.source));
+            if (!sources.size || [...sources].some(source => !allowedSources.has(source))) {
+              throw new Error(type + ": unexpected media sources " + [...sources].join(", "));
+            }
+            const expectedProvider = ["Wikimedia Commons", type === "images" ? "Bing Images" : "Bing Videos"]
+              .filter(source => sources.has(source)).join(" + ");
+            if (d.provider !== expectedProvider) {
+              throw new Error(type + ": provider label does not match returned sources: " + d.provider);
             }
             for (const [index, item] of d.results.entries()) {
               if (!item.source || !item.usageRights || !item.pageUrl?.startsWith("https://")) {
@@ -58,7 +67,7 @@ jobs:
               if (type === "images" && !item.imageUrl?.startsWith("https://")) {
                 throw new Error("images: result " + index + " lacks an HTTPS image URL");
               }
-              if (d.provider === "Wikimedia Commons") {
+              if (item.source === "Wikimedia Commons") {
                 for (const field of ["license", "licenseUrl", "creator", "credit", "attributionRequired"]) {
                   if (!(field in item)) throw new Error(type + ": Commons result " + index + " missing " + field);
                 }
