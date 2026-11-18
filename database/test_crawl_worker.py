@@ -117,11 +117,11 @@ class EhQuadCrawlerSafetyTests(unittest.TestCase):
 
     def test_safe_opener_disables_environment_proxies(self):
         opener = WORKER.build_safe_opener(lambda _target: True)
-        proxy = next(
-            handler for handler in opener.handlers
-            if isinstance(handler, urllib.request.ProxyHandler)
-        )
-        self.assertEqual(proxy.proxies, {})
+        # An empty ProxyHandler tells build_opener to suppress its default
+        # environment-derived proxy handler; the empty handler itself is omitted.
+        self.assertFalse(any(
+            isinstance(handler, urllib.request.ProxyHandler) for handler in opener.handlers
+        ))
         self.assertTrue(any(
             isinstance(handler, WORKER.PinnedHTTPHandler) for handler in opener.handlers
         ))
