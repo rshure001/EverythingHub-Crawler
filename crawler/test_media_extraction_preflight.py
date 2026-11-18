@@ -124,6 +124,7 @@ class MediaExtractionPreflightTests(unittest.TestCase):
         )
         self.assertEqual(duplicate_result["deferred_by_reason"]["ambiguous_source_terms_reviews"], 1)
         self.assertEqual(duplicate_result["registry_reviews"]["duplicate_origins"], 1)
+        self.assertEqual(duplicate_result["registry_reviews"]["valid_approvals"], 0)
 
     def test_registry_origin_must_be_a_bare_origin(self):
         for origin in ("https://media.example.org/path", "https://media.example.org?x=1"):
