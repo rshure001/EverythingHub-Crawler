@@ -96,6 +96,8 @@ jobs:
           shutil.copyfile(manifest_path, target / 'manifest.json')
           print(json.dumps({'status':'validated-and-staged','pages':total,'shards':len(shards),'unique_urls':len(seen),'catalog_gzip_bytes':len(catalog_raw),'integrity':'sha256'}, indent=2))
           PY
+      - name: Write machine-readable crawler release health
+        run: python publisher/release_health.py --manifest public-search/manifest.json --output site/search-index/health.json
       - name: Upload validated release artifact
         uses: actions/upload-pages-artifact@v3
         with:
@@ -168,6 +170,16 @@ jobs:
           if html.count('data-mode=') != 8 or 'everythinghub-approved.png' not in html:
               raise SystemExit('Published homepage is missing one or more approved search categories or artwork')
           manifest = json.loads(get('search-index/manifest.json'))
+          health = json.loads(get('search-index/health.json'))
+          expected_catalog = manifest.get('catalog_gzip')
+          if (
+              health.get('schema') != 1
+              or health.get('source_updated_at') != manifest.get('updated_at')
+              or health.get('total_pages') != manifest.get('total_pages')
+              or health.get('shard_count') != manifest.get('shard_count')
+              or health.get('catalog_gzip') != expected_catalog
+          ):
+              raise SystemExit('Published crawler health file does not match the catalog manifest')
           shards = manifest.get('shards')
           if manifest.get('integrity') != 'sha256' or not isinstance(shards, list) or len(shards) != int(manifest.get('shard_count', -1)):
               raise SystemExit('Published search manifest is invalid')
