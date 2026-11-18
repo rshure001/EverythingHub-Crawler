@@ -5,7 +5,7 @@ on:
     branches: [main]
     paths:
       - "engine/**"
-      - "public-search/catalog-v1.json.gz"
+      - "public-search/**"
       - ".github/workflows/independent-search-tests.yml"
   workflow_dispatch:
 
@@ -38,3 +38,12 @@ jobs:
         run: |
           python catalog_search.py "NASA" --limit 5
           python catalog_search.py "Rolex" --limit 5
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Test browser search client
+        working-directory: public-search
+        run: node test-search.js
