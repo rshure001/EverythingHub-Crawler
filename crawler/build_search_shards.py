@@ -4,6 +4,7 @@ import gzip
 import hashlib
 import json
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from lane_classifier import VALID_LANES, classify_lane
 
@@ -15,11 +16,22 @@ CATALOG_NAME = "catalog-v1.json.gz"
 
 
 def is_publishable(doc):
-    """Exclude explicitly robots-disallowed records from public search shards."""
+    """Exclude robots-denied, malformed, and credential-bearing URLs from public search."""
     if not isinstance(doc, dict) or doc.get("robots_allowed") is False:
         return False
     url = doc.get("url")
-    return isinstance(url, str) and url.startswith(("http://", "https://"))
+    if not isinstance(url, str):
+        return False
+    try:
+        parsed = urlsplit(url)
+        return (
+            parsed.scheme in ("http", "https")
+            and bool(parsed.hostname)
+            and parsed.username is None
+            and parsed.password is None
+        )
+    except ValueError:
+        return False
 
 
 def compact(doc):
