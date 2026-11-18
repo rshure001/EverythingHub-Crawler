@@ -8,7 +8,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from lane_classifier import VALID_LANES, classify_lane
-from crawl import is_access_challenge_page
+from crawl import is_access_challenge_page, parse_published_at
 
 ROOT = Path(__file__).resolve().parents[1]
 INDEX = ROOT / "data" / "index.json"
@@ -18,10 +18,19 @@ def load(path):
     with path.open(encoding="utf-8") as handle:
         return json.load(handle)
 
+def publication_date_coverage(pages):
+    """Return the count and percentage of records with parseable publication dates."""
+    total = len(pages)
+    dated = sum(bool(parse_published_at(page.get("published_at"))) for page in pages)
+    percentage = (dated / total * 100) if total else 0.0
+    return dated, percentage
+
+
 def main():
     index = load(INDEX)
     frontier = load(FRONTIER)
     pages = [p for p in index.get("pages", []) if isinstance(p, dict) and p.get("url")]
+    publication_dates, publication_date_percent = publication_date_coverage(pages)
     hosts = Counter(urlsplit(p["url"]).netloc.lower() for p in pages)
     depths = Counter(str(p.get("depth", "unknown")) for p in pages)
     lanes = Counter(
@@ -62,6 +71,7 @@ def main():
         f"- Source commit: `{commit_sha}`",
         "",
         f"- Total indexed page records: **{len(pages):,}**",
+        f"- Records with valid publication dates: **{publication_dates:,} ({publication_date_percent:.1f}%)**",
         f"- Unique indexed hosts: **{len(hosts):,}**",
         f"- URLs discovered (frontier seen): **{len(frontier.get('seen', [])):,}**",
         f"- URLs waiting in frontier: **{len(frontier.get('queue', [])):,}**",
