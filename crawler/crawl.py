@@ -708,10 +708,15 @@ def merge_index_records(existing_pages, new_records, noindex_urls=()):
         lane = page.get("lane")
         if not isinstance(lane, str) or lane not in VALID_LANES:
             page["lane"] = classify_lane(page.get("url", ""))
-    merged.update({
-        url: page for url, page in new_records.items()
-        if url not in blocked
-    })
+    for url, page in new_records.items():
+        if url in blocked:
+            continue
+        previous = merged.get(url, {})
+        if not page.get("published_at") and previous.get("published_at"):
+            # Preserve previously captured publication metadata when a source
+            # temporarily omits its date tag on a later crawl.
+            page["published_at"] = previous["published_at"]
+        merged[url] = page
     return merged
 
 
