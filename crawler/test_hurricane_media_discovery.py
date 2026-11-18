@@ -78,8 +78,9 @@ class MediaDiscoveryTests(unittest.TestCase):
         self.assertEqual(merged[0]["rights_status"], "unknown")
         self.assertEqual(merged[0]["usage_rights"], "Unknown")
         self.assertEqual(merged[0]["policy_status"], "robots_allowed_not_fetched")
+        self.assertEqual(merged[0]["robots_checked_at"], 100)
 
-    def test_merge_deduplicates_and_keeps_prior_candidates(self):
+    def test_merge_deduplicates_and_refreshes_robots_decision_timestamp(self):
         first = {
             "media_type": "image", "url": "https://media.example.org/image.jpg",
             "source_page_url": "https://media.example.org/one",
@@ -96,6 +97,21 @@ class MediaDiscoveryTests(unittest.TestCase):
             "https://media.example.org/one", "https://media.example.org/two"
         ])
         self.assertEqual(merged[0]["last_seen_at"], 200)
+        self.assertEqual(merged[0]["robots_checked_at"], 200)
+        self.assertEqual(merged[0]["robots_checked_at"], 200)
+
+    def test_legacy_candidate_gets_fresh_timestamp_when_rediscovered(self):
+        legacy = {
+            "media_type": "image", "url": "https://media.example.org/image.jpg",
+            "source_page_url": "https://media.example.org/one",
+            "robots_allowed": True, "last_seen_at": 50,
+            "source_pages": ["https://media.example.org/one"],
+        }
+        incoming = {**legacy, "source_page_url": "https://media.example.org/two"}
+        merged, added = merge_media_candidates([legacy], [incoming], now=300)
+        self.assertEqual(added, 0)
+        self.assertEqual(merged[0]["robots_checked_at"], 300)
+        self.assertEqual(merged[0]["last_seen_at"], 300)
 
 
 if __name__ == "__main__":
