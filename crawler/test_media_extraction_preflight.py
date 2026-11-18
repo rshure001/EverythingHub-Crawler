@@ -70,7 +70,10 @@ class MediaExtractionPreflightTests(unittest.TestCase):
         old = int((NOW - timedelta(hours=25)).timestamp())
         future = int((NOW + timedelta(minutes=5)).timestamp())
         result = evaluate_preflight(
-            catalog(candidate(robots_checked_at=old), candidate(robots_checked_at=future)),
+            catalog(
+                candidate(robots_checked_at=old),
+                candidate(robots_checked_at=future, last_seen_at=future),
+            ),
             registry(review()), now=NOW,
         )
         self.assertEqual(result["deferred_by_reason"]["stale_robots_check"], 1)
@@ -95,9 +98,18 @@ class MediaExtractionPreflightTests(unittest.TestCase):
         self.assertEqual(result["deferred_by_reason"]["unsafe_or_cross_origin_url"], 1)
 
     def test_stale_future_and_naive_terms_reviews_are_rejected(self):
-        stale = review(source_terms_checked_at=(NOW - timedelta(days=91)).isoformat())
-        future = review(source_terms_checked_at=(NOW + timedelta(days=1)).isoformat())
-        naive = review(source_terms_checked_at="2026-11-18T21:55:00")
+        stale = review(
+            origin="https://stale.example.org",
+            source_terms_checked_at=(NOW - timedelta(days=91)).isoformat(),
+        )
+        future = review(
+            origin="https://future.example.org",
+            source_terms_checked_at=(NOW + timedelta(days=1)).isoformat(),
+        )
+        naive = review(
+            origin="https://naive.example.org",
+            source_terms_checked_at="2026-11-18T21:55:00",
+        )
         result = evaluate_preflight(catalog(candidate()), registry(stale, future, naive), now=NOW)
         self.assertEqual(result["eligible_for_extraction_preflight"], 0)
         self.assertEqual(result["registry_reviews"]["invalid_reviews"], 3)
