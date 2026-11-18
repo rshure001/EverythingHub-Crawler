@@ -101,5 +101,6 @@ def attach_extractions(asset: Mapping[str, Any],
     for field, values in grouped.items():
         existing = _text(merged.get(field), MAX_RESULT_TEXT)
         merged[field] = _text(" ".join([existing, *values]), MAX_RESULT_TEXT)
-    merged["extraction_provenance"] = provenance[-MAX_SEGMENTS:]
-    return normalize_asset(merged)
+    result = normalize_asset(merged)
+    result["extraction_provenance"] = provenance[-MAX_SEGMENTS:]
+    return result
