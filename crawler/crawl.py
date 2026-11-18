@@ -53,6 +53,8 @@ PUBLISHED_DATE_META_PRIORITY = {
     "sailthru.date": 1,
     "pubdate": 2,
     "publishdate": 2,
+    "publish_date": 2,
+    "pub_date": 2,
     "date": 3,
 }
 
@@ -304,6 +306,11 @@ class PageParser(HTMLParser):
                 ):
                     self.published_at = candidate
                     self._published_at_priority = priority
+        if tag == "time" and a.get("itemprop", "").strip().lower() == "datepublished":
+            candidate = parse_published_at(a.get("datetime"))
+            if candidate and self._published_at_priority is None:
+                self.published_at = candidate
+                self._published_at_priority = PUBLISHED_DATE_META_PRIORITY["datepublished"]
         if tag == "a" and a.get("href"):
             rel = {item.lower() for item in a.get("rel", "").split()}
             if "nofollow" not in rel:
