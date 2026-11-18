@@ -13,6 +13,7 @@ on:
     - cron: "*/5 * * * *"
   workflow_dispatch:
 permissions:
+  actions: write
   contents: write
 concurrency:
   group: everythinghub-crawler
@@ -81,3 +82,12 @@ jobs:
               exit 1
             fi
           done
+      - name: Dispatch catalog publishing and search verification
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh workflow run publish-site.yml --ref main
+          echo "Dispatched the validated catalog publisher."
+          gh workflow run search-api-smoke.yml --ref main
+          echo "Dispatched the live search API smoke test."

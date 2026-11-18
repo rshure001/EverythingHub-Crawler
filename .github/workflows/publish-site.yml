@@ -8,11 +8,6 @@ on:
       - "site/**"
       - "public-search/**"
       - "publisher/**"
-      - ".github/workflows/publish-site.yml"
-  workflow_run:
-    workflows: ["Everything Hub crawler"]
-    types: [completed]
-    branches: [main]
 permissions:
   contents: read
   pages: write
