@@ -648,11 +648,13 @@ def effective_host_delay(parser):
     return max([HOST_MIN_INTERVAL, *delays, *rate_delays])
 
 
-def select_batch(queue, is_allowed, host_next_allowed, now, workers=WORKERS):
-    """Select depth-prioritized work while limiting each batch to one URL per host."""
+def select_batch(queue, is_allowed, host_next_allowed, now, workers=WORKERS,
+                 priority_urls=()):
+    """Select configured seed URLs first, then deeper work, with one URL per host."""
+    priority = set(priority_urls or ())
     pending = list(queue)
     queue.clear()
-    pending.sort(key=lambda item: item[1], reverse=True)
+    pending.sort(key=lambda item: (item[0] not in priority, -item[1]))
     selected = []
     deferred = []
     selected_hosts = set()
@@ -929,7 +931,7 @@ def main():
         remaining_fetches = MAX_FETCH_PER_RUN - fetched
         batch = select_batch(
             queue, allowed, host_next_allowed, time.time(),
-            workers=min(WORKERS, remaining_fetches)
+            workers=min(WORKERS, remaining_fetches), priority_urls=seeds
         )
         if not batch:
             wait = next_host_wait(queue, host_next_allowed, time.time())
