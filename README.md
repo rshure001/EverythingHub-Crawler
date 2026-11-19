@@ -1,5 +1,14 @@
 # Everything Hub Crawler
 
+## Live operations checkpoint — 2026-11-19 21:04 UTC
+
+- The independent public crawler completed run **#201** successfully at 2026-11-19 20:59 UTC. Configuration/tests, crawl, shard build, canonical index validation, media catalog validation, and commit all passed. Latest catalog publication is SHA-256 verified.
+- Production Vercel catalog was verified by search API smoke run **#136** at 2026-11-19 21:01 UTC: **18,598 indexed pages**, manifest SHA-256 `7a336408e0a62e5f214b7f34f0dff9898f42bd558f62d72b43e0370a3b1d54b0`, 40 first-party results on page one, and 50 non-overlapping first-party results on page two. Independent Rolex fallback returned 7 results.
+- PostgreSQL 17 isolated CI smoke test passed on both push and pull-request runs after the workflow fix. It verifies schema initialization, full-text search, and concurrent-safe queue leasing. This is ephemeral CI validation, not a running production database.
+- The duplicate parallel `eh_search` schema proposal was closed unmerged in PR #135. Keep the existing `eh_quad` / `eh_documents` architecture as the single database design.
+- Supabase control plane still reports `ACTIVE_HEALTHY`, but direct SQL remains unavailable with SQLSTATE **57P03**. At 2026-11-19 21:03:39 UTC, PostgreSQL logs still reported WAL redo in progress after approximately **70 minutes**. A read-only SQL probe failed. Do not run migrations, imports, resets, restores, or restarts until direct SQL is accepting connections.
+- No production database writes or cutover were performed. Dog Tag Day and Story Wall data remain untouched. No paid infrastructure was provisioned.
+
 ## Current verified operations checkpoint — 2026-11-19 16:49 UTC
 
 - The latest committed public crawler manifest is commit [a60c91b](https://github.com/rshure001/EverythingHub-Crawler/commit/a60c91b67f75544a13e3add9393cebafa0497361), updated at **2026-11-19 16:48:47 UTC**.
