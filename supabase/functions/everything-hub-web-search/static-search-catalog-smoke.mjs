@@ -49,7 +49,7 @@ if (meta) {
     }
   } else {
     // The Edge Function has a 6 MB compressed cap; the Vercel backend allows
-    // up to 8 MB compressed and 64 MB decoded, with the same SHA-256 checks.
+    // up to 12 MB compressed and 64 MB decoded, with the same SHA-256 checks.
     pages = validateManifestAndCatalog(manifest, compressed).pages;
     transport = "vercel-gzip";
   }
