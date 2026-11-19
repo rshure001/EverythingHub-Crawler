@@ -15,7 +15,7 @@ MAX_BYTES = 340_000  # Keep 10 KB headroom below the 350 KB serving/validation c
 # The independent Vercel backend safely decompresses up to 64 MB. The
 # Supabase Edge Function has a smaller 30 MB/6 MB budget and delegates larger
 # catalogs to Vercel rather than scanning all shards in its CPU-limited isolate.
-MAX_CATALOG_GZIP_BYTES = 16_000_000
+MAX_CATALOG_GZIP_BYTES = 12_000_000
 MAX_CATALOG_UNCOMPRESSED_BYTES = 64_000_000
 CATALOG_NAME = "catalog-v1.json.gz"
 
