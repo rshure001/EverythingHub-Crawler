@@ -65,6 +65,52 @@ jobs:
                 src: img.currentSrc, naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight
               }));
               if (/appdeploy\\.ai/i.test(report.approvedArtwork.src)) throw new Error("Artwork unexpectedly served from AppDeploy");
+              const verifyHomepageMediaShelf = async (selector, label) => {
+                await page.waitForFunction((targetSelector) => {
+                  const node = document.querySelector(targetSelector);
+                  if (!node) return false;
+                  const text = node.textContent || "";
+                  return node.querySelectorAll("a.live-media-card").length > 0 ||
+                    /No fresh|temporarily unavailable/i.test(text);
+                }, selector, { timeout: 30000 });
+                const summary = await page.locator(selector).evaluate(node => {
+                  const cards = [...node.querySelectorAll("a.live-media-card")];
+                  const invalidLinks = cards.filter(card => {
+                    try {
+                      const url = new URL(card.href);
+                      const rel = (card.getAttribute("rel") || "").split(/\\s+/);
+                      return !["https:", "http:"].includes(url.protocol) ||
+                        card.target !== "_blank" ||
+                        !rel.includes("noopener") ||
+                        !rel.includes("noreferrer");
+                    } catch {
+                      return true;
+                    }
+                  }).length;
+                  const images = [...node.querySelectorAll("img")];
+                  const invalidImages = images.filter(img => {
+                    try {
+                      return !["https:", "http:"].includes(new URL(img.src).protocol);
+                    } catch {
+                      return true;
+                    }
+                  }).length;
+                  return {
+                    cards: cards.length,
+                    invalidLinks,
+                    images: images.length,
+                    loadedImages: images.filter(img => img.complete && img.naturalWidth > 0).length,
+                    invalidImages,
+                    fallback: /No fresh|temporarily unavailable/i.test(node.textContent || "")
+                  };
+                });
+                if (summary.invalidLinks || summary.invalidImages) {
+                  throw new Error(label + " shelf contains unsafe media destinations: " + JSON.stringify(summary));
+                }
+                return summary;
+              };
+              report.homepageImageShelf = await verifyHomepageMediaShelf("#homeLiveImages", "Images");
+              report.homepageVideoShelf = await verifyHomepageMediaShelf("#homeLiveVideos", "Videos");
               await page.screenshot({ path: "everything-hub-homepage.png", fullPage: true });
 
               for (const query of ["Rolex", "NASA"]) {
