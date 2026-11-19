@@ -60,10 +60,9 @@ jobs:
               assert indexed.get("count", 0) > 0, indexed
               indexed_source = str(indexed.get("source", ""))
               if indexed.get("independentOfDatabase") is True:
-                  assert indexed.get("fallback") is True, indexed
-                  assert indexed.get("fallbackReason") == "database_unavailable", indexed
-                  assert indexed.get("provider") == "Bing RSS", indexed
-                  print("Database outage fallback passed through web-search endpoint:", indexed.get("count"), "results")
+                  raise AssertionError(
+                      "Bing RSS was returned before the verified public crawler index during database outage"
+                  )
               else:
                   assert "index" in indexed_source.lower(), indexed
               assert isinstance(indexed.get("results"), list), indexed
@@ -72,6 +71,8 @@ jobs:
                   assert result.get("title"), result
 
               if indexed.get("source") == "Everything Hub public crawler index":
+                  assert indexed.get("fallback") is True, indexed
+                  assert indexed.get("fallbackReason") in ("database_unavailable", "database_empty"), indexed
                   assert indexed.get("indexIntegrity") == "sha256", indexed
                   assert indexed.get("indexTransport") in ("gzip", "shards"), indexed
                   urls = [result["url"] for result in indexed["results"]]
