@@ -28,6 +28,7 @@ class ReleaseHealthTests(unittest.TestCase):
         self.assertEqual(health["total_pages"], 5724)
         self.assertEqual(health["shard_count"], 32)
         self.assertEqual(health["catalog_gzip"]["sha256"], "a" * 64)
+        self.assertEqual(health["search_transport"], "gzip")
 
 
     def valid_media_catalog(self):
@@ -88,6 +89,20 @@ class ReleaseHealthTests(unittest.TestCase):
         catalog["candidates"][0]["rights_status"] = "licensed"
         with self.assertRaisesRegex(ValueError, "media catalog failed validation"):
             build_health(self.valid_manifest(), media_catalog=catalog)
+
+    def test_health_supports_shard_only_manifest(self):
+        manifest = self.valid_manifest()
+        manifest.pop("catalog_gzip")
+        health = build_health(manifest, generated_at=1794975000)
+
+        self.assertIsNone(health["catalog_gzip"])
+        self.assertEqual(health["search_transport"], "shards")
+
+    def test_health_rejects_catalog_over_serving_limit(self):
+        manifest = self.valid_manifest()
+        manifest["catalog_gzip"]["bytes"] = 6_000_001
+        with self.assertRaisesRegex(ValueError, "serving safety limit"):
+            build_health(manifest)
 
     def test_health_rejects_shard_count_mismatch(self):
         manifest = self.valid_manifest()
