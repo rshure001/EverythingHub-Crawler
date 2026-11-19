@@ -6,6 +6,7 @@ import { searchStaticPages } from "./static-search.mjs";
 import { normalizeManifestTimestamp } from "./manifest-time.mjs";
 import { isValidStaticManifest } from "./static-manifest.mjs";
 import { readBoundedText } from "./bounded-stream.mjs";
+import { fetchVercelCatalogFallback } from "./vercel-fallback.mjs";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -240,10 +241,28 @@ Deno.serve(async (req: Request) => {
   };
 
   const staticFallback = async (reason: string) => {
-    // Keep outage responses fast: Bing RSS is the first fallback while PostgreSQL is recovering.
-    if (reason === "database_unavailable") {
-      const independent = await independentFallback(reason, null);
-      if (independent) return independent;
+    // Prefer the bounded, SHA-verified Vercel catalog. It already serves the
+    // current crawler index without loading all shards into this Edge isolate.
+    if (reason === "database_unavailable" || reason === "database_empty") {
+      try {
+        const vercel = await fetchVercelCatalogFallback({
+          query,
+          lane: validLane,
+          limit,
+          offset,
+          fallbackReason: reason,
+        });
+        if (vercel) {
+          return json(vercel, 200, "public, max-age=15, stale-while-revalidate=30");
+        }
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : String(error);
+        console.error("Vercel public catalog fallback unavailable:", detail);
+      }
+      if (reason === "database_unavailable") {
+        const independent = await independentFallback(reason, null);
+        if (independent) return independent;
+      }
     }
 
     let crawlerIndexCount: number | null = null;

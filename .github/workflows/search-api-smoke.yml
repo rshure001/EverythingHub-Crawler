@@ -59,14 +59,26 @@ jobs:
               indexed_error = f"{type(exc).__name__}: {exc}"
               print("Database-backed web search unavailable after independent fallback passed:", indexed_error)
           if indexed is not None:
-              assert indexed.get("count", 0) > 0, indexed
+              assert isinstance(indexed.get("results"), list) and indexed["results"], indexed
               indexed_source = str(indexed.get("source", ""))
               if indexed.get("independentOfDatabase") is True:
                   assert indexed.get("fallback") is True, indexed
-                  assert indexed.get("fallbackReason") == "database_unavailable", indexed
-                  assert indexed.get("provider") == "Bing RSS", indexed
-                  print("Database outage fallback passed through web-search endpoint:", indexed.get("count"), "results")
+                  assert indexed.get("fallbackReason") in ("database_unavailable", "database_empty"), indexed
+                  if indexed.get("indexStatus") == "crawler-catalog-active":
+                      assert indexed.get("indexedPages", 0) > 0, indexed
+                      assert indexed.get("indexIntegrity") == "sha256", indexed
+                      assert indexed.get("indexTransport") == "vercel", indexed
+                      assert isinstance(indexed.get("indexSha256"), str) and len(indexed["indexSha256"]) == 64, indexed
+                      assert "Everything Hub Crawler" in indexed.get("providers", []), indexed
+                      print("Vercel-backed crawler catalog fallback passed:", indexed.get("indexedPages"), "indexed pages")
+                  else:
+                      assert indexed.get("results"), indexed
+                      providers = indexed.get("providers", [])
+                      provider = str(indexed.get("provider", ""))
+                      assert provider == "Bing RSS" or any("Bing" in str(item) for item in providers), indexed
+                      print("Bing-only outage fallback returned:", len(indexed["results"]), "results")
               else:
+                  assert indexed.get("count", 0) > 0, indexed
                   assert "index" in indexed_source.lower(), indexed
               assert isinstance(indexed.get("results"), list), indexed
               for result in indexed["results"]:
