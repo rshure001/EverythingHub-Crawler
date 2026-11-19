@@ -16,7 +16,7 @@ class PostCrawlDispatchTests(unittest.TestCase):
         self.assertIn("gh workflow run search-api-smoke.yml --ref main", workflow)
 
     def test_publisher_and_search_smoke_support_explicit_dispatch(self):
-        for path in (".github/workflows/publish-site.yml", ".github/workflows/search-api-smoke.yml"):
+        for path in (".github/workflows/publish-site.yml", ".github/workflows/search-api-smoke.yml", ".github/workflows/recovery-search-check.yml"):
             workflow = (ROOT / path).read_text(encoding="utf-8")
             self.assertIn("  workflow_dispatch:", workflow)
             self.assertNotIn("  workflow_run:", workflow)
