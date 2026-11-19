@@ -24,6 +24,16 @@ This is the first-party replacement layer for hosted Git and hosted static publi
 
 A host with Docker Compose, a persistent data volume, and inbound TCP 80/443 plus SSH is required. The current connected DigitalOcean account reports no droplets and a team limit warning, so this repository does not provision a server. No free compute host has been verified for persistent Forgejo hosting. The stack is therefore prepared but not yet online. GitHub Actions now validates the Compose YAML, Caddy configuration, and platform safety tests on platform changes.
 
+## Windows host preparation
+
+From the repository root in PowerShell, run the read-only Windows check:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\\platform\\windows-host-preflight.ps1
+```
+
+The Windows host uses Docker Desktop with the WSL2 backend. This check reports Windows, RAM, free disk, WSL distributions, Docker Engine, and Compose readiness. It does not install software, change DNS, open firewall ports, or start services. The Linux host scripts are run inside the Docker/WSL2 Linux environment; do not run the Bash scripts directly in Windows PowerShell.
+
 ## Start
 
 1. Copy `platform/.env.example` to `.env` in the repository root on the host and set the actual Git and website hostnames plus a valid ACME email. Keep the populated `.env` out of Git.
