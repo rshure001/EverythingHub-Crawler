@@ -114,11 +114,24 @@ CREATE OR REPLACE FUNCTION eh_search.claim_crawl_jobs(p_worker TEXT, p_limit INT
 RETURNS SETOF eh_search.crawl_queue
 LANGUAGE plpgsql AS $$
 BEGIN
+  IF p_worker IS NULL OR length(btrim(p_worker)) = 0 THEN
+    RAISE EXCEPTION 'p_worker must be a non-empty worker name';
+  END IF;
+
+  -- Expired jobs that have exhausted their retry budget become terminal.
+  UPDATE eh_search.crawl_queue
+     SET status='failed', lease_owner=NULL, leased_until=NULL,
+         last_error=coalesce(last_error, 'Lease expired after maximum attempts')
+   WHERE status='leased'
+     AND leased_until < now()
+     AND attempts >= max_attempts;
+
   RETURN QUERY
   WITH candidates AS (
     SELECT q.id FROM eh_search.crawl_queue q
-    WHERE (q.status='pending' AND q.available_at <= now())
-       OR (q.status='leased' AND q.leased_until < now())
+    WHERE q.attempts < q.max_attempts
+      AND ((q.status='pending' AND q.available_at <= now())
+        OR (q.status='leased' AND q.leased_until < now()))
     ORDER BY q.priority DESC, q.available_at, q.id
     FOR UPDATE SKIP LOCKED
     LIMIT GREATEST(1, LEAST(p_limit, 100))
