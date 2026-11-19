@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Everything Hub — Production Control Center</title>
+<meta name="description" content="Everything Hub production deployment and release control center.">
+<style>
+:root{color-scheme:dark;--bg:#020a11;--panel:#071a22;--line:#1eff9a66;--green:#50ff86;--gold:#e9bf70;--muted:#9ab9aa;--red:#ff7777}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 50% 0,#0a3440,#020a11 62%);color:#effff7;font:15px system-ui,-apple-system,sans-serif;min-height:100vh}
+header{padding:20px max(18px,calc((100vw - 1180px)/2));border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;background:#020a11e8;gap:12px;flex-wrap:wrap}
+.brand{font-size:21px;font-weight:900;letter-spacing:-.5px}.brand span{color:var(--green)}.sub{color:var(--muted);font-size:11px;letter-spacing:1.4px;text-transform:uppercase}
+main{max-width:1180px;margin:28px auto;padding:0 18px 50px}
+h1{font-size:clamp(28px,5vw,42px);margin:0 0 8px;letter-spacing:-1.5px}h1 em{font-style:normal;color:var(--green)}.intro{color:var(--muted);margin:0 0 22px}
+.toolbar{display:flex;gap:10px;flex-wrap:wrap;margin:18px 0 22px}
+a.btn,button.btn{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;color:#eafff3;background:#082c2b;border:1px solid #29ff9b;border-radius:10px;padding:11px 15px;font-weight:800;font-size:13px;cursor:pointer}
+a.primary{background:linear-gradient(120deg,#087c4d,#42d94c);color:#00180c;border:0}
+.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.card{background:linear-gradient(145deg,#09232d,#041019);border:1px solid var(--line);border-radius:15px;padding:17px;box-shadow:0 0 18px #00ff9910;min-width:0}
+.card h2{font-size:13px;color:#baffd0;letter-spacing:1px;text-transform:uppercase;margin:0 0 13px}
+.status{display:flex;align-items:center;gap:9px;font-size:18px;font-weight:850}.dot{width:10px;height:10px;border-radius:50%;background:#788b84;box-shadow:0 0 10px currentColor}.ok{color:var(--green);background:var(--green)}.bad{color:var(--red);background:var(--red)}.wait{color:var(--gold);background:var(--gold)}
+.detail{font-size:12px;color:var(--muted);margin-top:8px;overflow-wrap:anywhere}.big{font-size:25px;font-weight:900;letter-spacing:-.8px}.wide{grid-column:span 2}
+.list{display:grid;gap:9px}.item{padding:10px 0;border-bottom:1px solid #1aff9a22}.item:last-child{border:0}.item strong{display:block;font-size:13px}.item small{color:var(--muted)}
+code{color:#aaffc9;overflow-wrap:anywhere}.notice{margin-top:16px;padding:13px 15px;border-left:3px solid var(--gold);background:#241e103b;color:#e9d6a9;font-size:12px;line-height:1.5}
+footer{text-align:center;color:#789b8b;font-size:11px;padding:24px}
+@media(max-width:800px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.wide{grid-column:span 2}}
+@media(max-width:520px){.grid{grid-template-columns:1fr}.wide{grid-column:span 1}header{align-items:flex-start}main{margin-top:20px}.toolbar a{flex:1}}
+</style></head>
+<body>
+<header><div><div class="brand">EVERYTHING <span>HUB</span></div><div class="sub">Production Control Center</div></div><div class="sub">Everything within reach</div></header>
+<main>
+<h1>Production <em>Control Center</em></h1>
+<p class="intro">One place to inspect the live site, search service, source control and release pipeline.</p>
+<div class="toolbar">
+<a class="btn primary" href="https://vercel.com/rshure001-8053/everythinghub-homepage-fixed" target="_blank" rel="noopener">Open Vercel Project ↗</a>
+<a class="btn" href="https://github.com/rshure001/EverythingHub-Crawler/actions" target="_blank" rel="noopener">Release Workflows ↗</a>
+<a class="btn" href="https://github.com/rshure001/EverythingHub-Crawler" target="_blank" rel="noopener">Source Repository ↗</a>
+<button class="btn" id="refresh">Refresh checks ↻</button>
+</div>
+<section class="grid">
+<article class="card"><h2>Production website</h2><div class="status"><i class="dot" id="siteDot"></i><span id="siteState">Checking…</span></div><div class="detail" id="siteDetail">everythinghub.ink</div><div class="toolbar"><a class="btn" href="https://everythinghub.ink/" target="_blank" rel="noopener">Open live site ↗</a></div></article>
+<article class="card"><h2>Search API</h2><div class="status"><i class="dot" id="searchDot"></i><span id="searchState">Checking…</span></div><div class="detail" id="searchDetail">Independent search endpoint</div><div class="toolbar"><a class="btn" href="https://everythinghub-search-backend.vercel.app/" target="_blank" rel="noopener">Open search service ↗</a></div></article>
+<article class="card"><h2>Current release</h2><div class="big">main</div><div class="detail">Latest repair merged: <code>f4d5d2ff</code><br>Artwork sharpness + media metadata preservation</div><div class="toolbar"><a class="btn" href="https://github.com/rshure001/EverythingHub-Crawler/commit/f4d5d2ff3e315ad60e3014b06fa8664b185c439c" target="_blank" rel="noopener">View release commit ↗</a></div></article>
+<article class="card wide"><h2>Release pipeline — latest GitHub runs</h2><div class="list" id="runs"><div class="item">Loading workflow history…</div></div></article>
+<article class="card"><h2>Production deployment</h2><div class="status"><i class="dot wait" id="deployDot"></i><span id="deployState">Verification pending</span></div><div class="detail">Last known production deployment: <code>dpl_CCQsS7E…</code><br>Production alias: everythinghub.ink</div><div class="toolbar"><a class="btn" href="https://vercel.com/rshure001-8053/everythinghub-homepage-fixed" target="_blank" rel="noopener">Deployment history ↗</a></div></article>
+<article class="card"><h2>Release safeguards</h2><div class="list"><div class="item"><strong>Approved artwork</strong><small>Preserve original image asset and proportions.</small></div><div class="item"><strong>Data protection</strong><small>No Dog Tag Day or Story Wall writes.</small></div><div class="item"><strong>Safe release</strong><small>Inspect build result before promoting production.</small></div></div></article>
+<article class="card wide"><h2>Deployment procedure</h2><div class="list"><div class="item"><strong>1 · Validate</strong><small>Check source commit, workflow results, and preview behavior.</small></div><div class="item"><strong>2 · Build</strong><small>Start the production build from the Vercel project or approved release workflow.</small></div><div class="item"><strong>3 · Verify</strong><small>Wait for READY, then test the production alias and search/media behavior.</small></div><div class="item"><strong>4 · Record</strong><small>Keep the deployment ID, commit SHA, URL, and verification outcome together.</small></div></div><div class="notice">This first release is a live monitoring and launch console. It does not yet hold deployment credentials or directly trigger a build from this page. That control must be added through a protected server-side action; never place Vercel or GitHub tokens in browser code.</div></article>
+</section>
+</main><footer>EVERYTHING HUB · PRODUCTION OPERATIONS · No production changes are made by status checks.</footer>
+<script>
+const $=id=>document.getElementById(id);
+function setStatus(dot,state,label,detail){$(dot).className='dot '+state;$(label).textContent=state==='ok'?'Online':state==='bad'?'Unavailable':'Checking…';$(detail).textContent=detail;}
+async function checkSite(){try{const r=await fetch('https://everythinghub.ink/',{method:'GET',cache:'no-store'});$('siteDot').className='dot '+(r.ok?'ok':'bad');$('siteState').textContent=r.ok?'Online · HTTP '+r.status:'HTTP '+r.status;$('siteDetail').textContent='https://everythinghub.ink/ · '+new Date().toLocaleTimeString();}catch(e){$('siteDot').className='dot bad';$('siteState').textContent='Check blocked';$('siteDetail').textContent='Browser could not verify the domain (network/CORS restriction possible).';}}
+async function checkSearch(){try{const u='https://everythinghub-search-backend.vercel.app/api/search?q=healthcheck&limit=1';const r=await fetch(u,{cache:'no-store'});if(!r.ok)throw Error('HTTP '+r.status);const d=await r.json();$('searchDot').className='dot ok';$('searchState').textContent='Online · HTTP '+r.status;$('searchDetail').textContent='Response received · '+((d.results||[]).length)+' sample result(s) · '+new Date().toLocaleTimeString();}catch(e){$('searchDot').className='dot bad';$('searchState').textContent='Not verified';$('searchDetail').textContent=String(e.message||e);}}
+async function checkRuns(){const box=$('runs');try{const r=await fetch('https://api.github.com/repos/rshure001/EverythingHub-Crawler/actions/runs?per_page=6',{headers:{Accept:'application/vnd.github+json'},cache:'no-store'});if(!r.ok)throw Error('GitHub API HTTP '+r.status);const d=await r.json();const runs=d.workflow_runs||[];box.innerHTML=runs.length?runs.map(x=>'<div class="item"><strong>'+esc(x.name||x.display_title||'Workflow')+' · '+esc(x.conclusion||x.status||'unknown')+'</strong><small>'+esc(x.head_branch||'')+' · '+new Date(x.created_at).toLocaleString()+' · <a style="color:#9dffbd" target="_blank" rel="noopener" href="'+esc(x.html_url)+'">View run ↗</a></small></div>').join(''):'<div class="item">No workflow runs returned.</div>';}catch(e){box.innerHTML='<div class="item">Workflow history unavailable: '+esc(e.message||e)+'</div>';}}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+async function refresh(){ $('refresh').textContent='Checking…';await Promise.all([checkSite(),checkSearch(),checkRuns()]);$('refresh').textContent='Refresh checks ↻';}
+$('refresh').addEventListener('click',refresh);refresh();
+</script></body></html>
