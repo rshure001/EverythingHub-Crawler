@@ -11,7 +11,7 @@ class HourlyProductionTests(unittest.TestCase):
     def test_records_sum_across_runs_in_last_hour(self):
         history = {"runs": [{
             "run_id": "old",
-            "timestamp": (self.now - timedelta(minutes=40)).isoformat(),
+            "timestamp": (self.now - timedelta(minutes=60)).isoformat(),
             "indexed_records": 600,
             "fetch_attempts": 700,
             "duration_seconds": 120,
