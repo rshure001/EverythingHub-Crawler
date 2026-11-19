@@ -17,7 +17,7 @@ kept here so production behavior is reviewable and testable in GitHub.
 - Verifies manifest version, timestamps, page count, shard count, compressed
   size, and SHA-256 before accepting the catalog.
 - Rejects invalid URLs and any record explicitly marked robots-denied.
-- Limits the compressed catalog to 10,000,000 bytes, decompressed JSON to 64,000,000 bytes, and all external requests by timeout.
+- Limits the compressed catalog to 12,000,000 bytes, decompressed JSON to 64,000,000 bytes, up to 30,000 pages and 256 shard entries, and all external requests by timeout.
 - Keeps a last-known-good in-memory catalog for up to one hour if GitHub has a
   transient outage; responses identify stale catalog use.
 - Does not fetch or download indexed source pages.

@@ -5,17 +5,22 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from catalog_search import MAX_CATALOG_GZIP_BYTES, _bounded_gzip, load_catalog
+from catalog_search import (MAX_CATALOG_GZIP_BYTES, MAX_INDEXED_PAGES, MAX_SHARD_BYTES, MAX_SHARD_COUNT, MAX_TOTAL_SHARD_BYTES, _bounded_gzip, load_catalog)
 
 
 class CatalogLoaderTests(unittest.TestCase):
-    def test_current_published_manifest_fits_python_loader_limit(self):
+    def test_current_published_manifest_loads_within_bounded_shard_limits(self):
         root = Path(__file__).resolve().parents[1]
-        manifest = json.loads((root / "public-search" / "manifest.json").read_text(encoding="utf-8"))
-        catalog = manifest.get("catalog_gzip")
-        self.assertIsInstance(catalog, dict)
-        self.assertEqual(MAX_CATALOG_GZIP_BYTES, 10_000_000)
-        self.assertLessEqual(catalog.get("bytes", 0), MAX_CATALOG_GZIP_BYTES)
+        search_dir = root / "public-search"
+        manifest = json.loads((search_dir / "manifest.json").read_text(encoding="utf-8"))
+        self.assertEqual(MAX_CATALOG_GZIP_BYTES, 12_000_000)
+        self.assertEqual(MAX_INDEXED_PAGES, 30_000)
+        self.assertEqual(MAX_SHARD_COUNT, 256)
+        self.assertEqual(MAX_TOTAL_SHARD_BYTES, 64_000_000)
+        self.assertEqual(manifest["total_pages"], 21_024)
+        self.assertLessEqual(sum(item["bytes"] for item in manifest["shards"]), MAX_TOTAL_SHARD_BYTES)
+        pages = load_catalog(search_dir=search_dir)
+        self.assertEqual(len(pages), manifest["total_pages"])
 
     def test_loads_version_one_catalog(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -97,6 +102,46 @@ class CatalogLoaderTests(unittest.TestCase):
             page = {"url": "https://example.com/a"}
             self.write_shard_manifest(directory, [[page], [page]])
             with self.assertRaisesRegex(ValueError, "duplicate URL"):
+                load_catalog(search_dir=directory)
+
+
+    def test_rejects_manifest_above_page_limit(self):
+        with tempfile.TemporaryDirectory() as directory:
+            manifest = {
+                "version": 1, "integrity": "sha256", "updated_at": 1700000000,
+                "total_pages": MAX_INDEXED_PAGES + 1, "shard_count": 1,
+                "shards": [{}],
+            }
+            (Path(directory) / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "total_pages exceeds the safety limit"):
+                load_catalog(search_dir=directory)
+
+    def test_rejects_manifest_above_shard_limit(self):
+        with tempfile.TemporaryDirectory() as directory:
+            manifest = {
+                "version": 1, "integrity": "sha256", "updated_at": 1700000000,
+                "total_pages": 1, "shard_count": MAX_SHARD_COUNT + 1,
+                "shards": [{} for _ in range(MAX_SHARD_COUNT + 1)],
+            }
+            (Path(directory) / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "shard_count"):
+                load_catalog(search_dir=directory)
+
+    def test_rejects_aggregate_shard_bytes_above_limit_before_reading_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            entries = [{
+                "file": f"shard-{index:04d}.json",
+                "pages": 1,
+                "bytes": MAX_SHARD_BYTES,
+                "sha256": "0" * 64,
+            } for index in range(1, MAX_SHARD_COUNT + 1)]
+            manifest = {
+                "version": 1, "integrity": "sha256", "updated_at": 1700000000,
+                "total_pages": MAX_SHARD_COUNT, "shard_count": len(entries),
+                "shards": entries,
+            }
+            (Path(directory) / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "aggregate byte safety limit"):
                 load_catalog(search_dir=directory)
 
     def test_rejects_shard_page_count_mismatch(self):

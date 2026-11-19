@@ -7,9 +7,10 @@ const CATALOG_URL = 'https://raw.githubusercontent.com/rshure001/EverythingHub-C
 const CACHE_TTL_MS = 300000;
 const STALE_TTL_MS = 3600000;
 const MAX_MANIFEST_BYTES = 128000;
-const MAX_CATALOG_GZIP_BYTES = 10000000;
+const MAX_CATALOG_GZIP_BYTES = 12000000;
 const MAX_CATALOG_JSON_BYTES = 64000000;
-const MAX_INDEXED_PAGES = 20000;
+const MAX_INDEXED_PAGES = 30000;
+const MAX_SHARD_COUNT = 256;
 let cache = null;
 
 function getBuffer(url, maxBytes) {
@@ -76,7 +77,7 @@ function validateManifestAndCatalog(manifest, compressed) {
     throw new Error('manifest_page_count_invalid');
   }
   if (!Number.isSafeInteger(manifest.shard_count) ||
-      manifest.shard_count < 1 || manifest.shard_count > 128 ||
+      manifest.shard_count < 1 || manifest.shard_count > MAX_SHARD_COUNT ||
       !Array.isArray(manifest.shards) || manifest.shards.length !== manifest.shard_count) {
     throw new Error('manifest_shard_count_invalid');
   }
@@ -150,6 +151,7 @@ function clearCatalogCache() { cache = null; }
 module.exports = {
   MAX_CATALOG_GZIP_BYTES,
   MAX_INDEXED_PAGES,
+  MAX_SHARD_COUNT,
   validateManifestAndCatalog,
   loadCatalog,
   clearCatalogCache

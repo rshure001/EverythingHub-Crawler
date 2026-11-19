@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const zlib = require('node:zlib');
 const { searchCatalog, parseBingRss, buildResponse } = require('../src/lib/search-core');
-const { MAX_CATALOG_GZIP_BYTES, MAX_INDEXED_PAGES, validateManifestAndCatalog } = require('../src/lib/catalog');
+const { MAX_CATALOG_GZIP_BYTES, MAX_INDEXED_PAGES, MAX_SHARD_COUNT, validateManifestAndCatalog } = require('../src/lib/catalog');
 
 function makePage(index, lane) {
   return {
@@ -37,16 +37,18 @@ function makeManifest(pages) {
 }
 
 
-test('accepts the current 15k-plus, 87-shard catalog within bounded limits', () => {
-  const pages = Array.from({ length: 15110 }, (_, index) => makePage(index, 'science'));
+test('accepts the current 21k-page, 121-shard catalog within bounded limits', () => {
+  const pages = Array.from({ length: 21024 }, (_, index) => makePage(index, 'science'));
   const { manifest, compressed } = makeManifest(pages);
-  manifest.shard_count = 87;
-  manifest.shards = Array.from({ length: 87 }, (_, index) => ({
+  manifest.shard_count = 121;
+  manifest.shards = Array.from({ length: 121 }, (_, index) => ({
     file: 'shard-' + String(index + 1).padStart(4, '0') + '.json'
   }));
   const result = validateManifestAndCatalog(manifest, compressed);
-  assert.equal(result.indexedPages, 15110);
-  assert.equal(MAX_INDEXED_PAGES, 20000);
+  assert.equal(result.indexedPages, 21024);
+  assert.equal(MAX_INDEXED_PAGES, 30000);
+  assert.equal(MAX_SHARD_COUNT, 256);
+  assert.equal(MAX_CATALOG_GZIP_BYTES, 12000000);
 });
 
 test('rejects catalog page and shard counts beyond the new bounded limits', () => {
@@ -59,8 +61,8 @@ test('rejects catalog page and shard counts beyond the new bounded limits', () =
   assert.throws(() => validateManifestAndCatalog(tooManyPages, compressed), /manifest_page_count_invalid/);
   const tooManyShards = {
     ...manifest,
-    shard_count: 129,
-    shards: Array.from({ length: 129 }, (_, index) => ({ file: 'shard-' + index + '.json' }))
+    shard_count: MAX_SHARD_COUNT + 1,
+    shards: Array.from({ length: MAX_SHARD_COUNT + 1 }, (_, index) => ({ file: 'shard-' + index + '.json' }))
   };
   assert.throws(() => validateManifestAndCatalog(tooManyShards, compressed), /manifest_shard_count_invalid/);
 });

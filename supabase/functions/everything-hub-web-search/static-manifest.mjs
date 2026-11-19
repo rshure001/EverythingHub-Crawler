@@ -1,5 +1,5 @@
-export const MAX_STATIC_INDEX_PAGES = 20_000;
-export const MAX_STATIC_INDEX_SHARDS = 128;
+export const MAX_STATIC_INDEX_PAGES = 30_000;
+export const MAX_STATIC_INDEX_SHARDS = 256;
 
 /**
  * Validate the bounded public catalog manifest contract shared by the Edge Function
