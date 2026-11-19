@@ -7,17 +7,18 @@ kept here so production behavior is reviewable and testable in GitHub.
 
 - Entry points: src/api/search.js and src/api/health.js
 - Runtime: Node.js 26, built-in modules only
-- Catalog source: the versioned public-search manifest and JSON shards on
-  the repository's main branch
+- Catalog source: the versioned public-search manifest and compressed catalog
+  pinned to one immutable Git commit resolved from the main-branch ref
 - Database dependency: none
 - External discovery provider: Bing RSS, cached per query for two minutes
 
 ## Integrity and safety
 
-- Verifies manifest version, timestamps, page count, shard count, per-shard byte counts and SHA-256 before accepting the catalog.
-- Rejects invalid URLs, duplicate URLs, and any record explicitly marked robots-denied.
-- Loads at most 256 JSON shards in bounded batches of 32, with a 1 MB per-shard cap and 48 MB aggregate cap; the compact gzip export remains validated as manifest metadata.
-- Bounds the catalog to 30,000 pages and 64 MB of JSON, and bounds all external requests by timeout.
+- Fetches the Git ref first, then retrieves the manifest and gzip catalog from the same immutable commit SHA to prevent mixed CDN revisions.
+- Verifies manifest version, timestamps, page count, shard count, compressed byte count, and catalog SHA-256 before accepting the catalog.
+- Rejects invalid URLs and any record explicitly marked robots-denied.
+- Bounds the compressed catalog to 12,000,000 bytes, decompressed JSON to 64,000,000 bytes, the index to 30,000 pages and 256 shard entries, and all external requests by timeout.
+- Retains a separately tested bounded shard validator/loader for future fallback work; it is not the active production load path.
 - Keeps a last-known-good in-memory catalog for up to one hour if GitHub has a
   transient outage; responses identify stale catalog use.
 - Does not fetch or download indexed source pages; it reads only the repository's own generated index shards.
