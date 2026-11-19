@@ -19,7 +19,11 @@ class PostCrawlDispatchTests(unittest.TestCase):
         for path in (".github/workflows/publish-site.yml", ".github/workflows/search-api-smoke.yml", ".github/workflows/recovery-search-check.yml"):
             workflow = (ROOT / path).read_text(encoding="utf-8")
             self.assertIn("  workflow_dispatch:", workflow)
-            self.assertNotIn("  workflow_run:", workflow)
+
+        search = (ROOT / ".github" / "workflows" / "search-api-smoke.yml").read_text(encoding="utf-8")
+        self.assertIn("  workflow_run:", search)
+        self.assertIn('workflows: ["EverythingHub Publisher"]', search)
+        self.assertIn("github.event.workflow_run.conclusion == 'success'", search)
 
     def test_push_triggers_still_cover_direct_code_and_catalog_changes(self):
         publisher = (ROOT / ".github" / "workflows" / "publish-site.yml").read_text(encoding="utf-8")
@@ -29,7 +33,7 @@ class PostCrawlDispatchTests(unittest.TestCase):
         self.assertIn('      - "public-search/**"', search)
         self.assertIn('      - "supabase/functions/everything-hub-web-search/**"', search)
         self.assertNotIn(".github/workflows/publish-site.yml", publisher)
-        self.assertNotIn(".github/workflows/search-api-smoke.yml", search)
+        self.assertIn('      - ".github/workflows/search-api-smoke.yml"', search)
 
 
 if __name__ == "__main__":
