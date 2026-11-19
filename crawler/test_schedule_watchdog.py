@@ -19,18 +19,17 @@ class ScheduleWatchdogTests(unittest.TestCase):
         self.assertNotIn('    - cron: "*/5 * * * *"', workflow)
         self.assertIn("every 10 minutes", workflow)
 
-    def test_watchdog_runs_after_crawler_validation_importer_release_and_independent_search_completion(self):
+    def test_watchdog_runs_after_crawler_completion_without_redundant_workflow_fanout(self):
         workflow = (Path(__file__).resolve().parents[1] / ".github" / "workflows" / "crawl-watchdog.yml").read_text(encoding="utf-8")
         workflow_run = workflow.split("  workflow_run:\n", 1)[1].split("  workflow_dispatch:", 1)[0]
-        self.assertEqual(workflow_run.count('- "'), 6)
+        self.assertEqual(workflow_run.count('- "'), 1)
         self.assertIn('- "Everything Hub crawler"', workflow_run)
-        self.assertNotIn('- "Everything Hub live diagnostics"', workflow_run)
-        self.assertIn('- "EverythingHub isolated importer smoke test"', workflow_run)
-        self.assertIn('- "EverythingHub Publisher"', workflow_run)
-        self.assertIn('- "EverythingHub search API smoke test"', workflow_run)
-        self.assertIn('- "Validate Everything Hub Vercel search backend"', workflow_run)
-        self.assertIn('- "Validate Everything Hub crawler and schema"', workflow_run)
-        self.assertIn("types:\n      - completed", workflow_run)
+        self.assertNotIn("EverythingHub isolated importer smoke test", workflow_run)
+        self.assertNotIn("EverythingHub Publisher", workflow_run)
+        self.assertNotIn("EverythingHub search API smoke test", workflow_run)
+        self.assertNotIn("Validate Everything Hub Vercel search backend", workflow_run)
+        self.assertNotIn("Validate Everything Hub crawler and schema", workflow_run)
+        self.assertIn("types:\\n      - completed", workflow_run)
         self.assertIn("branches: [main]", workflow_run)
 
     def test_recent_success_is_healthy(self):
