@@ -67,11 +67,20 @@ function searchCatalog(pages, query, lane) {
   ranked.sort((a, b) => b.score - a.score || a.url.localeCompare(b.url));
   return ranked;
 }
+function decodeCodePoint(value, radix) {
+  const codePoint = Number.parseInt(value, radix);
+  if (!Number.isSafeInteger(codePoint) || codePoint < 0 || codePoint > 0x10ffff ||
+      (codePoint >= 0xd800 && codePoint <= 0xdfff)) {
+    return '\uFFFD';
+  }
+  return String.fromCodePoint(codePoint);
+}
+
 function decodeXml(value) {
   return String(value || '')
     .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
-    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
-    .replace(/&#(\d+);/g, (_, number) => String.fromCodePoint(parseInt(number, 10)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => decodeCodePoint(hex, 16))
+    .replace(/&#(\d+);/g, (_, number) => decodeCodePoint(number, 10))
     .replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&#39;/g, "'")
     .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
 }
@@ -89,7 +98,7 @@ function parseBingRss(xml) {
     const snippet = readTag(block, 'description');
     try {
       const parsed = new URL(url);
-      if (!['http:', 'https:'].includes(parsed.protocol)) continue;
+      if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password) continue;
       results.push({
         title: clean(title) || url,
         url: parsed.href,

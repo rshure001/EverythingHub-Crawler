@@ -102,6 +102,19 @@ test('Bing RSS parser decodes entities and keeps only safe HTTP links', () => {
   assert.equal(results[0].provider, 'bing-rss');
 });
 
+test('Bing RSS parser replaces invalid numeric entities and rejects credentialed URLs', () => {
+  const xml = '<rss><channel>' +
+    '<item><title>Invalid &#x110000; and &#55296;</title><link>https://example.com/invalid-entity</link><description>Keep parsing</description></item>' +
+    '<item><title>Credentialed URL</title><link>https://user:pass@example.com/private</link><description>skip</description></item>' +
+    '<item><title>Valid rocket</title><link>https://example.com/rocket</link><description>Rocket &#x1F680;</description></item>' +
+    '</channel></rss>';
+  const results = parseBingRss(xml);
+  assert.equal(results.length, 2);
+  assert.equal(results[0].title, 'Invalid \uFFFD and \uFFFD');
+  assert.equal(results[1].snippet, 'Rocket 🚀');
+  assert.equal(results.some(item => item.url.includes('@')), false);
+});
+
 test('manifest and compressed catalog SHA-256, size, and page count are verified', () => {
   const { manifest, compressed } = makeManifest([makePage(1), makePage(2)]);
   const result = validateManifestAndCatalog(manifest, compressed);
