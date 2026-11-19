@@ -941,7 +941,7 @@ form.addEventListener('submit',async e=>{
   }
  };
  const loadApiPage=async(page)=>{
-  const u=new URL('https://everythinghub-search-backend-lr5f0zv0s-rshure001-8053.vercel.app/api/search');
+  const u=new URL('https://everythinghub-search-backend.vercel.app/api/search');
   u.searchParams.set('q',q);
   u.searchParams.set('limit','50');
   u.searchParams.set('offset',String((page-1)*50));
