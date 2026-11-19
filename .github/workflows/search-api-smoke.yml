@@ -7,7 +7,6 @@ on:
       - "supabase/functions/everything-hub-web-search/**"
       - "public-search/**"
       - "vercel-search-backend/**"
-      - ".github/workflows/search-api-smoke.yml"
   workflow_dispatch:
 permissions:
   contents: read
