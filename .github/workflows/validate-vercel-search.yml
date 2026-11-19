@@ -88,8 +88,8 @@ jobs:
             }));
           }
           const ageSeconds = Math.floor(Date.now() / 1000 - first.indexUpdatedAt);
-          if (ageSeconds < -300 || ageSeconds > 3600) {
-            throw new Error('Crawler catalog timestamp is outside the one-hour live-monitor window: ' + ageSeconds);
+          if (ageSeconds < -300 || ageSeconds > 900) {
+            throw new Error('Crawler catalog timestamp is outside the 15-minute live-monitor window: ' + ageSeconds);
           }
           if (
             second.offset !== 50 ||
