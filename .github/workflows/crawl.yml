@@ -139,6 +139,4 @@ jobs:
         run: |
           set -euo pipefail
           gh workflow run publish-site.yml --ref main
-          echo "Dispatched the validated catalog publisher."
-          gh workflow run search-api-smoke.yml --ref main
-          echo "Dispatched the live search API smoke test."
+          echo "Dispatched the validated catalog publisher; the search smoke runs after publisher completion."
