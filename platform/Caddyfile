@@ -1,0 +1,29 @@
+{
+  email {$ACME_EMAIL}
+  admin off
+}
+
+{$GIT_HOST} {
+  encode zstd gzip
+  reverse_proxy forgejo:3000
+  header {
+    Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    X-Content-Type-Options "nosniff"
+    Referrer-Policy "strict-origin-when-cross-origin"
+    -Server
+  }
+}
+
+{$WEB_HOST} {
+  root * /srv/everythinghub/current
+  encode zstd gzip
+  @versioned path /assets/* /media/* *.woff2 *.woff *.ttf *.svg *.png *.jpg *.jpeg *.webp *.avif *.ico *.js *.css
+  header @versioned Cache-Control "public, max-age=31536000, immutable"
+  header {
+    X-Content-Type-Options "nosniff"
+    Referrer-Policy "strict-origin-when-cross-origin"
+    -Server
+  }
+  try_files {path} /index.html
+  file_server
+}
