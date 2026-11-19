@@ -68,7 +68,7 @@ jobs:
           python -m py_compile crawler/crawl.py crawler/report.py crawler/build_search_shards.py crawler/validate_public_index.py crawler/validate_media_catalog.py crawler/hurricane_strength.py crawler/media_discovery.py crawler/media_extraction_preflight.py crawler/crawl_revision_guard.py
           test "$(grep -c '^https://' crawler/seeds.txt)" -eq 51
           python -m unittest discover -s crawler -p 'test_*.py' -v
-      # Validate bounded sitemap discovery, Retry-After backoff, and the strict 1,600-page fetch cap.
+      # Validate bounded sitemap discovery, Retry-After backoff, and the strict 6,000-page fetch cap (up to 1,000 fetch attempts per minute during an active six-minute run).
       - name: Crawl configured sites
         if: steps.freshness.outputs.current == 'true'
         run: python crawler/crawl.py
