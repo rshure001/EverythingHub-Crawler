@@ -1,4 +1,5 @@
 import gzip
+import hashlib
 import json
 import tempfile
 import unittest
@@ -30,6 +31,69 @@ class CatalogLoaderTests(unittest.TestCase):
                 json.dump({"version": 1, "pages": {}}, stream)
             with self.assertRaises(ValueError):
                 load_catalog(path)
+
+    def write_shard_manifest(self, directory, shards):
+        directory = Path(directory)
+        entries = []
+        for index, pages in enumerate(shards, start=1):
+            raw = (json.dumps(
+                {"version": 1, "pages": pages},
+                separators=(",", ":"),
+            ) + "\n").encode("utf-8")
+            name = f"shard-{index:04d}.json"
+            (directory / name).write_bytes(raw)
+            entries.append({
+                "file": name,
+                "pages": len(pages),
+                "bytes": len(raw),
+                "sha256": hashlib.sha256(raw).hexdigest(),
+            })
+        manifest = {
+            "version": 1,
+            "integrity": "sha256",
+            "updated_at": 1700000000,
+            "total_pages": sum(len(pages) for pages in shards),
+            "shard_count": len(entries),
+            "shards": entries,
+        }
+        (directory / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+        return manifest
+
+    def test_loads_and_verifies_shard_only_manifest(self):
+        with tempfile.TemporaryDirectory() as directory:
+            expected = [
+                {"url": "https://example.com/a", "title": "A"},
+                {"url": "https://example.org/b", "title": "B"},
+            ]
+            self.write_shard_manifest(directory, [[expected[0]], [expected[1]]])
+            self.assertEqual(load_catalog(search_dir=directory), expected)
+
+    def test_rejects_shard_digest_mismatch(self):
+        with tempfile.TemporaryDirectory() as directory:
+            self.write_shard_manifest(directory, [[{"url": "https://example.com/a"}]])
+            path = Path(directory) / "manifest.json"
+            manifest = json.loads(path.read_text(encoding="utf-8"))
+            manifest["shards"][0]["sha256"] = "0" * 64
+            path.write_text(json.dumps(manifest), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "SHA-256 mismatch"):
+                load_catalog(search_dir=directory)
+
+    def test_rejects_duplicate_urls_across_shards(self):
+        with tempfile.TemporaryDirectory() as directory:
+            page = {"url": "https://example.com/a"}
+            self.write_shard_manifest(directory, [[page], [page]])
+            with self.assertRaisesRegex(ValueError, "duplicate URL"):
+                load_catalog(search_dir=directory)
+
+    def test_rejects_shard_page_count_mismatch(self):
+        with tempfile.TemporaryDirectory() as directory:
+            self.write_shard_manifest(directory, [[{"url": "https://example.com/a"}]])
+            path = Path(directory) / "manifest.json"
+            manifest = json.loads(path.read_text(encoding="utf-8"))
+            manifest["total_pages"] = 2
+            path.write_text(json.dumps(manifest), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "page count differs"):
+                load_catalog(search_dir=directory)
 
 
 if __name__ == "__main__":
