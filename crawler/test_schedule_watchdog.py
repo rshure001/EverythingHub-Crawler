@@ -13,15 +13,16 @@ class ScheduleWatchdogTests(unittest.TestCase):
         self.assertIn('    - cron: "7,22,37,52 * * * *"', workflow)
         self.assertNotIn('    - cron: "*/15 * * * *"', workflow)
 
-    def test_watchdog_runs_after_crawler_importer_and_release_completion(self):
+    def test_watchdog_runs_after_crawler_importer_release_and_independent_search_completion(self):
         workflow = (Path(__file__).resolve().parents[1] / ".github" / "workflows" / "crawl-watchdog.yml").read_text(encoding="utf-8")
         workflow_run = workflow.split("  workflow_run:\n", 1)[1].split("  workflow_dispatch:", 1)[0]
-        self.assertEqual(workflow_run.count('- "'), 4)
+        self.assertEqual(workflow_run.count('- "'), 5)
         self.assertIn('- "Everything Hub crawler"', workflow_run)
         self.assertNotIn('- "Everything Hub live diagnostics"', workflow_run)
         self.assertIn('- "EverythingHub isolated importer smoke test"', workflow_run)
         self.assertIn('- "EverythingHub Publisher"', workflow_run)
         self.assertIn('- "EverythingHub search API smoke test"', workflow_run)
+        self.assertIn('- "Validate Everything Hub Vercel search backend"', workflow_run)
         self.assertNotIn('- "Validate Everything Hub crawler and schema"', workflow_run)
         self.assertIn("types:\n      - completed", workflow_run)
         self.assertIn("branches: [main]", workflow_run)
