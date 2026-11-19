@@ -4,6 +4,10 @@ const ALLOWED_LANES = new Set([
   "business", "government", "culture", "nature",
 ]);
 
+/**
+ * @param {{ query: string, lane?: string | null, limit?: number, offset?: number }} options
+ * @returns {URL}
+ */
 export function buildVercelSearchUrl({ query, lane = null, limit = 10, offset = 0 } = {}) {
   const normalizedQuery = String(query ?? "").trim().slice(0, 160);
   if (!normalizedQuery) throw new TypeError("query is required");
@@ -25,6 +29,18 @@ export function buildVercelSearchUrl({ query, lane = null, limit = 10, offset = 
   return url;
 }
 
+/**
+ * @param {{
+ *   query: string,
+ *   lane?: string | null,
+ *   limit?: number,
+ *   offset?: number,
+ *   fallbackReason?: string,
+ *   fetchImpl?: typeof fetch,
+ *   timeoutMs?: number
+ * }} options
+ * @returns {Promise<Record<string, any> | null>}
+ */
 export async function fetchVercelCatalogFallback({
   query,
   lane = null,
