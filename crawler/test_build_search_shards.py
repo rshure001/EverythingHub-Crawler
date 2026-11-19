@@ -1,6 +1,13 @@
 import unittest
 
-from build_search_shards import MAX_BYTES, batch_fits, compact, encode_batch
+from build_search_shards import (
+    MAX_BYTES,
+    MAX_CATALOG_GZIP_BYTES,
+    batch_fits,
+    catalog_metadata,
+    compact,
+    encode_batch,
+)
 
 
 class SearchShardBatchBoundaryTests(unittest.TestCase):
@@ -20,6 +27,19 @@ class SearchShardBatchBoundaryTests(unittest.TestCase):
         self.assertTrue(raw.endswith(b"\n"))
         self.assertTrue(batch_fits([page], len(raw)))
         self.assertFalse(batch_fits([page], len(raw) - 1))
+
+    def test_compressed_catalog_metadata_is_kept_within_the_serving_cap(self):
+        raw = b"small compressed catalog"
+        metadata = catalog_metadata(raw, 3)
+
+        self.assertEqual(metadata["file"], "catalog-v1.json.gz")
+        self.assertEqual(metadata["pages"], 3)
+        self.assertEqual(metadata["bytes"], len(raw))
+        self.assertEqual(len(metadata["sha256"]), 64)
+
+    def test_compressed_catalog_metadata_is_omitted_above_the_serving_cap(self):
+        raw = b"x" * (MAX_CATALOG_GZIP_BYTES + 1)
+        self.assertIsNone(catalog_metadata(raw, 3))
 
     def test_compact_preserves_crawl_timestamps(self):
         page = compact({

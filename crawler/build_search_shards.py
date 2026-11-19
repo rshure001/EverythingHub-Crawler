@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build integrity-pinned public search shards and one compressed crawler catalog."""
+"""Build integrity-pinned public search shards and an optional compressed catalog."""
 import gzip
 import hashlib
 import json
@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "data" / "index.json"
 OUT = ROOT / "public-search"
 MAX_BYTES = 340_000  # Keep 10 KB headroom below the 350 KB serving/validation ceiling.
+MAX_CATALOG_GZIP_BYTES = 6_000_000
 CATALOG_NAME = "catalog-v1.json.gz"
 
 
@@ -75,6 +76,18 @@ def batch_fits(items, max_bytes=MAX_BYTES):
     return len(encode_batch(items)) <= max_bytes
 
 
+def catalog_metadata(raw, page_count):
+    """Return gzip metadata only when the optional catalog stays within its serving cap."""
+    if len(raw) > MAX_CATALOG_GZIP_BYTES:
+        return None
+    return {
+        "file": CATALOG_NAME,
+        "pages": page_count,
+        "bytes": len(raw),
+        "sha256": hashlib.sha256(raw).hexdigest(),
+    }
+
+
 def main():
     source = json.loads(SOURCE.read_text(encoding="utf-8"))
     pages = [compact(p) for p in source.get("pages", []) if is_publishable(p)]
@@ -119,13 +132,15 @@ def main():
         separators=(",", ":"),
     ) + "\n"
     catalog_raw = gzip.compress(catalog_payload.encode("utf-8"), compresslevel=9, mtime=0)
-    (OUT / CATALOG_NAME).write_bytes(catalog_raw)
-    catalog_gzip = {
-        "file": CATALOG_NAME,
-        "pages": len(pages),
-        "bytes": len(catalog_raw),
-        "sha256": hashlib.sha256(catalog_raw).hexdigest(),
-    }
+    catalog_gzip = catalog_metadata(catalog_raw, len(pages))
+    catalog_path = OUT / CATALOG_NAME
+    if catalog_gzip is None:
+        # A missing optional gzip catalog is safe: verified bounded shards remain
+        # the static-search transport. Remove any stale oversized copy.
+        if catalog_path.exists():
+            catalog_path.unlink()
+    else:
+        catalog_path.write_bytes(catalog_raw)
 
     manifest = {
         "version": 1,
@@ -134,10 +149,11 @@ def main():
         "total_pages": len(pages),
         "shard_count": len(shards),
         "shards": shards,
-        "catalog_gzip": catalog_gzip,
         "source": "Everything Hub public-web crawler",
         "notice": "Search metadata and short excerpts from publicly accessible pages."
     }
+    if catalog_gzip is not None:
+        manifest["catalog_gzip"] = catalog_gzip
     (OUT / "manifest.json").write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
@@ -148,11 +164,17 @@ def main():
             f'{shard["file"]}: {shard["pages"]} pages, '
             f'{shard["bytes"]} bytes, sha256 {shard["sha256"]}'
         )
-    print(
-        f'{CATALOG_NAME}: {catalog_gzip["pages"]} pages, '
-        f'{catalog_gzip["bytes"]} compressed bytes, '
-        f'sha256 {catalog_gzip["sha256"]}'
-    )
+    if catalog_gzip is not None:
+        print(
+            f'{CATALOG_NAME}: {catalog_gzip["pages"]} pages, '
+            f'{catalog_gzip["bytes"]} compressed bytes, '
+            f'sha256 {catalog_gzip["sha256"]}'
+        )
+    else:
+        print(
+            f"Compressed catalog omitted: {len(catalog_raw):,} bytes exceeds "
+            f"the {MAX_CATALOG_GZIP_BYTES:,}-byte limit; verified shard fallback remains available."
+        )
 
 
 if __name__ == "__main__":

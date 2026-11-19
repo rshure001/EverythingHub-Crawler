@@ -258,19 +258,26 @@ def validate(root: Path = ROOT) -> list[str]:
     return errors
 
 
+def validation_summary(manifest: dict) -> str:
+    """Describe verified gzip transport or the verified shard-only fallback."""
+    summary = (
+        "Public search index valid: "
+        f"{manifest['total_pages']:,} pages across {manifest['shard_count']:,} shards; "
+        "all shard sizes, SHA-256 digests, URLs, and records match data/index.json; "
+    )
+    catalog = manifest.get("catalog_gzip")
+    if isinstance(catalog, dict):
+        return summary + f"compressed catalog verified ({catalog['bytes']:,} bytes)."
+    return summary + "compressed catalog omitted; verified shard fallback remains available."
+
+
 def main() -> None:
     errors = validate()
     if errors:
         print("\n".join(f"ERROR: {error}" for error in errors), file=sys.stderr)
         raise SystemExit(1)
     manifest = json.loads((ROOT / "public-search" / "manifest.json").read_text(encoding="utf-8"))
-    catalog = manifest["catalog_gzip"]
-    print(
-        "Public search index valid: "
-        f"{manifest['total_pages']:,} pages across {manifest['shard_count']:,} shards; "
-        "all shard sizes, SHA-256 digests, URLs, and records match data/index.json; "
-        f"compressed catalog verified ({catalog['bytes']:,} bytes)."
-    )
+    print(validation_summary(manifest))
 
 
 if __name__ == "__main__":
