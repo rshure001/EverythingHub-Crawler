@@ -30,6 +30,12 @@ requests start at crawler result forty, not crawler result fifty. This keeps
 the Bing supplement from creating a ten-result gap and prevents page-two
 duplicates. Regression tests cover pages one through three.
 
+## Deployment packaging
+
+- The direct Vercel upload mirrors `vercel-search-backend/src/` under `src/vercel-search-backend/src/` in the deployment payload.
+- That folder's `package.json` explicitly pins CommonJS and Node.js 26.x; the backend uses built-in Node modules only.
+- Keep the package manifest in Git so direct Vercel API deployments remain reproducible and reviewable.
+
 ## Tests
 
 Run from the repository root:
