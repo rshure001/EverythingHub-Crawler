@@ -141,4 +141,4 @@ jobs:
           gh workflow run publish-site.yml --ref main
           echo "Dispatched the validated catalog publisher."
           gh workflow run search-api-smoke.yml --ref main
-          echo "Dispatched the live search API smoke test."
+          echo "Dispatched the live search smoke test; it waits for the committed catalog."

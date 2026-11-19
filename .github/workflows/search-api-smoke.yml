@@ -5,8 +5,8 @@ on:
     branches: [main]
     paths:
       - "supabase/functions/everything-hub-web-search/**"
-      - "public-search/**"
       - "vercel-search-backend/**"
+      - "public-search/**"
       - ".github/workflows/search-api-smoke.yml"
   workflow_dispatch:
   workflow_run:
@@ -18,22 +18,38 @@ jobs:
   smoke-test:
     if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 8
     env:
       BASE: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1
       KEY: sb_publishable_XlIsACWhtVS1jVODWYGTpg_GMs8v3vJ
       VERCEL_API: https://everythinghub-search-backend.vercel.app
     steps:
+      - uses: actions/checkout@v4
       - name: Check indexed ranking and database-independent fallback
         run: |
           python - <<'PY'
           import json
           import os
+          import re
+          import time
           import urllib.parse
           import urllib.request
+          from pathlib import Path
 
           base = os.environ["BASE"]
           key = os.environ["KEY"]
+
+          manifest = json.loads(Path("public-search/manifest.json").read_text(encoding="utf-8"))
+          expected_pages = manifest.get("total_pages")
+          expected_updated_at = manifest.get("updated_at")
+          catalog = manifest.get("catalog_gzip")
+          expected_sha = catalog.get("sha256") if isinstance(catalog, dict) else None
+          if not isinstance(expected_pages, int) or expected_pages < 1:
+              raise SystemExit("Committed public search manifest has an invalid page count")
+          if not isinstance(expected_updated_at, int) or expected_updated_at < 1:
+              raise SystemExit("Committed public search manifest has an invalid update timestamp")
+          if not isinstance(expected_sha, str) or not re.fullmatch(r"[0-9a-f]{64}", expected_sha):
+              raise SystemExit("Committed public search manifest has no valid compressed-catalog SHA-256")
 
           def get(function, query, **extra):
               params = {"q": query, "limit": 10, **extra}
@@ -125,8 +141,58 @@ jobs:
                   assert response.status == 200, response.status
                   return json.load(response)
 
-          health = get_vercel("/api/health")
-          production = get_vercel("/api/search?" + urllib.parse.urlencode({"q": "NASA", "limit": 50, "offset": 0}))
+          deadline = time.monotonic() + 360
+          last_observed = None
+          while True:
+              health = get_vercel("/api/health")
+              production = get_vercel("/api/search?" + urllib.parse.urlencode({"q": "NASA", "limit": 50, "offset": 0}))
+              pages_match = production.get("indexedPages") == expected_pages
+              digest_match = str(production.get("indexSha256", "")).lower() == expected_sha
+              timestamp_match = production.get("indexUpdatedAt") == expected_updated_at
+              if (
+                  health.get("status") == "ok"
+                  and production.get("indexStatus") == "crawler-catalog-active"
+                  and pages_match
+                  and digest_match
+                  and timestamp_match
+              ):
+                  break
+              last_observed = {
+                  "indexedPages": production.get("indexedPages"),
+                  "indexSha256": production.get("indexSha256"),
+                  "indexUpdatedAt": production.get("indexUpdatedAt"),
+                  "indexStatus": production.get("indexStatus"),
+              }
+              remaining = deadline - time.monotonic()
+              if remaining <= 0:
+                  raise SystemExit(
+                      "Live Vercel catalog did not catch up to the committed manifest within 360 seconds: "
+                      + json.dumps({
+                          "expectedPages": expected_pages,
+                          "expectedSha256": expected_sha,
+                          "expectedUpdatedAt": expected_updated_at,
+                          "observed": last_observed,
+                      }, sort_keys=True)
+                  )
+              print(
+                  "Waiting for Vercel catalog cache to match committed manifest:",
+                  json.dumps({
+                      "expectedPages": expected_pages,
+                      "observedPages": last_observed["indexedPages"],
+                      "expectedUpdatedAt": expected_updated_at,
+                      "observedUpdatedAt": last_observed["indexUpdatedAt"],
+                      "remainingSeconds": int(remaining),
+                  }, sort_keys=True)
+              )
+              time.sleep(min(30, remaining))
+          print(
+              "Live Vercel catalog matches committed manifest:",
+              expected_pages,
+              "pages; SHA-256",
+              expected_sha,
+              "updated_at",
+              expected_updated_at,
+          )
           page2 = get_vercel("/api/search?" + urllib.parse.urlencode({"q": "NASA", "limit": 50, "offset": 50}))
           assert health.get("status") == "ok", health
           assert health.get("service") == "everythinghub-independent-search", health
