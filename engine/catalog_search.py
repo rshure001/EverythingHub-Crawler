@@ -14,7 +14,10 @@ from search_core import search
 DEFAULT_SEARCH_DIR = Path(__file__).resolve().parents[1] / "public-search"
 DEFAULT_CATALOG = DEFAULT_SEARCH_DIR / "catalog-v1.json.gz"
 MAX_SHARD_BYTES = 350_000
-MAX_CATALOG_GZIP_BYTES = 10_000_000
+MAX_SHARD_COUNT = 256
+MAX_TOTAL_SHARD_BYTES = 64_000_000
+MAX_INDEXED_PAGES = 30_000
+MAX_CATALOG_GZIP_BYTES = 12_000_000
 MAX_CATALOG_UNCOMPRESSED_BYTES = 64_000_000
 
 
@@ -55,6 +58,8 @@ def _load_gzip_catalog(
         raise ValueError("catalog pages must be a list")
     if expected_pages is not None and len(pages) != expected_pages:
         raise ValueError("compressed catalog page count differs from the manifest")
+    if len(pages) > MAX_INDEXED_PAGES:
+        raise ValueError("compressed catalog exceeds the indexed-page safety limit")
     if metadata is not None and metadata.get("pages") != len(pages):
         raise ValueError("compressed catalog metadata page count mismatch")
     return [page for page in pages if isinstance(page, dict)]
@@ -65,8 +70,14 @@ def _load_shards(search_dir: Path, manifest: dict[str, Any]) -> list[dict[str, A
     if not isinstance(shards, list) or len(shards) != manifest.get("shard_count"):
         raise ValueError("public search manifest shard count is invalid")
 
+    if len(shards) > MAX_SHARD_COUNT:
+        raise ValueError("public search manifest exceeds the shard-count safety limit")
+    if manifest.get("total_pages", 0) > MAX_INDEXED_PAGES:
+        raise ValueError("public search manifest exceeds the indexed-page safety limit")
+
     pages: list[dict[str, Any]] = []
     seen_urls: set[str] = set()
+    total_shard_bytes = 0
     for shard in shards:
         if not isinstance(shard, dict):
             raise ValueError("public search manifest contains a malformed shard entry")
@@ -80,6 +91,9 @@ def _load_shards(search_dir: Path, manifest: dict[str, Any]) -> list[dict[str, A
             raise ValueError(f"{name}: shard byte count is invalid")
         if not isinstance(page_count, int) or isinstance(page_count, bool) or page_count < 1:
             raise ValueError(f"{name}: shard page count is invalid")
+        total_shard_bytes += byte_count
+        if total_shard_bytes > MAX_TOTAL_SHARD_BYTES:
+            raise ValueError("public search shards exceed the aggregate byte safety limit")
         if not isinstance(digest, str) or not re.fullmatch(r"[a-f0-9]{64}", digest):
             raise ValueError(f"{name}: shard SHA-256 is invalid")
 
@@ -130,8 +144,10 @@ def load_catalog(
     shard_count = manifest.get("shard_count")
     if not isinstance(total_pages, int) or isinstance(total_pages, bool) or total_pages < 1:
         raise ValueError("public search manifest total_pages is invalid")
-    if not isinstance(shard_count, int) or isinstance(shard_count, bool) or shard_count < 1:
+    if not isinstance(shard_count, int) or isinstance(shard_count, bool) or shard_count < 1 or shard_count > MAX_SHARD_COUNT:
         raise ValueError("public search manifest shard_count is invalid")
+    if total_pages > MAX_INDEXED_PAGES:
+        raise ValueError("public search manifest total_pages exceeds the safety limit")
     shards = manifest.get("shards")
     if not isinstance(shards, list) or len(shards) != shard_count:
         raise ValueError("public search manifest shard count is invalid")
