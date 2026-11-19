@@ -112,6 +112,8 @@ jobs:
           static_index_count=0
           independent_fallback_ok=0
           independent_fallback_count=0
+          vercel_catalog_fallback_ok=0
+          vercel_catalog_fallback_count=0
           web_search_fallback_ok=0
           web_search_fallback_count=0
           independent_count=0
@@ -129,6 +131,7 @@ jobs:
                   console.log(JSON.stringify({source:d.source??null,provider:d.provider??null,fallback:d.fallback??false,independentOfDatabase:d.independentOfDatabase??false,count:d.count??a.length,resultCount:a.length,sample:a.slice(0,3).map(x=>({title:x.title,url:x.url}))},null,2));
                   if(!a.length) process.exit(2);
                   if(d.fallback===true && d.source==="Everything Hub public crawler index") process.exit(3);
+                  if(d.fallback===true && d.source==="Everything Hub Vercel public catalog" && d.independentOfDatabase===true && ["database_unavailable","database_empty"].includes(d.fallbackReason) && d.indexIntegrity==="sha256" && d.indexTransport==="vercel" && a.length) process.exit(5);
                   if(d.fallback===true && d.source==="Bing RSS independent web fallback" && d.independentOfDatabase===true && d.fallbackReason==="database_unavailable") process.exit(4);
                 '; then
                   echo "PASS: eh_quad database-backed search returned usable results."
@@ -141,6 +144,12 @@ jobs:
                     db_search_ok=0
                     db_search_detail="HTTP 200 in $db_search_seconds seconds via public crawler fallback; PostgreSQL is still unavailable"
                     echo "PASS: public crawler index fallback returned $static_index_count results; database-backed search remains blocked."
+                  elif [ "$search_exit" -eq 5 ]; then
+                    vercel_catalog_fallback_ok=1
+                    vercel_catalog_fallback_count=$(node -p "require('/tmp/search.json').results.length")
+                    db_search_ok=0
+                    db_search_detail="HTTP 200 in $db_search_seconds seconds via SHA-256-verified Vercel crawler catalog; PostgreSQL is still unavailable"
+                    echo "PASS: Vercel crawler catalog fallback returned $vercel_catalog_fallback_count results; database-backed search remains blocked."
                   elif [ "$search_exit" -eq 4 ]; then
                     independent_fallback_ok=1
                     independent_fallback_count=$(node -p "require('/tmp/search.json').results.length")
@@ -187,6 +196,7 @@ jobs:
             const source=String(d.source||"");
             console.log(JSON.stringify({source:source||null,provider:d.provider??null,fallback:d.fallback??false,independentOfDatabase:d.independentOfDatabase??false,fallbackReason:d.fallbackReason??null,indexIntegrity:d.indexIntegrity??null,indexTransport:d.indexTransport??null,count:d.count??a.length,resultCount:a.length,sample:a.slice(0,3).map(x=>({title:x.title,url:x.url}))},null,2));
             if(source==="Everything Hub public crawler index" && d.indexIntegrity==="sha256" && a.length) process.exit(0);
+            if(source==="Everything Hub Vercel public catalog" && d.fallback===true && d.independentOfDatabase===true && ["database_unavailable","database_empty"].includes(d.fallbackReason) && d.indexIntegrity==="sha256" && d.indexTransport==="vercel" && a.length) process.exit(6);
             if(source.startsWith("Everything Hub eh_quad") && a.length) process.exit(5);
             if(source==="Bing RSS independent web fallback" && d.independentOfDatabase===true && d.fallbackReason==="database_unavailable" && d.provider==="Bing RSS" && a.length) process.exit(4);
             process.exit(2);
@@ -197,7 +207,14 @@ jobs:
             echo "PASS: NASA query returned the SHA-256 verified public crawler index."
           else
             static_search_exit=$?
-            if [ "$static_search_exit" -eq 5 ]; then
+            if [ "$static_search_exit" -eq 6 ]; then
+              static_index_ok=1
+              static_index_count=$(node -p "require('/tmp/static-search.json').results.length")
+              static_index_transport="vercel"
+              db_search_ok=0
+              db_search_detail="NASA query returned the SHA-256-verified Vercel public crawler catalog; PostgreSQL remains unavailable"
+              echo "PASS: NASA query returned $static_index_count results from the SHA-256-verified Vercel crawler catalog."
+            elif [ "$static_search_exit" -eq 5 ]; then
               db_search_ok=1
               db_search_detail="NASA query returned eh_quad database-index results"
               echo "PASS: NASA query returned results from the eh_quad index."
@@ -255,6 +272,9 @@ jobs:
             echo "- Database-backed search: $db_search_status"
             if [ "$static_index_ok" -eq 1 ]; then
               echo "- Public crawler fallback: PASS (NASA query returned $static_index_count results; SHA-256 verified $static_index_transport catalog)"
+            fi
+            if [ "$vercel_catalog_fallback_ok" -eq 1 ]; then
+              echo "- Vercel crawler catalog fallback: PASS (Rolex query returned $vercel_catalog_fallback_count results; SHA-256 verified)"
             fi
             if [ "$independent_fallback_ok" -eq 1 ]; then
               echo "- Bing RSS independent fallback: PASS (Rolex query returned $independent_fallback_count results)"

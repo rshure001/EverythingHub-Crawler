@@ -47,6 +47,32 @@ class LiveDiagnosticsScheduleTests(unittest.TestCase):
         self.assertNotIn("approved-master-art", homepage_check)
         self.assertNotIn('class="tile"', homepage_check)
 
+    def test_vercel_catalog_fallback_is_recognized_without_claiming_database_search(self):
+        workflow = (
+            Path(__file__).resolve().parents[1]
+            / ".github"
+            / "workflows"
+            / "everything-hub-live-diagnostics.yml"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn('d.source==="Everything Hub Vercel public catalog"', workflow)
+        self.assertIn('d.indexIntegrity==="sha256"', workflow)
+        self.assertIn('d.indexTransport==="vercel"', workflow)
+        self.assertIn('vercel_catalog_fallback_ok=1', workflow)
+        self.assertIn('static_search_exit" -eq 6', workflow)
+
+        start = workflow.index('elif [ "$search_exit" -eq 5 ]')
+        end = workflow.index('elif [ "$search_exit" -eq 4 ]', start)
+        rolex_fallback = workflow[start:end]
+        self.assertIn("db_search_ok=0", rolex_fallback)
+        self.assertIn("Vercel crawler catalog fallback", rolex_fallback)
+
+        start = workflow.index('if [ "$static_search_exit" -eq 6 ]')
+        end = workflow.index('elif [ "$static_search_exit" -eq 5 ]', start)
+        nasa_fallback = workflow[start:end]
+        self.assertIn("db_search_ok=0", nasa_fallback)
+        self.assertIn("SHA-256-verified Vercel public crawler catalog", nasa_fallback)
+
     def test_importer_trigger_only_runs_diagnostics_for_hourly_schedule(self):
         workflow = (
             Path(__file__).resolve().parents[1]
