@@ -13,9 +13,11 @@ from lane_classifier import VALID_LANES
 
 ROOT = Path(__file__).resolve().parents[1]
 MAX_SHARD_BYTES = 350_000
-# Keep validation aligned with the browser and independent Vercel search transport.
+# Keep validation aligned with the independent Vercel backend's bounded decoder.
+# The Supabase Edge Function uses a smaller 30 MB budget and delegates larger
+# catalogs to Vercel rather than scanning all shards in its CPU-limited isolate.
 MAX_CATALOG_GZIP_BYTES = 8_000_000
-MAX_CATALOG_UNCOMPRESSED_BYTES = 30_000_000
+MAX_CATALOG_UNCOMPRESSED_BYTES = 64_000_000
 # GitHub recommends keeping individual repository files at or below 50 MB.
 # Stop before the 100 MB hard limit so a growing canonical index cannot make
 # the crawler commit fail unexpectedly.

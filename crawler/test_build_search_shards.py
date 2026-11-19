@@ -49,7 +49,13 @@ class SearchShardBatchBoundaryTests(unittest.TestCase):
 
     def test_builder_and_validator_share_the_uncompressed_catalog_cap(self):
         self.assertEqual(MAX_CATALOG_UNCOMPRESSED_BYTES, VALIDATOR_MAX_CATALOG_UNCOMPRESSED_BYTES)
-        self.assertEqual(MAX_CATALOG_UNCOMPRESSED_BYTES, 30_000_000)
+        self.assertEqual(MAX_CATALOG_UNCOMPRESSED_BYTES, 64_000_000)
+
+    def test_catalog_above_edge_budget_is_retained_for_vercel_fallback(self):
+        # The current 15.6k-page compact catalog is 30,234,899 bytes. The Edge
+        # Function delegates this size to Vercel, whose bounded decoder allows 64 MB.
+        metadata = catalog_metadata(b"small compressed catalog", 3, 30_234_899)
+        self.assertIsNotNone(metadata)
 
     def test_compressed_catalog_is_omitted_above_the_uncompressed_safety_cap(self):
         self.assertIsNone(catalog_metadata(b"small compressed catalog", 3, MAX_CATALOG_UNCOMPRESSED_BYTES + 1))

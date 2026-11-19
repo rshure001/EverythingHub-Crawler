@@ -12,10 +12,11 @@ ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "data" / "index.json"
 OUT = ROOT / "public-search"
 MAX_BYTES = 340_000  # Keep 10 KB headroom below the 350 KB serving/validation ceiling.
-# Keep the optional gzip catalog within both the compressed serving cap and the
-# validator's bounded decompression cap. Larger catalogs use verified shards only.
+# The independent Vercel backend safely decompresses up to 64 MB. The
+# Supabase Edge Function has a smaller 30 MB/6 MB budget and delegates larger
+# catalogs to Vercel rather than scanning all shards in its CPU-limited isolate.
 MAX_CATALOG_GZIP_BYTES = 8_000_000
-MAX_CATALOG_UNCOMPRESSED_BYTES = 30_000_000
+MAX_CATALOG_UNCOMPRESSED_BYTES = 64_000_000
 CATALOG_NAME = "catalog-v1.json.gz"
 
 

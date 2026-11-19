@@ -3,6 +3,11 @@ import { readFile } from "node:fs/promises";
 import { gunzipSync } from "node:zlib";
 import { searchStaticPages } from "./static-search.mjs";
 import { isValidStaticManifest } from "./static-manifest.mjs";
+import vercelCatalog from "../../../vercel-search-backend/src/lib/catalog.js";
+
+const { validateManifestAndCatalog } = vercelCatalog;
+const EDGE_MAX_CATALOG_GZIP_BYTES = 6_000_000;
+const EDGE_MAX_CATALOG_UNCOMPRESSED_BYTES = 30_000_000;
 
 const root = new URL("../../../", import.meta.url);
 const manifest = JSON.parse(await readFile(new URL("public-search/manifest.json", root), "utf8"));
@@ -24,12 +29,30 @@ if (meta) {
   if (createHash("sha256").update(compressed).digest("hex") !== meta.sha256) {
     throw new Error("catalog SHA-256 mismatch");
   }
-  const payload = JSON.parse(gunzipSync(compressed, { maxOutputLength: 30_000_000 }).toString("utf8"));
-  if (payload.version !== 1 || !Array.isArray(payload.pages) || payload.pages.length !== manifest.total_pages) {
-    throw new Error("catalog payload does not match manifest page count");
+  if (compressed.length <= EDGE_MAX_CATALOG_GZIP_BYTES) {
+    try {
+      const payload = JSON.parse(gunzipSync(
+        compressed,
+        { maxOutputLength: EDGE_MAX_CATALOG_UNCOMPRESSED_BYTES },
+      ).toString("utf8"));
+      if (payload.version !== 1 || !Array.isArray(payload.pages) || payload.pages.length !== manifest.total_pages) {
+        throw new Error("catalog payload does not match manifest page count");
+      }
+      pages = payload.pages;
+      transport = "edge-gzip";
+    } catch (error) {
+      if (error?.code !== "ERR_BUFFER_TOO_LARGE") throw error;
+      // The Edge Function intentionally stops at 30 MB and delegates larger
+      // verified catalogs to Vercel's independent 64 MB bounded decoder.
+      pages = validateManifestAndCatalog(manifest, compressed).pages;
+      transport = "vercel-gzip";
+    }
+  } else {
+    // The Edge Function has a 6 MB compressed cap; the Vercel backend allows
+    // up to 8 MB compressed and 64 MB decoded, with the same SHA-256 checks.
+    pages = validateManifestAndCatalog(manifest, compressed).pages;
+    transport = "vercel-gzip";
   }
-  pages = payload.pages;
-  transport = "gzip";
   compressedBytes = compressed.length;
 } else {
   const seenUrls = new Set();
