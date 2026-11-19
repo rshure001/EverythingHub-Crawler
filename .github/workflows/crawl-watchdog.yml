@@ -65,6 +65,15 @@ jobs:
               raise SystemExit("GitHub did not return crawler workflow-run arrays")
           known_ids = {row.get("id") for row in runs if isinstance(row, dict)}
           runs.extend(row for row in scheduled if isinstance(row, dict) and row.get("id") not in known_ids)
+          latest_scheduled = max(
+              (row for row in scheduled if isinstance(row, dict) and row.get("id")),
+              key=lambda row: row.get("created_at") or "",
+              default=None,
+          )
+          Path("/tmp/latest-scheduled-run-id").write_text(
+              str(latest_scheduled.get("id", "")) if latest_scheduled else "",
+              encoding="utf-8",
+          )
           Path("/tmp/crawl-runs-combined.json").write_text(
               json.dumps({"workflow_runs": runs}), encoding="utf-8"
           )
@@ -89,6 +98,40 @@ jobs:
           print("Recent crawler runs:", len(runs))
           print("Recent scheduled crawler runs:", len(scheduled))
           PY
+          latest_scheduled_run_id="$(cat /tmp/latest-scheduled-run-id)"
+          if [ -n "$latest_scheduled_run_id" ]; then
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${latest_scheduled_run_id}/jobs?per_page=100" > /tmp/latest-scheduled-jobs.json
+          else
+            echo '{"jobs":[]}' > /tmp/latest-scheduled-jobs.json
+          fi
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          combined = json.loads(Path("/tmp/crawl-runs-combined.json").read_text(encoding="utf-8"))
+          jobs_payload = json.loads(Path("/tmp/latest-scheduled-jobs.json").read_text(encoding="utf-8"))
+          run_id_text = Path("/tmp/latest-scheduled-run-id").read_text(encoding="utf-8").strip()
+          execution_conclusion = "unobserved"
+          if run_id_text:
+              try:
+                  run_id = int(run_id_text)
+              except ValueError:
+                  run_id = None
+              for job in jobs_payload.get("jobs", []):
+                  if not isinstance(job, dict) or job.get("name") != "crawl":
+                      continue
+                  for step in job.get("steps", []):
+                      if isinstance(step, dict) and step.get("name") == "Crawl configured sites":
+                          execution_conclusion = step.get("conclusion") or step.get("status") or "unobserved"
+                          break
+                  if run_id is not None:
+                      for run in combined.get("workflow_runs", []):
+                          if isinstance(run, dict) and run.get("id") == run_id:
+                              run["crawl_execution_conclusion"] = execution_conclusion
+                              break
+          Path("/tmp/crawl-runs-combined.json").write_text(json.dumps(combined), encoding="utf-8")
+          print("Latest scheduled crawl-step conclusion:", execution_conclusion)
+          PY
           python crawler/schedule_watchdog.py /tmp/crawl-runs-combined.json /tmp/public-manifest.json > /tmp/decision.json
           cat /tmp/decision.json
 
@@ -110,7 +153,8 @@ jobs:
             echo "- Schedule trigger status: $schedule_status"
             echo "- Latest scheduled crawler run: ${last_schedule:-none observed}"
             echo "- Scheduled run age (seconds): ${schedule_age:-unknown}"
-            echo "- Scheduled run conclusion: ${schedule_conclusion:-unknown}"
+            echo "- Scheduled crawl-step conclusion: ${schedule_conclusion:-unknown}"
+            echo "- Scheduled workflow conclusion: $(python -c 'import json; print(json.load(open("/tmp/decision.json")).get("last_scheduled_workflow_conclusion"))')"
           } >> "$GITHUB_STEP_SUMMARY"
 
           if [ "$schedule_status" != "recent" ] || [ "$schedule_conclusion" != "success" ]; then
