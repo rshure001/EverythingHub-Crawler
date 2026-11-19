@@ -57,15 +57,25 @@ def schedule_health(runs: list[dict[str, Any]], now: datetime,
             "schedule_age_seconds": None,
             "last_scheduled_run": None,
             "last_scheduled_conclusion": None,
+            "last_scheduled_workflow_conclusion": None,
         }
 
     created_at, latest = max(scheduled, key=lambda item: item[0])
     age = max(0, int((now - created_at).total_seconds()))
+    # Prefer the actual crawler step result when the watchdog enriched the
+    # scheduled run with job details. A workflow can conclude success even when
+    # its stale-revision guard intentionally skipped the crawl.
+    crawl_conclusion = (
+        latest.get("crawl_execution_conclusion")
+        if "crawl_execution_conclusion" in latest
+        else latest.get("conclusion")
+    )
     return {
         "schedule_status": "recent" if age <= max_schedule_age_seconds else "stale",
         "schedule_age_seconds": age,
         "last_scheduled_run": latest.get("created_at"),
-        "last_scheduled_conclusion": latest.get("conclusion"),
+        "last_scheduled_conclusion": crawl_conclusion,
+        "last_scheduled_workflow_conclusion": latest.get("conclusion"),
     }
 
 
