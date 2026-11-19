@@ -81,6 +81,9 @@ def main():
     duration = float(index.get("run_duration_seconds", 0) or 0)
     indexed_this_run = int(index.get("pages_indexed_this_run", 0) or 0)
     indexed_rate = indexed_this_run / (duration / 60) if duration > 0 else 0
+    indexed_hourly_equivalent = indexed_this_run / (duration / 3600) if duration > 0 else 0
+    hourly_target = 1000
+    hourly_target_status = "above target pace" if indexed_hourly_equivalent >= hourly_target else "below target pace"
     host_requests = index.get("host_requests_this_run", {}) or {}
     fetch_attempts = int(index.get("fetch_attempts_this_run", index.get("pages_crawled_this_run", 0)) or 0)
     successful_http = int(index.get("successful_http_responses_this_run", 0) or 0)
@@ -131,6 +134,8 @@ def main():
         f"- URLs added from sitemaps this run: **{int(index.get('sitemap_urls_added_this_run', 0) or 0):,}**",
         f"- Run duration: **{duration:.1f} seconds**",
         f"- Measured indexed rate (this run): **{indexed_rate:,.1f} pages/minute**",
+        f"- Run-rate equivalent: **{indexed_hourly_equivalent:,.0f} indexed records/hour** (short-run projection, not proof of a sustained hour)",
+        f"- 1,000-new-records/hour target: **{hourly_target_status}**",
         f"- Last index update (UTC): **{updated_text}**",
         "",
         "### Indexed content quality",
