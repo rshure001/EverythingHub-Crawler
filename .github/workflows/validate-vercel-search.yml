@@ -9,6 +9,10 @@ on:
     paths:
       - 'vercel-search-backend/**'
       - '.github/workflows/validate-vercel-search.yml'
+  schedule:
+    # Independently monitor the production catalog/search path without touching source websites.
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
@@ -21,3 +25,98 @@ jobs:
           node-version: '26'
       - name: Run search integrity and pagination tests
         run: node --test vercel-search-backend/test/*.test.js
+  live-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Verify production search backend health
+        env:
+          BASE: https://everythinghub-search-backend.vercel.app
+        run: |
+          set -euo pipefail
+          curl --silent --show-error --fail --max-time 20 "$BASE/api/health" -o /tmp/health.json
+          node <<'NODE'
+          const fs = require('node:fs');
+          const health = JSON.parse(fs.readFileSync('/tmp/health.json', 'utf8'));
+          if (
+            health.status !== 'ok' ||
+            health.database_required !== false ||
+            health.catalog_integrity !== 'sha256' ||
+            health.pagination !== 'non-overlapping'
+          ) {
+            throw new Error('Production search health contract failed: ' + JSON.stringify(health));
+          }
+          console.log(JSON.stringify({
+            status: health.status,
+            service: health.service,
+            storage: health.storage,
+            databaseRequired: health.database_required,
+            catalogIntegrity: health.catalog_integrity,
+            pagination: health.pagination
+          }, null, 2));
+          NODE
+      - name: Verify live catalog search, freshness, and non-overlapping pagination
+        env:
+          BASE: https://everythinghub-search-backend.vercel.app
+        run: |
+          set -euo pipefail
+          curl --silent --show-error --fail --max-time 30 -G "$BASE/api/search" \
+            --data-urlencode "q=NASA" --data-urlencode "limit=50" --data-urlencode "offset=0" \
+            -o /tmp/page-1.json
+          curl --silent --show-error --fail --max-time 30 -G "$BASE/api/search" \
+            --data-urlencode "q=NASA" --data-urlencode "limit=50" --data-urlencode "offset=50" \
+            -o /tmp/page-2.json
+          node <<'NODE'
+          const fs = require('node:fs');
+          const first = JSON.parse(fs.readFileSync('/tmp/page-1.json', 'utf8'));
+          const second = JSON.parse(fs.readFileSync('/tmp/page-2.json', 'utf8'));
+          const shaPattern = /^[a-f0-9]{64}$/i;
+          if (
+            first.indexStatus !== 'crawler-catalog-active' ||
+            !Number.isSafeInteger(first.indexedPages) || first.indexedPages < 1 ||
+            !Number.isSafeInteger(first.indexUpdatedAt) || first.indexUpdatedAt < 1 ||
+            !shaPattern.test(first.indexSha256 || '') ||
+            !Array.isArray(first.results) || first.results.length < 11 ||
+            !first.providers?.includes('Everything Hub Crawler') ||
+            !first.results.some(item => item.provider === 'everythinghub-catalog')
+          ) {
+            throw new Error('Live crawler catalog is missing or invalid: ' + JSON.stringify({
+              indexStatus: first.indexStatus,
+              indexedPages: first.indexedPages,
+              resultCount: first.results?.length,
+              providers: first.providers
+            }));
+          }
+          const ageSeconds = Math.floor(Date.now() / 1000 - first.indexUpdatedAt);
+          if (ageSeconds < -300 || ageSeconds > 3600) {
+            throw new Error('Crawler catalog timestamp is outside the one-hour live-monitor window: ' + ageSeconds);
+          }
+          if (
+            second.offset !== 50 ||
+            second.count !== first.count ||
+            second.indexSha256 !== first.indexSha256 ||
+            second.indexUpdatedAt !== first.indexUpdatedAt ||
+            !Array.isArray(second.results) || second.results.length === 0 ||
+            second.results.some(item => item.provider !== 'everythinghub-catalog')
+          ) {
+            throw new Error('Second search page does not match the same crawler catalog snapshot');
+          }
+          const firstUrls = new Set(first.results.map(item => item.url));
+          const overlap = second.results.filter(item => firstUrls.has(item.url));
+          if (overlap.length) {
+            throw new Error('Search pagination returned ' + overlap.length + ' duplicate URLs');
+          }
+          console.log(JSON.stringify({
+            query: first.query,
+            indexedPages: first.indexedPages,
+            crawlerMatches: first.count,
+            catalogUpdatedAt: new Date(first.indexUpdatedAt * 1000).toISOString(),
+            catalogAgeSeconds: ageSeconds,
+            page1Results: first.results.length,
+            page1CrawlerResults: first.results.filter(item => item.provider === 'everythinghub-catalog').length,
+            page1BingResults: first.results.filter(item => item.provider === 'bing-rss').length,
+            page2Results: second.results.length,
+            duplicateUrlsAcrossPages: overlap.length,
+            catalogSha256: first.indexSha256
+          }, null, 2));
+          NODE
