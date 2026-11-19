@@ -29,16 +29,27 @@ function searchCatalog(pages, query, lane) {
     const url = frequencies(page.url);
     let score = 0;
     let matched = 0;
+    let strongMatched = 0;
     for (const term of terms) {
-      const points = (title[term] || 0) * 12 +
-        (description[term] || 0) * 6 +
-        (url[term] || 0) * 4 +
-        Math.min(body[term] || 0, 8);
-      if (points > 0) { matched += 1; score += points; }
+      const titleHits = title[term] || 0;
+      const descriptionHits = description[term] || 0;
+      const urlHits = url[term] || 0;
+      const bodyHits = body[term] || 0;
+      const strongPoints = titleHits * 20 + descriptionHits * 10 + urlHits * 8;
+      const points = strongPoints + Math.min(bodyHits, 8);
+      if (points > 0) {
+        matched += 1;
+        score += points;
+      }
+      if (strongPoints > 0) strongMatched += 1;
     }
     if (!matched) continue;
     score += matched * 5;
-    if (matched === terms.length) score += 15;
+    // Reward complete matches only when every query term appears in a
+    // high-signal field. Repeated body-only mentions must not look exact.
+    if (strongMatched === terms.length) score += 15;
+    // A single weak body mention is discovery evidence, not a useful result.
+    if (strongMatched === 0 && score < 18) continue;
     const summary = clean(page.description);
     ranked.push({
       title: clean(page.title) || page.url,
