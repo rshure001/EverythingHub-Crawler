@@ -10,7 +10,7 @@ const commons = {
   creator: "Example Creator"
 };
 
-test("allows public-domain previews when attribution metadata says none is required", () => {
+test("allows public-domain previews when attribution is explicitly not required", () => {
   assert.equal(isMediaPreviewAllowed({
     source: "Wikimedia Commons",
     license: "Public domain",
@@ -18,7 +18,7 @@ test("allows public-domain previews when attribution metadata says none is requi
   }), true);
 });
 
-test("allows CC0 previews", () => {
+test("allows CC0 previews when attribution is explicitly not required", () => {
   assert.equal(isMediaPreviewAllowed({
     source: "Wikimedia Commons",
     license: "CC0 1.0",
@@ -26,17 +26,51 @@ test("allows CC0 previews", () => {
   }), true);
 });
 
-test("allows CC BY previews with a license URL and creator attribution", () => {
+test("allows CC BY previews with the matching canonical license URL and creator", () => {
   assert.equal(isMediaPreviewAllowed(commons), true);
 });
 
-test("allows CC BY-SA previews when the attribution requirement is explicitly false", () => {
+test("allows CC BY-SA previews when creator attribution is present", () => {
   assert.equal(isMediaPreviewAllowed({
     source: "Wikimedia Commons",
     license: "CC BY-SA 4.0",
     licenseUrl: "https://creativecommons.org/licenses/by-sa/4.0/",
-    attributionRequired: false
+    attributionRequired: false,
+    creator: "Example Creator"
   }), true);
+});
+
+test("rejects CC BY and CC BY-SA when creator attribution is missing even if metadata says false", () => {
+  assert.equal(isMediaPreviewAllowed({ ...commons, attributionRequired: false, creator: "" }), false);
+  assert.equal(isMediaPreviewAllowed({
+    source: "Wikimedia Commons",
+    license: "CC BY-SA 4.0",
+    licenseUrl: "https://creativecommons.org/licenses/by-sa/4.0/",
+    attributionRequired: false,
+    creator: ""
+  }), false);
+});
+
+test("rejects a CC BY license paired with a CC BY-SA license URL", () => {
+  assert.equal(isMediaPreviewAllowed({
+    ...commons,
+    licenseUrl: "https://creativecommons.org/licenses/by-sa/4.0/"
+  }), false);
+});
+
+test("rejects a CC BY-SA license paired with a CC BY license URL", () => {
+  assert.equal(isMediaPreviewAllowed({
+    source: "Wikimedia Commons",
+    license: "CC BY-SA 4.0",
+    licenseUrl: "https://creativecommons.org/licenses/by/4.0/",
+    attributionRequired: true,
+    creator: "Example Creator"
+  }), false);
+});
+
+test("rejects non-HTTPS and non-canonical Creative Commons URLs", () => {
+  assert.equal(isMediaPreviewAllowed({ ...commons, licenseUrl: "http://creativecommons.org/licenses/by/4.0/" }), false);
+  assert.equal(isMediaPreviewAllowed({ ...commons, licenseUrl: "https://example.com/licenses/by/4.0/" }), false);
 });
 
 test("rejects Bing results even if a license-like field is present", () => {
@@ -61,12 +95,18 @@ test("rejects CC BY licenses without an explicit license URL", () => {
   assert.equal(isMediaPreviewAllowed({ ...commons, licenseUrl: "" }), false);
 });
 
-test("rejects attribution-required media without creator or credit", () => {
-  assert.equal(isMediaPreviewAllowed({ ...commons, creator: "", credit: "" }), false);
+test("rejects attribution-required public-domain records without creator credit", () => {
+  assert.equal(isMediaPreviewAllowed({
+    source: "Wikimedia Commons",
+    license: "Public domain",
+    attributionRequired: true,
+    creator: ""
+  }), false);
 });
 
-test("rejects unknown attribution state", () => {
-  assert.equal(isMediaPreviewAllowed({ ...commons, attributionRequired: null }), false);
+test("rejects unknown attribution state for public-domain and CC0 records", () => {
+  assert.equal(isMediaPreviewAllowed({ ...commons, license: "Public domain", attributionRequired: null }), false);
+  assert.equal(isMediaPreviewAllowed({ ...commons, license: "CC0 1.0", attributionRequired: null }), false);
 });
 
 test("rejects unknown licenses and non-Commons sources", () => {
