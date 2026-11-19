@@ -33,3 +33,23 @@ jobs:
         run: bash -n platform/host-preflight.sh platform/backup-host.sh platform/activate-release.sh platform/install-host.sh platform/host-status.sh
       - name: Run platform safety tests
         run: python -m unittest discover -s platform -p 'test_*.py' -v
+
+  validate-windows-host-script:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse Windows host preflight script
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path "platform/windows-host-preflight.ps1"),
+            [ref]$tokens,
+            [ref]$errors
+          ) | Out-Null
+          if ($errors.Count -gt 0) {
+            $errors | ForEach-Object { Write-Error $_ }
+            exit 1
+          }
+          Write-Host "Windows PowerShell script syntax is valid"
