@@ -1,8 +1,11 @@
 import unittest
 
+from validate_public_index import MAX_CATALOG_UNCOMPRESSED_BYTES as VALIDATOR_MAX_CATALOG_UNCOMPRESSED_BYTES
+
 from build_search_shards import (
     MAX_BYTES,
     MAX_CATALOG_GZIP_BYTES,
+    MAX_CATALOG_UNCOMPRESSED_BYTES,
     batch_fits,
     catalog_metadata,
     compact,
@@ -43,6 +46,15 @@ class SearchShardBatchBoundaryTests(unittest.TestCase):
     def test_compressed_catalog_metadata_is_omitted_above_the_serving_cap(self):
         raw = b"x" * (MAX_CATALOG_GZIP_BYTES + 1)
         self.assertIsNone(catalog_metadata(raw, 3))
+
+    def test_builder_and_validator_share_the_uncompressed_catalog_cap(self):
+        self.assertEqual(MAX_CATALOG_UNCOMPRESSED_BYTES, VALIDATOR_MAX_CATALOG_UNCOMPRESSED_BYTES)
+        self.assertEqual(MAX_CATALOG_UNCOMPRESSED_BYTES, 30_000_000)
+
+    def test_compressed_catalog_is_omitted_above_the_uncompressed_safety_cap(self):
+        self.assertIsNone(catalog_metadata(b"small compressed catalog", 3, MAX_CATALOG_UNCOMPRESSED_BYTES + 1))
+        self.assertIsNotNone(catalog_metadata(b"small compressed catalog", 3, MAX_CATALOG_UNCOMPRESSED_BYTES))
+
 
     def test_compact_preserves_crawl_timestamps(self):
         page = compact({
