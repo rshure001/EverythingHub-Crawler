@@ -2,8 +2,9 @@
 const https = require('node:https');
 const zlib = require('node:zlib');
 const crypto = require('node:crypto');
+
 const MANIFEST_URL = 'https://raw.githubusercontent.com/rshure001/EverythingHub-Crawler/main/public-search/manifest.json';
-const CATALOG_URL = 'https://raw.githubusercontent.com/rshure001/EverythingHub-Crawler/main/public-search/catalog-v1.json.gz';
+const SHARD_BASE_URL = 'https://raw.githubusercontent.com/rshure001/EverythingHub-Crawler/main/public-search/';
 const CACHE_TTL_MS = 300000;
 const STALE_TTL_MS = 3600000;
 const MAX_MANIFEST_BYTES = 128000;
@@ -11,9 +12,14 @@ const MAX_CATALOG_GZIP_BYTES = 12000000;
 const MAX_CATALOG_JSON_BYTES = 64000000;
 const MAX_INDEXED_PAGES = 30000;
 const MAX_SHARD_COUNT = 256;
+const MAX_SHARD_BYTES = 1000000;
+const MAX_TOTAL_SHARD_BYTES = 48000000;
+const MAX_SHARD_CONCURRENCY = 32;
+const SHARD_FETCH_TIMEOUT_MS = 7000;
+const agent = new https.Agent({ keepAlive: true, maxSockets: MAX_SHARD_CONCURRENCY });
 let cache = null;
 
-function getBuffer(url, maxBytes) {
+function getBuffer(url, maxBytes, timeoutMs = 10000) {
   return new Promise((resolve, reject) => {
     let settled = false;
     let request;
@@ -26,7 +32,11 @@ function getBuffer(url, maxBytes) {
     };
     try {
       request = https.get(url, {
-        headers: { 'user-agent': 'EverythingHub-IndependentSearch/2.0', accept: '*/*' }
+        agent,
+        headers: {
+          'user-agent': 'EverythingHub-IndependentSearch/2.1',
+          accept: '*/*'
+        }
       }, (response) => {
         if (response.statusCode < 200 || response.statusCode >= 300) {
           response.resume();
@@ -55,7 +65,7 @@ function getBuffer(url, maxBytes) {
         });
         response.on('error', fail);
       });
-      request.setTimeout(10000, () => request.destroy(new Error('upstream_timeout')));
+      request.setTimeout(timeoutMs, () => request.destroy(new Error('upstream_timeout')));
       request.on('error', fail);
     } catch (error) {
       fail(error);
@@ -63,7 +73,7 @@ function getBuffer(url, maxBytes) {
   });
 }
 
-function validateManifestAndCatalog(manifest, compressed) {
+function validateManifestEnvelope(manifest) {
   if (!manifest || manifest.version !== 1 || manifest.integrity !== 'sha256') {
     throw new Error('manifest_schema_invalid');
   }
@@ -89,6 +99,25 @@ function validateManifestAndCatalog(manifest, compressed) {
       typeof meta.sha256 !== 'string' || !/^[a-f0-9]{64}$/i.test(meta.sha256)) {
     throw new Error('manifest_catalog_metadata_invalid');
   }
+  return meta;
+}
+
+function validatePage(page, prefix) {
+  if (!page || typeof page.url !== 'string') {
+    throw new Error(prefix + '_record_url_missing');
+  }
+  let url;
+  try { url = new URL(page.url); } catch { throw new Error(prefix + '_record_url_invalid'); }
+  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) {
+    throw new Error(prefix + '_record_url_unsafe');
+  }
+  if (page.robots_allowed === false || page.robotsAllowed === false) {
+    throw new Error(prefix + '_contains_robots_denied_record');
+  }
+}
+
+function validateManifestAndCatalog(manifest, compressed) {
+  const meta = validateManifestEnvelope(manifest);
   if (!Buffer.isBuffer(compressed) || compressed.length !== meta.bytes) {
     throw new Error('catalog_size_mismatch');
   }
@@ -108,34 +137,107 @@ function validateManifestAndCatalog(manifest, compressed) {
       payload.pages.length !== manifest.total_pages) {
     throw new Error('catalog_page_count_or_schema_mismatch');
   }
-  for (const page of payload.pages) {
-    if (!page || typeof page.url !== 'string') throw new Error('catalog_record_url_missing');
-    let url;
-    try { url = new URL(page.url); } catch { throw new Error('catalog_record_url_invalid'); }
-    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) {
-      throw new Error('catalog_record_url_unsafe');
-    }
-    if (page.robots_allowed === false || page.robotsAllowed === false) {
-      throw new Error('catalog_contains_robots_denied_record');
-    }
-  }
+  for (const page of payload.pages) validatePage(page, 'catalog');
   return {
     pages: payload.pages,
     updatedAt: manifest.updated_at,
     sha256: digest,
-    indexedPages: payload.pages.length
+    indexedPages: payload.pages.length,
+    source: 'compressed-catalog',
+    integrity: 'catalog-sha256',
+    shardCount: manifest.shard_count
+  };
+}
+
+function validateShardManifest(manifest) {
+  validateManifestEnvelope(manifest);
+  let totalBytes = 0;
+  let totalPages = 0;
+  const seen = new Set();
+  for (const shard of manifest.shards) {
+    if (!shard || typeof shard.file !== 'string' || !/^shard-\d{4}\.json$/.test(shard.file)) {
+      throw new Error('manifest_shard_file_invalid');
+    }
+    if (seen.has(shard.file)) throw new Error('manifest_duplicate_shard_file');
+    seen.add(shard.file);
+    if (!Number.isSafeInteger(shard.pages) || shard.pages < 1 || shard.pages > 1000) {
+      throw new Error('manifest_shard_page_count_invalid');
+    }
+    if (!Number.isSafeInteger(shard.bytes) || shard.bytes < 1 || shard.bytes > MAX_SHARD_BYTES) {
+      throw new Error('manifest_shard_size_invalid');
+    }
+    if (typeof shard.sha256 !== 'string' || !/^[a-f0-9]{64}$/i.test(shard.sha256)) {
+      throw new Error('manifest_shard_hash_invalid');
+    }
+    totalBytes += shard.bytes;
+    totalPages += shard.pages;
+    if (totalBytes > MAX_TOTAL_SHARD_BYTES) throw new Error('manifest_total_shard_bytes_exceeded');
+  }
+  if (totalPages !== manifest.total_pages) throw new Error('manifest_shard_page_total_mismatch');
+  return { shards: manifest.shards, totalBytes, totalPages };
+}
+
+function validateShardPayload(meta, buffer) {
+  if (!meta || typeof meta.file !== 'string' || !/^shard-\d{4}\.json$/.test(meta.file)) {
+    throw new Error('shard_file_invalid');
+  }
+  if (!Buffer.isBuffer(buffer) || buffer.length !== meta.bytes) {
+    throw new Error('shard_size_mismatch');
+  }
+  const digest = crypto.createHash('sha256').update(buffer).digest('hex');
+  if (digest.toLowerCase() !== String(meta.sha256 || '').toLowerCase()) {
+    throw new Error('shard_integrity_mismatch');
+  }
+  let payload;
+  try { payload = JSON.parse(buffer.toString('utf8')); } catch {
+    throw new Error('shard_json_invalid');
+  }
+  if (!payload || payload.version !== 1 || !Array.isArray(payload.pages) ||
+      payload.pages.length !== meta.pages) {
+    throw new Error('shard_page_count_or_schema_mismatch');
+  }
+  for (const page of payload.pages) validatePage(page, 'shard');
+  return payload.pages;
+}
+
+async function loadShardedCatalog(manifest) {
+  const { shards, totalBytes } = validateShardManifest(manifest);
+  const pages = [];
+  for (let offset = 0; offset < shards.length; offset += MAX_SHARD_CONCURRENCY) {
+    const batch = shards.slice(offset, offset + MAX_SHARD_CONCURRENCY);
+    const loaded = await Promise.all(batch.map(async (meta) => {
+      const buffer = await getBuffer(SHARD_BASE_URL + encodeURIComponent(meta.file), meta.bytes, SHARD_FETCH_TIMEOUT_MS);
+      return validateShardPayload(meta, buffer);
+    }));
+    for (const shardPages of loaded) pages.push(...shardPages);
+  }
+  if (pages.length !== manifest.total_pages) throw new Error('catalog_shard_total_page_mismatch');
+  const seenUrls = new Set();
+  for (const page of pages) {
+    if (seenUrls.has(page.url)) throw new Error('catalog_duplicate_url');
+    seenUrls.add(page.url);
+  }
+  return {
+    pages,
+    updatedAt: manifest.updated_at,
+    sha256: manifest.catalog_gzip.sha256,
+    indexedPages: pages.length,
+    source: 'public-search-shards',
+    integrity: 'per-shard-sha256',
+    shardCount: shards.length,
+    shardBytes: totalBytes
   };
 }
 
 async function loadCatalog() {
   if (cache && Date.now() - cache.loadedAt < CACHE_TTL_MS) return { ...cache, stale: false };
   try {
-    const [manifestRaw, compressed] = await Promise.all([
-      getBuffer(MANIFEST_URL, MAX_MANIFEST_BYTES),
-      getBuffer(CATALOG_URL, MAX_CATALOG_GZIP_BYTES)
-    ]);
-    const manifest = JSON.parse(manifestRaw.toString('utf8'));
-    const validated = validateManifestAndCatalog(manifest, compressed);
+    const manifestRaw = await getBuffer(MANIFEST_URL, MAX_MANIFEST_BYTES, 5000);
+    let manifest;
+    try { manifest = JSON.parse(manifestRaw.toString('utf8')); } catch {
+      throw new Error('manifest_json_invalid');
+    }
+    const validated = await loadShardedCatalog(manifest);
     cache = { ...validated, loadedAt: Date.now(), stale: false };
     return { ...cache };
   } catch (error) {
@@ -150,9 +252,16 @@ function clearCatalogCache() { cache = null; }
 
 module.exports = {
   MAX_CATALOG_GZIP_BYTES,
+  MAX_CATALOG_JSON_BYTES,
   MAX_INDEXED_PAGES,
   MAX_SHARD_COUNT,
+  MAX_SHARD_BYTES,
+  MAX_TOTAL_SHARD_BYTES,
+  MAX_SHARD_CONCURRENCY,
   validateManifestAndCatalog,
+  validateShardManifest,
+  validateShardPayload,
+  loadShardedCatalog,
   loadCatalog,
   clearCatalogCache
 };
