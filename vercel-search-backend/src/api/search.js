@@ -60,6 +60,12 @@ async function loadBing(query) {
   return results;
 }
 
+function safeCatalogError(error) {
+  const raw = String(error && error.message || 'catalog_unavailable');
+  const code = raw.split(':', 1)[0].trim().replace(/[^a-z0-9_-]/gi, '_').slice(0, 80);
+  return code || 'catalog_unavailable';
+}
+
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -86,10 +92,13 @@ module.exports = async function handler(req, res) {
   const [catalogResult, bingResult] = await Promise.allSettled([loadCatalog(), loadBing(query)]);
   const bingResults = bingResult.status === 'fulfilled' ? bingResult.value : [];
   if (catalogResult.status !== 'fulfilled') {
+    const catalogError = safeCatalogError(catalogResult.reason);
+    console.warn('[catalog-load-failed]', catalogError);
     if (!bingResults.length) {
       return res.status(503).json({
         error: 'search_temporarily_unavailable',
         indexStatus: 'catalog-unavailable',
+        catalogError,
         database_required: false
       });
     }
@@ -103,6 +112,7 @@ module.exports = async function handler(req, res) {
       hasMore: false,
       indexedPages: 0,
       indexStatus: 'catalog-unavailable',
+      catalogError,
       results: offset === 0 ? bingResults.slice(0, Math.min(10, limit)) : [],
       providers: ['Bing Web Search'],
       fallback: true
@@ -115,10 +125,13 @@ module.exports = async function handler(req, res) {
     indexedPages: catalog.indexedPages,
     indexUpdatedAt: catalog.updatedAt,
     indexSha256: catalog.sha256,
+    indexSource: catalog.source,
+    indexIntegrity: catalog.integrity,
+    indexShardCount: catalog.shardCount,
     staleCatalog: catalog.stale
   });
   if (bingResult.status !== 'fulfilled') payload.providers = ['Everything Hub Crawler'];
-  if (catalog.refreshError) payload.catalogRefreshError = catalog.refreshError;
+  if (catalog.refreshError) payload.catalogRefreshError = safeCatalogError({ message: catalog.refreshError });
   res.setHeader('X-Index-Updated-At', String(catalog.updatedAt));
   return res.status(200).json(payload);
 };
