@@ -75,9 +75,19 @@ def _load_shards(search_dir: Path, manifest: dict[str, Any]) -> list[dict[str, A
     if manifest.get("total_pages", 0) > MAX_INDEXED_PAGES:
         raise ValueError("public search manifest exceeds the indexed-page safety limit")
 
+    declared_total_shard_bytes = 0
+    for shard in shards:
+        if not isinstance(shard, dict):
+            raise ValueError("public search manifest contains a malformed shard entry")
+        byte_count = shard.get("bytes")
+        if not isinstance(byte_count, int) or isinstance(byte_count, bool) or not 2 <= byte_count <= MAX_SHARD_BYTES:
+            raise ValueError("public search manifest contains an invalid shard byte count")
+        declared_total_shard_bytes += byte_count
+        if declared_total_shard_bytes > MAX_TOTAL_SHARD_BYTES:
+            raise ValueError("public search shards exceed the aggregate byte safety limit")
+
     pages: list[dict[str, Any]] = []
     seen_urls: set[str] = set()
-    total_shard_bytes = 0
     for shard in shards:
         if not isinstance(shard, dict):
             raise ValueError("public search manifest contains a malformed shard entry")
@@ -91,9 +101,6 @@ def _load_shards(search_dir: Path, manifest: dict[str, Any]) -> list[dict[str, A
             raise ValueError(f"{name}: shard byte count is invalid")
         if not isinstance(page_count, int) or isinstance(page_count, bool) or page_count < 1:
             raise ValueError(f"{name}: shard page count is invalid")
-        total_shard_bytes += byte_count
-        if total_shard_bytes > MAX_TOTAL_SHARD_BYTES:
-            raise ValueError("public search shards exceed the aggregate byte safety limit")
         if not isinstance(digest, str) or not re.fullmatch(r"[a-f0-9]{64}", digest):
             raise ValueError(f"{name}: shard SHA-256 is invalid")
 
