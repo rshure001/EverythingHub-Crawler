@@ -55,6 +55,12 @@ jobs:
                   report.categoryCount !== 8 || JSON.stringify(report.categoryModes) !== JSON.stringify(expected)) {
                 throw new Error("Homepage structure check failed: " + JSON.stringify(report));
               }
+              report.mediaPreviewPolicyLoaded = await page.evaluate(() =>
+                typeof window.EHMediaPreviewPolicy?.isMediaPreviewAllowed === "function"
+              );
+              if (!report.mediaPreviewPolicyLoaded) {
+                throw new Error("Homepage media preview policy script did not load");
+              }
               const artwork = page.locator(".approved-master-art");
               await artwork.waitFor({ state: "visible", timeout: 15000 });
               await page.waitForFunction(() => {
@@ -65,6 +71,73 @@ jobs:
                 src: img.currentSrc, naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight
               }));
               if (/appdeploy\\.ai/i.test(report.approvedArtwork.src)) throw new Error("Artwork unexpectedly served from AppDeploy");
+              const verifyHomepageMediaShelf = async (selector, label) => {
+                await page.waitForFunction((targetSelector) => {
+                  const node = document.querySelector(targetSelector);
+                  if (!node) return false;
+                  const text = node.textContent || "";
+                  return node.querySelectorAll("a.live-media-card").length > 0 ||
+                    /No fresh|temporarily unavailable/i.test(text);
+                }, selector, { timeout: 30000 });
+                const summary = await page.locator(selector).evaluate(node => {
+                  const cards = [...node.querySelectorAll("a.live-media-card")];
+                  const invalidLinks = cards.filter(card => {
+                    try {
+                      const rawHref = card.getAttribute("href") || "";
+                      const url = new URL(rawHref, location.href);
+                      const rel = (card.getAttribute("rel") || "").split(/\s+/);
+                      return !(rawHref.startsWith("https://") || rawHref.startsWith("http://")) ||
+                        !["https:", "http:"].includes(url.protocol) ||
+                        card.target !== "_blank" ||
+                        !rel.includes("noopener") ||
+                        !rel.includes("noreferrer");
+                    } catch {
+                      return true;
+                    }
+                  }).length;
+                  const images = [...node.querySelectorAll("a.live-media-card img")];
+                  const invalidImages = images.filter(img => {
+                    try {
+                      return !((img.getAttribute("src") || "").startsWith("https://") || (img.getAttribute("src") || "").startsWith("http://")) ||
+                        !["https:", "http:"].includes(new URL(img.src).protocol);
+                    } catch {
+                      return true;
+                    }
+                  }).length;
+                  const unlicensedPreviewCards = cards.filter(card =>
+                    card.querySelector("img") && card.dataset.previewAllowed !== "true"
+                  ).length;
+                  const invalidLicensePreviews = images.filter(img => {
+                    const card = img.closest("a.live-media-card");
+                    if (!card || card.dataset.previewAllowed !== "true") return true;
+                    const state = card.dataset.attributionRequired || "unknown";
+                    const attributionRequired = state === "true" ? true : state === "false" ? false : null;
+                    return window.EHMediaPreviewPolicy?.isMediaPreviewAllowed({
+                      source: card.dataset.source || "",
+                      license: card.dataset.license || "",
+                      licenseUrl: card.dataset.licenseUrl || "",
+                      attributionRequired,
+                      creator: card.dataset.creator || ""
+                    }) !== true;
+                  }).length;
+                  return {
+                    cards: cards.length,
+                    invalidLinks,
+                    images: images.length,
+                    loadedImages: images.filter(img => img.complete && img.naturalWidth > 0).length,
+                    invalidImages,
+                    unlicensedPreviewCards,
+                    invalidLicensePreviews,
+                    fallback: /No fresh|temporarily unavailable/i.test(node.textContent || "")
+                  };
+                });
+                if (summary.invalidLinks || summary.invalidImages || summary.unlicensedPreviewCards || summary.invalidLicensePreviews) {
+                  throw new Error(label + " shelf contains unsafe media destinations: " + JSON.stringify(summary));
+                }
+                return summary;
+              };
+              report.homepageImageShelf = await verifyHomepageMediaShelf("#homeLiveImages", "Images");
+              report.homepageVideoShelf = await verifyHomepageMediaShelf("#homeLiveVideos", "Videos");
               await page.screenshot({ path: "everything-hub-homepage.png", fullPage: true });
 
               for (const query of ["Rolex", "NASA"]) {

@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/media-discovery-smoke.yml"
+      - "vercel-homepage/index.html"
       - "supabase/functions/everything-hub-media-search/index.ts"
       - "supabase/functions/everything-hub-media-search/merge-results.mjs"
       - "supabase/functions/everything-hub-media-search/merge-results.test.mjs"
@@ -27,9 +28,9 @@ jobs:
         run: |
           set -euo pipefail
           curl --silent --show-error --fail --max-time 20 -G "$BASE" \
-            --data-urlencode "q=octopus" --data-urlencode "type=image" -D /tmp/images.headers -o /tmp/images.json
+            --data-urlencode "q=latest technology science nature" --data-urlencode "type=image" -D /tmp/images.headers -o /tmp/images.json
           curl --silent --show-error --fail --max-time 20 -G "$BASE" \
-            --data-urlencode "q=Apollo 11 NASA" --data-urlencode "type=video" -D /tmp/videos.headers -o /tmp/videos.json
+            --data-urlencode "q=latest science technology discoveries" --data-urlencode "type=video" -D /tmp/videos.headers -o /tmp/videos.json
           node <<'NODE'
           const fs = require("fs");
           for (const type of ["images", "videos"]) {
