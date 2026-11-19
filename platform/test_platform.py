@@ -40,7 +40,7 @@ class PlatformFoundationTests(unittest.TestCase):
 
     def test_activation_uses_canonical_release_path_before_atomic_swap(self):
         script = (ROOT / "activate-release.sh").read_text()
-        self.assertIn('resolve_release.py "$release_dir"', script)
+        self.assertIn('"$SCRIPT_DIR/resolve_release.py" "$release_dir"', script)
         self.assertIn('ln -sfn "$resolved_release"', script)
         self.assertIn("mv -Tf", script)
 
