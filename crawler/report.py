@@ -13,15 +13,53 @@ from crawl import is_access_challenge_page
 ROOT = Path(__file__).resolve().parents[1]
 INDEX = ROOT / "data" / "index.json"
 FRONTIER = ROOT / "data" / "frontier.json"
+SEEDS = ROOT / "crawler" / "seeds.txt"
+
 
 def load(path):
     with path.open(encoding="utf-8") as handle:
         return json.load(handle)
 
+
+def _http_hostname(value):
+    """Return a normalized HTTP(S) hostname, or None for malformed input."""
+    try:
+        parsed = urlsplit(str(value or ""))
+        if parsed.scheme.lower() not in {"http", "https"}:
+            return None
+        return (parsed.hostname or "").casefold().rstrip(".") or None
+    except (TypeError, ValueError):
+        return None
+
+
+def summarize_seed_coverage(seed_urls, pages):
+    """Compare configured seed hosts with hosts represented by indexed pages."""
+    seed_hosts = {
+        host for url in seed_urls
+        if (host := _http_hostname(url))
+    }
+    indexed_hosts = {
+        host for page in pages
+        if isinstance(page, dict) and (host := _http_hostname(page.get("url")))
+    }
+    missing = sorted(seed_hosts - indexed_hosts)
+    return {
+        "configured": len(seed_hosts),
+        "indexed": len(seed_hosts & indexed_hosts),
+        "missing": missing,
+    }
+
+
 def main():
     index = load(INDEX)
     frontier = load(FRONTIER)
     pages = [p for p in index.get("pages", []) if isinstance(p, dict) and p.get("url")]
+    seed_urls = [
+        line.strip()
+        for line in SEEDS.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    ]
+    seed_coverage = summarize_seed_coverage(seed_urls, pages)
     hosts = Counter(urlsplit(p["url"]).netloc.lower() for p in pages)
     depths = Counter(str(p.get("depth", "unknown")) for p in pages)
     lanes = Counter(
@@ -63,6 +101,9 @@ def main():
         "",
         f"- Total indexed page records: **{len(pages):,}**",
         f"- Unique indexed hosts: **{len(hosts):,}**",
+        f"- Configured seed hosts: **{seed_coverage['configured']:,}**",
+        f"- Configured seed hosts represented in the index: **{seed_coverage['indexed']:,}**",
+        f"- Configured seed hosts not yet represented: **{len(seed_coverage['missing']):,}**",
         f"- Robots-allowed media candidates retained (not fetched): **{int(index.get('media_candidates_total', 0) or 0):,}**",
         f"- Same-origin, robots-allowed media candidates admitted this run: **{int(index.get('media_candidates_discovered_this_run', 0) or 0):,}**",
         f"- New unique media candidates this run: **{int(index.get('media_candidates_added_this_run', 0) or 0):,}**",
@@ -108,12 +149,18 @@ def main():
     lines.extend(f"- {host}: {count:,}" for host, count in sorted(host_requests.items(), key=lambda item: (-item[1], item[0]))[:10])
     lines += ["", "### Largest indexed hosts", ""]
     lines.extend(f"- {host}: {count:,}" for host, count in hosts.most_common(10))
+    lines += ["", "### Seed host coverage", ""]
+    if seed_coverage["missing"]:
+        lines.append("- Not yet represented: " + ", ".join(seed_coverage["missing"]))
+    else:
+        lines.append("- All configured seed hosts have at least one indexed page.")
     report = "\n".join(lines) + "\n"
     print(report)
     summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary_path:
         with open(summary_path, "a", encoding="utf-8") as handle:
             handle.write(report)
+
 
 if __name__ == "__main__":
     main()
