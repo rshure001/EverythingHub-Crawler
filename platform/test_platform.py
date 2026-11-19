@@ -57,6 +57,23 @@ class PlatformFoundationTests(unittest.TestCase):
         self.assertIn("physical machine", docs)
         self.assertIn("no confirmed always-on free host", docs)
 
+    def test_preflight_parses_env_without_sourcing_it(self):
+        script = (ROOT / "host-preflight.sh").read_text()
+        self.assertIn("Parse the dotenv file without sourcing", script)
+        self.assertIn("getent ahosts", script)
+        self.assertNotIn('source "$ENV_FILE"', script)
+
+    def test_installer_runs_preflight_before_starting_services(self):
+        script = (ROOT / "install-host.sh").read_text()
+        self.assertLess(script.index('host-preflight.sh'), script.index('"\${COMPOSE[@]}" up -d'))
+        self.assertIn("did not change DNS or firewall", script)
+
+    def test_status_checks_both_public_hosts_and_active_release(self):
+        script = (ROOT / "host-status.sh").read_text()
+        self.assertIn('https://$WEB_HOST/', script)
+        self.assertIn('https://$GIT_HOST/', script)
+        self.assertIn("/srv/everythinghub/current", script)
+
     def test_example_env_contains_no_real_credentials(self):
         env = (ROOT / ".env.example").read_text()
         self.assertIn("GIT_HOST=", env)
