@@ -36,10 +36,11 @@ CREATE TABLE IF NOT EXISTS web_pages (
   crawled_at TIMESTAMPTZ,
   last_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   is_indexable BOOLEAN NOT NULL DEFAULT TRUE,
+  -- Generated expressions must be IMMUTABLE; unaccent is intentionally applied at query time.
   search_document TSVECTOR GENERATED ALWAYS AS (
-    setweight(to_tsvector('simple', unaccent(coalesce(title,''))), 'A') ||
-    setweight(to_tsvector('simple', unaccent(coalesce(description,''))), 'B') ||
-    setweight(to_tsvector('simple', unaccent(coalesce(body_text,''))), 'C')
+    setweight(to_tsvector('simple', coalesce(title,'')), 'A') ||
+    setweight(to_tsvector('simple', coalesce(description,'')), 'B') ||
+    setweight(to_tsvector('simple', coalesce(body_text,'')), 'C')
   ) STORED
 );
 
@@ -131,7 +132,7 @@ BEGIN
 END;
 $$;
 
--- Search endpoint query pattern:
+-- Example search:
 -- SELECT id, canonical_url, title, description,
 --        ts_rank(search_document, websearch_to_tsquery('simple', unaccent($1))) AS rank
 -- FROM eh_search.web_pages
