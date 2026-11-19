@@ -17,7 +17,7 @@ kept here so production behavior is reviewable and testable in GitHub.
 - Verifies manifest version, timestamps, page count, shard count, compressed
   size, and SHA-256 before accepting the catalog.
 - Rejects invalid URLs and any record explicitly marked robots-denied.
-- Limits compressed and decompressed catalog sizes and request timeouts.
+- Limits the compressed catalog to 10,000,000 bytes, decompressed JSON to 64,000,000 bytes, and all external requests by timeout.
 - Keeps a last-known-good in-memory catalog for up to one hour if GitHub has a
   transient outage; responses identify stale catalog use.
 - Does not fetch or download indexed source pages.
@@ -32,7 +32,7 @@ duplicates. Regression tests cover pages one through three.
 
 ## Deployment packaging
 
-- The direct Vercel upload mirrors `vercel-search-backend/src/` under `src/vercel-search-backend/src/` in the deployment payload.
+- The direct Vercel upload maps `vercel-search-backend/src/api/` to `src/api/`, `vercel-search-backend/src/lib/` to `src/lib/`, and the package manifest to `src/package.json` in the deployment payload.
 - That folder's `package.json` explicitly pins CommonJS and Node.js 26.x; the backend uses built-in Node modules only.
 - Keep the package manifest in Git so direct Vercel API deployments remain reproducible and reviewable.
 
