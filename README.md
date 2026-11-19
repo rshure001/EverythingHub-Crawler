@@ -3,7 +3,7 @@
 Independent, polite crawler for the Everything Hub search project.
 
 ## Current configuration
-- 49 curated public starting sites in `crawler/seeds.txt` (a newly assembled set, not a recovered historical list).
+- 51 curated public starting sites in `crawler/seeds.txt` (a newly assembled set, not a recovered historical list).
 - Up to 16 concurrent workers, with at most one request per hostname in each batch; a batch never contains two URLs for the same host.
 - A 1-second minimum host interval, increased when robots.txt declares a longer Crawl-delay or Request-rate.
 - A six-minute run budget; next-allowed host timestamps are persisted with the frontier across scheduled runs.
