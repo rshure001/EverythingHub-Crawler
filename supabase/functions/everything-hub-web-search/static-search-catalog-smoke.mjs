@@ -9,20 +9,68 @@ const manifest = JSON.parse(await readFile(new URL("public-search/manifest.json"
 if (!isValidStaticManifest(manifest)) {
   throw new Error("unsupported or out-of-bounds public catalog manifest");
 }
+
+let pages = [];
+let transport = "shards";
+let compressedBytes = null;
 const meta = manifest.catalog_gzip;
-if (!meta || meta.file !== "catalog-v1.json.gz" || meta.pages !== manifest.total_pages) {
-  throw new Error("catalog gzip metadata is missing or inconsistent");
+
+if (meta) {
+  if (meta.file !== "catalog-v1.json.gz" || meta.pages !== manifest.total_pages) {
+    throw new Error("catalog gzip metadata is inconsistent");
+  }
+  const compressed = await readFile(new URL("public-search/" + meta.file, root));
+  if (compressed.length !== meta.bytes) throw new Error("catalog compressed byte count mismatch");
+  if (createHash("sha256").update(compressed).digest("hex") !== meta.sha256) {
+    throw new Error("catalog SHA-256 mismatch");
+  }
+  const payload = JSON.parse(gunzipSync(compressed, { maxOutputLength: 30_000_000 }).toString("utf8"));
+  if (payload.version !== 1 || !Array.isArray(payload.pages) || payload.pages.length !== manifest.total_pages) {
+    throw new Error("catalog payload does not match manifest page count");
+  }
+  pages = payload.pages;
+  transport = "gzip";
+  compressedBytes = compressed.length;
+} else {
+  const seenUrls = new Set();
+  for (const shard of manifest.shards) {
+    if (
+      !shard ||
+      typeof shard.file !== "string" ||
+      !/^shard-\d{4}\.json$/.test(shard.file) ||
+      !Number.isInteger(shard.bytes) ||
+      shard.bytes < 2 ||
+      shard.bytes > 350_000 ||
+      !Number.isInteger(shard.pages) ||
+      shard.pages < 1 ||
+      typeof shard.sha256 !== "string" ||
+      !/^[a-f0-9]{64}$/.test(shard.sha256)
+    ) {
+      throw new Error("public shard metadata is invalid");
+    }
+    const raw = await readFile(new URL("public-search/" + shard.file, root));
+    if (raw.length !== shard.bytes) throw new Error(shard.file + " byte count mismatch");
+    if (createHash("sha256").update(raw).digest("hex") !== shard.sha256) {
+      throw new Error(shard.file + " SHA-256 mismatch");
+    }
+    const payload = JSON.parse(raw.toString("utf8"));
+    if (payload.version !== 1 || !Array.isArray(payload.pages) || payload.pages.length !== shard.pages) {
+      throw new Error(shard.file + " payload does not match its manifest entry");
+    }
+    for (const page of payload.pages) {
+      if (!page || typeof page.url !== "string" || seenUrls.has(page.url)) {
+        throw new Error(shard.file + " contains an invalid or duplicate URL");
+      }
+      seenUrls.add(page.url);
+    }
+    pages.push(...payload.pages);
+  }
+  if (pages.length !== manifest.total_pages) {
+    throw new Error("verified shards do not match the manifest page count");
+  }
 }
-const compressed = await readFile(new URL("public-search/" + meta.file, root));
-if (compressed.length !== meta.bytes) throw new Error("catalog compressed byte count mismatch");
-if (createHash("sha256").update(compressed).digest("hex") !== meta.sha256) {
-  throw new Error("catalog SHA-256 mismatch");
-}
-const payload = JSON.parse(gunzipSync(compressed, { maxOutputLength: 30_000_000 }).toString("utf8"));
-if (payload.version !== 1 || !Array.isArray(payload.pages) || payload.pages.length !== manifest.total_pages) {
-  throw new Error("catalog payload does not match manifest page count");
-}
-const nasa = searchStaticPages(payload.pages, "NASA", null, 5, 0);
+
+const nasa = searchStaticPages(pages, "NASA", null, 5, 0);
 if (nasa.count < 1 || nasa.results.length < 1) throw new Error("NASA catalog query returned no results");
 if (!nasa.results.every((item) =>
   Number.isFinite(item.rankScore) &&
@@ -35,11 +83,12 @@ const rankScores = nasa.results.map((item) => item.rankScore);
 if (rankScores.some((score, index) => index > 0 && score > rankScores[index - 1])) {
   throw new Error("Hurricane rank scores are not sorted descending");
 }
-const rolex = searchStaticPages(payload.pages, "Rolex", null, 5, 0);
+const rolex = searchStaticPages(pages, "Rolex", null, 5, 0);
 console.log(JSON.stringify({
-  catalogPages: payload.pages.length,
+  catalogPages: pages.length,
   shardCount: manifest.shard_count,
-  compressedBytes: compressed.length,
+  transport,
+  compressedBytes,
   nasaMatches: nasa.count,
   nasaTop: nasa.results[0]?.url,
   nasaTopRankScore: nasa.results[0]?.rankScore,
