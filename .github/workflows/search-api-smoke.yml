@@ -40,38 +40,6 @@ jobs:
                   assert response.status == 200, response.status
                   return json.load(response)
 
-          indexed = get("everything-hub-web-search", "NASA")
-          assert indexed.get("count", 0) > 0, indexed
-          assert "index" in str(indexed.get("source", "")).lower(), indexed
-          assert isinstance(indexed.get("results"), list), indexed
-          for result in indexed["results"]:
-              assert result.get("url", "").startswith(("https://", "http://")), result
-              assert result.get("title"), result
-
-          if indexed.get("source") == "Everything Hub public crawler index":
-              assert indexed.get("indexIntegrity") == "sha256", indexed
-              assert indexed.get("indexTransport") in ("gzip", "shards"), indexed
-              urls = [result["url"] for result in indexed["results"]]
-              assert len(urls) == len(set(urls)), indexed
-              lexical_scores = [result.get("relevance") for result in indexed["results"]]
-              assert all(isinstance(score, (int, float)) for score in lexical_scores), indexed
-              rank_scores = [result.get("rankScore") for result in indexed["results"]]
-              assert all(isinstance(score, (int, float)) for score in rank_scores), indexed
-              assert rank_scores == sorted(rank_scores, reverse=True), rank_scores
-              assert all(result.get("evidenceBand") in ("high", "medium", "low")
-                         for result in indexed["results"]), indexed
-              assert all(isinstance(result.get("evidenceComponents"), dict)
-                         for result in indexed["results"]), indexed
-              print("Static index Hurricane ranking passed:", indexed["count"], "NASA matches;",
-                    "transport=", indexed["indexTransport"])
-
-              science = get("everything-hub-web-search", "NASA", tentacle="science")
-              assert science.get("count", 0) > 0, science
-              assert all(item.get("tentacle") == "science" for item in science["results"]), science
-              print("Science lane filter passed:", science["count"], "matches")
-          else:
-              print("Database-backed search passed:", indexed.get("source"), indexed["count"])
-
           independent = get("everything-hub-independent-search", "Rolex")
           assert independent.get("count", 0) > 0, independent
           assert independent.get("provider") == "Bing RSS", independent
@@ -80,4 +48,46 @@ jobs:
               assert result.get("url", "").startswith(("https://", "http://")), result
               assert result.get("title"), result
           print("Independent fallback passed:", independent["count"], "Rolex results")
+
+          indexed = None
+          indexed_error = None
+          try:
+              indexed = get("everything-hub-web-search", "NASA")
+          except Exception as exc:
+              indexed_error = f"{type(exc).__name__}: {exc}"
+              print("Database-backed web search unavailable after independent fallback passed:", indexed_error)
+          if indexed is not None:
+              assert indexed.get("count", 0) > 0, indexed
+              assert "index" in str(indexed.get("source", "")).lower(), indexed
+              assert isinstance(indexed.get("results"), list), indexed
+              for result in indexed["results"]:
+                  assert result.get("url", "").startswith(("https://", "http://")), result
+                  assert result.get("title"), result
+
+              if indexed.get("source") == "Everything Hub public crawler index":
+                  assert indexed.get("indexIntegrity") == "sha256", indexed
+                  assert indexed.get("indexTransport") in ("gzip", "shards"), indexed
+                  urls = [result["url"] for result in indexed["results"]]
+                  assert len(urls) == len(set(urls)), indexed
+                  lexical_scores = [result.get("relevance") for result in indexed["results"]]
+                  assert all(isinstance(score, (int, float)) for score in lexical_scores), indexed
+                  rank_scores = [result.get("rankScore") for result in indexed["results"]]
+                  assert all(isinstance(score, (int, float)) for score in rank_scores), indexed
+                  assert rank_scores == sorted(rank_scores, reverse=True), rank_scores
+                  assert all(result.get("evidenceBand") in ("high", "medium", "low")
+                             for result in indexed["results"]), indexed
+                  assert all(isinstance(result.get("evidenceComponents"), dict)
+                             for result in indexed["results"]), indexed
+                  print("Static index Hurricane ranking passed:", indexed["count"], "NASA matches;",
+                        "transport=", indexed["indexTransport"])
+
+                  science = get("everything-hub-web-search", "NASA", tentacle="science")
+                  assert science.get("count", 0) > 0, science
+                  assert all(item.get("tentacle") == "science" for item in science["results"]), science
+                  print("Science lane filter passed:", science["count"], "matches")
+              else:
+                  print("Database-backed search passed:", indexed.get("source"), indexed["count"])
+
+          if indexed_error:
+              raise SystemExit("Database-backed web search unavailable: " + indexed_error)
           PY
