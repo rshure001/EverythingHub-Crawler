@@ -13,6 +13,12 @@ class ScheduleWatchdogTests(unittest.TestCase):
         self.assertIn('    - cron: "7,22,37,52 * * * *"', workflow)
         self.assertNotIn('    - cron: "*/15 * * * *"', workflow)
 
+    def test_crawler_schedule_uses_staggered_ten_minute_cadence(self):
+        workflow = (Path(__file__).resolve().parents[1] / ".github" / "workflows" / "crawl.yml").read_text(encoding="utf-8")
+        self.assertIn('    - cron: "3,13,23,33,43,53 * * * *"', workflow)
+        self.assertNotIn('    - cron: "*/5 * * * *"', workflow)
+        self.assertIn("every 10 minutes", workflow)
+
     def test_watchdog_runs_after_crawler_importer_release_and_independent_search_completion(self):
         workflow = (Path(__file__).resolve().parents[1] / ".github" / "workflows" / "crawl-watchdog.yml").read_text(encoding="utf-8")
         workflow_run = workflow.split("  workflow_run:\n", 1)[1].split("  workflow_dispatch:", 1)[0]

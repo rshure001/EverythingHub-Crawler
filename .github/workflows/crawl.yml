@@ -20,8 +20,8 @@ on:
       - "crawler/media-source-terms.json"
       - "crawler/report.py"
   schedule:
-    # Run every 5 minutes; the durable frontier resumes work and concurrency prevents overlapping crawls.
-    - cron: "*/5 * * * *"
+    # Run every 10 minutes on staggered minutes; the watchdog recovers delayed or missed scheduled runs.
+    - cron: "3,13,23,33,43,53 * * * *"
   workflow_dispatch:
 permissions:
   actions: write
