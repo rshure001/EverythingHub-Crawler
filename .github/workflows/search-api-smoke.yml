@@ -7,7 +7,11 @@ on:
       - "supabase/functions/everything-hub-web-search/**"
       - "public-search/**"
       - "vercel-search-backend/**"
+      - ".github/workflows/search-api-smoke.yml"
   workflow_dispatch:
+  workflow_run:
+    workflows: ["EverythingHub Publisher"]
+    types: [completed]
 permissions:
   contents: read
 jobs:
