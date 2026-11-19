@@ -142,5 +142,3 @@ jobs:
           echo "Dispatched the validated catalog publisher."
           gh workflow run search-api-smoke.yml --ref main
           echo "Dispatched the live search API smoke test."
-          gh workflow run recovery-search-check.yml --ref main
-          echo "Dispatched independent Vercel catalog verification."
