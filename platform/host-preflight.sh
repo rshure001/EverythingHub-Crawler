@@ -26,13 +26,26 @@ mem_kb="$(awk '/MemTotal/ {print $2}' /proc/meminfo)"
 (( mem_kb >= 2097152 )) || fail "At least 2 GiB RAM is required for the initial stack"
 pass "Memory meets minimum 2 GiB threshold"
 
-if [[ -n "${GIT_HOST:-}" && -n "${WEB_HOST:-}" ]]; then
-  for host in "$GIT_HOST" "$WEB_HOST"; do
-    getent ahosts "$host" >/dev/null 2>&1 || fail "Hostname does not resolve: $host"
-    pass "DNS resolves: $host"
-  done
-else
-  fail "GIT_HOST and WEB_HOST must be set in the environment file"
-fi
+# Parse the dotenv file without sourcing or executing its contents.
+mapfile -t hosts < <(python3 - "$ENV_FILE" <<'PY'
+import sys
+values = {}
+for raw in open(sys.argv[1], encoding="utf-8"):
+    line = raw.strip()
+    if not line or line.startswith("#") or "=" not in line:
+        continue
+    key, value = line.split("=", 1)
+    values[key.strip()] = value.strip().strip('"').strip("'")
+for key in ("GIT_HOST", "WEB_HOST"):
+    print(values.get(key, ""))
+PY
+)
+GIT_HOST="${hosts[0]:-}"
+WEB_HOST="${hosts[1]:-}"
+[[ -n "$GIT_HOST" && -n "$WEB_HOST" ]] || fail "GIT_HOST and WEB_HOST must be set in the environment file"
+for host in "$GIT_HOST" "$WEB_HOST"; do
+  getent ahosts "$host" >/dev/null 2>&1 || fail "Hostname does not resolve: $host"
+  pass "DNS resolves: $host"
+done
 
 printf '\nPreflight only: no firewall, DNS, services, or production data were changed.\n'
