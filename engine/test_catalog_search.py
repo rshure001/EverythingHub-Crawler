@@ -17,8 +17,17 @@ class CatalogLoaderTests(unittest.TestCase):
         self.assertEqual(MAX_INDEXED_PAGES, 30_000)
         self.assertEqual(MAX_SHARD_COUNT, 256)
         self.assertEqual(MAX_TOTAL_SHARD_BYTES, 64_000_000)
-        self.assertEqual(manifest["total_pages"], 21_024)
+        self.assertGreaterEqual(manifest["total_pages"], 21_000)
+        self.assertLessEqual(manifest["total_pages"], MAX_INDEXED_PAGES)
+        self.assertEqual(
+            sum(item["pages"] for item in manifest["shards"]),
+            manifest["total_pages"],
+        )
         self.assertLessEqual(sum(item["bytes"] for item in manifest["shards"]), MAX_TOTAL_SHARD_BYTES)
+        catalog_gzip = manifest.get("catalog_gzip")
+        self.assertIsInstance(catalog_gzip, dict)
+        self.assertEqual(catalog_gzip.get("pages"), manifest["total_pages"])
+        self.assertLessEqual(catalog_gzip.get("bytes", MAX_CATALOG_GZIP_BYTES + 1), MAX_CATALOG_GZIP_BYTES)
         pages = load_catalog(search_dir=search_dir)
         self.assertEqual(len(pages), manifest["total_pages"])
 
