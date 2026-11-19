@@ -34,6 +34,7 @@ const STATIC_INDEX_CACHE_MS = 60_000;
 const MAX_STATIC_SHARD_BYTES = 350_000;
 const MAX_STATIC_CATALOG_GZIP_BYTES = 6_000_000;
 const MAX_STATIC_CATALOG_UNCOMPRESSED_BYTES = 30_000_000;
+const STATIC_INDEX_LOAD_TIMEOUT_MS = 12_000;
 
 type StaticCatalog = {
   pages: any[];
@@ -52,13 +53,15 @@ async function loadStaticCatalog(): Promise<StaticCatalog> {
   if (staticCatalogPromise) return staticCatalogPromise;
 
   const pending = (async () => {
+    // Bound the complete first-party catalog load, not just each shard request.
+    const loadSignal = AbortSignal.timeout(STATIC_INDEX_LOAD_TIMEOUT_MS);
     const headers = {
       Accept: "application/json",
       "User-Agent": "EverythingHubSearch/1.0 (+https://github.com/rshure001/EverythingHub-Crawler)",
     };
     const manifestResponse = await fetch(STATIC_INDEX_BASE + "/manifest.json", {
       headers,
-      signal: AbortSignal.timeout(9000),
+      signal: loadSignal,
     });
     if (!manifestResponse.ok) {
       throw new Error("Public crawler manifest returned HTTP " + manifestResponse.status);
@@ -89,7 +92,7 @@ async function loadStaticCatalog(): Promise<StaticCatalog> {
 
         const response = await fetch(STATIC_INDEX_BASE + "/" + compressed.file, {
           headers,
-          signal: AbortSignal.timeout(9000),
+          signal: loadSignal,
         });
         if (!response.ok) {
           throw new Error("Compressed catalog returned HTTP " + response.status);
@@ -146,7 +149,7 @@ async function loadStaticCatalog(): Promise<StaticCatalog> {
 
           const response = await fetch(STATIC_INDEX_BASE + "/" + shard.file, {
             headers,
-            signal: AbortSignal.timeout(9000),
+            signal: loadSignal,
           });
           if (!response.ok) {
             throw new Error(shard.file + " returned HTTP " + response.status);
@@ -285,12 +288,7 @@ Deno.serve(async (req: Request) => {
   };
 
   const staticFallback = async (reason: string) => {
-    // During database recovery, prefer the lightweight independent provider before loading the full catalog.
-    if (reason === "database_unavailable") {
-      const independent = await independentFallback(reason, null);
-      if (independent) return independent;
-    }
-
+    // Prefer the verified first-party crawler catalog; use Bing RSS only if it cannot answer.
     let crawlerIndexCount: number | null = null;
     let catalogLoaded = false;
     let catalogTransport: "gzip" | "shards" | null = null;
@@ -335,10 +333,8 @@ Deno.serve(async (req: Request) => {
       console.error("Static crawler index fallback unavailable:", detail);
     }
 
-    if (reason !== "database_unavailable") {
-      const independent = await independentFallback(reason, crawlerIndexCount);
-      if (independent) return independent;
-    }
+    const independent = await independentFallback(reason, crawlerIndexCount);
+    if (independent) return independent;
 
     if (catalogLoaded) {
       return json({
