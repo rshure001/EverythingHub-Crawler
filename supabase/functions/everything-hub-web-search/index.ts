@@ -283,6 +283,12 @@ Deno.serve(async (req: Request) => {
   };
 
   const staticFallback = async (reason: string) => {
+    // During database recovery, prefer the lightweight independent provider before loading the full catalog.
+    if (reason === "database_unavailable") {
+      const independent = await independentFallback(reason, null);
+      if (independent) return independent;
+    }
+
     let crawlerIndexCount: number | null = null;
     let catalogLoaded = false;
     let catalogTransport: "gzip" | "shards" | null = null;
@@ -327,8 +333,10 @@ Deno.serve(async (req: Request) => {
       console.error("Static crawler index fallback unavailable:", detail);
     }
 
-    const independent = await independentFallback(reason, crawlerIndexCount);
-    if (independent) return independent;
+    if (reason !== "database_unavailable") {
+      const independent = await independentFallback(reason, crawlerIndexCount);
+      if (independent) return independent;
+    }
 
     if (catalogLoaded) {
       return json({
