@@ -14,11 +14,6 @@ on:
   workflow_run:
     workflows:
       - "Everything Hub crawler"
-      - "EverythingHub isolated importer smoke test"
-      - "EverythingHub Publisher"
-      - "EverythingHub search API smoke test"
-      - "Validate Everything Hub Vercel search backend"
-      - "Validate Everything Hub crawler and schema"
     types:
       - completed
     branches: [main]
@@ -43,7 +38,6 @@ jobs:
           python -m unittest crawler.test_schedule_watchdog -v
           python -m unittest crawler.test_pipeline_health -v
       - name: Check recent crawler runs and recover missed schedules
-        if: ${{ github.event_name != 'workflow_run' || (github.event.workflow_run.name != 'EverythingHub Publisher' && github.event.workflow_run.name != 'EverythingHub search API smoke test') }}
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
