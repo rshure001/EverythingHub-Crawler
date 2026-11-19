@@ -747,7 +747,6 @@ async function loadHomepageMedia(type, query, targetId){
    const href=safe(item.pageUrl||item.videoUrl||item.imageUrl);
    const source=String(item.source||data.provider||'Web source').trim();
    const license=String(item.license||'').trim();
-   const licenseUrl=safe(item.licenseUrl||'');
    const creator=String(item.creator||item.credit||'').trim();
    const attributionRequired=item.attributionRequired;
    const previewAllowed=window.EHMediaPreviewPolicy?.isMediaPreviewAllowed(item)===true;
