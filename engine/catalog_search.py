@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import argparse
-import gzip
 import hashlib
 import json
 import re
@@ -91,7 +90,7 @@ def _load_shards(search_dir: Path, manifest: dict[str, Any]) -> list[dict[str, A
             raise ValueError(f"{name}: shard SHA-256 mismatch")
         payload = json.loads(raw.decode("utf-8"))
         shard_pages = payload.get("pages") if isinstance(payload, dict) else None
-        if payload.get("version") != 1 or not isinstance(shard_pages, list) or len(shard_pages) != page_count:
+        if not isinstance(payload, dict) or payload.get("version") != 1 or not isinstance(shard_pages, list) or len(shard_pages) != page_count:
             raise ValueError(f"{name}: shard payload does not match its manifest entry")
 
         for page in shard_pages:
