@@ -127,9 +127,9 @@ test("static Supabase homepage embeds the shared media license policy and keeps 
   const policySource = fs.readFileSync(path.join(__dirname, "media-preview-policy.js"), "utf8").trim();
   const release = JSON.parse(fs.readFileSync(path.join(__dirname, "../site/release-manifest.json"), "utf8"));
   assert.ok(siteHtml.includes(policySource), "static homepage must embed the tested shared policy");
-  assert.match(siteHtml, /window\\.EHMediaPreviewPolicy\\?\\.isMediaPreviewAllowed/);
-  assert.match(siteHtml, /previewAllowed\\?safeUrl/);
-  assert.match(siteHtml, /source:x\\.source\\|\\|data\\.provider/);
+  assert.match(siteHtml, /window\.EHMediaPreviewPolicy\?\.isMediaPreviewAllowed/);
+  assert.match(siteHtml, /previewAllowed\?safeUrl/);
+  assert.match(siteHtml, /source:x\.source\|\|data\.provider/);
   assert.match(siteHtml, /Preview withheld — reuse rights unverified/);
   assert.equal(release.files[0].size, Buffer.byteLength(siteHtml, "utf8"));
   assert.equal(release.files[0].sha256, crypto.createHash("sha256").update(siteHtml).digest("hex"));
