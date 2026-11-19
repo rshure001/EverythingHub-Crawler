@@ -19,7 +19,7 @@ const SHARD_FETCH_TIMEOUT_MS = 7000;
 const agent = new https.Agent({ keepAlive: true, maxSockets: MAX_SHARD_CONCURRENCY });
 let cache = null;
 
-function getBuffer(url, maxBytes, timeoutMs = 10000) {
+function getBuffer(url, maxBytes, timeoutMs = 10000, source = 'upstream') {
   return new Promise((resolve, reject) => {
     let settled = false;
     let request;
@@ -40,13 +40,13 @@ function getBuffer(url, maxBytes, timeoutMs = 10000) {
       }, (response) => {
         if (response.statusCode < 200 || response.statusCode >= 300) {
           response.resume();
-          fail(new Error('upstream_http_' + response.statusCode));
+          fail(new Error(source + '_http_' + response.statusCode));
           return;
         }
         const declared = Number(response.headers['content-length'] || 0);
         if (declared > maxBytes) {
           response.resume();
-          fail(new Error('upstream_size_limit'));
+          fail(new Error(source + '_size_limit'));
           return;
         }
         response.on('data', (chunk) => {
@@ -65,7 +65,7 @@ function getBuffer(url, maxBytes, timeoutMs = 10000) {
         });
         response.on('error', fail);
       });
-      request.setTimeout(timeoutMs, () => request.destroy(new Error('upstream_timeout')));
+      request.setTimeout(timeoutMs, () => request.destroy(new Error(source + '_timeout')));
       request.on('error', fail);
     } catch (error) {
       fail(error);
@@ -224,7 +224,7 @@ async function mapLimit(items, limit, mapper) {
 async function loadShardedCatalog(manifest) {
   const { shards, totalBytes } = validateShardManifest(manifest);
   const loaded = await mapLimit(shards, MAX_SHARD_CONCURRENCY, async (meta) => {
-    const buffer = await getBuffer(SHARD_BASE_URL + encodeURIComponent(meta.file), meta.bytes, SHARD_FETCH_TIMEOUT_MS);
+    const buffer = await getBuffer(SHARD_BASE_URL + encodeURIComponent(meta.file), MAX_SHARD_BYTES, SHARD_FETCH_TIMEOUT_MS, 'shard');
     return validateShardPayload(meta, buffer);
   });
   const pages = [];
@@ -250,7 +250,7 @@ async function loadShardedCatalog(manifest) {
 async function loadCatalog() {
   if (cache && Date.now() - cache.loadedAt < CACHE_TTL_MS) return { ...cache, stale: false };
   try {
-    const manifestRaw = await getBuffer(MANIFEST_URL, MAX_MANIFEST_BYTES, 5000);
+    const manifestRaw = await getBuffer(MANIFEST_URL, MAX_MANIFEST_BYTES, 5000, 'manifest');
     let manifest;
     try { manifest = JSON.parse(manifestRaw.toString('utf8')); } catch {
       throw new Error('manifest_json_invalid');
