@@ -1,0 +1,23 @@
+name: Validate Everything Hub Vercel search backend
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'vercel-search-backend/**'
+      - '.github/workflows/validate-vercel-search.yml'
+  pull_request:
+    paths:
+      - 'vercel-search-backend/**'
+      - '.github/workflows/validate-vercel-search.yml'
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+      - name: Run search integrity and pagination tests
+        run: node --test vercel-search-backend/test/*.test.js
