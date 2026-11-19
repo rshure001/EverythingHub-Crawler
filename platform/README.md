@@ -22,12 +22,12 @@ This is the first-party replacement layer for hosted Git and hosted static publi
 
 ## First deployment requirements
 
-A host with Docker Compose, a persistent data volume, and inbound TCP 80/443 plus SSH is required. The current connected DigitalOcean account reports no droplets and a team limit warning, so this repository does not provision a server. No free compute host has been verified for persistent Forgejo hosting. The stack is therefore prepared but not yet online.
+A host with Docker Compose, a persistent data volume, and inbound TCP 80/443 plus SSH is required. The current connected DigitalOcean account reports no droplets and a team limit warning, so this repository does not provision a server. No free compute host has been verified for persistent Forgejo hosting. The stack is therefore prepared but not yet online. GitHub Actions now validates the Compose YAML, Caddy configuration, and platform safety tests on platform changes.
 
 ## Start
 
-1. Copy `.env.example` to `.env` on the host and set unique secrets and DNS names.
-2. Review the ports and firewall rules.
+1. Copy `platform/.env.example` to `.env` in the repository root on the host and set the actual Git and website hostnames plus a valid ACME email. Keep the populated `.env` out of Git.
+2. Review the ports and firewall rules. The host must already have working DNS records for both hostnames; do not change production DNS until the new host passes its checks.
 3. Run `docker compose -f platform/compose.yml up -d`.
 4. Complete the Forgejo first-run setup privately; disable open registration and create the owner account.
 5. Configure the first repository mirror/import from the current Everything Hub repository.
