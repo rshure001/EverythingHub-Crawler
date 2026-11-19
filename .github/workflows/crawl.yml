@@ -15,6 +15,8 @@ on:
       - "crawler/test_validate_media_catalog.py"
       - "crawler/media_extraction_preflight.py"
       - "crawler/test_media_extraction_preflight.py"
+      - "crawler/crawl_revision_guard.py"
+      - "crawler/test_crawl_revision_guard.py"
       - "crawler/media-source-terms.json"
       - "crawler/report.py"
   schedule:
@@ -36,27 +38,60 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Guard stale crawler revisions before external fetches
+        id: freshness
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          git diff --name-only "$GITHUB_SHA" FETCH_HEAD > /tmp/main-changed-paths.txt
+          python crawler/crawl_revision_guard.py /tmp/main-changed-paths.txt "$GITHUB_REF_NAME" > /tmp/freshness.json
+          cat /tmp/freshness.json
+
+          action="$(python -c 'import json; print(json.load(open("/tmp/freshness.json"))["action"])')"
+          reason="$(python -c 'import json; print(json.load(open("/tmp/freshness.json"))["reason"])')"
+          echo "- Crawler revision guard: $action — $reason" >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$action" = "dispatch" ]; then
+            echo "current=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::This run is stale or not on main; it will not fetch or commit against an outdated crawler catalog."
+            gh workflow run crawl.yml --ref main
+            echo "Dispatched one fresh crawler run from current main."
+          else
+            echo "current=true" >> "$GITHUB_OUTPUT"
+            echo "Crawler inputs match current main; proceeding with bounded crawl."
+          fi
       - name: Validate crawler configuration and tests
         run: |
-          python -m py_compile crawler/crawl.py crawler/report.py crawler/build_search_shards.py crawler/validate_public_index.py crawler/validate_media_catalog.py crawler/hurricane_strength.py crawler/media_discovery.py crawler/media_extraction_preflight.py
+          python -m py_compile crawler/crawl.py crawler/report.py crawler/build_search_shards.py crawler/validate_public_index.py crawler/validate_media_catalog.py crawler/hurricane_strength.py crawler/media_discovery.py crawler/media_extraction_preflight.py crawler/crawl_revision_guard.py
           test "$(grep -c '^https://' crawler/seeds.txt)" -eq 51
           python -m unittest discover -s crawler -p 'test_*.py' -v
       # Validate bounded sitemap discovery, Retry-After backoff, and the strict 1,600-page fetch cap.
       - name: Crawl configured sites
+        if: steps.freshness.outputs.current == 'true'
         run: python crawler/crawl.py
       - name: Build small public search shards
+        if: steps.freshness.outputs.current == 'true'
         run: python crawler/build_search_shards.py
       - name: Validate public search index
+        if: steps.freshness.outputs.current == 'true'
         run: python crawler/validate_public_index.py
       - name: Validate metadata-only media catalog
+        if: steps.freshness.outputs.current == 'true'
         run: python crawler/validate_media_catalog.py
       - name: Preflight source-approved media extraction
+        if: steps.freshness.outputs.current == 'true'
         run: python crawler/media_extraction_preflight.py
       - name: Publish crawler health summary
+        if: steps.freshness.outputs.current == 'true'
         run: python crawler/report.py
       - name: Measure Hurricane Core strength
+        if: steps.freshness.outputs.current == 'true'
         run: python crawler/hurricane_strength.py
       - name: Commit updated index and frontier
+        if: steps.freshness.outputs.current == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -98,6 +133,7 @@ jobs:
             fi
           done
       - name: Dispatch catalog publishing and search verification
+        if: steps.freshness.outputs.current == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
