@@ -77,9 +77,11 @@ jobs:
                   const cards = [...node.querySelectorAll("a.live-media-card")];
                   const invalidLinks = cards.filter(card => {
                     try {
-                      const url = new URL(card.href);
+                      const rawHref = card.getAttribute("href") || "";
+                      const url = new URL(rawHref, location.href);
                       const rel = (card.getAttribute("rel") || "").split(/\s+/);
-                      return !["https:", "http:"].includes(url.protocol) ||
+                      return !/^https?:\/\//i.test(rawHref) ||
+                        !["https:", "http:"].includes(url.protocol) ||
                         card.target !== "_blank" ||
                         !rel.includes("noopener") ||
                         !rel.includes("noreferrer");
@@ -87,13 +89,36 @@ jobs:
                       return true;
                     }
                   }).length;
-                  const images = [...node.querySelectorAll("img")];
+                  const images = [...node.querySelectorAll("a.live-media-card img")];
                   const invalidImages = images.filter(img => {
                     try {
-                      return !["https:", "http:"].includes(new URL(img.src).protocol);
+                      return !/^https?:\/\//i.test(img.getAttribute("src") || "") ||
+                        !["https:", "http:"].includes(new URL(img.src).protocol);
                     } catch {
                       return true;
                     }
+                  }).length;
+                  const unlicensedPreviewCards = cards.filter(card =>
+                    card.querySelector("img") && card.dataset.previewAllowed !== "true"
+                  ).length;
+                  const invalidLicensePreviews = images.filter(img => {
+                    const card = img.closest("a.live-media-card");
+                    if (!card) return true;
+                    const source = card.dataset.source || "";
+                    const license = (card.dataset.license || "").trim();
+                    const licenseUrl = (card.dataset.licenseUrl || "").trim();
+                    const attributionRequired = card.dataset.attributionRequired || "unknown";
+                    const creator = (card.dataset.creator || "").trim();
+                    const publicDomain = /^(public domain|cc0)(?:\\b|\\s|$)/i.test(license);
+                    const ccBy = /^CC BY(?:-SA)?(?:\\s|$)/i.test(license);
+                    const validLicense = publicDomain || (ccBy && /^https?:\\/\\//i.test(licenseUrl));
+                    const validAttribution = attributionRequired === "false" ||
+                      (attributionRequired === "true" && creator.length > 0);
+                    return source !== "Wikimedia Commons" ||
+                      card.dataset.previewAllowed !== "true" ||
+                      !license ||
+                      !validLicense ||
+                      !validAttribution;
                   }).length;
                   return {
                     cards: cards.length,
@@ -101,10 +126,12 @@ jobs:
                     images: images.length,
                     loadedImages: images.filter(img => img.complete && img.naturalWidth > 0).length,
                     invalidImages,
+                    unlicensedPreviewCards,
+                    invalidLicensePreviews,
                     fallback: /No fresh|temporarily unavailable/i.test(node.textContent || "")
                   };
                 });
-                if (summary.invalidLinks || summary.invalidImages) {
+                if (summary.invalidLinks || summary.invalidImages || summary.unlicensedPreviewCards || summary.invalidLicensePreviews) {
                   throw new Error(label + " shelf contains unsafe media destinations: " + JSON.stringify(summary));
                 }
                 return summary;
