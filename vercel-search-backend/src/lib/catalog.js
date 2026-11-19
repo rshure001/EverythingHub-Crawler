@@ -3,7 +3,8 @@ const https = require('node:https');
 const zlib = require('node:zlib');
 const crypto = require('node:crypto');
 
-const MANIFEST_URL = 'https://raw.githubusercontent.com/rshure001/EverythingHub-Crawler/main/public-search/manifest.json';
+const CATALOG_BASE_URL = 'https://raw.githubusercontent.com/rshure001/EverythingHub-Crawler/';
+const GIT_REF_URL = 'https://api.github.com/repos/rshure001/EverythingHub-Crawler/git/ref/heads/main';
 const SHARD_BASE_URL = 'https://raw.githubusercontent.com/rshure001/EverythingHub-Crawler/main/public-search/';
 const CACHE_TTL_MS = 300000;
 const STALE_TTL_MS = 3600000;
@@ -250,12 +251,21 @@ async function loadShardedCatalog(manifest) {
 async function loadCatalog() {
   if (cache && Date.now() - cache.loadedAt < CACHE_TTL_MS) return { ...cache, stale: false };
   try {
-    const manifestRaw = await getBuffer(MANIFEST_URL, MAX_MANIFEST_BYTES, 5000);
+    // Pin both files to one immutable Git revision to prevent stale CDN mixes.
+    const gitRef = JSON.parse((await getBuffer(GIT_REF_URL + '?v=' + Date.now(), 4096)).toString('utf8'));
+    const sha = gitRef && gitRef.object && gitRef.object.sha;
+    if (typeof sha !== 'string' || !/^[a-f0-9]{40}$/i.test(sha)) {
+      throw new Error('catalog_git_ref_invalid');
+    }
+    const [manifestRaw, compressed] = await Promise.all([
+      getBuffer(CATALOG_BASE_URL + sha + '/public-search/manifest.json', MAX_MANIFEST_BYTES),
+      getBuffer(CATALOG_BASE_URL + sha + '/public-search/catalog-v1.json.gz', MAX_CATALOG_GZIP_BYTES)
+    ]);
     let manifest;
     try { manifest = JSON.parse(manifestRaw.toString('utf8')); } catch {
       throw new Error('manifest_json_invalid');
     }
-    const validated = await loadShardedCatalog(manifest);
+    const validated = validateManifestAndCatalog(manifest, compressed);
     cache = { ...validated, loadedAt: Date.now(), stale: false };
     return { ...cache };
   } catch (error) {
