@@ -5,7 +5,14 @@ import unittest
 from pathlib import Path
 
 from build_search_shards import is_publishable
-from validate_public_index import bounded_gzip_decompress, validation_summary, validate
+from validate_public_index import (
+    MAX_CANONICAL_INDEX_BYTES,
+    RECOMMENDED_CANONICAL_INDEX_BYTES,
+    bounded_gzip_decompress,
+    canonical_index_size_warning,
+    validation_summary,
+    validate,
+)
 
 
 class PublicIndexValidationTests(unittest.TestCase):
@@ -63,6 +70,30 @@ class PublicIndexValidationTests(unittest.TestCase):
             encoding="utf-8",
         )
 
+
+    def test_canonical_index_size_warning_is_silent_below_recommendation(self):
+        pages = [{"url": "https://example.com/a", "title": "A"}]
+        self.write_fixture(pages, pages)
+        self.assertIsNone(canonical_index_size_warning(self.root))
+
+    def test_canonical_index_size_warning_reports_github_recommendation(self):
+        source_path = self.root / "data" / "index.json"
+        with source_path.open("wb") as handle:
+            handle.truncate(RECOMMENDED_CANONICAL_INDEX_BYTES + 1)
+        warning = canonical_index_size_warning(self.root)
+        self.assertIsNotNone(warning)
+        self.assertIn("GitHub recommends", warning)
+        self.assertIn(f"{RECOMMENDED_CANONICAL_INDEX_BYTES:,}", warning)
+
+    def test_canonical_index_hard_safety_ceiling_fails_before_json_parse(self):
+        pages = [{"url": "https://example.com/a", "title": "A"}]
+        self.write_fixture(pages, pages)
+        source_path = self.root / "data" / "index.json"
+        with source_path.open("wb") as handle:
+            handle.truncate(MAX_CANONICAL_INDEX_BYTES + 1)
+        errors = validate(self.root)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("safety ceiling", errors[0])
 
     def test_manifest_timestamp_must_match_canonical_index(self):
         pages = [{"url": "https://example.com/a", "title": "A"}]

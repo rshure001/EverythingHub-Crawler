@@ -16,6 +16,11 @@ MAX_SHARD_BYTES = 350_000
 # Keep validation aligned with the browser and independent Vercel search transport.
 MAX_CATALOG_GZIP_BYTES = 8_000_000
 MAX_CATALOG_UNCOMPRESSED_BYTES = 30_000_000
+# GitHub recommends keeping individual repository files at or below 50 MB.
+# Stop before the 100 MB hard limit so a growing canonical index cannot make
+# the crawler commit fail unexpectedly.
+RECOMMENDED_CANONICAL_INDEX_BYTES = 50_000_000
+MAX_CANONICAL_INDEX_BYTES = 90_000_000
 CATALOG_NAME = "catalog-v1.json.gz"
 
 
@@ -50,6 +55,20 @@ def is_safe_public_url(value: object) -> bool:
         return False
 
 
+def canonical_index_size_warning(root: Path = ROOT) -> str | None:
+    """Warn when the canonical JSON approaches GitHub's recommended file size."""
+    source_path = root / "data" / "index.json"
+    if not source_path.is_file():
+        return None
+    size_bytes = source_path.stat().st_size
+    if size_bytes <= RECOMMENDED_CANONICAL_INDEX_BYTES:
+        return None
+    return (
+        f"data/index.json is {size_bytes:,} bytes; GitHub recommends keeping "
+        f"individual files at or below {RECOMMENDED_CANONICAL_INDEX_BYTES:,} bytes."
+    )
+
+
 def validate(root: Path = ROOT) -> list[str]:
     errors: list[str] = []
     source_path = root / "data" / "index.json"
@@ -60,6 +79,13 @@ def validate(root: Path = ROOT) -> list[str]:
         return ["data/index.json is missing"]
     if not manifest_path.is_file():
         return ["public-search/manifest.json is missing"]
+    source_size = source_path.stat().st_size
+    if source_size > MAX_CANONICAL_INDEX_BYTES:
+        return [
+            f"data/index.json is {source_size:,} bytes, above the "
+            f"{MAX_CANONICAL_INDEX_BYTES:,}-byte safety ceiling; split or "
+            "externalize the canonical index before committing another crawl."
+        ]
 
     try:
         source = json.loads(source_path.read_text(encoding="utf-8"))
@@ -278,6 +304,9 @@ def main() -> None:
         print("\n".join(f"ERROR: {error}" for error in errors), file=sys.stderr)
         raise SystemExit(1)
     manifest = json.loads((ROOT / "public-search" / "manifest.json").read_text(encoding="utf-8"))
+    warning = canonical_index_size_warning()
+    if warning:
+        print(f"WARNING: {warning}", file=sys.stderr)
     print(validation_summary(manifest))
 
 
