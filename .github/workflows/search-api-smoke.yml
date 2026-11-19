@@ -6,6 +6,8 @@ on:
     paths:
       - "supabase/functions/everything-hub-web-search/**"
       - "public-search/**"
+      - "vercel-search-backend/**"
+      - ".github/workflows/search-api-smoke.yml"
   workflow_dispatch:
 permissions:
   contents: read
@@ -109,21 +111,40 @@ jobs:
                   return json.load(response)
 
           health = get_vercel("/api/health")
-          production = get_vercel("/api/search?" + urllib.parse.urlencode({"q": "NASA", "limit": 50}))
+          production = get_vercel("/api/search?" + urllib.parse.urlencode({"q": "NASA", "limit": 50, "offset": 0}))
+          page2 = get_vercel("/api/search?" + urllib.parse.urlencode({"q": "NASA", "limit": 50, "offset": 50}))
           assert health.get("status") == "ok", health
           assert health.get("service") == "everythinghub-independent-search", health
           assert health.get("database_required") is False, health
+          assert health.get("pagination") == "non-overlapping", health
           assert production.get("indexStatus") == "crawler-catalog-active", production
           assert isinstance(production.get("indexedPages"), int) and production["indexedPages"] > 0, production
+          assert isinstance(production.get("indexSha256"), str) and len(production["indexSha256"]) == 64, production
+          assert production.get("page") == 1, production
+          assert page2.get("page") == 2, page2
+          assert page2.get("catalogOffset") == 40, page2
+          assert page2.get("indexedPages") == production.get("indexedPages"), page2
+          assert page2.get("indexSha256") == production.get("indexSha256"), page2
           local_results = [
               item for item in production.get("results", [])
               if item.get("source") == "Everything Hub Crawler"
               and item.get("provider") == "everythinghub-catalog"
           ]
-          assert local_results, production
-          for item in local_results:
+          page2_results = [
+              item for item in page2.get("results", [])
+              if item.get("source") == "Everything Hub Crawler"
+              and item.get("provider") == "everythinghub-catalog"
+          ]
+          assert len(local_results) == 40, production
+          assert len(page2_results) == 50, page2
+          for item in local_results + page2_results:
               assert item.get("origin") == "Everything Hub Index", item
               assert item.get("url", "").startswith(("https://", "http://")), item
+          first_urls = {item["url"] for item in local_results}
+          second_urls = {item["url"] for item in page2_results}
+          assert not first_urls.intersection(second_urls), {"page1": local_results, "page2": page2_results}
+          assert page2.get("hasMore") is True, page2
           print("Production Vercel catalog passed:", production["indexedPages"], "indexed pages;",
-                len(local_results), "first-party NASA results in the 50-result response")
+                len(local_results), "first-party page-one results;", len(page2_results),
+                "non-overlapping page-two results")
           PY
