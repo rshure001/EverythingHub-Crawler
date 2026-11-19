@@ -9,7 +9,7 @@ const STALE_TTL_MS = 3600000;
 const MAX_MANIFEST_BYTES = 128000;
 const MAX_CATALOG_GZIP_BYTES = 8000000;
 const MAX_CATALOG_JSON_BYTES = 64000000;
-const MAX_INDEXED_PAGES = 15000;
+const MAX_INDEXED_PAGES = 20000;
 let cache = null;
 
 function getBuffer(url, maxBytes) {
@@ -76,7 +76,7 @@ function validateManifestAndCatalog(manifest, compressed) {
     throw new Error('manifest_page_count_invalid');
   }
   if (!Number.isSafeInteger(manifest.shard_count) ||
-      manifest.shard_count < 1 || manifest.shard_count > 96 ||
+      manifest.shard_count < 1 || manifest.shard_count > 128 ||
       !Array.isArray(manifest.shards) || manifest.shards.length !== manifest.shard_count) {
     throw new Error('manifest_shard_count_invalid');
   }
