@@ -10,8 +10,8 @@ on:
       - 'vercel-search-backend/**'
       - '.github/workflows/validate-vercel-search.yml'
   schedule:
-    # Independently monitor the production catalog/search path without touching source websites.
-    - cron: '*/15 * * * *'
+    # Stagger lightweight production checks away from GitHub's quarter-hour peaks; completion also wakes the crawler watchdog.
+    - cron: '5,20,35,50 * * * *'
   workflow_dispatch:
 permissions:
   contents: read
