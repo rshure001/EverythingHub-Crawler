@@ -68,7 +68,7 @@ class LaneClassifierTests(unittest.TestCase):
             (root / "public-search").mkdir()
             url = "https://www.nasa.gov/"
             (root / "data" / "index.json").write_text(
-                json.dumps({"pages": [{"url": url}]}), encoding="utf-8"
+                json.dumps({"updated_at": 1700000000, "pages": [{"url": url}]}), encoding="utf-8"
             )
             page = {"url": url, "title": "NASA", "description": "", "text": "", "lane": lane}
             raw = json.dumps(
@@ -81,6 +81,7 @@ class LaneClassifierTests(unittest.TestCase):
             manifest = {
                 "version": 1,
                 "integrity": "sha256",
+                "updated_at": 1700000000,
                 "total_pages": 1,
                 "shard_count": 1,
                 "shards": [{
