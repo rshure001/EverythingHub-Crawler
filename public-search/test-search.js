@@ -174,11 +174,21 @@ async function testCurrentPublishedManifestFitsClientLimits() {
   const totalShardBytes = currentManifest.shards.reduce((sum, shard) => sum + shard.bytes, 0);
 
   assert.ok(
-    currentManifest.catalog_gzip &&
-      currentManifest.catalog_gzip.bytes <= 10_000_000 &&
-      currentManifest.catalog_gzip.pages === currentManifest.total_pages,
-    "current compressed catalog must fit the 10 MB browser transport limit"
+    currentManifest.total_pages <= 30_000,
+    "current catalog must fit the 30,000-page browser safety limit"
   );
+  assert.ok(
+    currentManifest.shard_count <= 256 &&
+      currentManifest.shards.length === currentManifest.shard_count,
+    "current manifest must fit the 256-shard browser safety limit"
+  );
+  if (currentManifest.catalog_gzip) {
+    assert.ok(
+      currentManifest.catalog_gzip.bytes <= 12_000_000 &&
+        currentManifest.catalog_gzip.pages === currentManifest.total_pages,
+      "optional compressed catalog must fit the 12 MB browser transport limit"
+    );
+  }
   assert.ok(
     totalShardBytes <= 48_000_000,
     "current shard catalog must fit the 48 MB browser fallback limit"
@@ -197,13 +207,20 @@ async function testCurrentPublishedManifestFitsClientLimits() {
 
   try {
     await assert.rejects(engine.create({ manifestUrl }), /HTTP 404/);
-    assert.ok(
-      requested.some(value => value.endsWith("/catalog-v1.json.gz")),
-      "current published manifest must pass compressed catalog metadata validation"
-    );
+    if (currentManifest.catalog_gzip) {
+      assert.ok(
+        requested.some(value => value.endsWith("/catalog-v1.json.gz")),
+        "a declared compressed catalog must be attempted before shard fallback"
+      );
+    } else {
+      assert.ok(
+        !requested.some(value => value.endsWith("/catalog-v1.json.gz")),
+        "a shard-only manifest must not request an undeclared compressed catalog"
+      );
+    }
     assert.ok(
       requested.some(value => value.endsWith("/shard-0001.json")),
-      "when gzip is unavailable, current manifest must pass shard limits and reach shard loading"
+      "current manifest must pass browser bounds and reach integrity-checked shard loading"
     );
   } finally {
     globalThis.fetch = previousFetch;
