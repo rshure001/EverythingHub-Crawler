@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
-MAX_CATALOG_GZIP_BYTES = 8_000_000
+MAX_CATALOG_GZIP_BYTES = 10_000_000
 CRAWLER_DIR = ROOT / "crawler"
 if str(CRAWLER_DIR) not in sys.path:
     sys.path.insert(0, str(CRAWLER_DIR))
