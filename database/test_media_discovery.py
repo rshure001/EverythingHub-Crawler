@@ -39,16 +39,16 @@ class MediaDiscoveryComplianceTests(unittest.TestCase):
 
     def test_live_media_smoke_covers_images_videos_and_reuse_rights(self):
         workflow = (SOURCE.parents[3] / ".github" / "workflows" / "media-discovery-smoke.yml").read_text(encoding="utf-8")
-        self.assertIn('q=octopus', workflow)
-        self.assertIn('q=Apollo 11 NASA', workflow)
+        self.assertIn('q=latest technology science nature', workflow)
+        self.assertIn('q=latest science technology discoveries', workflow)
         self.assertIn('cache-control: public, max-age=180, s-maxage=180', workflow)
         self.assertIn('Unverified', workflow)
 
 
     def test_homepage_media_queries_match_live_smoke_queries(self):
         homepage = (SOURCE.parents[3] / "vercel-homepage" / "index.html").read_text(encoding="utf-8")
-        self.assertIn("loadHomepageMedia('image','octopus','homeLiveImages')", homepage)
-        self.assertIn("loadHomepageMedia('video','Apollo 11 NASA','homeLiveVideos')", homepage)
+        self.assertIn("loadHomepageMedia('image','latest technology science nature','homeLiveImages')", homepage)
+        self.assertIn("loadHomepageMedia('video','latest science technology discoveries','homeLiveVideos')", homepage)
 
 
     def test_bing_and_commons_are_queried_independently_and_merged(self):
