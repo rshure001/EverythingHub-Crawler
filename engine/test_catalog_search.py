@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from catalog_search import (MAX_CATALOG_GZIP_BYTES, MAX_INDEXED_PAGES, MAX_SHARD_COUNT, MAX_TOTAL_SHARD_BYTES, _bounded_gzip, load_catalog)
+from catalog_search import (MAX_CATALOG_GZIP_BYTES, MAX_INDEXED_PAGES, MAX_SHARD_BYTES, MAX_SHARD_COUNT, MAX_TOTAL_SHARD_BYTES, _bounded_gzip, load_catalog)
 
 
 class CatalogLoaderTests(unittest.TestCase):
@@ -113,7 +113,7 @@ class CatalogLoaderTests(unittest.TestCase):
                 "shards": [{}],
             }
             (Path(directory) / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
-            with self.assertRaisesRegex(ValueError, "indexed-page safety limit"):
+            with self.assertRaisesRegex(ValueError, "total_pages exceeds the safety limit"):
                 load_catalog(search_dir=directory)
 
     def test_rejects_manifest_above_shard_limit(self):
