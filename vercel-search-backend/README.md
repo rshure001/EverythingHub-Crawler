@@ -32,8 +32,8 @@ duplicates. Regression tests cover pages one through three.
 
 ## Deployment packaging
 
-- The Vercel deployment includes the runtime files under \`src/vercel-search-backend/src/\`.
-- \`src/package.json\` explicitly pins CommonJS and Node.js 26.x; the backend uses built-in Node modules only.
+- The direct Vercel upload mirrors `vercel-search-backend/src/` under `src/vercel-search-backend/src/` in the deployment payload.
+- That folder's `package.json` explicitly pins CommonJS and Node.js 26.x; the backend uses built-in Node modules only.
 - Keep the package manifest in Git so direct Vercel API deployments remain reproducible and reviewable.
 
 ## Tests
