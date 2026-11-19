@@ -1,0 +1,25 @@
+services:
+  everythinghub-postgres:
+    image: postgres:17
+    container_name: everythinghub-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-everythinghub}
+      POSTGRES_USER: ${POSTGRES_USER:-eh_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    ports:
+      # Bind only to localhost; expose through a private network/API, never public 5432.
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - everythinghub_pgdata:/var/lib/postgresql/data
+      - ./db/init/001_everythinghub_core.sql:/docker-entrypoint-initdb.d/001_everythinghub_core.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-eh_admin} -d ${POSTGRES_DB:-everythinghub}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    shm_size: 256mb
+
+volumes:
+  everythinghub_pgdata:
