@@ -30,6 +30,6 @@ jobs:
             -v "$PWD/platform/Caddyfile:/etc/caddy/Caddyfile:ro" \
             caddy:2 caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
       - name: Check hosting shell scripts
-        run: bash -n platform/host-preflight.sh platform/backup-host.sh platform/activate-release.sh
+        run: bash -n platform/host-preflight.sh platform/backup-host.sh platform/activate-release.sh platform/install-host.sh platform/host-status.sh
       - name: Run platform safety tests
         run: python -m unittest discover -s platform -p 'test_*.py' -v
