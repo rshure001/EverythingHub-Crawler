@@ -75,14 +75,18 @@ class PipelineHealthTests(unittest.TestCase):
         self.assertEqual(result["search_smoke"]["status"], "healthy")
         self.assertEqual(result["overall_status"], "blocked")
 
-    def test_downstream_completion_never_dispatches_an_extra_crawl(self):
+    def test_downstream_health_is_checked_on_schedule_not_every_workflow_completion(self):
         workflow = (
             Path(__file__).resolve().parents[1]
             / ".github" / "workflows" / "crawl-watchdog.yml"
         ).read_text(encoding="utf-8")
-        self.assertIn("github.event.workflow_run.name", workflow)
-        self.assertIn("EverythingHub Publisher", workflow)
-        self.assertIn("EverythingHub search API smoke test", workflow)
+        workflow_run = workflow.split("  workflow_run:\\n", 1)[1].split("  workflow_dispatch:", 1)[0]
+        self.assertEqual(workflow_run.count('- "'), 1)
+        self.assertIn('- "Everything Hub crawler"', workflow_run)
+        self.assertNotIn("EverythingHub Publisher", workflow_run)
+        self.assertNotIn("EverythingHub search API smoke test", workflow_run)
+        self.assertNotIn("github.event.workflow_run.name", workflow)
+        self.assertIn('    - cron: "7,22,37,52 * * * *"', workflow)
         self.assertIn("pipeline_health.py", workflow)
 
 
