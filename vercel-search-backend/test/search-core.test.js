@@ -128,3 +128,65 @@ test('explicit robots-denied catalog records are rejected', () => {
     /catalog_contains_robots_denied_record/
   );
 });
+
+test('weak body-only mentions are excluded from single-term results', () => {
+  const pages = [
+    {
+      ...makePage(10, 'science'),
+      title: 'General reference article',
+      description: 'An unrelated overview',
+      text: 'This article mentions Rolex once in passing.'
+    },
+    {
+      ...makePage(11, 'science'),
+      title: 'Rolex watches and history',
+      description: 'Rolex watchmaking reference',
+      text: 'A detailed guide to watchmaking.'
+    }
+  ];
+  const results = searchCatalog(pages, 'Rolex', 'science');
+  assert.deepEqual(results.map(item => item.url), [
+    'https://example.com/nasa/11'
+  ]);
+});
+
+test('title evidence outranks repeated body-only mentions', () => {
+  const pages = [
+    {
+      ...makePage(12, 'science'),
+      title: 'Rolex watch reference',
+      description: 'A focused watch guide',
+      text: 'A short overview.'
+    },
+    {
+      ...makePage(13, 'science'),
+      title: 'General reference article',
+      description: 'An unrelated overview',
+      text: 'Rolex watch '.repeat(20)
+    }
+  ];
+  const results = searchCatalog(pages, 'Rolex watch', 'science');
+  assert.equal(results.length, 2);
+  assert.equal(results[0].url, 'https://example.com/nasa/12');
+  assert.ok(results[0].score > results[1].score);
+});
+
+test('complete-query bonus requires every term in a high-signal field', () => {
+  const pages = [
+    {
+      ...makePage(14, 'science'),
+      title: 'Rolex watches',
+      description: 'Watchmaking',
+      text: 'A focused guide.'
+    },
+    {
+      ...makePage(15, 'science'),
+      title: 'General reference',
+      description: 'Background information',
+      text: 'Rolex watch '.repeat(20)
+    }
+  ];
+  const results = searchCatalog(pages, 'Rolex watch', 'science');
+  assert.equal(results[0].url, 'https://example.com/nasa/14');
+  assert.ok(results[0].score < 100);
+});
