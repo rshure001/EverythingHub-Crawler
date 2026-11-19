@@ -1,0 +1,73 @@
+name: PostgreSQL 17 core smoke test
+
+on:
+  pull_request:
+    paths:
+      - "db/init/**"
+      - "docker-compose.postgres.yml"
+      - ".github/workflows/postgres-core.yml"
+  push:
+    branches: [main]
+    paths:
+      - "db/init/**"
+      - "docker-compose.postgres.yml"
+      - ".github/workflows/postgres-core.yml"
+
+jobs:
+  postgres-core:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: everythinghub_test
+          POSTGRES_USER: eh_test
+          POSTGRES_PASSWORD: test-only-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U eh_test -d everythinghub_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Initialize schema
+        env:
+          PGPASSWORD: test-only-password
+        run: psql -h localhost -U eh_test -d everythinghub_test -v ON_ERROR_STOP=1 -f db/init/001_everythinghub_core.sql
+      - name: Verify search index and queue leasing
+        env:
+          PGPASSWORD: test-only-password
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql -h localhost -U eh_test -d everythinghub_test -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO eh_search.crawl_sources(domain) VALUES ('example.test');
+          INSERT INTO eh_search.web_pages(canonical_url, url_hash, title, description, body_text)
+          VALUES ('https://example.test/rolex', decode(md5('rolex'), 'hex'),
+                  'Rolex watches', 'Precision timepieces', 'Independent search index smoke test');
+          DO $$
+          BEGIN
+            IF NOT EXISTS (
+              SELECT 1 FROM eh_search.web_pages
+              WHERE search_document @@ websearch_to_tsquery('simple', 'Rolex')
+            ) THEN
+              RAISE EXCEPTION 'Full-text search smoke test failed';
+            END IF;
+          END $$;
+          INSERT INTO eh_search.crawl_queue(url, priority)
+          VALUES ('https://example.test/a', 10), ('https://example.test/b', 5);
+          DO $$
+          DECLARE claimed_count INTEGER;
+          BEGIN
+            SELECT count(*) INTO claimed_count
+            FROM eh_search.claim_crawl_jobs('smoke-worker', 2, 60);
+            IF claimed_count <> 2 THEN
+              RAISE EXCEPTION 'Expected 2 leased jobs, got %', claimed_count;
+            END IF;
+            IF (SELECT count(*) FROM eh_search.crawl_queue WHERE status='leased' AND lease_owner='smoke-worker') <> 2 THEN
+              RAISE EXCEPTION 'Queue lease state was not persisted';
+            END IF;
+          END $$;
+          SQL
