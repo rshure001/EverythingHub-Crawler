@@ -31,7 +31,7 @@ class SearchApiSmokeFreshnessTests(unittest.TestCase):
             / "search-api-smoke.yml"
         ).read_text(encoding="utf-8")
         push_block = smoke.split("  push:\n", 1)[1].split("  workflow_dispatch:", 1)[0]
-        self.assertNotIn('"public-search/**"', push_block)
+        self.assertIn('"public-search/**"', push_block)
         self.assertIn('workflows: ["EverythingHub Publisher"]', smoke)
 
         crawl = (
@@ -42,8 +42,8 @@ class SearchApiSmokeFreshnessTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         dispatch = crawl.split("Dispatch catalog publishing and search verification", 1)[1]
         self.assertIn("gh workflow run publish-site.yml", dispatch)
-        self.assertNotIn("gh workflow run search-api-smoke.yml", dispatch)
-        self.assertIn("search smoke runs after publisher completion", dispatch)
+        self.assertIn("gh workflow run search-api-smoke.yml", dispatch)
+        self.assertIn("search smoke test; it waits for the committed catalog", dispatch)
 
 
 if __name__ == "__main__":
