@@ -55,6 +55,12 @@ jobs:
                   report.categoryCount !== 8 || JSON.stringify(report.categoryModes) !== JSON.stringify(expected)) {
                 throw new Error("Homepage structure check failed: " + JSON.stringify(report));
               }
+              report.mediaPreviewPolicyLoaded = await page.evaluate(() =>
+                typeof window.EHMediaPreviewPolicy?.isMediaPreviewAllowed === "function"
+              );
+              if (!report.mediaPreviewPolicyLoaded) {
+                throw new Error("Homepage media preview policy script did not load");
+              }
               const artwork = page.locator(".approved-master-art");
               await artwork.waitFor({ state: "visible", timeout: 15000 });
               await page.waitForFunction(() => {
