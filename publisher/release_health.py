@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
+MAX_CATALOG_GZIP_BYTES = 8_000_000
 CRAWLER_DIR = ROOT / "crawler"
 if str(CRAWLER_DIR) not in sys.path:
     sys.path.insert(0, str(CRAWLER_DIR))
@@ -50,8 +51,8 @@ def build_health(
             raise ValueError("compressed catalog page count differs from the manifest")
         if not isinstance(catalog.get("bytes"), int) or catalog["bytes"] < 1:
             raise ValueError("compressed catalog byte count is invalid")
-        if catalog["bytes"] > 6_000_000:
-            raise ValueError("compressed catalog exceeds the serving safety limit")
+        if catalog["bytes"] > MAX_CATALOG_GZIP_BYTES:
+            raise ValueError("compressed catalog exceeds the 8 MB independent-search safety limit")
         digest = catalog.get("sha256")
         if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
             raise ValueError("compressed catalog SHA-256 digest is invalid")
