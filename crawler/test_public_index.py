@@ -22,7 +22,7 @@ class PublicIndexValidationTests(unittest.TestCase):
         import hashlib
 
         (self.root / "data" / "index.json").write_text(
-            json.dumps({"version": 1, "pages": source_pages}),
+            json.dumps({"version": 1, "updated_at": 1700000000, "pages": source_pages}),
             encoding="utf-8",
         )
         # Public search shards now require one of the eight supported lanes.
@@ -48,6 +48,7 @@ class PublicIndexValidationTests(unittest.TestCase):
         manifest = {
             "version": 1,
             "integrity": "sha256",
+            "updated_at": 1700000000,
             "total_pages": len(shard_pages),
             "shard_count": 1,
             "shards": [{
@@ -62,6 +63,44 @@ class PublicIndexValidationTests(unittest.TestCase):
             encoding="utf-8",
         )
 
+
+    def test_manifest_timestamp_must_match_canonical_index(self):
+        pages = [{"url": "https://example.com/a", "title": "A"}]
+        self.write_fixture(pages, pages)
+        manifest_path = self.root / "public-search" / "manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["updated_at"] += 1
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+        self.assertIn(
+            "manifest updated_at does not match canonical index",
+            validate(self.root),
+        )
+
+    def test_manifest_timestamp_must_be_a_positive_unix_integer(self):
+        pages = [{"url": "https://example.com/a", "title": "A"}]
+        for value in (None, True, 0, -1, "1700000000"):
+            with self.subTest(value=value):
+                self.write_fixture(pages, pages)
+                manifest_path = self.root / "public-search" / "manifest.json"
+                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                manifest["updated_at"] = value
+                manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+                self.assertIn(
+                    "manifest updated_at must be a positive Unix timestamp",
+                    validate(self.root),
+                )
+
+    def test_canonical_index_timestamp_must_be_a_positive_unix_integer(self):
+        pages = [{"url": "https://example.com/a", "title": "A"}]
+        self.write_fixture(pages, pages)
+        source_path = self.root / "data" / "index.json"
+        source = json.loads(source_path.read_text(encoding="utf-8"))
+        source["updated_at"] = True
+        source_path.write_text(json.dumps(source), encoding="utf-8")
+        self.assertIn(
+            "canonical index updated_at must be a positive Unix timestamp",
+            validate(self.root),
+        )
 
     def test_bounded_gzip_decompression_accepts_valid_payload(self):
         raw = gzip.compress(b"valid catalog", mtime=0)
