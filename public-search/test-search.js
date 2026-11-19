@@ -82,6 +82,30 @@ async function testGzipLoader() {
     assert.equal(loaded.pageCount, 2);
     assert.equal(loaded.search("NASA", { lane: "science" }).length, 1);
     assert.equal(requestCount, 2);
+
+    const badPages = [{ ...pages[0], robots_allowed: false }, pages[2]];
+    const badCompressed = gzipSync(bytesFor({ version: 1, pages: badPages }), { level: 9, mtime: 0 });
+    const badManifestUrl = "https://example.test/search-gzip-bad/manifest.json";
+    const badGzipUrl = new URL("catalog-v1.json.gz", badManifestUrl).href;
+    const badManifest = {
+      ...manifest,
+      catalog_gzip: {
+        file: "catalog-v1.json.gz",
+        pages: badPages.length,
+        bytes: badCompressed.length,
+        sha256: sha256(badCompressed)
+      }
+    };
+    globalThis.fetch = async url => {
+      const value = String(url);
+      if (value === badManifestUrl) return new Response(JSON.stringify(badManifest), { status: 200 });
+      if (value === badGzipUrl) return new Response(badCompressed, { status: 200 });
+      return new Response("not found", { status: 404 });
+    };
+    await assert.rejects(
+      engine.create({ manifestUrl: badManifestUrl, strictCatalogGzip: true }),
+      /robots-denied/
+    );
   } finally {
     globalThis.fetch = previousFetch;
   }
