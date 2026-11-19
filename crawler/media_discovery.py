@@ -35,7 +35,10 @@ def _text(value: Any, limit: int = MAX_TEXT_LENGTH) -> str:
 
 def safe_media_url(base_url: str, value: Any) -> str:
     """Resolve a public HTTP(S) URL while rejecting credentials and signed URLs."""
-    raw = _text(value, MAX_MEDIA_URL_LENGTH)
+    raw_value = str(value or "").strip()
+    if not raw_value or len(raw_value) > MAX_MEDIA_URL_LENGTH:
+        return ""
+    raw = _text(raw_value, MAX_MEDIA_URL_LENGTH)
     if not raw:
         return ""
     try:
