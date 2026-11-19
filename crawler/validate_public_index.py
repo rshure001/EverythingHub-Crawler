@@ -13,7 +13,8 @@ from lane_classifier import VALID_LANES
 
 ROOT = Path(__file__).resolve().parents[1]
 MAX_SHARD_BYTES = 350_000
-MAX_CATALOG_GZIP_BYTES = 6_000_000
+# Keep validation aligned with the browser and independent Vercel search transport.
+MAX_CATALOG_GZIP_BYTES = 7_000_000
 MAX_CATALOG_UNCOMPRESSED_BYTES = 30_000_000
 CATALOG_NAME = "catalog-v1.json.gz"
 
