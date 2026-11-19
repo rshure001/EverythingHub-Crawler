@@ -12,9 +12,10 @@ ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "data" / "index.json"
 OUT = ROOT / "public-search"
 MAX_BYTES = 340_000  # Keep 10 KB headroom below the 350 KB serving/validation ceiling.
-# Vercel's independent search backend and the browser client accept a 7 MB catalog.
-# The Supabase Edge Function intentionally keeps its stricter 6 MB CPU guard.
+# Keep the optional gzip catalog within both the compressed serving cap and the
+# validator's bounded decompression cap. Larger catalogs use verified shards only.
 MAX_CATALOG_GZIP_BYTES = 8_000_000
+MAX_CATALOG_UNCOMPRESSED_BYTES = 30_000_000
 CATALOG_NAME = "catalog-v1.json.gz"
 
 
@@ -78,8 +79,10 @@ def batch_fits(items, max_bytes=MAX_BYTES):
     return len(encode_batch(items)) <= max_bytes
 
 
-def catalog_metadata(raw, page_count):
-    """Return gzip metadata only when the optional catalog stays within its serving cap."""
+def catalog_metadata(raw, page_count, uncompressed_bytes=None):
+    """Return gzip metadata only when both compressed and decoded sizes are safe."""
+    if uncompressed_bytes is not None and uncompressed_bytes > MAX_CATALOG_UNCOMPRESSED_BYTES:
+        return None
     if len(raw) > MAX_CATALOG_GZIP_BYTES:
         return None
     return {
@@ -133,8 +136,23 @@ def main():
         ensure_ascii=False,
         separators=(",", ":"),
     ) + "\n"
-    catalog_raw = gzip.compress(catalog_payload.encode("utf-8"), compresslevel=9, mtime=0)
-    catalog_gzip = catalog_metadata(catalog_raw, len(pages))
+    catalog_payload_bytes = catalog_payload.encode("utf-8")
+    catalog_raw = None
+    catalog_gzip = None
+    catalog_omission_reason = None
+    if len(catalog_payload_bytes) > MAX_CATALOG_UNCOMPRESSED_BYTES:
+        catalog_omission_reason = (
+            f"{len(catalog_payload_bytes):,} uncompressed bytes exceeds "
+            f"the {MAX_CATALOG_UNCOMPRESSED_BYTES:,}-byte limit"
+        )
+    else:
+        catalog_raw = gzip.compress(catalog_payload_bytes, compresslevel=9, mtime=0)
+        catalog_gzip = catalog_metadata(catalog_raw, len(pages), len(catalog_payload_bytes))
+        if catalog_gzip is None:
+            catalog_omission_reason = (
+                f"{len(catalog_raw):,} compressed bytes exceeds "
+                f"the {MAX_CATALOG_GZIP_BYTES:,}-byte limit"
+            )
     catalog_path = OUT / CATALOG_NAME
     if catalog_gzip is None:
         # A missing optional gzip catalog is safe: verified bounded shards remain
@@ -174,8 +192,8 @@ def main():
         )
     else:
         print(
-            f"Compressed catalog omitted: {len(catalog_raw):,} bytes exceeds "
-            f"the {MAX_CATALOG_GZIP_BYTES:,}-byte limit; verified shard fallback remains available."
+            f"Compressed catalog omitted: {catalog_omission_reason}; "
+            "verified shard fallback remains available."
         )
 
 
