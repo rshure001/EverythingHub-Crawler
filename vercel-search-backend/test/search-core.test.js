@@ -175,7 +175,7 @@ test('complete-query bonus requires every term in a high-signal field', () => {
   const pages = [
     {
       ...makePage(14, 'science'),
-      title: 'Rolex watches',
+      title: 'Rolex watch reference',
       description: 'Watchmaking',
       text: 'A focused guide.'
     },
