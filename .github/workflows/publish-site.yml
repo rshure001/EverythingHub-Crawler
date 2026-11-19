@@ -8,7 +8,6 @@ on:
       - "site/**"
       - "public-search/**"
       - "publisher/**"
-      - ".github/workflows/publish-site.yml"
 permissions:
   contents: read
   pages: write
