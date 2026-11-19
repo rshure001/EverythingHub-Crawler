@@ -1,24 +1,41 @@
-# Everything Hub Vercel homepage source
+# Everything Hub Vercel homepage
 
-This is the source HTML for the `everythinghub-homepage-fixed` Vercel project. The production project root is `src/`, so this file is deployed as `src/index.html` and the crawler catalog is deployed under `src/search-index/`.
+## Source of truth
+- Homepage: `vercel-homepage/index.html`
+- Approved artwork: `vercel-homepage/assets/everythinghub-approved.png`
+- Media preview policy: `vercel-homepage/media-preview-policy.js`
+- Category landing pages: `vercel-homepage/discover/**`
+- Search catalog: `public-search/manifest.json` and the shards listed there.
 
-## Crawler catalog
-- Source of truth: `public-search/manifest.json` and its 14 `shard-*.json` files.
-- Repository catalog as of 2026-11-16 06:08 UTC: 2,654 pages in 14 shards across 31 hosts.
-- Production deployment `dpl_2LExaSgucu7XGWARGsU69KJTiWFY` now serves the same 2,654-page catalog. The canonical Vercel hostname and all 14 shard URLs returned HTTP 200.
-- The homepage loads `search-index/manifest.json`, fetches all listed shards, and maps crawler fields into the local ranking index. The 2,654-page catalog is now published on the canonical Vercel production hostname.
-- Search result labels identify crawler hits as `EverythingHub index`; independent web providers remain supplemental.
+The homepage uses same-origin paths for the approved artwork (`/assets/everythinghub-approved.png`) and media policy (`/media-preview-policy.js`). Do not hard-code a deployment-specific preview hostname into the homepage.
 
-## Production deployment
-- Vercel project: `everythinghub-homepage-fixed`
+## Search catalog
+The manifest is authoritative for page count, shard count, timestamps, and SHA-256. Counts change with each successful crawl; always read the current manifest instead of copying a count into application code or deployment configuration.
+
+Last verified repository snapshot: **2026-11-19 20:06:48 UTC**
+- Indexed pages: **16,665**
+- Search shards: **96**
+- Unique indexed hosts: **35**
+- Discovered URLs: **47,331**
+- Frontier waiting: **17,864**
+
+These are snapshot measurements, not permanent constants.
+
+## Vercel deployment
+- Project: `everythinghub-homepage-fixed`
 - Project ID: `prj_cbClZyDtkrdJrcTZrqkPvbfLPazg`
-- Verified deployment: `dpl_AywBVASPaQHe5XjFQUG3djN6FBRS`
-- Production aliases assigned by Vercel: `everythinghub.ink`, `everything.dogtagday.org`, and `everythinghub-homepage-fixed.vercel.app`
+- Project source files are packaged under `src/` for the Vercel deployment.
+- `src/vercel.json` forwards topic, sitemap, and robots routes to the Everything Hub site Edge Function.
+- The GitHub-to-Vercel auto-deploy connection is not currently configured; a READY deployment must be checked against its exact source files and runtime before it is called live.
 
-The approved artwork and visual layout were not changed in this update. Only the crawler-catalog loader was connected to the published search shards.
+## Production verification
+The browser workflow checks:
+- One search form and one search input.
+- All eight category controls.
+- The approved artwork and media-preview policy.
+- Media links, attribution and preview licensing.
+- Rolex and NASA search.
+- Image and video modes.
+- Mobile layout and browser errors.
 
-## Custom-domain status
-Vercel lists `everythinghub.ink` and `everything.dogtagday.org` as aliases on the production deployment, and the project-domain lookup reports `verified: true`. However, the current DNS check still reports `misconfigured: true`: authoritative nameservers are Namecheap (`dns1.registrar-servers.com`, `dns2.registrar-servers.com`), the observed apex A record is `192.64.119.157`, and Vercel recommends `76.76.21.21`. Fetch attempts through both custom hostnames failed, while the canonical Vercel production hostname and all 14 catalog shards returned HTTP 200. No DNS changes were made.
-
-## GitHub publishing status
-The Vercel project currently has no verified GitHub auto-deploy connection. The 2,654-page catalog was published through a controlled file-upload deployment from the GitHub snapshot; the canonical production hostname, homepage structure, and all 14 shards were verified. Future crawler commits will not automatically publish until a GitHub-to-Vercel connection or authenticated publishing workflow is configured. The production database importer remains separate and is blocked by Supabase PostgreSQL WAL recovery (`57P03`).
+The canonical Vercel hostname is the deployment verification target. Custom domains must be checked separately because DNS configuration can differ from Vercel's project alias state.
