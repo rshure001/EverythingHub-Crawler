@@ -6,6 +6,7 @@ on:
       - "crawler/**"
       - "database/**"
       - "publisher/**"
+      - "site/**"
       - "vercel-search-backend/**"
       - "supabase/functions/**"
       - "vercel-homepage/**"
@@ -21,6 +22,7 @@ on:
     paths:
       - "crawler/**"
       - "publisher/**"
+      - "site/**"
       - "vercel-search-backend/**"
       - "database/**"
       - "supabase/functions/**"
