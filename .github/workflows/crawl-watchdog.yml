@@ -18,6 +18,7 @@ on:
       - "EverythingHub Publisher"
       - "EverythingHub search API smoke test"
       - "Validate Everything Hub Vercel search backend"
+      - "Validate Everything Hub crawler and schema"
     types:
       - completed
     branches: [main]
