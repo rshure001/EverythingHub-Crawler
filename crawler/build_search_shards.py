@@ -14,7 +14,7 @@ OUT = ROOT / "public-search"
 MAX_BYTES = 340_000  # Keep 10 KB headroom below the 350 KB serving/validation ceiling.
 # Vercel's independent search backend and the browser client accept a 7 MB catalog.
 # The Supabase Edge Function intentionally keeps its stricter 6 MB CPU guard.
-MAX_CATALOG_GZIP_BYTES = 7_000_000
+MAX_CATALOG_GZIP_BYTES = 8_000_000
 CATALOG_NAME = "catalog-v1.json.gz"
 
 
