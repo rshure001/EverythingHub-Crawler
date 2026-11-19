@@ -42,15 +42,25 @@ def build_health(
         raise ValueError("manifest shard_count must be a positive integer")
     if not isinstance(shards, list) or len(shards) != shard_count:
         raise ValueError("manifest shard_count does not match its shard list")
-    if not isinstance(catalog, dict) or catalog.get("file") != "catalog-v1.json.gz":
-        raise ValueError("manifest compressed catalog metadata is missing or unsafe")
-    if catalog.get("pages") != total_pages:
-        raise ValueError("compressed catalog page count differs from the manifest")
-    if not isinstance(catalog.get("bytes"), int) or catalog["bytes"] < 1:
-        raise ValueError("compressed catalog byte count is invalid")
-    digest = catalog.get("sha256")
-    if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
-        raise ValueError("compressed catalog SHA-256 digest is invalid")
+    catalog_health = None
+    if catalog is not None:
+        if not isinstance(catalog, dict) or catalog.get("file") != "catalog-v1.json.gz":
+            raise ValueError("manifest compressed catalog metadata is unsafe")
+        if catalog.get("pages") != total_pages:
+            raise ValueError("compressed catalog page count differs from the manifest")
+        if not isinstance(catalog.get("bytes"), int) or catalog["bytes"] < 1:
+            raise ValueError("compressed catalog byte count is invalid")
+        if catalog["bytes"] > 6_000_000:
+            raise ValueError("compressed catalog exceeds the serving safety limit")
+        digest = catalog.get("sha256")
+        if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+            raise ValueError("compressed catalog SHA-256 digest is invalid")
+        catalog_health = {
+            "file": catalog["file"],
+            "pages": catalog["pages"],
+            "bytes": catalog["bytes"],
+            "sha256": digest,
+        }
 
     timestamp = int(time.time()) if generated_at is None else generated_at
     if not isinstance(timestamp, int) or timestamp <= 0:
@@ -64,12 +74,8 @@ def build_health(
         "total_pages": total_pages,
         "shard_count": shard_count,
         "integrity": "sha256",
-        "catalog_gzip": {
-            "file": catalog["file"],
-            "pages": catalog["pages"],
-            "bytes": catalog["bytes"],
-            "sha256": digest,
-        },
+        "catalog_gzip": catalog_health,
+        "search_transport": "gzip" if catalog_health is not None else "shards",
     }
 
     if media_catalog is not None:
