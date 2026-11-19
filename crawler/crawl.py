@@ -19,6 +19,7 @@ from pathlib import Path
 from lane_classifier import VALID_LANES, classify_lane
 from safe_http import UnsafeTargetError, build_pinned_opener
 from media_discovery import discover_media, merge_media_candidates
+from seed_coverage import DEFAULT_SEED_RETRY_SECONDS, schedule_missing_seed_urls
 
 ROOT = Path(__file__).resolve().parents[1]
 SEEDS = ROOT / "crawler" / "seeds.txt"
@@ -35,6 +36,7 @@ MAX_SITEMAP_URLS_PER_HOST = 100
 MAX_SITEMAP_BYTES = 1_000_000
 SITEMAP_RECHECK_SECONDS = 7 * 24 * 60 * 60
 MAX_RETRY_AFTER_SECONDS = 7 * 24 * 60 * 60
+SEED_RETRY_SECONDS = DEFAULT_SEED_RETRY_SECONDS
 DEFAULT_429_BACKOFF_SECONDS = 3600
 DEFAULT_5XX_BACKOFF_SECONDS = 600
 DEFAULT_NETWORK_BACKOFF_SECONDS = 60
@@ -778,9 +780,22 @@ def main():
     def host_delay(site):
         return effective_host_delay(policy(site))
 
-    # Resume durable frontier. Seed pages are only inserted once, not on every run.
+    # Resume the durable frontier and retry missing configured seed hosts on a
+    # long cooldown. A seed that was seen but blocked, noindexed, or permanently
+    # failed must not disappear from coverage forever.
+    old_index = load_json(OUTPUT, {"version": 1, "pages": []})
+    old_pages = old_index.get("pages", []) if isinstance(old_index, dict) else []
+    indexed_hosts = {
+        host_key(page.get("url"))
+        for page in old_pages
+        if isinstance(page, dict) and isinstance(page.get("url"), str)
+    }
+
     frontier = load_json(FRONTIER, {"queue": [], "seen": []})
     seen = set(frontier.get("seen", []))
+    seed_retry_after = frontier.get("seed_retry_after", {})
+    if not isinstance(seed_retry_after, dict):
+        seed_retry_after = {}
     saved_host_schedule = frontier.get("host_next_allowed", {})
     if not isinstance(saved_host_schedule, dict):
         saved_host_schedule = {}
@@ -803,7 +818,29 @@ def main():
     for seed in seeds:
         if seed not in seen and len(seen) < QUEUE_LIMIT:
             seen.add(seed)
-            queue.append((seed, 0))
+
+    # Do not spend requests on a seed URL when that host already has indexed
+    # coverage. Missing hosts are re-queued at most once per 24 hours; normal
+    # robots checks and per-host rate limits still run in select_batch().
+    seed_set = set(seeds)
+    queue = deque(
+        (url, depth) for url, depth in queue
+        if not (url in seed_set and host_key(url) in indexed_hosts)
+    )
+    queued_urls = {url for url, _depth in queue}
+    eligible_seeds = [seed for seed in seeds if seed in seen]
+    for seed_url, depth in schedule_missing_seed_urls(
+        eligible_seeds,
+        indexed_hosts,
+        queued_urls,
+        seed_retry_after,
+        now=time.time(),
+        cooldown_seconds=SEED_RETRY_SECONDS,
+        queue_limit=QUEUE_LIMIT,
+        host_key=host_key,
+    ):
+        queue.append((seed_url, depth))
+        seen.add(seed_url)
 
     # Sitemap discovery is deliberately separate from the page-fetch budget:
     # use only robots.txt declarations, stay on the same host, and cap every run.
@@ -1063,7 +1100,7 @@ def main():
 
     run_duration = round(time.monotonic() - run_started, 2)
     fetch_metrics = summarize_fetch_outcomes(fetch_outcomes)
-    old = load_json(OUTPUT, {"version": 1, "pages": []})
+    old = old_index
     old_challenge_urls = {
         page.get("url")
         for page in old.get("pages", [])
@@ -1131,7 +1168,8 @@ def main():
         "queue": [{"url": url, "depth": depth} for url, depth in queue],
         "seen": sorted(seen),
         "host_next_allowed": host_next_allowed,
-        "sitemap_checked": sitemap_checked
+        "sitemap_checked": sitemap_checked,
+        "seed_retry_after": seed_retry_after
     })
     print(f"Fetched {fetched}; indexed {len(records)}; not indexed {fetched - len(records)}; "
           f"robots blocked {robots_blocked_count[0]}; access challenges excluded {access_challenge_pages_count[0]}; "
