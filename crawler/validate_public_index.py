@@ -66,6 +66,28 @@ def validate(root: Path = ROOT) -> list[str]:
     except Exception as exc:
         return [f"index or manifest is invalid JSON: {exc}"]
 
+    # The watchdog uses this timestamp to judge search-index freshness. Reject a
+    # missing, malformed, or stale manifest timestamp before any publisher can
+    # treat the catalog as current.
+    source_updated_at = source.get("updated_at") if isinstance(source, dict) else None
+    manifest_updated_at = manifest.get("updated_at") if isinstance(manifest, dict) else None
+    source_timestamp_valid = (
+        isinstance(source_updated_at, int)
+        and not isinstance(source_updated_at, bool)
+        and source_updated_at > 0
+    )
+    manifest_timestamp_valid = (
+        isinstance(manifest_updated_at, int)
+        and not isinstance(manifest_updated_at, bool)
+        and manifest_updated_at > 0
+    )
+    if not source_timestamp_valid:
+        errors.append("canonical index updated_at must be a positive Unix timestamp")
+    if not manifest_timestamp_valid:
+        errors.append("manifest updated_at must be a positive Unix timestamp")
+    elif source_timestamp_valid and manifest_updated_at != source_updated_at:
+        errors.append("manifest updated_at does not match canonical index")
+
     if not isinstance(source.get("pages"), list):
         errors.append("data/index.json pages must be an array")
         source_pages = []
