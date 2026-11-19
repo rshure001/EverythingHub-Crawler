@@ -17,6 +17,7 @@ jobs:
     env:
       BASE: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1
       KEY: sb_publishable_XlIsACWhtVS1jVODWYGTpg_GMs8v3vJ
+      VERCEL_API: https://everythinghub-search-backend.vercel.app
     steps:
       - name: Check indexed ranking and database-independent fallback
         run: |
@@ -99,4 +100,30 @@ jobs:
 
           if indexed_error:
               raise SystemExit("Database-backed web search unavailable: " + indexed_error)
+
+          vercel_base = os.environ["VERCEL_API"].rstrip("/")
+          def get_vercel(path):
+              request = urllib.request.Request(vercel_base + path, headers={"Accept": "application/json"})
+              with urllib.request.urlopen(request, timeout=25) as response:
+                  assert response.status == 200, response.status
+                  return json.load(response)
+
+          health = get_vercel("/api/health")
+          production = get_vercel("/api/search?" + urllib.parse.urlencode({"q": "NASA", "limit": 50}))
+          assert health.get("status") == "ok", health
+          assert health.get("service") == "everythinghub-independent-search", health
+          assert health.get("database_required") is False, health
+          assert production.get("indexStatus") == "crawler-catalog-active", production
+          assert isinstance(production.get("indexedPages"), int) and production["indexedPages"] > 0, production
+          local_results = [
+              item for item in production.get("results", [])
+              if item.get("source") == "Everything Hub Crawler"
+              and item.get("provider") == "everythinghub-catalog"
+          ]
+          assert local_results, production
+          for item in local_results:
+              assert item.get("origin") == "Everything Hub Index", item
+              assert item.get("url", "").startswith(("https://", "http://")), item
+          print("Production Vercel catalog passed:", production["indexedPages"], "indexed pages;",
+                len(local_results), "first-party NASA results in the 50-result response")
           PY
