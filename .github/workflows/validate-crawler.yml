@@ -6,6 +6,7 @@ on:
       - "crawler/**"
       - "database/**"
       - "publisher/**"
+      - "vercel-search-backend/**"
       - "supabase/functions/**"
       - "README.md"
       - "SCALABLE-ARCHITECTURE.md"
@@ -14,10 +15,12 @@ on:
       - ".github/workflows/validate-crawler.yml"
       - ".github/workflows/search-api-smoke.yml"
       - ".github/workflows/recovery-search-check.yml"
+      - ".github/workflows/validate-vercel-search.yml"
   pull_request:
     paths:
       - "crawler/**"
       - "publisher/**"
+      - "vercel-search-backend/**"
       - "database/**"
       - "supabase/functions/**"
       - "README.md"
@@ -29,6 +32,7 @@ on:
       - ".github/workflows/search-api-smoke.yml"
       - ".github/workflows/everything-hub-live-diagnostics.yml"
       - ".github/workflows/recovery-search-check.yml"
+      - ".github/workflows/validate-vercel-search.yml"
   workflow_dispatch:
 permissions:
   contents: read
@@ -41,12 +45,15 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "26"
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - name: Validate crawler, watchdog, and publisher workflow YAML
         run: |
-          ruby -e 'require "yaml"; ARGV.each { |path| YAML.load_file(path, aliases: true); puts "YAML-valid #{path}" }' .github/workflows/crawl.yml .github/workflows/crawl-watchdog.yml .github/workflows/publish-site.yml .github/workflows/search-api-smoke.yml .github/workflows/everything-hub-live-diagnostics.yml .github/workflows/recovery-search-check.yml
+          ruby -e 'require "yaml"; ARGV.each { |path| YAML.load_file(path, aliases: true); puts "YAML-valid #{path}" }' .github/workflows/crawl.yml .github/workflows/crawl-watchdog.yml .github/workflows/publish-site.yml .github/workflows/search-api-smoke.yml .github/workflows/everything-hub-live-diagnostics.yml .github/workflows/recovery-search-check.yml .github/workflows/validate-vercel-search.yml
       - name: Compile crawler and database tools
         run: |
           python -m py_compile crawler/crawl.py crawler/report.py crawler/build_search_shards.py crawler/validate_public_index.py crawler/validate_media_catalog.py crawler/schedule_watchdog.py crawler/pipeline_health.py database/import_repository_index.py database/crawl_worker.py database/crawl_worker_smoke.py publisher/release_health.py
@@ -55,6 +62,9 @@ jobs:
           python -m unittest discover -s crawler -p 'test_*.py' -v
           python -m unittest discover -s database -p 'test_*.py' -v
           python -m unittest discover -s publisher -p 'test_*.py' -v
+          node --check vercel-search-backend/src/api/search.js
+          node --check vercel-search-backend/src/api/health.js
+          node --test vercel-search-backend/test/*.test.js
           node --test supabase/functions/everything-hub-web-search/params.test.mjs supabase/functions/everything-hub-web-search/db-fetch.test.mjs supabase/functions/everything-hub-web-search/static-search.test.mjs supabase/functions/everything-hub-web-search/static-manifest.test.mjs supabase/functions/everything-hub-web-search/bounded-stream.test.mjs supabase/functions/everything-hub-web-search/manifest-time.test.mjs supabase/functions/everything-hub-media-search/merge-results.test.mjs
           python crawler/build_search_shards.py
           python crawler/validate_public_index.py
