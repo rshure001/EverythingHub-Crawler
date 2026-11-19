@@ -24,6 +24,9 @@ jobs:
       - name: Validate Caddy configuration syntax
         run: |
           docker run --rm \
+            -e GIT_HOST=git.example.com \
+            -e WEB_HOST=www.example.com \
+            -e ACME_EMAIL=admin@example.com \
             -v "$PWD/platform/Caddyfile:/etc/caddy/Caddyfile:ro" \
             caddy:2 caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
       - name: Run platform safety tests
