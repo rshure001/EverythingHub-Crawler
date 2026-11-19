@@ -1,0 +1,50 @@
+import pathlib
+import unittest
+
+ROOT = pathlib.Path(__file__).parent
+
+class PlatformFoundationTests(unittest.TestCase):
+    def test_compose_has_separate_git_and_gateway_services(self):
+        compose = (ROOT / "compose.yml").read_text()
+        self.assertIn("forgejo:", compose)
+        self.assertIn("gateway:", compose)
+        self.assertIn("forgejo_data:", compose)
+        self.assertIn("caddy_data:", compose)
+
+    def test_registration_is_disabled_by_default(self):
+        compose = (ROOT / "compose.yml").read_text()
+        self.assertIn('FORGEJO__service__DISABLE_REGISTRATION: "true"', compose)
+
+    def test_git_ssh_port_is_consistent(self):
+        compose = (ROOT / "compose.yml").read_text()
+        self.assertIn('FORGEJO__server__SSH_PORT: "2222"', compose)
+        self.assertIn('FORGEJO__server__SSH_LISTEN_PORT: "2222"', compose)
+        self.assertIn('"2222:2222"', compose)
+
+    def test_gateway_has_https_and_security_headers(self):
+        compose = (ROOT / "compose.yml").read_text()
+        caddy = (ROOT / "Caddyfile").read_text()
+        self.assertIn('"443:443"', compose)
+        self.assertIn("Strict-Transport-Security", caddy)
+        self.assertIn('X-Content-Type-Options "nosniff"', caddy)
+        self.assertIn("Referrer-Policy", caddy)
+
+    def test_static_origin_is_read_only(self):
+        compose = (ROOT / "compose.yml").read_text()
+        self.assertIn("/srv/everythinghub:/srv/everythinghub:ro", compose)
+
+    def test_activation_requires_index_and_scoped_release_path(self):
+        script = (ROOT / "activate-release.sh").read_text()
+        self.assertIn("/srv/everythinghub/releases/*", script)
+        self.assertIn('! -f "$release_dir/index.html"', script)
+        self.assertIn("mv -Tf", script)
+
+    def test_example_env_contains_no_real_credentials(self):
+        env = (ROOT / ".env.example").read_text()
+        self.assertIn("GIT_HOST=", env)
+        self.assertIn("WEB_HOST=", env)
+        self.assertNotIn("PASSWORD=", env)
+        self.assertNotIn("TOKEN=", env)
+
+if __name__ == "__main__":
+    unittest.main()
