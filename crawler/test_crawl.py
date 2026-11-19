@@ -611,6 +611,50 @@ class CrawlerTests(unittest.TestCase):
         self.assertEqual(len(batch), 2)
         self.assertEqual(len(queue), 1)
 
+    def test_select_batch_prioritizes_seed_urls_ahead_of_deeper_frontier(self):
+        seed = "https://www.britannica.com/"
+        queue = deque([
+            ("https://deep.example/page", 3),
+            (seed, 0),
+            ("https://middle.example/page", 2),
+        ])
+
+        batch = crawl.select_batch(
+            queue, lambda _url: True, {}, now=100.0, workers=2,
+            priority_urls={seed},
+        )
+
+        self.assertEqual(batch, [(seed, 0), ("https://deep.example/page", 3)])
+        self.assertEqual(list(queue), [("https://middle.example/page", 2)])
+
+    def test_select_batch_priority_does_not_bypass_host_rate_limit(self):
+        seed = "https://www.noaa.gov/"
+        queue = deque([
+            (seed, 0),
+            ("https://ready.example/page", 2),
+        ])
+
+        batch = crawl.select_batch(
+            queue, lambda _url: True, {"www.noaa.gov": 200.0},
+            now=100.0, workers=2, priority_urls={seed},
+        )
+
+        self.assertEqual(batch, [("https://ready.example/page", 2)])
+        self.assertEqual(list(queue), [(seed, 0)])
+
+    def test_select_batch_retains_depth_priority_when_no_seed_priority_is_given(self):
+        queue = deque([
+            ("https://shallow.example/page", 1),
+            ("https://deep.example/page", 3),
+        ])
+
+        batch = crawl.select_batch(queue, lambda _url: True, {}, now=100.0, workers=2)
+
+        self.assertEqual(
+            batch,
+            [("https://deep.example/page", 3), ("https://shallow.example/page", 1)],
+        )
+
     def test_effective_host_delay_respects_robots_directives(self):
         parser = urllib.robotparser.RobotFileParser()
         parser.parse([
