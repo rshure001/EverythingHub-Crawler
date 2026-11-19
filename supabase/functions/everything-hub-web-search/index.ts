@@ -31,7 +31,6 @@ const db = supabase.schema("eh_quad");
 const STATIC_INDEX_BASE =
   "https://raw.githubusercontent.com/rshure001/EverythingHub-Crawler/main/public-search";
 const STATIC_INDEX_CACHE_MS = 60_000;
-const MAX_STATIC_SHARD_BYTES = 350_000;
 const MAX_STATIC_CATALOG_GZIP_BYTES = 6_000_000;
 const MAX_STATIC_CATALOG_UNCOMPRESSED_BYTES = 30_000_000;
 const STATIC_INDEX_LOAD_TIMEOUT_MS = 12_000;
@@ -75,6 +74,9 @@ async function loadStaticCatalog(): Promise<StaticCatalog> {
     const pages: any[] = [];
     let catalogMode: "gzip" | "shards" = "shards";
     const compressed = manifest.catalog_gzip;
+    if (!compressed) {
+      throw new Error("Shard-only catalogs are validated for static clients; the Edge Function will use its independent fallback to stay within the CPU budget");
+    }
 
     if (compressed) {
       try {
@@ -129,57 +131,7 @@ async function loadStaticCatalog(): Promise<StaticCatalog> {
     }
 
     if (!pages.length) {
-      const concurrency = 8;
-      for (let offset = 0; offset < manifest.shards.length; offset += concurrency) {
-        const batch = await Promise.all(manifest.shards.slice(offset, offset + concurrency).map(async (shard: any) => {
-          if (
-            !shard ||
-            typeof shard.file !== "string" ||
-            !/^shard-\d{4}\.json$/.test(shard.file) ||
-            !Number.isInteger(shard.bytes) ||
-            shard.bytes < 2 ||
-            shard.bytes > MAX_STATIC_SHARD_BYTES ||
-            !Number.isInteger(shard.pages) ||
-            shard.pages < 1 ||
-            typeof shard.sha256 !== "string" ||
-            !/^[a-f0-9]{64}$/.test(shard.sha256)
-          ) {
-            throw new Error("Public crawler shard metadata is invalid");
-          }
-
-          const response = await fetch(STATIC_INDEX_BASE + "/" + shard.file, {
-            headers,
-            signal: loadSignal,
-          });
-          if (!response.ok) {
-            throw new Error(shard.file + " returned HTTP " + response.status);
-          }
-
-          const bytes = new Uint8Array(await response.arrayBuffer());
-          if (bytes.length !== shard.bytes) {
-            throw new Error(shard.file + " byte length does not match the manifest");
-          }
-          const digestBuffer = await crypto.subtle.digest("SHA-256", bytes);
-          const digest = Array.from(new Uint8Array(digestBuffer))
-            .map((value) => value.toString(16).padStart(2, "0"))
-            .join("");
-          if (digest !== shard.sha256) {
-            throw new Error(shard.file + " SHA-256 does not match the manifest");
-          }
-
-          const payload = JSON.parse(new TextDecoder().decode(bytes));
-          if (
-            payload?.version !== 1 ||
-            !Array.isArray(payload?.pages) ||
-            payload.pages.length !== shard.pages
-          ) {
-            throw new Error(shard.file + " failed page-count validation");
-          }
-          return payload.pages;
-        }));
-
-        for (const shardPages of batch) pages.push(...shardPages);
-      }
+      throw new Error("No bounded compressed crawler catalog is available; full shard scans are not attempted inside the Edge Function CPU budget");
     }
 
     if (pages.length !== manifest.total_pages) {
@@ -288,7 +240,12 @@ Deno.serve(async (req: Request) => {
   };
 
   const staticFallback = async (reason: string) => {
-    // Prefer the verified first-party crawler catalog; use Bing RSS only if it cannot answer.
+    // Keep outage responses fast: Bing RSS is the first fallback while PostgreSQL is recovering.
+    if (reason === "database_unavailable") {
+      const independent = await independentFallback(reason, null);
+      if (independent) return independent;
+    }
+
     let crawlerIndexCount: number | null = null;
     let catalogLoaded = false;
     let catalogTransport: "gzip" | "shards" | null = null;
@@ -333,8 +290,10 @@ Deno.serve(async (req: Request) => {
       console.error("Static crawler index fallback unavailable:", detail);
     }
 
-    const independent = await independentFallback(reason, crawlerIndexCount);
-    if (independent) return independent;
+    if (reason !== "database_unavailable") {
+      const independent = await independentFallback(reason, crawlerIndexCount);
+      if (independent) return independent;
+    }
 
     if (catalogLoaded) {
       return json({
