@@ -228,8 +228,10 @@ Deno.serve(async (req: Request) => {
         projectUrl.replace(/\/$/, "") + "/functions/v1/everything-hub-independent-search",
       );
       endpoint.searchParams.set("q", query);
+      const apiKey = Deno.env.get("SUPABASE_ANON_KEY") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+      if (!apiKey) throw new Error("Supabase API key is unavailable for internal independent search");
       const response = await fetch(endpoint, {
-        headers: { Accept: "application/json" },
+        headers: { Accept: "application/json", apikey: apiKey },
         signal: AbortSignal.timeout(8500),
       });
       if (!response.ok) {
@@ -283,6 +285,12 @@ Deno.serve(async (req: Request) => {
   };
 
   const staticFallback = async (reason: string) => {
+    // During database recovery, prefer the lightweight independent provider before loading the full catalog.
+    if (reason === "database_unavailable") {
+      const independent = await independentFallback(reason, null);
+      if (independent) return independent;
+    }
+
     let crawlerIndexCount: number | null = null;
     let catalogLoaded = false;
     let catalogTransport: "gzip" | "shards" | null = null;
@@ -327,8 +335,10 @@ Deno.serve(async (req: Request) => {
       console.error("Static crawler index fallback unavailable:", detail);
     }
 
-    const independent = await independentFallback(reason, crawlerIndexCount);
-    if (independent) return independent;
+    if (reason !== "database_unavailable") {
+      const independent = await independentFallback(reason, crawlerIndexCount);
+      if (independent) return independent;
+    }
 
     if (catalogLoaded) {
       return json({

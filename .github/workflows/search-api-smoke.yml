@@ -58,7 +58,14 @@ jobs:
               print("Database-backed web search unavailable after independent fallback passed:", indexed_error)
           if indexed is not None:
               assert indexed.get("count", 0) > 0, indexed
-              assert "index" in str(indexed.get("source", "")).lower(), indexed
+              indexed_source = str(indexed.get("source", ""))
+              if indexed.get("independentOfDatabase") is True:
+                  assert indexed.get("fallback") is True, indexed
+                  assert indexed.get("fallbackReason") == "database_unavailable", indexed
+                  assert indexed.get("provider") == "Bing RSS", indexed
+                  print("Database outage fallback passed through web-search endpoint:", indexed.get("count"), "results")
+              else:
+                  assert "index" in indexed_source.lower(), indexed
               assert isinstance(indexed.get("results"), list), indexed
               for result in indexed["results"]:
                   assert result.get("url", "").startswith(("https://", "http://")), result
@@ -85,7 +92,7 @@ jobs:
                   assert science.get("count", 0) > 0, science
                   assert all(item.get("tentacle") == "science" for item in science["results"]), science
                   print("Science lane filter passed:", science["count"], "matches")
-              else:
+              elif indexed.get("independentOfDatabase") is not True:
                   print("Database-backed search passed:", indexed.get("source"), indexed["count"])
 
           if indexed_error:
