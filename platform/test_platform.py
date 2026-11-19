@@ -65,7 +65,7 @@ class PlatformFoundationTests(unittest.TestCase):
 
     def test_installer_runs_preflight_before_starting_services(self):
         script = (ROOT / "install-host.sh").read_text()
-        self.assertLess(script.index('host-preflight.sh'), script.index('"\${COMPOSE[@]}" up -d'))
+        self.assertLess(script.index('host-preflight.sh'), script.index('up -d'))
         self.assertIn("did not change DNS or firewall", script)
 
     def test_status_checks_both_public_hosts_and_active_release(self):
