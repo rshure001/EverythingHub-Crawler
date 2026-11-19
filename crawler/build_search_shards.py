@@ -12,7 +12,9 @@ ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "data" / "index.json"
 OUT = ROOT / "public-search"
 MAX_BYTES = 340_000  # Keep 10 KB headroom below the 350 KB serving/validation ceiling.
-MAX_CATALOG_GZIP_BYTES = 6_000_000
+# Vercel's independent search backend and the browser client accept a 7 MB catalog.
+# The Supabase Edge Function intentionally keeps its stricter 6 MB CPU guard.
+MAX_CATALOG_GZIP_BYTES = 7_000_000
 CATALOG_NAME = "catalog-v1.json.gz"
 
 
