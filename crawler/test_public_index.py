@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 
 from build_search_shards import is_publishable
-from validate_public_index import bounded_gzip_decompress, validate
+from validate_public_index import bounded_gzip_decompress, validation_summary, validate
 
 
 class PublicIndexValidationTests(unittest.TestCase):
@@ -125,6 +125,19 @@ class PublicIndexValidationTests(unittest.TestCase):
         ]
         self.write_fixture(pages, pages)
         self.assertEqual(validate(self.root), [])
+
+    def test_validation_summary_supports_shard_only_manifest(self):
+        summary = validation_summary({"total_pages": 12749, "shard_count": 72})
+        self.assertIn("compressed catalog omitted", summary)
+        self.assertIn("verified shard fallback remains available", summary)
+
+    def test_validation_summary_reports_verified_compressed_catalog(self):
+        summary = validation_summary({
+            "total_pages": 2,
+            "shard_count": 1,
+            "catalog_gzip": {"bytes": 1234},
+        })
+        self.assertIn("compressed catalog verified (1,234 bytes)", summary)
 
     def test_robots_disallowed_records_are_never_published(self):
         blocked = {"url": "https://example.com/private", "robots_allowed": False}
