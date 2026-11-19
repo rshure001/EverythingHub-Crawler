@@ -13,12 +13,6 @@ on:
       - "db/init/**"
       - "docker-compose.postgres.yml"
       - ".github/workflows/postgres-core.yml"
-  push:
-    branches: [main]
-    paths:
-      - "db/init/**"
-      - "docker-compose.postgres.yml"
-      - ".github/workflows/postgres-core.yml"
 
 jobs:
   postgres-core:
@@ -79,7 +73,7 @@ jobs:
           END $$;
           INSERT INTO eh_search.crawl_queue(url, max_attempts)
           VALUES ('https://example.test/retry-limit', 1);
-          DO $
+          DO $$
           DECLARE claimed_count INTEGER;
           BEGIN
             SELECT count(*) INTO claimed_count
@@ -95,8 +89,8 @@ jobs:
                 WHERE url='https://example.test/retry-limit') <> 'failed' THEN
               RAISE EXCEPTION 'Exhausted lease did not become terminal failed';
             END IF;
-          END $;
-          DO $
+          END $$;
+          DO $$
           BEGIN
             BEGIN
               PERFORM * FROM eh_search.claim_crawl_jobs('', 1, 60);
@@ -106,5 +100,5 @@ jobs:
                 RAISE;
               END IF;
             END;
-          END $;
+          END $$;
           SQL
