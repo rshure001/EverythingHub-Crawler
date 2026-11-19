@@ -43,6 +43,53 @@ footer{margin:28px 3px 0;padding:17px 0 0;border-top:1px solid #1f5238;color:#7e
 
 </main>
 <script>
+/* Shared media preview policy: unverified sources remain link-only. */
+(function attachEverythingHubMediaPreviewPolicy(root) {
+  function isMediaPreviewAllowed(item) {
+    if (!item || typeof item !== "object") return false;
+    const source = String(item.source || "").trim();
+    const license = String(item.license || "").trim().toLowerCase();
+    const licenseUrl = String(item.licenseUrl || "").trim();
+    const attributionRequired = item.attributionRequired;
+    const creator = String(item.creator || item.credit || "").trim();
+
+    const publicDomain = license.startsWith("public domain");
+    const cc0 = /^cc0(?:\s|$)/.test(license);
+    const ccByMatch = license.match(/^cc by(-sa)?\s+(1\.0|2\.0|2\.5|3\.0|4\.0)$/);
+    let ccByLicenseUrlValid = false;
+    if (ccByMatch) {
+      try {
+        const url = new URL(licenseUrl);
+        const kind = ccByMatch[1] ? "by-sa" : "by";
+        const expectedPath = "/licenses/" + kind + "/" + ccByMatch[2] + "/";
+        ccByLicenseUrlValid = url.protocol === "https:" &&
+          url.hostname === "creativecommons.org" &&
+          url.pathname.replace(/\/+$/, "/") === expectedPath;
+      } catch {
+        ccByLicenseUrlValid = false;
+      }
+    }
+
+    const licenseValid = publicDomain || cc0 || (ccByMatch !== null && ccByLicenseUrlValid);
+    // CC BY and CC BY-SA always require creator attribution, even if source
+    // metadata incorrectly claims otherwise. Public-domain/CC0 records must
+    // explicitly state whether attribution is required.
+    const attributionValid = ccByMatch
+      ? creator.length > 0
+      : attributionRequired === false || (attributionRequired === true && creator.length > 0);
+
+    // Bing results remain discovery links only. Embedded previews require
+    // explicit Wikimedia Commons licensing and satisfied attribution.
+    return source === "Wikimedia Commons" && licenseValid && attributionValid;
+  }
+
+  const api = Object.freeze({ isMediaPreviewAllowed });
+  if (typeof module === "object" && module && module.exports) module.exports = api;
+  else root.EHMediaPreviewPolicy = api;
+})(typeof globalThis === "object" ? globalThis : this);
+</script>
+<script>
+const mediaPreviewAllowed = window.EHMediaPreviewPolicy?.isMediaPreviewAllowed ?? (() => false);
 const BASE="https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1",KEY="sb_publishable_XlIsACWhtVS1jVODWYGTpg_GMs8v3vJ";
 const SEARCH_API="https://everythinghub-search-backend-lr5f0zv0s-rshure001-8053.vercel.app/api/search";
 const LANES={web:null,news:"news",images:"general",videos:"general",shopping:"business",places:"culture",business:"business",research:"science"};
@@ -53,13 +100,13 @@ function safeUrl(v){try{const u=new URL(v);return ["https:","http:"].includes(u.
 function setMode(v){if(!LABELS[v])return;mode=v;modeLabel.textContent=LABELS[v];input.placeholder="Search "+v[0].toUpperCase()+v.slice(1)+"…"}
 function el(tag,cls,txt){const n=document.createElement(tag);if(cls)n.className=cls;if(txt!==undefined)n.textContent=txt;return n}
 function message(txt){results.replaceChildren(el("div","empty",txt))}
-function addResult(x){const href=safeUrl(x.url||x.pageUrl||x.videoUrl||x.imageUrl);if(!href)return;const card=el("article","result"),image=safeUrl(x.image||x.imageUrl||x.thumbnailUrl);if(image){const img=el("img","thumb");img.src=image;img.alt="";img.loading="lazy";img.referrerPolicy="no-referrer";card.append(img)}else card.classList.add("no-thumb");const copy=el("div","copy"),link=el("a","",x.title||href),desc=el("p","",x.snippet||x.description||"Open this result to explore the source."),source=el("div","source",x.source||"Everything Hub");link.href=href;link.target="_blank";link.rel="noopener noreferrer";copy.append(link,desc,source);card.append(copy);results.append(card)}
-async function search(reset=true){if(busy)return;if(reset){offset=0;hasMore=false;results.replaceChildren();more.hidden=true}const query=input.value.trim();if(query.length<2){status.firstElementChild.textContent="Enter at least two characters to search.";return}busy=true;status.firstElementChild.textContent="Searching "+mode+"…";try{let data,items;if(mode==="images"||mode==="videos"){const u=new URL(BASE+"/everything-hub-media-search");u.searchParams.set("q",query);u.searchParams.set("type",mode==="videos"?"video":"image");const r=await fetch(u,{headers:{apikey:KEY,accept:"application/json"}});if(!r.ok)throw Error("Media search returned "+r.status);data=await r.json();items=(data.results||[]).map(x=>({...x,url:x.pageUrl||x.videoUrl||x.imageUrl,image:x.imageUrl||x.thumbnailUrl,source:data.provider||"Media search"}));hasMore=false}else{const u=new URL(SEARCH_API);u.searchParams.set("q",query);u.searchParams.set("limit","20");u.searchParams.set("offset",String(offset));if(LANES[mode])u.searchParams.set("tentacle",LANES[mode]);const r=await fetch(u);if(!r.ok)throw Error("Search returned "+r.status);data=await r.json();items=data.results||[];hasMore=Boolean(data.hasMore)}for(const x of items)addResult(x);const count=Math.max(Number(data.count)||0,items.length);status.firstElementChild.textContent=count.toLocaleString()+" results for “"+query+"”";if(!items.length)message("No matches found. Try another phrase or choose Web Search.");more.hidden=!hasMore;more.textContent="More results"}catch(e){status.firstElementChild.textContent="Search is temporarily unavailable. Please try again shortly.";message(String(e.message||e))}finally{busy=false}}
+function addResult(x){const href=safeUrl(x.url||x.pageUrl||x.videoUrl||x.imageUrl);if(!href)return;const card=el("article","result"),previewCandidate=Boolean(x.image||x.imageUrl||x.thumbnailUrl),previewAllowed=mediaPreviewAllowed(x),image=previewAllowed?safeUrl(x.image||x.imageUrl||x.thumbnailUrl):"";if(image){const img=el("img","thumb");img.src=image;img.alt="";img.loading="lazy";img.referrerPolicy="no-referrer";card.append(img)}else card.classList.add("no-thumb");const copy=el("div","copy"),link=el("a","",x.title||href),desc=el("p","",x.snippet||x.description||"Open this result to explore the source."),source=el("div","source",(x.source||"Everything Hub")+(previewCandidate&&!previewAllowed?" · Preview withheld — reuse rights unverified":""));link.href=href;link.target="_blank";link.rel="noopener noreferrer";copy.append(link,desc,source);card.append(copy);results.append(card)}
+async function search(reset=true){if(busy)return;if(reset){offset=0;hasMore=false;results.replaceChildren();more.hidden=true}const query=input.value.trim();if(query.length<2){status.firstElementChild.textContent="Enter at least two characters to search.";return}busy=true;status.firstElementChild.textContent="Searching "+mode+"…";try{let data,items;if(mode==="images"||mode==="videos"){const u=new URL(BASE+"/everything-hub-media-search");u.searchParams.set("q",query);u.searchParams.set("type",mode==="videos"?"video":"image");const r=await fetch(u,{headers:{apikey:KEY,accept:"application/json"}});if(!r.ok)throw Error("Media search returned "+r.status);data=await r.json();items=(data.results||[]).map(x=>({...x,url:x.pageUrl||x.videoUrl||x.imageUrl,image:x.imageUrl||x.thumbnailUrl,source:x.source||data.provider||"Media search"}));hasMore=false}else{const u=new URL(SEARCH_API);u.searchParams.set("q",query);u.searchParams.set("limit","20");u.searchParams.set("offset",String(offset));if(LANES[mode])u.searchParams.set("tentacle",LANES[mode]);const r=await fetch(u);if(!r.ok)throw Error("Search returned "+r.status);data=await r.json();items=data.results||[];hasMore=Boolean(data.hasMore)}for(const x of items)addResult(x);const count=Math.max(Number(data.count)||0,items.length);status.firstElementChild.textContent=count.toLocaleString()+" results for “"+query+"”";if(!items.length)message("No matches found. Try another phrase or choose Web Search.");more.hidden=!hasMore;more.textContent="More results"}catch(e){status.firstElementChild.textContent="Search is temporarily unavailable. Please try again shortly.";message(String(e.message||e))}finally{busy=false}}
 form.addEventListener("submit",e=>{e.preventDefault();search(true)});
 document.querySelectorAll("[data-mode]").forEach(b=>b.addEventListener("click",()=>{setMode(b.dataset.mode);if(input.value.trim())search(true);else{status.firstElementChild.textContent="Ready to search "+mode+".";input.focus()}}));
 more.addEventListener("click",()=>{if(!busy&&hasMore){offset+=20;search(false)}});
 async function feedJson(url){const r=await fetch(url,{headers:{accept:"application/json"}});if(!r.ok)throw Error("Feed returned "+r.status);return r.json()}
-function addFeedItem(target,x,kind){const href=safeUrl(x.url||x.pageUrl||x.videoUrl||x.imageUrl);if(!href)return;const item=el("article","feed-item"),thumb=safeUrl(x.image||x.imageUrl||x.thumbnailUrl);if(thumb){const img=el("img","");img.src=thumb;img.alt=x.title||"";img.loading="lazy";img.referrerPolicy="no-referrer";item.append(img)}const copy=el("div","feed-copy"),link=el("a","",x.title||"Open discovery");link.href=href;link.target="_blank";link.rel="noopener noreferrer";copy.append(link);const summary=x.snippet||x.description;if(summary)copy.append(el("p","",summary));copy.append(el("div","feed-meta",x.source||kind));item.append(copy);target.append(item)}
+function addFeedItem(target,x,kind){const href=safeUrl(x.url||x.pageUrl||x.videoUrl||x.imageUrl);if(!href)return;const item=el("article","feed-item"),previewCandidate=Boolean(x.image||x.imageUrl||x.thumbnailUrl),previewAllowed=mediaPreviewAllowed(x),thumb=previewAllowed?safeUrl(x.image||x.imageUrl||x.thumbnailUrl):"";if(thumb){const img=el("img","");img.src=thumb;img.alt=x.title||"";img.loading="lazy";img.referrerPolicy="no-referrer";item.append(img)}const copy=el("div","feed-copy"),link=el("a","",x.title||"Open discovery");link.href=href;link.target="_blank";link.rel="noopener noreferrer";copy.append(link);const summary=x.snippet||x.description;if(summary)copy.append(el("p","",summary));copy.append(el("div","feed-meta",(x.source||kind)+(previewCandidate&&!previewAllowed?" · Preview withheld — reuse rights unverified":"")));item.append(copy);target.append(item)}
 async function loadDiscovery(){const news=document.getElementById("feed-news"),images=document.getElementById("feed-images"),videos=document.getElementById("feed-videos");const jobs=[
 (async()=>{try{const u=new URL(SEARCH_API);u.searchParams.set("q","latest news");u.searchParams.set("limit","5");u.searchParams.set("offset","0");u.searchParams.set("tentacle","news");const d=await feedJson(u);news.replaceChildren();(d.results||[]).slice(0,5).forEach(x=>addFeedItem(news,x,"News"));if(!news.children.length)news.append(el("p","feed-empty","No stories available right now."))}catch{news.replaceChildren(el("p","feed-empty","Stories are temporarily unavailable."))}})(),
 (async()=>{try{const u=new URL(BASE+"/everything-hub-media-search");u.searchParams.set("q","nature landscape");u.searchParams.set("type","image");const d=await feedJson(u);images.replaceChildren();(d.results||[]).slice(0,4).forEach(x=>addFeedItem(images,{...x,url:x.pageUrl||x.imageUrl,image:x.imageUrl||x.thumbnailUrl}, "Images"));if(!images.children.length)images.append(el("p","feed-empty","No images available right now."))}catch{images.replaceChildren(el("p","feed-empty","Images are temporarily unavailable."))}})(),
