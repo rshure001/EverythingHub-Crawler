@@ -43,12 +43,12 @@ jobs:
           head -n 1 /tmp/headers.txt
           grep -i '^content-type:' /tmp/headers.txt | tail -1
           printf 'bytes='; wc -c < /tmp/home.html
-          for needle in '<!doctype html' 'Everything Hub' 'id="q"' 'approved-master-art' 'class="tile"' 'everything-hub-media-search'; do
+          for needle in '<!doctype html' 'Everything Hub' 'id="q"' 'id="searchForm"' 'class="art"' 'assets/everythinghub-approved.png' 'everything-hub-media-search'; do
             if grep -Fq "$needle" /tmp/home.html; then echo "PASS homepage contains: $needle"; else echo "FAIL homepage missing: $needle"; exit 1; fi
           done
-          tile_count=$(grep -o 'class="tile"' /tmp/home.html | wc -l)
-          echo "homepage_tiles=$tile_count"
-          test "$tile_count" -eq 8
+          category_count=$(grep -o 'data-mode=' /tmp/home.html | wc -l)
+          echo "homepage_categories=$category_count"
+          test "$category_count" -eq 8
           echo "=== CANONICAL VERCEL HOMEPAGE AND SEARCH CATALOG ==="
           node <<'NODE'
           const fs = require("fs");
