@@ -1,4 +1,5 @@
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
 const { createHash, webcrypto } = require("node:crypto");
 const { gzipSync } = require("node:zlib");
 const engine = require("./search.js");
@@ -164,9 +165,39 @@ async function testShardOnlyLoader() {
   }
 }
 
+
+async function testCurrentPublishedManifestFitsClientLimits() {
+  const currentManifest = JSON.parse(fs.readFileSync("./manifest.json", "utf8"));
+  const manifestUrl = "https://example.test/current/manifest.json";
+  const previousFetch = globalThis.fetch;
+  const requested = [];
+
+  globalThis.fetch = async url => {
+    const value = String(url);
+    requested.push(value);
+    if (value === manifestUrl) {
+      return new Response(JSON.stringify(currentManifest), { status: 200 });
+    }
+    // Force the integrity-checked shard path after optional gzip is unavailable.
+    // Reaching shard-0001 proves the current manifest passed client validation.
+    return new Response("not found", { status: 404 });
+  };
+
+  try {
+    await assert.rejects(engine.create({ manifestUrl }), /HTTP 404/);
+    assert.ok(
+      requested.some(value => value.endsWith("/shard-0001.json")),
+      "current published manifest must pass client limits and reach shard loading"
+    );
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+}
+
 testShardOnlyLoader()
   .then(testGzipLoader)
-  .then(() => console.log("10 browser ranking tests, gzip and shard-only loader/integrity tests passed"))
+  .then(testCurrentPublishedManifestFitsClientLimits)
+  .then(() => console.log("Browser ranking, gzip, shard integrity, and current-manifest bounds tests passed"))
   .catch(error => {
     console.error(error);
     process.exitCode = 1;
