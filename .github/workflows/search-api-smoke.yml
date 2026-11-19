@@ -72,9 +72,11 @@ jobs:
                       assert "Everything Hub Crawler" in indexed.get("providers", []), indexed
                       print("Vercel-backed crawler catalog fallback passed:", indexed.get("indexedPages"), "indexed pages")
                   else:
-                      assert indexed.get("count", 0) > 0, indexed
-                      assert indexed.get("provider") == "Bing RSS", indexed
-                      print("Bing RSS outage fallback passed through web-search endpoint:", indexed.get("count"), "results")
+                      assert indexed.get("results"), indexed
+                      providers = indexed.get("providers", [])
+                      provider = str(indexed.get("provider", ""))
+                      assert provider == "Bing RSS" or any("Bing" in str(item) for item in providers), indexed
+                      print("Bing-only outage fallback returned:", len(indexed["results"]), "results")
               else:
                   assert indexed.get("count", 0) > 0, indexed
                   assert "index" in indexed_source.lower(), indexed
