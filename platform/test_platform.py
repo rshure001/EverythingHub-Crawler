@@ -1,5 +1,10 @@
 import pathlib
+import sys
+import tempfile
 import unittest
+
+sys.path.insert(0, str(pathlib.Path(__file__).parent))
+from resolve_release import resolve_release_dir
 
 ROOT = pathlib.Path(__file__).parent
 
@@ -33,11 +38,57 @@ class PlatformFoundationTests(unittest.TestCase):
         compose = (ROOT / "compose.yml").read_text()
         self.assertIn("/srv/everythinghub:/srv/everythinghub:ro", compose)
 
-    def test_activation_requires_index_and_scoped_release_path(self):
+    def test_activation_uses_canonical_release_path_before_atomic_swap(self):
         script = (ROOT / "activate-release.sh").read_text()
-        self.assertIn("/srv/everythinghub/releases/*", script)
-        self.assertIn('! -f "$release_dir/index.html"', script)
+        self.assertIn('"$SCRIPT_DIR/resolve_release.py" "$release_dir"', script)
+        self.assertIn('ln -sfn "$resolved_release"', script)
         self.assertIn("mv -Tf", script)
+
+    def test_release_resolver_accepts_a_valid_release(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory) / "releases"
+            release = root / "release-1"
+            release.mkdir(parents=True)
+            (release / "index.html").write_text("<h1>Everything Hub</h1>", encoding="utf-8")
+            self.assertEqual(resolve_release_dir(str(release), root), release.resolve())
+
+    def test_release_resolver_rejects_parent_traversal(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = pathlib.Path(directory)
+            root = base / "releases"
+            outside = base / "outside"
+            root.mkdir()
+            outside.mkdir()
+            (outside / "index.html").write_text("outside", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "outside"):
+                resolve_release_dir(str(root / ".." / "outside"), root)
+
+    def test_release_resolver_rejects_symlink_escape(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = pathlib.Path(directory)
+            root = base / "releases"
+            outside = base / "outside"
+            root.mkdir()
+            outside.mkdir()
+            (outside / "index.html").write_text("outside", encoding="utf-8")
+            link = root / "escaped"
+            try:
+                link.symlink_to(outside, target_is_directory=True)
+            except OSError as exc:
+                self.skipTest(f"symlinks unavailable: {exc}")
+            with self.assertRaisesRegex(ValueError, "outside"):
+                resolve_release_dir(str(link), root)
+
+    def test_release_resolver_rejects_root_and_missing_index(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory) / "releases"
+            root.mkdir()
+            with self.assertRaisesRegex(ValueError, "root itself"):
+                resolve_release_dir(str(root), root)
+            release = root / "incomplete"
+            release.mkdir()
+            with self.assertRaisesRegex(ValueError, "index.html"):
+                resolve_release_dir(str(release), root)
 
     def test_hosting_preflight_is_read_only(self):
         script = (ROOT / "host-preflight.sh").read_text()
