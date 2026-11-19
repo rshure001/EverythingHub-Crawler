@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from catalog_search import load_catalog
+from catalog_search import _bounded_gzip, load_catalog
 
 
 class CatalogLoaderTests(unittest.TestCase):
@@ -15,6 +15,12 @@ class CatalogLoaderTests(unittest.TestCase):
             with gzip.open(path, "wt", encoding="utf-8") as stream:
                 json.dump({"version": 1, "pages": [{"url": "https://example.com"}]}, stream)
             self.assertEqual(load_catalog(path), [{"url": "https://example.com"}])
+
+    def test_bounded_gzip_accepts_catalog_above_30mb_within_64mb_limit(self):
+        payload = b"x" * 30_000_001
+        decoded = _bounded_gzip(gzip.compress(payload))
+        self.assertEqual(len(decoded), len(payload))
+        self.assertEqual(decoded[:1], b"x")
 
     def test_rejects_unknown_catalog_version(self):
         with tempfile.TemporaryDirectory() as directory:
