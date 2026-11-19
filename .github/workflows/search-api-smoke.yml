@@ -6,6 +6,7 @@ on:
     paths:
       - "supabase/functions/everything-hub-web-search/**"
       - "vercel-search-backend/**"
+      - "public-search/**"
       - ".github/workflows/search-api-smoke.yml"
   workflow_dispatch:
   workflow_run:
