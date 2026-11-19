@@ -26,6 +26,8 @@ jobs:
       - name: Run search integrity and pagination tests
         run: node --test vercel-search-backend/test/*.test.js
   live-smoke:
+    # Production freshness is monitored on main and by the schedule; do not fail code PRs because the independent live catalog is stale.
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
