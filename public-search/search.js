@@ -23,9 +23,9 @@
   const MAX_SHARDS = 128;
   const MAX_PAGES = 20000;
   const MAX_SHARD_BYTES = 350000;
-  const MAX_TOTAL_BYTES = 36000000;
-  const MAX_GZIP_BYTES = 8000000;
-  const MAX_DECOMPRESSED_BYTES = 36000000;
+  const MAX_TOTAL_BYTES = 48000000;
+  const MAX_GZIP_BYTES = 10000000;
+  const MAX_DECOMPRESSED_BYTES = 64000000;
   const DEFAULT_PARALLEL = 4;
   const MAX_PARALLEL = 6;
   const FETCH_TIMEOUT_MS = 20000;
@@ -205,7 +205,7 @@
       throw new Error("Search manifest page totals do not match its shard descriptors.");
     }
     if (totalBytes > MAX_TOTAL_BYTES) {
-      throw new Error("Search shard catalog exceeds the 30 MB browser safety limit.");
+      throw new Error("Search shard catalog exceeds the 48 MB browser safety limit.");
     }
     return { totalBytes };
   }
@@ -224,7 +224,7 @@
       total += part.value.byteLength;
       if (total > MAX_DECOMPRESSED_BYTES) {
         await reader.cancel();
-        throw new Error("Compressed catalog exceeds the 30 MB decompressed safety limit.");
+        throw new Error("Compressed catalog exceeds the 64 MB decompressed safety limit.");
       }
       chunks.push(part.value);
     }
@@ -361,7 +361,7 @@
   async function loadLegacyGzip(url, fetcher) {
     const bytes = await fetchBytes(url, fetcher);
     if (bytes.byteLength > MAX_GZIP_BYTES) {
-      throw new Error("Compressed catalog exceeds the 8 MB browser safety limit.");
+      throw new Error("Compressed catalog exceeds the 10 MB browser safety limit.");
     }
     const payload = JSON.parse(await decodeGzip(bytes));
     if (!payload || payload.version !== 1 || !Array.isArray(payload.pages)) {
