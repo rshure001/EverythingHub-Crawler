@@ -109,23 +109,16 @@ jobs:
                   ).length;
                   const invalidLicensePreviews = images.filter(img => {
                     const card = img.closest("a.live-media-card");
-                    if (!card) return true;
-                    const source = card.dataset.source || "";
-                    const license = (card.dataset.license || "").trim();
-                    const licenseUrl = (card.dataset.licenseUrl || "").trim();
-                    const attributionRequired = card.dataset.attributionRequired || "unknown";
-                    const creator = (card.dataset.creator || "").trim();
-                    const licenseLower = license.toLowerCase();
-                    const publicDomain = licenseLower.startsWith("public domain") || licenseLower.startsWith("cc0");
-                    const ccBy = licenseLower.startsWith("cc by ") || licenseLower.startsWith("cc by-sa ");
-                    const validLicense = publicDomain || (ccBy && (licenseUrl.startsWith("https://") || licenseUrl.startsWith("http://")));
-                    const validAttribution = attributionRequired === "false" ||
-                      (attributionRequired === "true" && creator.length > 0);
-                    return source !== "Wikimedia Commons" ||
-                      card.dataset.previewAllowed !== "true" ||
-                      !license ||
-                      !validLicense ||
-                      !validAttribution;
+                    if (!card || card.dataset.previewAllowed !== "true") return true;
+                    const state = card.dataset.attributionRequired || "unknown";
+                    const attributionRequired = state === "true" ? true : state === "false" ? false : null;
+                    return window.EHMediaPreviewPolicy?.isMediaPreviewAllowed({
+                      source: card.dataset.source || "",
+                      license: card.dataset.license || "",
+                      licenseUrl: card.dataset.licenseUrl || "",
+                      attributionRequired,
+                      creator: card.dataset.creator || ""
+                    }) !== true;
                   }).length;
                   return {
                     cards: cards.length,
