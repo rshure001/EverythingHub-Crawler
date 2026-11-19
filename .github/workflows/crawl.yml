@@ -6,6 +6,8 @@ on:
       - ".github/workflows/crawl.yml"
       - "crawler/crawl.py"
       - "crawler/test_crawl.py"
+      - "crawler/test_discovery_sitemap.py"
+      - "vercel-homepage/sitemap.xml"
       - "crawler/seeds.txt"
       - "crawler/build_search_shards.py"
       - "crawler/validate_public_index.py"
