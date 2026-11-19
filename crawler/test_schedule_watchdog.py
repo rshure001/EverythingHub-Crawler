@@ -179,6 +179,9 @@ class ScheduleWatchdogTests(unittest.TestCase):
         self.assertIn("schedule_watchdog.py /tmp/crawl-runs-combined.json /tmp/public-manifest.json", workflow)
         self.assertIn("actions/workflows/crawl.yml/runs?event=schedule&per_page=5", workflow)
         self.assertIn("Schedule trigger status", workflow)
+        self.assertIn('if [ "$schedule_status" != "recent" ] || [ "$schedule_conclusion" != "success" ]; then', workflow)
+        self.assertIn("Scheduled crawler delivery warning", workflow)
+        self.assertIn("Crawl freshness is evaluated independently", workflow)
 
     def test_schedule_health_is_independent_of_recent_manual_crawl(self):
         result = evaluate(

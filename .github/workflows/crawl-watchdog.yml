@@ -113,6 +113,12 @@ jobs:
             echo "- Scheduled run conclusion: ${schedule_conclusion:-unknown}"
           } >> "$GITHUB_STEP_SUMMARY"
 
+          if [ "$schedule_status" != "recent" ] || [ "$schedule_conclusion" != "success" ]; then
+            schedule_warning="status=${schedule_status}; latest conclusion=${schedule_conclusion:-unknown}; age=${schedule_age:-unknown}s; latest run=${last_schedule:-none observed}"
+            echo "> **Scheduled crawler delivery warning:** ${schedule_warning}. Crawl freshness is evaluated independently, so no duplicate recovery is dispatched solely for schedule lag." >> "$GITHUB_STEP_SUMMARY"
+            echo "::warning title=Scheduled crawler delivery::${schedule_warning}. Crawl freshness is evaluated independently."
+          fi
+
           case "$action" in
             dispatch)
               gh workflow run crawl.yml --ref main
