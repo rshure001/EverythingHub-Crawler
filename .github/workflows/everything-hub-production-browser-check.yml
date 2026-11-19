@@ -78,7 +78,7 @@ jobs:
                   const invalidLinks = cards.filter(card => {
                     try {
                       const url = new URL(card.href);
-                      const rel = (card.getAttribute("rel") || "").split(/\\s+/);
+                      const rel = (card.getAttribute("rel") || "").split(/\s+/);
                       return !["https:", "http:"].includes(url.protocol) ||
                         card.target !== "_blank" ||
                         !rel.includes("noopener") ||
