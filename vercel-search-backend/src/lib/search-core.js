@@ -143,6 +143,9 @@ function buildResponse(options) {
     indexStatus: 'crawler-catalog-active',
     indexUpdatedAt: options.indexUpdatedAt || null,
     indexSha256: options.indexSha256 || null,
+    indexSource: options.indexSource || null,
+    indexIntegrity: options.indexIntegrity || null,
+    indexShardCount: Number.isInteger(options.indexShardCount) ? options.indexShardCount : null,
     staleCatalog: Boolean(options.staleCatalog),
     results,
     providers
