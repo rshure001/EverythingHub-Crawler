@@ -8,6 +8,9 @@ on:
       - "public-search/**"
       - "vercel-search-backend/**"
   workflow_dispatch:
+  workflow_run:
+    workflows: ["EverythingHub Publisher"]
+    types: [completed]
 permissions:
   contents: read
 jobs:
