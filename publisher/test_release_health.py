@@ -1,6 +1,6 @@
 import unittest
 
-from release_health import build_health
+from release_health import MAX_CATALOG_GZIP_BYTES, build_health
 
 
 class ReleaseHealthTests(unittest.TestCase):
@@ -98,10 +98,22 @@ class ReleaseHealthTests(unittest.TestCase):
         self.assertIsNone(health["catalog_gzip"])
         self.assertEqual(health["search_transport"], "shards")
 
-    def test_health_rejects_catalog_over_serving_limit(self):
+    def test_health_accepts_current_independent_search_catalog_size(self):
         manifest = self.valid_manifest()
-        manifest["catalog_gzip"]["bytes"] = 6_000_001
-        with self.assertRaisesRegex(ValueError, "serving safety limit"):
+        manifest["catalog_gzip"]["bytes"] = 6_310_389
+        health = build_health(manifest)
+        self.assertEqual(health["catalog_gzip"]["bytes"], 6_310_389)
+
+    def test_health_accepts_catalog_at_independent_search_limit(self):
+        manifest = self.valid_manifest()
+        manifest["catalog_gzip"]["bytes"] = MAX_CATALOG_GZIP_BYTES
+        health = build_health(manifest)
+        self.assertEqual(health["catalog_gzip"]["bytes"], MAX_CATALOG_GZIP_BYTES)
+
+    def test_health_rejects_catalog_over_independent_search_limit(self):
+        manifest = self.valid_manifest()
+        manifest["catalog_gzip"]["bytes"] = MAX_CATALOG_GZIP_BYTES + 1
+        with self.assertRaisesRegex(ValueError, "8 MB independent-search safety limit"):
             build_health(manifest)
 
     def test_health_rejects_shard_count_mismatch(self):
