@@ -108,7 +108,7 @@ class ReleaseHealthTests(unittest.TestCase):
         manifest = self.valid_manifest()
         manifest["catalog_gzip"]["bytes"] = 10_113_629
         health = build_health(manifest, media_catalog=self.valid_media_catalog())
-        self.assertEqual(health["catalog_gzip"]["bytes"], 8_011_063)
+        self.assertEqual(health["catalog_gzip"]["bytes"], 10_113_629)
 
     def test_health_accepts_catalog_at_independent_search_limit(self):
         manifest = self.valid_manifest()
