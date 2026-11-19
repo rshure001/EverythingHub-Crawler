@@ -744,10 +744,24 @@ async function loadHomepageMedia(type, query, targetId){
   if(!results.length){target.innerHTML='<div class="live-loading">No fresh '+(type==='video'?'videos':'pictures')+' returned just now. Search above to explore this topic.</div>';return;}
   target.innerHTML=results.map(item=>{
    const href=safe(item.pageUrl||item.videoUrl||item.imageUrl);
-   const image=safe(item.imageUrl||item.thumbnailUrl);
+   const source=String(item.source||data.provider||'Web source').trim();
+   const license=String(item.license||'').trim();
+   const licenseUrl=safe(item.licenseUrl||'');
+   const creator=String(item.creator||item.credit||'').trim();
+   const attributionRequired=item.attributionRequired;
+   const publicDomain=/^(public domain|cc0)(?:\\b|\\s|$)/i.test(license);
+   const ccBy=/^CC BY(?:-SA)?(?:\\s|$)/i.test(license)&&licenseUrl!=='#';
+   const attributionSatisfied=attributionRequired===false||(attributionRequired===true&&creator.length>0);
+   // Bing results are discovery links only. Embed a preview only when Commons
+   // supplies an explicit reusable license and its attribution requirement is met.
+   const previewAllowed=source==='Wikimedia Commons'&&(publicDomain||ccBy)&&attributionSatisfied;
+   const image=previewAllowed?safe(item.imageUrl||item.thumbnailUrl):'#';
    const title=esc(item.title||'Explore media');
-   const mediaLabel=type==='video'?'Video · '+esc(data.provider||'Web source'):esc(data.provider||'Image source');
-   return '<a class="live-media-card" href="'+href+'" target="_blank" rel="noopener noreferrer"><div class="live-thumb">'+(image!=='#'?'<img loading="lazy" src="'+image+'" alt="'+title+'" referrerpolicy="no-referrer">':'')+(type==='video'?'<span class="live-play">▶</span>':'')+'</div><div class="live-copy"><strong>'+title+'</strong><small>'+mediaLabel+'</small></div></a>';
+   const mediaLabel=previewAllowed
+    ? [source,creator,license].filter(Boolean).map(esc).join(' · ')
+    : esc(source)+' · Discovery link only; verify reuse rights';
+   const attributionState=attributionRequired===true?'true':attributionRequired===false?'false':'unknown';
+   return '<a class="live-media-card" data-source="'+esc(source)+'" data-preview-allowed="'+(previewAllowed?'true':'false')+'" data-license="'+esc(previewAllowed?license:'')+'" data-license-url="'+esc(previewAllowed?item.licenseUrl||'':'')+'" data-attribution-required="'+attributionState+'" data-creator="'+esc(previewAllowed?creator:'')+'" href="'+href+'" target="_blank" rel="noopener noreferrer"><div class="live-thumb">'+(image!=='#'?'<img loading="lazy" src="'+image+'" alt="'+title+'" referrerpolicy="no-referrer">':'')+(type==='video'?'<span class="live-play">▶</span>':'')+'</div><div class="live-copy"><strong>'+title+'</strong><small>'+mediaLabel+'</small></div></a>';
   }).join('');
  }catch(error){target.innerHTML='<div class="live-loading">Live media is temporarily unavailable. Use the Images or Videos search above.</div>';}
 }
