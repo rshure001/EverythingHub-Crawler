@@ -714,6 +714,7 @@ main{width:min(900px,calc(100% - 28px))!important;margin:22px auto 40px!importan
 
 <a class="dogtag-link" href="discover/" aria-label="Explore Everything Hub pages">Explore Pages</a><a class="dogtag-link" href="catalogs/" aria-label="Browse source catalogs">Source Catalogs</a><a class="dogtag-link" href="https://DogTagDay.org" target="_blank" rel="noopener noreferrer"><span class="tag-icon" aria-hidden="true">▱</span>DogTagDay.org</a>
 </main><footer>EverythingHub · Independent search and discovery · <a href="catalogs/">Browse source catalogs</a><nav class="seo-directory" aria-label="Explore Everything Hub" style="max-width:1120px;margin:24px auto;padding:18px;border:1px solid #1eff9a55;border-radius:14px;background:#04131d;color:#eafff5"><strong style="display:block;margin-bottom:10px">Explore Everything Hub</strong><div style="display:flex;flex-wrap:wrap;gap:10px 16px;font-size:12px"><a style="color:#aaff75" href="/discover/web/">Web Search</a><a style="color:#aaff75" href="/discover/news/">News</a><a style="color:#aaff75" href="/discover/images/">Images</a><a style="color:#aaff75" href="/discover/videos/">Videos</a><a style="color:#aaff75" href="/discover/shopping/">Shopping</a><a style="color:#aaff75" href="/discover/places/">Places</a><a style="color:#aaff75" href="/discover/business/">Business</a><a style="color:#aaff75" href="/discover/research/">Research</a></div></nav></footer>
+<script src="/media-preview-policy.js"></script>
 <script>
 const form=document.querySelector('#search'),input=document.querySelector('#q'),out=document.querySelector('#results');
 const EH_SUPABASE_URL='https://vdceayvfgkwpgwixrhwi.supabase.co';
@@ -749,13 +750,7 @@ async function loadHomepageMedia(type, query, targetId){
    const licenseUrl=safe(item.licenseUrl||'');
    const creator=String(item.creator||item.credit||'').trim();
    const attributionRequired=item.attributionRequired;
-   const licenseLower=license.toLowerCase();
-   const publicDomain=licenseLower.startsWith('public domain')||licenseLower.startsWith('cc0');
-   const ccBy=(licenseLower.startsWith('cc by ')||licenseLower.startsWith('cc by-sa '))&&(licenseUrl.startsWith('https://')||licenseUrl.startsWith('http://'));
-   const attributionSatisfied=attributionRequired===false||(attributionRequired===true&&creator.length>0);
-   // Bing results are discovery links only. Embed a preview only when Commons
-   // supplies an explicit reusable license and its attribution requirement is met.
-   const previewAllowed=source==='Wikimedia Commons'&&(publicDomain||ccBy)&&attributionSatisfied;
+   const previewAllowed=window.EHMediaPreviewPolicy?.isMediaPreviewAllowed(item)===true;
    const image=previewAllowed?safe(item.imageUrl||item.thumbnailUrl):'#';
    const title=esc(item.title||'Explore media');
    const mediaLabel=previewAllowed
