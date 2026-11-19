@@ -1,6 +1,7 @@
 import importlib.util
 from contextlib import contextmanager
 import unittest
+import tempfile
 import urllib.robotparser
 from collections import deque
 from pathlib import Path
@@ -727,5 +728,23 @@ class CrawlerTests(unittest.TestCase):
         self.assertEqual(len(queue), 4)
         self.assertIn(("http://host-0.example/second", 0), list(queue))
 
+    def test_save_json_writes_compact_semantically_identical_json(self):
+        payload = {
+            "updated_at": 123,
+            "pages": [
+                {"url": "https://example.com/", "title": "Café", "text": "A representative excerpt."},
+            ],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "index.json"
+            crawl.save_json(path, payload)
+            raw = path.read_text(encoding="utf-8")
+            self.assertEqual(crawl.load_json(path, {}), payload)
+            self.assertEqual(
+                raw,
+                crawl.json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n",
+            )
+            pretty = crawl.json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
+            self.assertLess(len(raw), len(pretty))
 if __name__ == "__main__":
     unittest.main()
