@@ -144,7 +144,7 @@ function validateManifestAndCatalog(manifest, compressed) {
     updatedAt: manifest.updated_at,
     sha256: digest,
     indexedPages: payload.pages.length,
-    source: 'compressed-catalog',
+    source: 'git-commit-pinned-compressed-catalog',
     integrity: 'catalog-sha256',
     shardCount: manifest.shard_count
   };
