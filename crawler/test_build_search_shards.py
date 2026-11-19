@@ -1,6 +1,9 @@
 import unittest
 
-from validate_public_index import MAX_CATALOG_UNCOMPRESSED_BYTES as VALIDATOR_MAX_CATALOG_UNCOMPRESSED_BYTES
+from validate_public_index import (
+    MAX_CATALOG_GZIP_BYTES as VALIDATOR_MAX_CATALOG_GZIP_BYTES,
+    MAX_CATALOG_UNCOMPRESSED_BYTES as VALIDATOR_MAX_CATALOG_UNCOMPRESSED_BYTES,
+)
 
 from build_search_shards import (
     MAX_BYTES,
@@ -32,7 +35,17 @@ class SearchShardBatchBoundaryTests(unittest.TestCase):
         self.assertFalse(batch_fits([page], len(raw) - 1))
 
     def test_compressed_catalog_cap_supports_the_independent_search_backend(self):
-        self.assertEqual(MAX_CATALOG_GZIP_BYTES, 8_000_000)
+        self.assertEqual(MAX_CATALOG_GZIP_BYTES, 10_000_000)
+
+    def test_builder_and_validator_share_the_compressed_catalog_cap(self):
+        self.assertEqual(MAX_CATALOG_GZIP_BYTES, VALIDATOR_MAX_CATALOG_GZIP_BYTES)
+        self.assertEqual(MAX_CATALOG_GZIP_BYTES, 10_000_000)
+
+    def test_compressed_catalog_at_observed_overflow_size_is_kept(self):
+        observed_size = 8_011_063
+        metadata = catalog_metadata(b"x" * observed_size, 16_698)
+        self.assertIsNotNone(metadata)
+        self.assertEqual(metadata["bytes"], observed_size)
 
     def test_compressed_catalog_metadata_is_kept_within_the_serving_cap(self):
         raw = b"small compressed catalog"
@@ -52,8 +65,8 @@ class SearchShardBatchBoundaryTests(unittest.TestCase):
         self.assertEqual(MAX_CATALOG_UNCOMPRESSED_BYTES, 64_000_000)
 
     def test_catalog_above_edge_budget_is_retained_for_vercel_fallback(self):
-        # The current 15.6k-page compact catalog is 30,234,899 bytes. The Edge
-        # Function delegates this size to Vercel, whose bounded decoder allows 64 MB.
+        # Large catalogs above the Edge Function's direct-load budget are delegated
+        # to Vercel, whose bounded decoder allows up to 64 MB.
         metadata = catalog_metadata(b"small compressed catalog", 3, 30_234_899)
         self.assertIsNotNone(metadata)
 

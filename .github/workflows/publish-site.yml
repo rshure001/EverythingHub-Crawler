@@ -82,8 +82,8 @@ jobs:
               if not isinstance(catalog, dict) or catalog.get('file') != 'catalog-v1.json.gz':
                   raise SystemExit('Compressed crawler catalog metadata is unsafe')
               declared_bytes = catalog.get('bytes')
-              if not isinstance(declared_bytes, int) or declared_bytes < 1 or declared_bytes > 8_000_000:
-                  raise SystemExit('Compressed crawler catalog exceeds the 8 MB independent-search safety limit')
+              if not isinstance(declared_bytes, int) or declared_bytes < 1 or declared_bytes > 10_000_000:
+                  raise SystemExit('Compressed crawler catalog exceeds the 10 MB independent-search safety limit')
               catalog_raw = (source / catalog['file']).read_bytes()
               if len(catalog_raw) != declared_bytes:
                   raise SystemExit('Compressed crawler catalog byte length mismatch')

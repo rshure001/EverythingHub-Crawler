@@ -104,6 +104,12 @@ class ReleaseHealthTests(unittest.TestCase):
         health = build_health(manifest)
         self.assertEqual(health["catalog_gzip"]["bytes"], 6_310_389)
 
+    def test_health_accepts_the_observed_catalog_above_the_old_8mb_limit(self):
+        manifest = self.valid_manifest()
+        manifest["catalog_gzip"]["bytes"] = 8_011_063
+        health = build_health(manifest, media_catalog=self.valid_media_catalog())
+        self.assertEqual(health["catalog_gzip"]["bytes"], 8_011_063)
+
     def test_health_accepts_catalog_at_independent_search_limit(self):
         manifest = self.valid_manifest()
         manifest["catalog_gzip"]["bytes"] = MAX_CATALOG_GZIP_BYTES
