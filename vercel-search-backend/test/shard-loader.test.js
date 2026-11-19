@@ -7,7 +7,8 @@ const assert = require('node:assert/strict');
 const {
   MAX_TOTAL_SHARD_BYTES,
   validateShardManifest,
-  validateShardPayload
+  validateShardPayload,
+  mapLimit
 } = require('../src/lib/catalog');
 
 function makeShard(file, pages) {
@@ -108,4 +109,20 @@ test('robots-denied shard records are rejected', () => {
 test('unsafe shard URLs are rejected', () => {
   const shard = makeShard('shard-0001.json', [page('https://user:pass@example.com/private')]);
   assert.throws(() => validateShardPayload(shard.meta, shard.buffer), /shard_record_url_unsafe/);
+});
+
+test('shard loader uses a bounded worker pool without batch barriers', async () => {
+  let active = 0;
+  let maximum = 0;
+  const results = await mapLimit(Array.from({ length: 40 }, (_, index) => index), 5, async (value) => {
+    active += 1;
+    maximum = Math.max(maximum, active);
+    await new Promise(resolve => setImmediate(resolve));
+    active -= 1;
+    return value * 2;
+  });
+  assert.equal(results.length, 40);
+  assert.equal(results[39], 78);
+  assert.ok(maximum <= 5);
+  assert.ok(maximum > 1);
 });
