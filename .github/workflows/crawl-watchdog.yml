@@ -17,6 +17,7 @@ on:
       - "EverythingHub isolated importer smoke test"
       - "EverythingHub Publisher"
       - "EverythingHub search API smoke test"
+      - "Validate Everything Hub Vercel search backend"
     types:
       - completed
     branches: [main]
