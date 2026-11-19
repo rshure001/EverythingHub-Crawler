@@ -11,9 +11,12 @@ export function isValidStaticManifest(value) {
   const manifest = /** @type {Record<string, unknown>} */ (value);
   const shards = manifest.shards;
   const totalPages = manifest.total_pages;
+  const updatedAt = manifest.updated_at;
   return (
     manifest.version === 1 &&
     manifest.integrity === "sha256" &&
+    Number.isSafeInteger(updatedAt) &&
+    updatedAt > 0 &&
     Array.isArray(shards) &&
     shards.length >= 1 &&
     shards.length <= MAX_STATIC_INDEX_SHARDS &&
