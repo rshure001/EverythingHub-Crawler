@@ -559,7 +559,7 @@ main{width:min(900px,calc(100% - 28px))!important;margin:22px auto 40px!importan
  #results .result a{color:#1a0dab!important;font-size:18px!important}
  #results .result p{color:#4d5156!important;font-size:14px!important}
  #results .source,#results .result-count{color:#5f6368!important}
- .live-media,.video-shelf,.divisions,.dashboard,.gallery,.ticker,.news-strip{display:none!important}
+ .live-media,.video-shelf,.divisions,.dashboard{display:block!important}
  main{width:100%!important;max-width:100%!important;margin:0 auto!important;padding:0!important}
 }
 
@@ -684,6 +684,17 @@ main{width:min(900px,calc(100% - 28px))!important;margin:22px auto 40px!importan
  <div class="discover-footer">Stories link to their original publishers. Updates are provided by GDELT.</div>
 </section>
 
+<section class="live-media" aria-label="Explore images and videos">
+ <div class="live-media-block">
+  <div class="live-media-title"><strong>Images</strong><span>Visual discoveries from across the web</span></div>
+  <div id="homeLiveImages" class="live-media-grid" aria-live="polite"><div class="live-loading">Loading image discoveries…</div></div>
+ </div>
+ <div class="live-media-block">
+  <div class="live-media-title"><strong>Videos</strong><span>Watch and explore</span></div>
+  <div id="homeLiveVideos" class="live-media-grid" aria-live="polite"><div class="live-loading">Loading video discoveries…</div></div>
+ </div>
+</section>
+
 <section class="divisions"><div class="heading"><h2>Explore Everything Hub</h2><small>Eight ways to discover</small></div><div class="grid">
 <a class="tile" href="?mode=web"><span class="ico">◎</span><span><strong>Web Search</strong><small>Find anything</small></span></a>
 <a class="tile" href="?mode=news"><span class="ico">▥</span><span><strong>News</strong><small>World & local updates</small></span></a>
@@ -741,8 +752,8 @@ async function loadHomepageMedia(type, query, targetId){
  }catch(error){target.innerHTML='<div class="live-loading">Live media is temporarily unavailable. Use the Images or Videos search above.</div>';}
 }
 function loadHomepageDiscovery(){
- loadHomepageMedia('image','octopus','homeLiveImages');
- loadHomepageMedia('video','Apollo 11 NASA','homeLiveVideos');
+ loadHomepageMedia('image','latest technology science nature','homeLiveImages');
+ loadHomepageMedia('video','latest science technology discoveries','homeLiveVideos');
 }
 loadHomepageDiscovery();
 
