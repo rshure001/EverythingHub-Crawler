@@ -83,7 +83,7 @@ jobs:
                   raise SystemExit('Compressed crawler catalog metadata is unsafe')
               declared_bytes = catalog.get('bytes')
               if not isinstance(declared_bytes, int) or declared_bytes < 1 or declared_bytes > 8_000_000:
-                  raise SystemExit('Compressed crawler catalog exceeds the 7 MB independent-search safety limit')
+                  raise SystemExit('Compressed crawler catalog exceeds the 8 MB independent-search safety limit')
               catalog_raw = (source / catalog['file']).read_bytes()
               if len(catalog_raw) != declared_bytes:
                   raise SystemExit('Compressed crawler catalog byte length mismatch')
@@ -239,7 +239,7 @@ jobs:
                   raise SystemExit('Published compressed crawler catalog metadata is unsafe')
               declared_bytes = catalog.get('bytes')
               if not isinstance(declared_bytes, int) or declared_bytes < 1 or declared_bytes > 8_000_000:
-                  raise SystemExit('Published compressed crawler catalog exceeds the 7 MB independent-search safety limit')
+                  raise SystemExit('Published compressed crawler catalog exceeds the 8 MB independent-search safety limit')
               catalog_raw = get('search-index/' + catalog['file'])
               if len(catalog_raw) != declared_bytes:
                   raise SystemExit('Published compressed crawler catalog byte length mismatch')
