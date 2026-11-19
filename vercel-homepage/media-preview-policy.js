@@ -7,15 +7,33 @@
     const attributionRequired = item.attributionRequired;
     const creator = String(item.creator || item.credit || "").trim();
 
-    const publicDomain = license.startsWith("public domain") || license.startsWith("cc0");
-    const ccBy = license.startsWith("cc by ") || license.startsWith("cc by-sa ");
-    const licenseUrlValid = licenseUrl.startsWith("https://") || licenseUrl.startsWith("http://");
-    const licenseValid = publicDomain || (ccBy && licenseUrlValid);
-    const attributionValid = attributionRequired === false ||
-      (attributionRequired === true && creator.length > 0);
+    const publicDomain = license.startsWith("public domain");
+    const cc0 = /^cc0(?:\s|$)/.test(license);
+    const ccByMatch = license.match(/^cc by(-sa)?\s+(1\.0|2\.0|2\.5|3\.0|4\.0)$/);
+    let ccByLicenseUrlValid = false;
+    if (ccByMatch) {
+      try {
+        const url = new URL(licenseUrl);
+        const kind = ccByMatch[1] ? "by-sa" : "by";
+        const expectedPath = "/licenses/" + kind + "/" + ccByMatch[2] + "/";
+        ccByLicenseUrlValid = url.protocol === "https:" &&
+          url.hostname === "creativecommons.org" &&
+          url.pathname.replace(/\/+$/, "/") === expectedPath;
+      } catch {
+        ccByLicenseUrlValid = false;
+      }
+    }
 
-    // Bing results are discovery links only. Preview embeds require explicit
-    // Commons license metadata and a satisfied attribution requirement.
+    const licenseValid = publicDomain || cc0 || (ccByMatch !== null && ccByLicenseUrlValid);
+    // CC BY and CC BY-SA always require creator attribution, even if source
+    // metadata incorrectly claims otherwise. Public-domain/CC0 records must
+    // explicitly state whether attribution is required.
+    const attributionValid = ccByMatch
+      ? creator.length > 0
+      : attributionRequired === false || (attributionRequired === true && creator.length > 0);
+
+    // Bing results remain discovery links only. Embedded previews require
+    // explicit Wikimedia Commons licensing and satisfied attribution.
     return source === "Wikimedia Commons" && licenseValid && attributionValid;
   }
 
