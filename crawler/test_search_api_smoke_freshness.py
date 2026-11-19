@@ -23,7 +23,7 @@ class SearchApiSmokeFreshnessTests(unittest.TestCase):
         self.assertIn('production.get("indexUpdatedAt") == expected_updated_at', workflow)
         self.assertIn('str(production.get("indexSha256", "")).lower() == expected_sha', workflow)
 
-    def test_search_smoke_runs_after_publisher_instead_of_racing_catalog_commit(self):
+    def test_search_smoke_keeps_catalog_and_workflow_dispatch_paths(self):
         smoke = (
             Path(__file__).resolve().parents[1]
             / ".github"
