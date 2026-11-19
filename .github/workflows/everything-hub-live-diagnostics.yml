@@ -112,6 +112,8 @@ jobs:
           static_index_count=0
           independent_fallback_ok=0
           independent_fallback_count=0
+          web_search_fallback_ok=0
+          web_search_fallback_count=0
           independent_count=0
           image_count=0
           video_count=0
@@ -127,7 +129,7 @@ jobs:
                   console.log(JSON.stringify({source:d.source??null,provider:d.provider??null,fallback:d.fallback??false,independentOfDatabase:d.independentOfDatabase??false,count:d.count??a.length,resultCount:a.length,sample:a.slice(0,3).map(x=>({title:x.title,url:x.url}))},null,2));
                   if(!a.length) process.exit(2);
                   if(d.fallback===true && d.source==="Everything Hub public crawler index") process.exit(3);
-                  if(d.fallback===true && d.source==="Bing RSS independent web fallback" && d.independentOfDatabase===true) process.exit(4);
+                  if(d.fallback===true && d.source==="Bing RSS independent web fallback" && d.independentOfDatabase===true && d.fallbackReason==="database_unavailable") process.exit(4);
                 '; then
                   echo "PASS: eh_quad database-backed search returned usable results."
                   db_search_detail="HTTP 200 in $db_search_seconds seconds with database-backed results"
@@ -143,8 +145,8 @@ jobs:
                     independent_fallback_ok=1
                     independent_fallback_count=$(node -p "require('/tmp/search.json').results.length")
                     db_search_ok=0
-                    db_search_detail="HTTP 200 in $db_search_seconds seconds via Bing RSS after no crawler-index match; PostgreSQL is still unavailable"
-                    echo "PASS: Bing RSS fallback returned $independent_fallback_count results after no crawler-index match."
+                    db_search_detail="HTTP 200 in $db_search_seconds seconds via Bing RSS independent fallback during database recovery; PostgreSQL is still unavailable"
+                    echo "PASS: Bing RSS independent fallback returned $independent_fallback_count results."
                   else
                     echo "WARN: search API returned no usable results."
                     db_search_ok=0
@@ -179,15 +181,30 @@ jobs:
           fi
           echo "=== PUBLIC CRAWLER INDEX: NASA ==="
           curl --max-time 10 -sS -G "$BASE/everything-hub-web-search" -H "apikey: $KEY" -H "accept: application/json" --data-urlencode "q=NASA" --data-urlencode "limit=10" -o /tmp/static-search.json
-          node -e '
+          if node -e '
             const fs=require("fs"); const d=JSON.parse(fs.readFileSync("/tmp/static-search.json","utf8"));
             const a=Array.isArray(d.results)?d.results:[];
-            console.log(JSON.stringify({source:d.source??null,indexIntegrity:d.indexIntegrity??null,indexTransport:d.indexTransport??null,count:d.count??a.length,resultCount:a.length,sample:a.slice(0,3).map(x=>({title:x.title,url:x.url}))},null,2));
-            if(d.source!=="Everything Hub public crawler index" || d.indexIntegrity!=="sha256" || !a.length) process.exit(2);
-          '
-          static_index_ok=1
-          static_index_count=$(node -p "require('/tmp/static-search.json').results.length")
-          static_index_transport=$(node -p "require('/tmp/static-search.json').indexTransport || 'shards'")
+            console.log(JSON.stringify({source:d.source??null,provider:d.provider??null,fallback:d.fallback??false,independentOfDatabase:d.independentOfDatabase??false,fallbackReason:d.fallbackReason??null,indexIntegrity:d.indexIntegrity??null,indexTransport:d.indexTransport??null,count:d.count??a.length,resultCount:a.length,sample:a.slice(0,3).map(x=>({title:x.title,url:x.url}))},null,2));
+            if(d.source==="Everything Hub public crawler index" && d.indexIntegrity==="sha256" && a.length) process.exit(0);
+            if(d.source==="Bing RSS independent web fallback" && d.independentOfDatabase===true && d.fallbackReason==="database_unavailable" && d.provider==="Bing RSS" && a.length) process.exit(4);
+            process.exit(2);
+          '; then
+            static_index_ok=1
+            static_index_count=$(node -p "require('/tmp/static-search.json').results.length")
+            static_index_transport=$(node -p "require('/tmp/static-search.json').indexTransport || 'shards'")
+          else
+            static_search_exit=$?
+            if [ "$static_search_exit" -eq 4 ]; then
+              web_search_fallback_ok=1
+              web_search_fallback_count=$(node -p "require('/tmp/static-search.json').results.length")
+              db_search_ok=0
+              db_search_detail="HTTP 200 via Bing RSS independent fallback; PostgreSQL is still unavailable"
+              echo "PASS: NASA query returned $web_search_fallback_count independent results while PostgreSQL is unavailable."
+            else
+              echo "::error::NASA query returned neither the verified public crawler index nor the approved independent fallback."
+              exit 1
+            fi
+          fi
           echo "=== DATABASE-INDEPENDENT SEARCH FALLBACK ==="
           curl -fsS -G "$BASE/everything-hub-independent-search" --data-urlencode "q=Rolex" -o /tmp/independent.json
           node -e '
@@ -233,7 +250,13 @@ jobs:
               echo "- Public crawler fallback: PASS (NASA query returned $static_index_count results; SHA-256 verified $static_index_transport catalog)"
             fi
             if [ "$independent_fallback_ok" -eq 1 ]; then
-              echo "- Bing RSS no-match fallback: PASS (Rolex query returned $independent_fallback_count results)"
+              echo "- Bing RSS independent fallback: PASS (Rolex query returned $independent_fallback_count results)"
+            fi
+            if [ "$web_search_fallback_ok" -eq 1 ]; then
+              echo "- Database-independent web-search fallback: PASS (NASA query returned $web_search_fallback_count results)"
+            fi
+            if [ "$web_search_fallback_ok" -eq 1 ] && [ "$static_index_ok" -eq 0 ]; then
+              echo "- Static catalog Edge Function path: NOT EXERCISED — independent provider is prioritized during database recovery; committed catalog integrity and ranking are covered by crawler CI."
             fi
             echo "- Independent search endpoint: PASS ($independent_count results)"
             echo "- Image discovery: PASS ($image_count results)"
