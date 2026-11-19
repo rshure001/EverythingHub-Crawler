@@ -1,5 +1,15 @@
 # Everything Hub Crawler
 
+# Current verified operations checkpoint — 2026-11-19 16:49 UTC
+
+- The latest committed public crawler manifest is commit [a60c91b](https://github.com/rshure001/EverythingHub-Crawler/commit/a60c91b67f75544a13e3add9393cebafa0497361), updated at **2026-11-19 16:48:47 UTC**.
+- The public catalog contains **15,419 indexed pages across 88 shards**. The manifest lists 88 shards, and their declared page counts sum exactly to 15,419. The latest crawler-index commit advanced the catalog from 15,353 to 15,419 pages (**+66**).
+- Recent commits also added a warning for stale scheduled crawler delivery, added live discovery shelves for news/images/videos, tuned homepage media discovery, and gated media previews by license/attribution.
+- Supabase control plane reports `everything-hub-control` as `ACTIVE_HEALTHY`, but a fresh read-only `eh_quad` table inventory failed with PostgreSQL SQLSTATE **57P03** (`the database system is not accepting connections; Hot standby mode is disabled`). This is a live database availability blocker, not evidence that the control-plane project is paused.
+- The deployed Supabase crawler remains intentionally paused at **v49** and sitemap discovery at **v7**; their pause responses preserve existing queue/index data. The web-search Edge Function is active at **v34**, the homepage function at **v58**, and media search at **v22**.
+- The web-search function includes a SHA-256-validated Vercel catalog fallback. The current manifest's optional gzip catalog is **7,381,539 bytes**, larger than the Edge Function's **6,000,000-byte** direct-gzip limit; do not raise memory/decompression limits blindly. The Vercel fallback is the intended recovery route while the database is unavailable. Live endpoint/browser verification remains required before claiming end-to-end search is healthy.
+- No production schema writes, migrations, imports, restores, or destructive actions were attempted. The separate Dog Tag Day Story Wall Supabase project and its data were not accessed or changed. No AppDeploy was used.
+
 Independent, polite crawler for the Everything Hub search project.
 
 ## Current configuration
