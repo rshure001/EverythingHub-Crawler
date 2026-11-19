@@ -721,6 +721,7 @@ class CrawlerTests(unittest.TestCase):
 
         self.assertEqual(crawl.WORKERS, 20)
         self.assertEqual(crawl.MAX_FETCH_PER_RUN, 6000)
+        self.assertEqual(crawl.QUEUE_LIMIT, 100000)
         self.assertEqual(len(batch), 19)
         self.assertEqual(
             len({crawl.host_key(url) for url, _depth in batch}),
