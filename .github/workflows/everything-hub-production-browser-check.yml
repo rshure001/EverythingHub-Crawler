@@ -80,7 +80,7 @@ jobs:
                       const rawHref = card.getAttribute("href") || "";
                       const url = new URL(rawHref, location.href);
                       const rel = (card.getAttribute("rel") || "").split(/\s+/);
-                      return !/^https?:\/\//i.test(rawHref) ||
+                      return !(rawHref.startsWith("https://") || rawHref.startsWith("http://")) ||
                         !["https:", "http:"].includes(url.protocol) ||
                         card.target !== "_blank" ||
                         !rel.includes("noopener") ||
@@ -92,7 +92,7 @@ jobs:
                   const images = [...node.querySelectorAll("a.live-media-card img")];
                   const invalidImages = images.filter(img => {
                     try {
-                      return !/^https?:\/\//i.test(img.getAttribute("src") || "") ||
+                      return !((img.getAttribute("src") || "").startsWith("https://") || (img.getAttribute("src") || "").startsWith("http://")) ||
                         !["https:", "http:"].includes(new URL(img.src).protocol);
                     } catch {
                       return true;
@@ -109,9 +109,10 @@ jobs:
                     const licenseUrl = (card.dataset.licenseUrl || "").trim();
                     const attributionRequired = card.dataset.attributionRequired || "unknown";
                     const creator = (card.dataset.creator || "").trim();
-                    const publicDomain = /^(public domain|cc0)(?:\\b|\\s|$)/i.test(license);
-                    const ccBy = /^CC BY(?:-SA)?(?:\\s|$)/i.test(license);
-                    const validLicense = publicDomain || (ccBy && /^https?:\\/\\//i.test(licenseUrl));
+                    const licenseLower = license.toLowerCase();
+                    const publicDomain = licenseLower.startsWith("public domain") || licenseLower.startsWith("cc0");
+                    const ccBy = licenseLower.startsWith("cc by ") || licenseLower.startsWith("cc by-sa ");
+                    const validLicense = publicDomain || (ccBy && (licenseUrl.startsWith("https://") || licenseUrl.startsWith("http://")));
                     const validAttribution = attributionRequired === "false" ||
                       (attributionRequired === "true" && creator.length > 0);
                     return source !== "Wikimedia Commons" ||
