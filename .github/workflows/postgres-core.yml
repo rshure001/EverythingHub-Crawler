@@ -1,6 +1,13 @@
 name: PostgreSQL 17 core smoke test
 
 on:
+  workflow_dispatch:
+  push:
+    branches: [main, feature/independent-postgres-core]
+    paths:
+      - "db/init/**"
+      - "docker-compose.postgres.yml"
+      - ".github/workflows/postgres-core.yml"
   pull_request:
     paths:
       - "db/init/**"
