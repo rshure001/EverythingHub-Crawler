@@ -1,6 +1,6 @@
 import unittest
 
-from media_discovery import discover_media, merge_media_candidates, safe_media_url
+from media_discovery import MAX_MEDIA_URL_LENGTH, discover_media, merge_media_candidates, safe_media_url
 
 
 class MediaDiscoveryTests(unittest.TestCase):
@@ -46,6 +46,20 @@ class MediaDiscoveryTests(unittest.TestCase):
             "data:image/png;base64,abc",
         ):
             self.assertEqual(safe_media_url("https://media.example.org/page", url), "")
+
+    def test_rejects_overlong_media_urls_instead_of_truncating(self):
+        prefix = "https://media.example.org/"
+        exact_limit = prefix + "a" * (MAX_MEDIA_URL_LENGTH - len(prefix))
+        over_limit = exact_limit + "a"
+        self.assertEqual(len(exact_limit), MAX_MEDIA_URL_LENGTH)
+        self.assertEqual(
+            safe_media_url("https://media.example.org/page", exact_limit),
+            exact_limit,
+        )
+        self.assertEqual(
+            safe_media_url("https://media.example.org/page", over_limit),
+            "",
+        )
 
     def test_strips_tracking_and_fragments_but_preserves_path_case(self):
         url = safe_media_url(
