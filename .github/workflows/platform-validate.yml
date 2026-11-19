@@ -1,0 +1,30 @@
+name: Validate Everything Hub self-owned platform
+
+on:
+  push:
+    paths:
+      - "platform/**"
+      - ".github/workflows/platform-validate.yml"
+  pull_request:
+    paths:
+      - "platform/**"
+      - ".github/workflows/platform-validate.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-platform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Compose configuration syntax
+        run: ruby -e 'require "yaml"; YAML.load_file("platform/compose.yml"); puts "Compose YAML parsed"'
+      - name: Validate Caddy configuration syntax
+        run: |
+          docker run --rm \
+            -v "$PWD/platform/Caddyfile:/etc/caddy/Caddyfile:ro" \
+            caddy:2 caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+      - name: Run platform safety tests
+        run: python -m unittest discover -s platform -p 'test_*.py' -v
