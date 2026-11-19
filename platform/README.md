@@ -28,10 +28,12 @@ A host with Docker Compose, a persistent data volume, and inbound TCP 80/443 plu
 
 1. Copy `platform/.env.example` to `.env` in the repository root on the host and set the actual Git and website hostnames plus a valid ACME email. Keep the populated `.env` out of Git.
 2. Review the ports and firewall rules. The host must already have working DNS records for both hostnames; do not change production DNS until the new host passes its checks.
-3. Run `docker compose -f platform/compose.yml up -d`.
-4. Complete the Forgejo first-run setup privately; disable open registration and create the owner account.
-5. Configure the first repository mirror/import from the current Everything Hub repository.
-6. Publish the static site into `/srv/everythinghub/releases/<release-id>`, then run the atomic activation command below.
+3. Run the read-only checks: `bash platform/host-preflight.sh`.
+4. On the host you control, run `sudo bash platform/install-host.sh` to pull the images and start the services. The installer does not change DNS or firewall rules.
+5. Complete the Forgejo first-run setup privately; disable open registration and create the owner account.
+6. Configure the first repository mirror/import from the current Everything Hub repository.
+7. Publish the static site into `/srv/everythinghub/releases/<release-id>`, then run the atomic activation command below.
+8. Run `bash platform/host-status.sh` to verify both public HTTPS endpoints and the active release. Back up with `sudo bash platform/backup-host.sh` and copy backups off-host.
 
 ## Atomic static release
 
