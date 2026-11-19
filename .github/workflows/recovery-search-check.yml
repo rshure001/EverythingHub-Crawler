@@ -64,6 +64,43 @@ jobs:
           if (!Array.isArray(rolex.results) || typeof rolex.count !== "number") throw new Error("Rolex preview response shape is invalid");
           console.log(JSON.stringify({health, nasa:{count:nasa.count,shown:nasa.results.length,indexed_pages:nasa.indexed_pages}, rolex:{count:rolex.count,shown:rolex.results.length}}, null, 2));
           NODE
+      - name: Verify production Vercel catalog search API
+        env:
+          PRODUCTION_API: https://everythinghub-search-backend.vercel.app
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 30 "$PRODUCTION_API/api/health" > production-health.json
+          curl --fail --silent --show-error --max-time 30 -G "$PRODUCTION_API/api/search" --data-urlencode "q=NASA" --data-urlencode "limit=50" > production-nasa.json
+          curl --fail --silent --show-error --max-time 30 -G "$PRODUCTION_API/api/search" --data-urlencode "q=Rolex" --data-urlencode "limit=50" > production-rolex.json
+          node <<'NODE'
+          const fs = require("fs");
+          const health = JSON.parse(fs.readFileSync("production-health.json", "utf8"));
+          const nasa = JSON.parse(fs.readFileSync("production-nasa.json", "utf8"));
+          const rolex = JSON.parse(fs.readFileSync("production-rolex.json", "utf8"));
+          if (health.status !== "ok" || health.service !== "everythinghub-independent-search" || health.database_required !== false) {
+            throw new Error("Production independent-search health check failed");
+          }
+          if (nasa.indexStatus !== "crawler-catalog-active" || !Number.isInteger(nasa.indexedPages) || nasa.indexedPages < 1) {
+            throw new Error("Production search did not report an active crawler catalog");
+          }
+          const local = (nasa.results || []).filter(item =>
+            item.source === "Everything Hub Crawler" && item.provider === "everythinghub-catalog"
+          );
+          if (!local.length) throw new Error("Production NASA query returned no first-party crawler results");
+          for (const item of local) {
+            if (!item.title || !/^https?:\/\//.test(item.url || "") || item.origin !== "Everything Hub Index") {
+              throw new Error("Production crawler result is missing required fields");
+            }
+          }
+          if (!Array.isArray(rolex.results) || typeof rolex.count !== "number" || rolex.indexedPages !== nasa.indexedPages) {
+            throw new Error("Production Rolex response shape or catalog count is invalid");
+          }
+          console.log(JSON.stringify({
+            health,
+            nasa: { count: nasa.count, shown: nasa.results.length, indexedPages: nasa.indexedPages, firstPartyShown: local.length },
+            rolex: { count: rolex.count, shown: rolex.results.length, indexedPages: rolex.indexedPages }
+          }, null, 2));
+          NODE
       - name: Stop service
         if: always()
         run: docker rm -f eh-recovery || true
