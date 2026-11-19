@@ -707,7 +707,7 @@ class CrawlerTests(unittest.TestCase):
         self.assertEqual(batch, [("https://ready.example/two", 0)])
         self.assertEqual(list(queue), [("https://slow.example/one", 0)])
 
-    def test_default_batch_uses_sixteen_distinct_hosts(self):
+    def test_default_batch_uses_twenty_distinct_hosts(self):
         queue = deque([
             (f"https://host-{index}.example/page", 0)
             for index in range(19)
@@ -721,12 +721,12 @@ class CrawlerTests(unittest.TestCase):
 
         self.assertEqual(crawl.WORKERS, 20)
         self.assertEqual(crawl.MAX_FETCH_PER_RUN, 6000)
-        self.assertEqual(len(batch), 16)
+        self.assertEqual(len(batch), 19)
         self.assertEqual(
             len({crawl.host_key(url) for url, _depth in batch}),
             len(batch),
         )
-        self.assertEqual(len(queue), 4)
+        self.assertEqual(len(queue), 1)
         self.assertIn(("http://host-0.example/second", 0), list(queue))
 
     def test_save_json_writes_compact_semantically_identical_json(self):
