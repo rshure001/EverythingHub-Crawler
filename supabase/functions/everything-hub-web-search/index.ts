@@ -228,8 +228,10 @@ Deno.serve(async (req: Request) => {
         projectUrl.replace(/\/$/, "") + "/functions/v1/everything-hub-independent-search",
       );
       endpoint.searchParams.set("q", query);
+      const apiKey = Deno.env.get("SUPABASE_ANON_KEY") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+      if (!apiKey) throw new Error("Supabase API key is unavailable for internal independent search");
       const response = await fetch(endpoint, {
-        headers: { Accept: "application/json" },
+        headers: { Accept: "application/json", apikey: apiKey },
         signal: AbortSignal.timeout(8500),
       });
       if (!response.ok) {
