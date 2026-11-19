@@ -17,8 +17,8 @@ function makeManifest(shardCount = 35, totalPages = 6350) {
   };
 }
 
-test("accepts the current 10k-plus, 57-shard public catalog", () => {
-  assert.equal(isValidStaticManifest(makeManifest(57, 10029)), true);
+test("accepts the current 12k-plus, 68-shard public catalog", () => {
+  assert.equal(isValidStaticManifest(makeManifest(68, 12025)), true);
 });
 
 test("accepts the configured shard ceiling", () => {
@@ -34,8 +34,8 @@ test("rejects shard-count mismatches", () => {
 });
 
 test("accepts the configured page ceiling and rejects counts beyond it", () => {
-  assert.equal(isValidStaticManifest(makeManifest(72, MAX_STATIC_INDEX_PAGES)), true);
-  assert.equal(isValidStaticManifest(makeManifest(72, MAX_STATIC_INDEX_PAGES + 1)), false);
+  assert.equal(isValidStaticManifest(makeManifest(MAX_STATIC_INDEX_SHARDS, MAX_STATIC_INDEX_PAGES)), true);
+  assert.equal(isValidStaticManifest(makeManifest(MAX_STATIC_INDEX_SHARDS, MAX_STATIC_INDEX_PAGES + 1)), false);
   assert.equal(isValidStaticManifest(makeManifest(35, 0)), false);
   assert.equal(isValidStaticManifest({ ...makeManifest(35), total_pages: "6350" }), false);
 });
