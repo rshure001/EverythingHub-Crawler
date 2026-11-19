@@ -29,7 +29,7 @@ class ScheduleWatchdogTests(unittest.TestCase):
         self.assertNotIn("EverythingHub search API smoke test", workflow_run)
         self.assertNotIn("Validate Everything Hub Vercel search backend", workflow_run)
         self.assertNotIn("Validate Everything Hub crawler and schema", workflow_run)
-        self.assertIn("types:\\n      - completed", workflow_run)
+        self.assertIn("types:" + chr(10) + "      - completed", workflow_run)
         self.assertIn("branches: [main]", workflow_run)
 
     def test_recent_success_is_healthy(self):
