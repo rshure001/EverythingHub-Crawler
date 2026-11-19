@@ -80,7 +80,7 @@ class PipelineHealthTests(unittest.TestCase):
             Path(__file__).resolve().parents[1]
             / ".github" / "workflows" / "crawl-watchdog.yml"
         ).read_text(encoding="utf-8")
-        workflow_run = workflow.split("  workflow_run:\\n", 1)[1].split("  workflow_dispatch:", 1)[0]
+        workflow_run = workflow.split("  workflow_run:" + chr(10), 1)[1].split("  workflow_dispatch:", 1)[0]
         self.assertEqual(workflow_run.count('- "'), 1)
         self.assertIn('- "Everything Hub crawler"', workflow_run)
         self.assertNotIn("EverythingHub Publisher", workflow_run)
