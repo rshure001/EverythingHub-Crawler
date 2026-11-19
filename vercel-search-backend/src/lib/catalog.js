@@ -200,17 +200,35 @@ function validateShardPayload(meta, buffer) {
   return payload.pages;
 }
 
+async function mapLimit(items, limit, mapper) {
+  const results = new Array(items.length);
+  let nextIndex = 0;
+  let failure = null;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (!failure) {
+      const index = nextIndex++;
+      if (index >= items.length) return;
+      try {
+        results[index] = await mapper(items[index], index);
+      } catch (error) {
+        failure = error;
+        return;
+      }
+    }
+  });
+  await Promise.all(workers);
+  if (failure) throw failure;
+  return results;
+}
+
 async function loadShardedCatalog(manifest) {
   const { shards, totalBytes } = validateShardManifest(manifest);
+  const loaded = await mapLimit(shards, MAX_SHARD_CONCURRENCY, async (meta) => {
+    const buffer = await getBuffer(SHARD_BASE_URL + encodeURIComponent(meta.file), meta.bytes, SHARD_FETCH_TIMEOUT_MS);
+    return validateShardPayload(meta, buffer);
+  });
   const pages = [];
-  for (let offset = 0; offset < shards.length; offset += MAX_SHARD_CONCURRENCY) {
-    const batch = shards.slice(offset, offset + MAX_SHARD_CONCURRENCY);
-    const loaded = await Promise.all(batch.map(async (meta) => {
-      const buffer = await getBuffer(SHARD_BASE_URL + encodeURIComponent(meta.file), meta.bytes, SHARD_FETCH_TIMEOUT_MS);
-      return validateShardPayload(meta, buffer);
-    }));
-    for (const shardPages of loaded) pages.push(...shardPages);
-  }
+  for (const shardPages of loaded) pages.push(...shardPages);
   if (pages.length !== manifest.total_pages) throw new Error('catalog_shard_total_page_mismatch');
   const seenUrls = new Set();
   for (const page of pages) {
@@ -262,6 +280,7 @@ module.exports = {
   validateShardManifest,
   validateShardPayload,
   loadShardedCatalog,
+  mapLimit,
   loadCatalog,
   clearCatalogCache
 };
