@@ -61,6 +61,7 @@ jobs:
               indexed_source = str(indexed.get("source", ""))
               if indexed.get("independentOfDatabase") is True:
                   assert indexed.get("fallback") is True, indexed
+                  assert indexed.get("fallbackReason") == "database_unavailable", indexed
                   assert indexed.get("provider") == "Bing RSS", indexed
                   print("Database outage fallback passed through web-search endpoint:", indexed.get("count"), "results")
               else:
