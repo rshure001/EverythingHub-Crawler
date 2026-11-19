@@ -1,0 +1,57 @@
+services:
+  forgejo:
+    image: codeberg.org/forgejo/forgejo:10
+    container_name: everythinghub-forgejo
+    restart: unless-stopped
+    environment:
+      USER_UID: "1000"
+      USER_GID: "1000"
+      FORGEJO__server__DOMAIN: ${GIT_HOST}
+      FORGEJO__server__ROOT_URL: https://${GIT_HOST}/
+      FORGEJO__server__SSH_DOMAIN: ${GIT_HOST}
+      FORGEJO__server__SSH_PORT: "2222"
+      FORGEJO__server__HTTP_PORT: "3000"
+      FORGEJO__service__DISABLE_REGISTRATION: "true"
+      FORGEJO__security__INSTALL_LOCK: "true"
+      FORGEJO__server__LFS_START_SERVER: "true"
+    volumes:
+      - forgejo_data:/data
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    expose:
+      - "3000"
+    ports:
+      - "2222:2222"
+    networks:
+      - hub_internal
+
+  gateway:
+    image: caddy:2
+    container_name: everythinghub-gateway
+    restart: unless-stopped
+    environment:
+      GIT_HOST: ${GIT_HOST}
+      WEB_HOST: ${WEB_HOST}
+      ACME_EMAIL: ${ACME_EMAIL}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - /srv/everythinghub:/srv/everythinghub:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - forgejo
+    networks:
+      - hub_internal
+
+volumes:
+  forgejo_data:
+  caddy_data:
+  caddy_config:
+
+networks:
+  hub_internal:
+    name: everythinghub_internal
