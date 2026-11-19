@@ -1,6 +1,6 @@
 # Everything Hub Crawler
 
-# Current verified operations checkpoint — 2026-11-19 16:49 UTC
+## Current verified operations checkpoint — 2026-11-19 16:49 UTC
 
 - The latest committed public crawler manifest is commit [a60c91b](https://github.com/rshure001/EverythingHub-Crawler/commit/a60c91b67f75544a13e3add9393cebafa0497361), updated at **2026-11-19 16:48:47 UTC**.
 - The public catalog contains **15,419 indexed pages across 88 shards**. The manifest lists 88 shards, and their declared page counts sum exactly to 15,419. The latest crawler-index commit advanced the catalog from 15,353 to 15,419 pages (**+66**).
