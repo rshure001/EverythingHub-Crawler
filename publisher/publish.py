@@ -32,7 +32,7 @@ def validate() -> list[str]:
         if item.get("size") != len(raw):
             errors.append(f"size mismatch: {rel}")
         if item.get("sha256") != hashlib.sha256(raw).hexdigest():
-            errors.append(f"SHA-256 mismatch: {rel}")
+            errors.append(f"SHA-256 mismatch: {rel}; actual digest {hashlib.sha256(raw).hexdigest()}")
     actual = {p.relative_to(SITE).as_posix() for p in SITE.rglob("*") if p.is_file() and p != MANIFEST}
     if actual != seen:
         errors.append(f"manifest/file set mismatch; unlisted={sorted(actual-seen)}, missing={sorted(seen-actual)}")
