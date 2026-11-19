@@ -178,6 +178,9 @@ class ScheduleWatchdogTests(unittest.TestCase):
         self.assertIn("base64.b64decode", workflow)
         self.assertIn("schedule_watchdog.py /tmp/crawl-runs-combined.json /tmp/public-manifest.json", workflow)
         self.assertIn("actions/workflows/crawl.yml/runs?event=schedule&per_page=5", workflow)
+        self.assertIn("actions/runs/${latest_scheduled_run_id}/jobs?per_page=100", workflow)
+        self.assertIn("Crawl configured sites", workflow)
+        self.assertIn("crawl_execution_conclusion", workflow)
         self.assertIn("Schedule trigger status", workflow)
         self.assertIn('if [ "$schedule_status" != "recent" ] || [ "$schedule_conclusion" != "success" ]; then', workflow)
         self.assertIn("Scheduled crawler delivery warning", workflow)
@@ -203,6 +206,36 @@ class ScheduleWatchdogTests(unittest.TestCase):
         )
         self.assertEqual(result["schedule_status"], "recent")
         self.assertEqual(result["schedule_age_seconds"], 480)
+        self.assertEqual(result["last_scheduled_conclusion"], "success")
+
+    def test_skipped_crawl_step_is_not_reported_as_a_successful_scheduled_crawl(self):
+        result = evaluate(
+            [{
+                "status": "completed",
+                "conclusion": "success",
+                "crawl_execution_conclusion": "skipped",
+                "event": "schedule",
+                "created_at": "2026-11-16T15:55:00Z",
+            }],
+            now=NOW,
+        )
+        self.assertEqual(result["schedule_status"], "recent")
+        self.assertEqual(result["last_scheduled_conclusion"], "skipped")
+        self.assertEqual(result["last_scheduled_workflow_conclusion"], "success")
+
+    def test_in_progress_crawl_step_is_not_reported_as_a_successful_scheduled_crawl(self):
+        result = evaluate(
+            [{
+                "status": "in_progress",
+                "conclusion": None,
+                "crawl_execution_conclusion": "in_progress",
+                "event": "schedule",
+                "created_at": "2026-11-16T15:59:00Z",
+            }],
+            now=NOW,
+        )
+        self.assertEqual(result["schedule_status"], "recent")
+        self.assertEqual(result["last_scheduled_conclusion"], "in_progress")
 
     def test_failed_scheduled_attempt_shows_recent_delivery_but_waits(self):
         result = evaluate(

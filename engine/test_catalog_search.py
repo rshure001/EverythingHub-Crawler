@@ -5,10 +5,18 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from catalog_search import _bounded_gzip, load_catalog
+from catalog_search import MAX_CATALOG_GZIP_BYTES, _bounded_gzip, load_catalog
 
 
 class CatalogLoaderTests(unittest.TestCase):
+    def test_current_published_manifest_fits_python_loader_limit(self):
+        root = Path(__file__).resolve().parents[1]
+        manifest = json.loads((root / "public-search" / "manifest.json").read_text(encoding="utf-8"))
+        catalog = manifest.get("catalog_gzip")
+        self.assertIsInstance(catalog, dict)
+        self.assertEqual(MAX_CATALOG_GZIP_BYTES, 10_000_000)
+        self.assertLessEqual(catalog.get("bytes", 0), MAX_CATALOG_GZIP_BYTES)
+
     def test_loads_version_one_catalog(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "catalog.json.gz"

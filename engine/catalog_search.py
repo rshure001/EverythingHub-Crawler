@@ -14,7 +14,7 @@ from search_core import search
 DEFAULT_SEARCH_DIR = Path(__file__).resolve().parents[1] / "public-search"
 DEFAULT_CATALOG = DEFAULT_SEARCH_DIR / "catalog-v1.json.gz"
 MAX_SHARD_BYTES = 350_000
-MAX_CATALOG_GZIP_BYTES = 8_000_000
+MAX_CATALOG_GZIP_BYTES = 10_000_000
 MAX_CATALOG_UNCOMPRESSED_BYTES = 64_000_000
 
 
