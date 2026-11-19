@@ -749,8 +749,9 @@ async function loadHomepageMedia(type, query, targetId){
    const licenseUrl=safe(item.licenseUrl||'');
    const creator=String(item.creator||item.credit||'').trim();
    const attributionRequired=item.attributionRequired;
-   const publicDomain=/^(public domain|cc0)(?:\\b|\\s|$)/i.test(license);
-   const ccBy=/^CC BY(?:-SA)?(?:\\s|$)/i.test(license)&&licenseUrl!=='#';
+   const licenseLower=license.toLowerCase();
+   const publicDomain=licenseLower.startsWith('public domain')||licenseLower.startsWith('cc0');
+   const ccBy=(licenseLower.startsWith('cc by ')||licenseLower.startsWith('cc by-sa '))&&(licenseUrl.startsWith('https://')||licenseUrl.startsWith('http://'));
    const attributionSatisfied=attributionRequired===false||(attributionRequired===true&&creator.length>0);
    // Bing results are discovery links only. Embed a preview only when Commons
    // supplies an explicit reusable license and its attribution requirement is met.
