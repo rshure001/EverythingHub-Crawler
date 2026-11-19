@@ -171,6 +171,18 @@ async function testCurrentPublishedManifestFitsClientLimits() {
   const manifestUrl = "https://example.test/current/manifest.json";
   const previousFetch = globalThis.fetch;
   const requested = [];
+  const totalShardBytes = currentManifest.shards.reduce((sum, shard) => sum + shard.bytes, 0);
+
+  assert.ok(
+    currentManifest.catalog_gzip &&
+      currentManifest.catalog_gzip.bytes <= 10_000_000 &&
+      currentManifest.catalog_gzip.pages === currentManifest.total_pages,
+    "current compressed catalog must fit the 10 MB browser transport limit"
+  );
+  assert.ok(
+    totalShardBytes <= 48_000_000,
+    "current shard catalog must fit the 48 MB browser fallback limit"
+  );
 
   globalThis.fetch = async url => {
     const value = String(url);
@@ -186,8 +198,12 @@ async function testCurrentPublishedManifestFitsClientLimits() {
   try {
     await assert.rejects(engine.create({ manifestUrl }), /HTTP 404/);
     assert.ok(
+      requested.some(value => value.endsWith("/catalog-v1.json.gz")),
+      "current published manifest must pass compressed catalog metadata validation"
+    );
+    assert.ok(
       requested.some(value => value.endsWith("/shard-0001.json")),
-      "current published manifest must pass client limits and reach shard loading"
+      "when gzip is unavailable, current manifest must pass shard limits and reach shard loading"
     );
   } finally {
     globalThis.fetch = previousFetch;

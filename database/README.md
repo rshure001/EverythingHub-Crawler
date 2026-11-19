@@ -6,6 +6,13 @@ project is separate and must never be used for these migrations or imports.
 
 ## Schema
 
+## Read-only recovery preflight
+
+After PostgreSQL accepts connections, run `database/eh_quad_recovery_preflight.sql` against the dedicated `everything-hub-control` project before any migration or import. It uses SELECT-only catalog queries to inventory `eh_quad` relations, estimated row counts, required objects, RLS flags, role privileges, the canonical search RPC, and policies. It does not change schema, roles, policies, queues, or rows.
+
+The automated guard is `crawler/test_eh_quad_recovery_preflight.py`; it rejects non-SELECT statements and references to schemas outside the `eh_quad` / `pg_catalog` boundary. This preflight is diagnostic only and does not imply that the production database is currently available.
+
+
 Use **only** `002_eh_quad_schema.sql` for the current schema. It creates the
 `eh_quad` schema, document/search tables, crawl queue, host leases, run
 metrics, media table, lane state, indexes, and the `eh_quad.eh_search_pages`
