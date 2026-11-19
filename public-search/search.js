@@ -267,6 +267,18 @@
     ) {
       throw new Error("Compressed catalog page count or schema mismatch.");
     }
+    const urls = new Set();
+    for (const page of payload.pages) {
+      const pageUrl = page && canonicalHttpUrl(page.url);
+      if (!pageUrl) throw new Error("Compressed catalog contains an invalid page URL.");
+      if (page.robots_allowed === false) {
+        throw new Error("Compressed catalog contains a robots-denied page.");
+      }
+      if (urls.has(pageUrl)) {
+        throw new Error("Compressed catalog contains a duplicate canonical URL.");
+      }
+      urls.add(pageUrl);
+    }
     return payload.pages;
   }
 
