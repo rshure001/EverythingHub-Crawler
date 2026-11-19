@@ -13,7 +13,8 @@ on:
       - ".github/workflows/crawl-watchdog.yml"
       - ".github/workflows/validate-crawler.yml"
       - ".github/workflows/search-api-smoke.yml"
-      - ".github/workflows/everything-hub-live-diagnostics.yml"
+      - ".github/workflows/everything-hub-live-diagnostics.yml .github/workflows/recovery-search-check.yml"
+      - ".github/workflows/recovery-search-check.yml"
   pull_request:
     paths:
       - "crawler/**"
@@ -28,6 +29,7 @@ on:
       - ".github/workflows/publish-site.yml"
       - ".github/workflows/search-api-smoke.yml"
       - ".github/workflows/everything-hub-live-diagnostics.yml"
+      - ".github/workflows/recovery-search-check.yml"
   workflow_dispatch:
 permissions:
   contents: read
