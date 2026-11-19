@@ -226,7 +226,7 @@ def validate(root: Path = ROOT) -> list[str]:
             else:
                 raw = catalog_path.read_bytes()
                 if len(raw) > MAX_CATALOG_GZIP_BYTES:
-                    errors.append("compressed catalog exceeds the 5 MB safety limit")
+                    errors.append(f"compressed catalog exceeds the {MAX_CATALOG_GZIP_BYTES:,}-byte safety limit")
                 if catalog.get("bytes") != len(raw):
                     errors.append("compressed catalog byte-size mismatch")
                 digest = catalog.get("sha256")
