@@ -6,6 +6,8 @@ on:
       - "recovery/**"
       - "public-search/**"
       - ".github/workflows/recovery-search-check.yml"
+  schedule:
+    - cron: "13 4 * * *"
   workflow_dispatch:
 permissions:
   contents: read
