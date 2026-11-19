@@ -1,5 +1,6 @@
 const assert = require("node:assert/strict");
 const { createHash, webcrypto } = require("node:crypto");
+const { gzipSync } = require("node:zlib");
 const engine = require("./search.js");
 
 if (!globalThis.crypto || !globalThis.crypto.subtle) {
@@ -47,6 +48,68 @@ const badManifest = {
     manifest.shards[1]
   ]
 };
+
+async function testGzipLoader() {
+  const gzipPages = [pages[0], pages[2]];
+  const compressed = gzipSync(bytesFor({ version: 1, pages: gzipPages }), { level: 9, mtime: 0 });
+  const gzipManifestUrl = "https://example.test/search-gzip/manifest.json";
+  const gzipUrl = new URL("catalog-v1.json.gz", gzipManifestUrl).href;
+  const gzipManifest = {
+    ...manifest,
+    catalog_gzip: {
+      file: "catalog-v1.json.gz",
+      pages: gzipPages.length,
+      bytes: compressed.length,
+      sha256: sha256(compressed)
+    }
+  };
+  const previousFetch = globalThis.fetch;
+  let requestCount = 0;
+
+  globalThis.fetch = async url => {
+    requestCount++;
+    const value = String(url);
+    if (value === gzipManifestUrl) {
+      return new Response(JSON.stringify(gzipManifest), { status: 200 });
+    }
+    if (value === gzipUrl) return new Response(compressed, { status: 200 });
+    return new Response("not found", { status: 404 });
+  };
+
+  try {
+    const loaded = await engine.create({ manifestUrl: gzipManifestUrl });
+    assert.equal(loaded.transport, "gzip");
+    assert.equal(loaded.pageCount, 2);
+    assert.equal(loaded.search("NASA", { lane: "science" }).length, 1);
+    assert.equal(requestCount, 2);
+
+    const badPages = [{ ...pages[0], robots_allowed: false }, pages[2]];
+    const badCompressed = gzipSync(bytesFor({ version: 1, pages: badPages }), { level: 9, mtime: 0 });
+    const badManifestUrl = "https://example.test/search-gzip-bad/manifest.json";
+    const badGzipUrl = new URL("catalog-v1.json.gz", badManifestUrl).href;
+    const badManifest = {
+      ...manifest,
+      catalog_gzip: {
+        file: "catalog-v1.json.gz",
+        pages: badPages.length,
+        bytes: badCompressed.length,
+        sha256: sha256(badCompressed)
+      }
+    };
+    globalThis.fetch = async url => {
+      const value = String(url);
+      if (value === badManifestUrl) return new Response(JSON.stringify(badManifest), { status: 200 });
+      if (value === badGzipUrl) return new Response(badCompressed, { status: 200 });
+      return new Response("not found", { status: 404 });
+    };
+    await assert.rejects(
+      engine.create({ manifestUrl: badManifestUrl, strictCatalogGzip: true }),
+      /robots-denied/
+    );
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+}
 
 async function testShardOnlyLoader() {
   const previousFetch = globalThis.fetch;
@@ -102,7 +165,8 @@ async function testShardOnlyLoader() {
 }
 
 testShardOnlyLoader()
-  .then(() => console.log("10 browser ranking tests and shard-only loader/integrity tests passed"))
+  .then(testGzipLoader)
+  .then(() => console.log("10 browser ranking tests, gzip and shard-only loader/integrity tests passed"))
   .catch(error => {
     console.error(error);
     process.exitCode = 1;

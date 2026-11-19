@@ -28,6 +28,9 @@ class SearchShardBatchBoundaryTests(unittest.TestCase):
         self.assertTrue(batch_fits([page], len(raw)))
         self.assertFalse(batch_fits([page], len(raw) - 1))
 
+    def test_compressed_catalog_cap_supports_the_independent_search_backend(self):
+        self.assertEqual(MAX_CATALOG_GZIP_BYTES, 7_000_000)
+
     def test_compressed_catalog_metadata_is_kept_within_the_serving_cap(self):
         raw = b"small compressed catalog"
         metadata = catalog_metadata(raw, 3)

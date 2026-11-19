@@ -24,7 +24,7 @@
   const MAX_PAGES = 15000;
   const MAX_SHARD_BYTES = 350000;
   const MAX_TOTAL_BYTES = 30000000;
-  const MAX_GZIP_BYTES = 6000000;
+  const MAX_GZIP_BYTES = 7000000;
   const MAX_DECOMPRESSED_BYTES = 30000000;
   const DEFAULT_PARALLEL = 4;
   const MAX_PARALLEL = 6;
@@ -266,6 +266,18 @@
       payload.pages.length !== expectedPages
     ) {
       throw new Error("Compressed catalog page count or schema mismatch.");
+    }
+    const urls = new Set();
+    for (const page of payload.pages) {
+      const pageUrl = page && canonicalHttpUrl(page.url);
+      if (!pageUrl) throw new Error("Compressed catalog contains an invalid page URL.");
+      if (page.robots_allowed === false) {
+        throw new Error("Compressed catalog contains a robots-denied page.");
+      }
+      if (urls.has(pageUrl)) {
+        throw new Error("Compressed catalog contains a duplicate canonical URL.");
+      }
+      urls.add(pageUrl);
     }
     return payload.pages;
   }
