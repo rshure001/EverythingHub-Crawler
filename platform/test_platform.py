@@ -39,6 +39,24 @@ class PlatformFoundationTests(unittest.TestCase):
         self.assertIn('! -f "$release_dir/index.html"', script)
         self.assertIn("mv -Tf", script)
 
+    def test_hosting_preflight_is_read_only(self):
+        script = (ROOT / "host-preflight.sh").read_text()
+        self.assertIn("docker compose", script)
+        self.assertIn("getent ahosts", script)
+        self.assertIn("no firewall, DNS, services", script)
+
+    def test_backup_requires_both_git_and_release_data(self):
+        script = (ROOT / "backup-host.sh").read_text()
+        self.assertIn("docker volume inspect", script)
+        self.assertIn("/srv/everythinghub/releases", script)
+        self.assertIn("sha256sum", script)
+        self.assertIn("umask 077", script)
+
+    def test_hosting_docs_explain_physical_host_dependency(self):
+        docs = (ROOT / "HOSTING.md").read_text()
+        self.assertIn("physical machine", docs)
+        self.assertIn("no confirmed always-on free host", docs)
+
     def test_example_env_contains_no_real_credentials(self):
         env = (ROOT / ".env.example").read_text()
         self.assertIn("GIT_HOST=", env)
