@@ -69,7 +69,7 @@ jobs:
           node --check vercel-search-backend/src/api/search.js
           node --check vercel-search-backend/src/api/health.js
           node --test vercel-search-backend/test/*.test.js
-          node --test vercel-homepage/media-preview-policy.test.js
+          node --test vercel-homepage/media-preview-policy.test.js vercel-homepage/homepage-contract.test.js
           node --test supabase/functions/everything-hub-web-search/params.test.mjs supabase/functions/everything-hub-web-search/db-fetch.test.mjs supabase/functions/everything-hub-web-search/static-search.test.mjs supabase/functions/everything-hub-web-search/static-manifest.test.mjs supabase/functions/everything-hub-web-search/bounded-stream.test.mjs supabase/functions/everything-hub-web-search/manifest-time.test.mjs supabase/functions/everything-hub-web-search/vercel-fallback.test.mjs supabase/functions/everything-hub-media-search/merge-results.test.mjs
           python crawler/build_search_shards.py
           python crawler/validate_public_index.py
