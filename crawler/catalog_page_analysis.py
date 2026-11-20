@@ -360,7 +360,9 @@ def _extract_list_entities(body: str) -> list[tuple[str, str, str]]:
                     continue
                 if normalized in {"more", "other", "others", "various", "etc"}:
                     continue
-                found[(record_type, normalized)] = (record_type, name, cue)
+                match_text = match.group(0)
+                catalog_cue = cue if re.search(r"\binclude\b", match_text, re.I) or ":" in match_text else cue + "_examples"
+                found[(record_type, normalized)] = (record_type, name, catalog_cue)
                 if len(found) >= 30:
                     return list(found.values())
     return list(found.values())
@@ -452,7 +454,10 @@ def analyze_pages(
         explicit = _candidate_groups(page, host, segments, body, title) if is_eligible else []
         content_entities = _extract_list_entities(body) if is_eligible else []
         content_entity_mentions += len(content_entities)
-        content_counts = Counter(entity_kind for entity_kind, _entity_title, _cue in content_entities)
+        content_counts = Counter(
+            entity_kind for entity_kind, _entity_title, cue in content_entities
+            if not cue.endswith("_examples")
+        )
         is_catalog_definition = bool(explicit) or any(count >= 2 for count in content_counts.values())
         kind = _record_type(page, segments) if is_eligible else None
         group_key = host + "|" + kind + "|" + _group_path(kind, segments) if kind and not is_catalog_definition else None
@@ -501,7 +506,10 @@ def analyze_pages(
                 "record_id": content_record_id, "entity_id": stable_id("entity", entity_key),
                 "canonical_entity_key": entity_key, "record_type": entity_kind,
                 "title": entity_title,
-                "description": f"Explicit {cue} list item extracted from {title or host}.",
+                "description": (
+                    f"{'Example' if cue.endswith('_examples') else 'Explicit'} "
+                    f"{cue.removesuffix('_examples')} list item extracted from {title or host}."
+                ),
                 "source_urls": [], "source_page_ids": [], "catalog_ids": [],
                 "last_seen_at": page.get("fetched_at"), "content_extracted": True,
             })
