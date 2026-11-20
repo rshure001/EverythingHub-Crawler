@@ -1,0 +1,51 @@
+{
+  "rewrites": [
+    {
+      "source": "/topics",
+      "destination": "https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-site/topics/"
+    },
+    {
+      "source": "/topics/",
+      "destination": "https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-site/topics/"
+    },
+    {
+      "source": "/topics/:topic",
+      "destination": "https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-site/topics/:topic/"
+    },
+    {
+      "source": "/topics/:topic/",
+      "destination": "https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-site/topics/:topic/"
+    },
+    {
+      "source": "/topics/:topic/:category",
+      "destination": "https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-site/topics/:topic/:category/"
+    },
+    {
+      "source": "/topics/:topic/:category/",
+      "destination": "https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-site/topics/:topic/:category/"
+    },
+    {
+      "source": "/sitemap.xml",
+      "destination": "https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-site/sitemap.xml"
+    },
+    {
+      "source": "/robots.txt",
+      "destination": "https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-site/robots.txt"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        }
+      ]
+    }
+  ]
+}
