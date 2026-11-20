@@ -4,44 +4,149 @@ on:
   push:
     paths:
       - "crawler/catalog_retro_discovery.py"
+      - "crawler/catalog_page_analysis.py"
+      - "crawler/test_catalog_page_analysis.py"
       - "crawler/test_catalog_retro_discovery.py"
-      - "data/index.json"
+      - "crawler/product_metadata.py"
+      - "crawler/test_product_metadata.py"
       - ".github/workflows/retroactive-catalog-index.yml"
   workflow_dispatch:
   schedule:
-    - cron: "43 */6 * * *"
+    - cron: "23 * * * *"
 
 permissions:
   contents: write
 
 concurrency:
-  group: catalog-data-publish
+  group: catalog-data-publish-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
   inventory:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Use the current main corpus for branch previews
+        if: github.ref != 'refs/heads/main'
+        run: |
+          set -euo pipefail
+          git fetch --depth=1 origin main
+          git checkout origin/main -- data/index.json data/index-shards
+          python - <<'PY'
+          import json
+          from datetime import datetime, timezone
+          from pathlib import Path
+          manifest = json.loads(Path("data/index.json").read_text(encoding="utf-8"))
+          print(json.dumps({
+              "source_index_pages": manifest.get("total_pages"),
+              "source_index_updated_at": datetime.fromtimestamp(
+                  manifest.get("updated_at", 0), timezone.utc
+              ).isoformat(),
+          }, sort_keys=True))
+          PY
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Restore reusable per-host catalog analysis cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            data/.page-derived-catalog-cache
+            data/page-derived-catalogs/report.json
+          key: ${{ runner.os }}-catalog-cache-${{ github.ref_name }}-${{ github.run_id }}
+          restore-keys: |
+            ${{ runner.os }}-catalog-cache-${{ github.ref_name }}-
       - name: Test retroactive discovery
         working-directory: crawler
         run: python -m unittest test_catalog_retro_discovery.py -v
+      - name: Test conservative product metadata extraction
+        working-directory: crawler
+        run: python -m unittest test_product_metadata.py -v
+      - name: Test page-derived catalog analysis
+        working-directory: crawler
+        run: python -m unittest test_catalog_page_analysis.py -v
+
+      - name: Test public search publisher limits
+        working-directory: publisher
+        run: python -m unittest test_stage_search_catalog.py -v
       - name: Inventory every existing indexed host
         run: python crawler/catalog_retro_discovery.py
-      - name: Publish host candidates and per-page discovery seeds
+      - name: Analyze every eligible existing indexed page
+        run: python crawler/catalog_page_analysis.py --query Rolex --query "Las Vegas"
+      - name: Record persisted catalog and record throughput
         run: |
-          git add -f data/host-catalog-candidates.json data/page-catalog-seeds.json.gz
-          git rm -f --ignore-unmatch data/page-catalog-seeds.json
-          if git diff --cached --quiet; then
-            echo "No host inventory changes."
-            exit 0
-          fi
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path("data/page-derived-catalogs/report.json").read_text(encoding="utf-8"))
+          print(json.dumps({
+              "source_index_pages": report["source_index_pages"],
+              "pages_analyzed": report["metrics"]["pages_analyzed"],
+              "eligible_pages": report["metrics"]["eligible_pages"],
+              "unique_catalogs_discovered": report["metrics"]["unique_catalogs_discovered"],
+              "unique_catalogs_by_type": report["metrics"]["unique_catalogs_by_type"],
+              "source_declared_catalogs": report["metrics"]["source_declared_catalogs"],
+              "content_list_catalogs": report["metrics"]["content_list_catalogs"],
+              "derived_catalogs": report["metrics"]["derived_catalogs"],
+              "catalog_page_associations": report["metrics"]["catalog_page_associations"],
+              "catalog_candidate_occurrences": report["metrics"]["catalog_candidate_occurrences"],
+              "duplicate_catalog_candidates": report["metrics"]["duplicate_catalog_candidates"],
+              "subcatalogs_discovered": report["metrics"]["subcatalogs_discovered"],
+              "unique_entities": report["metrics"]["unique_entities"],
+              "cross_host_record_merges": report["metrics"]["cross_host_record_merges"],
+              "unique_records_by_type": report["metrics"]["unique_records_by_type"],
+              "structured_product_pages": report["metrics"]["structured_product_pages"],
+              "structured_product_records": report["metrics"]["structured_product_records"],
+              "structured_brand_records": report["metrics"]["structured_brand_records"],
+              "records_staged": report["metrics"]["records_staged"],
+              "records_published": report["metrics"]["records_published"],
+              "media_references": report["metrics"]["media_references"],
+              "unique_media_urls": report["metrics"]["unique_media_urls"],
+              "coverage_percentage": report["metrics"]["coverage_percentage"],
+              "unique_source_coverage_percentage": report["metrics"]["unique_source_coverage_percentage"],
+              "eligible_page_coverage_percentage": report["metrics"]["eligible_page_coverage_percentage"],
+              "eligible_unique_source_page_coverage_percentage": report["metrics"]["eligible_unique_source_page_coverage_percentage"],
+              "previous_counts": report.get("previous_counts"),
+              "count_deltas": report.get("count_deltas"),
+              "elapsed_wall_clock_seconds": report.get("elapsed_wall_clock_seconds"),
+              "throughput": report.get("throughput"),
+          }, indent=2))
+          PY
+      - name: Validate registry and every per-catalog index before publishing
+        run: python crawler/catalog_page_analysis.py --validate-only
+      - name: Publish validated catalog analysis on main
+        if: github.ref == 'refs/heads/main'
+        run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "Inventory catalog candidates from existing search index"
-          git pull --rebase origin main
-          git push
+          for attempt in 1 2 3; do
+            git add -f data/host-catalog-candidates.json data/page-catalog-seeds.json.gz data/page-derived-catalogs
+            git rm -f --ignore-unmatch data/page-catalog-seeds.json
+            if git diff --cached --quiet; then
+              echo "No catalog analysis changes."
+              exit 0
+            fi
+            git commit -m "Publish validated page-derived catalog candidates"
+            if git push origin HEAD:main; then
+              exit 0
+            fi
+            echo "Main advanced during publish; rebuilding from the latest canonical index (attempt $attempt)."
+            git fetch origin main
+            git reset --hard origin/main
+            python crawler/catalog_retro_discovery.py
+            python crawler/catalog_page_analysis.py --query Rolex --query "Las Vegas"
+            python crawler/catalog_page_analysis.py --validate-only
+          done
+          echo "Unable to publish validated catalog analysis after three protected attempts."
+          exit 1
+      - name: Upload catalog analysis preview from non-main branches
+        if: github.ref != 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: page-derived-catalog-analysis-preview
+          path: data/page-derived-catalogs/
+          if-no-files-found: error

@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from stage_search_catalog import stage_search_catalog, validate_manifest
+from stage_search_catalog import MAX_INDEXED_PAGES, stage_search_catalog, validate_manifest
 
 
 def page(url, title):
@@ -157,10 +157,55 @@ class StageSearchCatalogTests(unittest.TestCase):
                 stage_search_catalog(source, target)
 
 
-    def test_accepts_catalog_above_100000_pages_within_new_safety_limit(self):
+    def test_accepts_current_125643_page_sharded_catalog_with_headroom(self):
+        total_pages = 125_643
+        shard_count = 482
+        total_compressed = 60_689_761
+        total_uncompressed = 240_013_197
+        compressed_sizes = [176_884]
+        uncompressed_sizes = [499_996]
+        remaining_compressed = total_compressed - compressed_sizes[0]
+        remaining_uncompressed = total_uncompressed - uncompressed_sizes[0]
+        compressed_sizes.extend(
+            remaining_compressed // (shard_count - 1) + (1 if i < remaining_compressed % (shard_count - 1) else 0)
+            for i in range(shard_count - 1)
+        )
+        uncompressed_sizes.extend(
+            remaining_uncompressed // (shard_count - 1) + (1 if i < remaining_uncompressed % (shard_count - 1) else 0)
+            for i in range(shard_count - 1)
+        )
         shards = []
-        remaining = 100_001
-        for index in range(1, 102):
+        remaining_pages = total_pages
+        for index in range(shard_count):
+            pages = min(261 if index < 323 else 260, remaining_pages)
+            remaining_pages -= pages
+            shards.append({
+                "file": f"shard-{index + 1:04d}.json.gz",
+                "pages": pages,
+                "bytes": compressed_sizes[index],
+                "uncompressed_bytes": uncompressed_sizes[index],
+                "sha256": "a" * 64,
+            })
+        manifest = {
+            "version": 1,
+            "integrity": "sha256",
+            "updated_at": 1795140000,
+            "total_pages": total_pages,
+            "shard_count": len(shards),
+            "shards": shards,
+        }
+        checked = validate_manifest(manifest)
+        self.assertEqual(checked["total_pages"], 125_643)
+        self.assertEqual(len(checked["shards"]), 482)
+        self.assertEqual(checked["total_bytes"], total_compressed)
+        self.assertEqual(checked["total_uncompressed_bytes"], total_uncompressed)
+
+    def test_rejects_page_count_above_configured_safety_limit(self):
+        total_pages = MAX_INDEXED_PAGES + 1
+        shards = []
+        remaining = total_pages
+        index = 1
+        while remaining:
             pages = min(1000, remaining)
             remaining -= pages
             shards.append({
@@ -170,17 +215,17 @@ class StageSearchCatalogTests(unittest.TestCase):
                 "uncompressed_bytes": 1,
                 "sha256": "a" * 64,
             })
+            index += 1
         manifest = {
             "version": 1,
             "integrity": "sha256",
             "updated_at": 1795140000,
-            "total_pages": 100_001,
+            "total_pages": total_pages,
             "shard_count": len(shards),
             "shards": shards,
         }
-        checked = validate_manifest(manifest)
-        self.assertEqual(checked["total_pages"], 100_001)
-        self.assertEqual(len(checked["shards"]), 101)
+        with self.assertRaisesRegex(ValueError, "150,000-page safety limit"):
+            validate_manifest(manifest)
 
 if __name__ == "__main__":
     unittest.main()
