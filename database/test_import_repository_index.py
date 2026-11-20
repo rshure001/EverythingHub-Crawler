@@ -15,7 +15,7 @@ class SchemaIsolationTests(unittest.TestCase):
 
     def test_page_text_fields_remove_nul_before_postgres_insert(self):
         self.assertEqual(
-            IMPORTER.page_text_fields({"title": "Ti\\x00tle", "description": "Desc\\x00ription", "text": "Bo\\x00dy"}),
+            IMPORTER.page_text_fields({"title": "Ti\x00tle", "description": "Desc\x00ription", "text": "Bo\x00dy"}),
             ("Title", "Description", "Body"),
         )
 
