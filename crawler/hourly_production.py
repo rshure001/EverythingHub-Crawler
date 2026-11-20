@@ -42,8 +42,13 @@ def validate_manifest_snapshot(value: dict) -> dict:
     }
 
 
-def measure_manifest_delta(before: dict | None, after: dict | None) -> dict:
-    """Return a measured net unique-page delta only for a valid timestamped pair."""
+def measure_manifest_delta(before: dict | None, after: dict | None,
+                           run_duration_seconds: float | None = None) -> dict:
+    """Measure net unique-page growth and normalize it by active crawler time.
+
+    Manifest timestamps also expose idle time between runs; that wall-clock
+    rate is retained separately and is never confused with the run's throughput.
+    """
     result = {
         "valid": False,
         "reason": "manifest_baseline_unavailable",
@@ -52,9 +57,12 @@ def measure_manifest_delta(before: dict | None, after: dict | None) -> dict:
         "before_updated_at": None,
         "after_updated_at": None,
         "elapsed_seconds": None,
+        "run_duration_seconds": None,
         "new_unique_records": None,
         "records_per_minute": None,
         "records_per_hour": None,
+        "wall_clock_records_per_minute": None,
+        "wall_clock_records_per_hour": None,
     }
     if before is None or after is None:
         return result
@@ -83,9 +91,21 @@ def measure_manifest_delta(before: dict | None, after: dict | None) -> dict:
         "valid": True,
         "reason": None,
         "new_unique_records": delta,
-        "records_per_minute": round(delta * 60 / elapsed, 2),
-        "records_per_hour": round(delta * 3600 / elapsed, 1),
+        "wall_clock_records_per_minute": round(delta * 60 / elapsed, 2),
+        "wall_clock_records_per_hour": round(delta * 3600 / elapsed, 1),
     })
+    try:
+        duration = float(run_duration_seconds)
+    except (TypeError, ValueError):
+        duration = 0.0
+    if duration > 0:
+        result.update({
+            "run_duration_seconds": round(duration, 2),
+            "records_per_minute": round(delta * 60 / duration, 2),
+            "records_per_hour": round(delta * 3600 / duration, 1),
+        })
+    else:
+        result["rate_reason"] = "crawler_run_duration_unavailable"
     return result
 
 
@@ -109,7 +129,9 @@ def build_snapshot(index: dict, history: dict | None = None, *, now=None,
             index.get("pages_crawled_this_run", 0),
         ) or 0),
     )
-    interval = measure_manifest_delta(manifest_before, manifest_after)
+    interval = measure_manifest_delta(
+        manifest_before, manifest_after, duration
+    )
     timestamp = interval["after_updated_at"] if interval["valid"] else now.isoformat()
 
     run = {
@@ -206,10 +228,17 @@ def main():
             f"- Manifest before: **{interval['before_pages']:,} pages** at {interval['before_updated_at']}",
             f"- Manifest after: **{interval['after_pages']:,} pages** at {interval['after_updated_at']}",
             f"- Net new unique pages by manifest count: **{delta:+,}**",
-            f"- Elapsed wall-clock: **{interval['elapsed_seconds']:.0f} seconds**",
+            f"- Manifest timestamp gap (includes idle time): **{interval['elapsed_seconds']:.0f} seconds**",
             (
-                f"- Measured rate: **{interval['records_per_minute']:.2f} records/minute**; "
-                f"**{interval['records_per_hour']:.1f} records/hour** normalized from this interval"
+                f"- Active crawler duration: **{interval['run_duration_seconds']:.1f} seconds**; "
+                f"unique-page rate: **{interval['records_per_minute']:.2f}/minute** "
+                f"(**{interval['records_per_hour']:.1f}/hour**)"
+                if interval.get("records_per_minute") is not None
+                else "- Unique-page rate: **not measured** (crawler duration unavailable)"
+            ),
+            (
+                f"- Gap-inclusive rate: **{interval['wall_clock_records_per_minute']:.2f}/minute**; "
+                f"**{interval['wall_clock_records_per_hour']:.1f}/hour**"
             ),
             f"- Total indexed pages: **{interval['after_pages']:,}**",
         ])
