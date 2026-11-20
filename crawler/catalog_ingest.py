@@ -129,7 +129,7 @@ def adapt(manifest: dict[str, Any]) -> dict[str, Any]:
         "source_pages": source_pages,
     }
 
-def maindef main() -> None:
+def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", type=Path, default=INPUT)
     parser.add_argument("--output", type=Path, default=OUTPUT)
