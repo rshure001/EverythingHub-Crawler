@@ -5,6 +5,7 @@ on:
     paths:
       - "crawler/catalog_discovery.py"
       - "crawler/test_catalog_discovery.py"
+      - "project/**"
       - ".github/workflows/catalog-first-discovery.yml"
   workflow_dispatch:
     inputs:
@@ -38,6 +39,8 @@ jobs:
       - name: Validate catalog discovery
         working-directory: crawler
         run: python -m unittest test_catalog_discovery.py -v
+      - name: Validate project ledger
+        run: python -m unittest discover -s project -p 'test_*.py' -v
       - name: Discover whole catalogs and their bulk resources
         env:
           ROWS: ${{ inputs.rows || '250' }}
