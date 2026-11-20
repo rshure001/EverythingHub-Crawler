@@ -34,7 +34,8 @@ jobs:
         run: python crawler/catalog_retro_discovery.py
       - name: Publish host candidates and per-page discovery seeds
         run: |
-          git add -f data/host-catalog-candidates.json data/page-catalog-seeds.json
+          git add -f data/host-catalog-candidates.json data/page-catalog-seeds.json.gz
+          git rm -f --ignore-unmatch data/page-catalog-seeds.json
           if git diff --cached --quiet; then
             echo "No host inventory changes."
             exit 0
