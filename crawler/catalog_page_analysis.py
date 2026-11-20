@@ -21,6 +21,7 @@ from index_store import load_index
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_INDEX = ROOT / "data" / "index.json"
 DEFAULT_OUTPUT = ROOT / "data" / "page-derived-catalogs"
+ANALYZER_VERSION = 2
 TRACKING_KEYS = {"fbclid", "gclid", "dclid", "mc_cid", "mc_eid", "ref", "source"}
 STOP_TOKENS = {"the", "and", "for", "with", "from", "our", "your", "all", "new", "home", "page", "official", "welcome"}
 GENERIC_TITLES = {"home", "homepage", "welcome", "404", "not found", "access denied", "page not found"}
@@ -95,6 +96,38 @@ CONTENT_INTENT_TOKENS = {
     "news", "article", "articles", "story", "stories", "research", "paper", "papers",
     "report", "reports", "media", "image", "images", "video", "videos", "resource", "resources",
 }
+SEGMENT_TYPES.update({
+    "subjects": "subject", "subject": "subject", "topics": "subject",
+    "topic": "subject", "themes": "subject", "theme": "subject",
+})
+CATALOG_SEGMENTS.update({"subjects", "subject", "topics", "topic", "themes", "theme"})
+ROOTS_BY_TYPE["subject"] = {"subjects", "subject", "topics", "topic", "themes", "theme"}
+CATEGORY_SEGMENTS.update({"subjects", "topics", "themes"})
+CATALOG_TYPE["subject"] = "knowledge_base"
+TYPE_LABEL["subject"] = "Subjects"
+
+LIST_ENTITY_PATTERNS = (
+    ("product", "products", re.compile(r"\b(?:products?|items?)\s+(?:include|such as|like|are|:)\s+([^.!?\n]{3,260})", re.I)),
+    ("model", "models", re.compile(r"\bmodels?\s+(?:include|such as|like|are|:)\s+([^.!?\n]{3,260})", re.I)),
+    ("brand", "brands", re.compile(r"\bbrands?\s+(?:include|such as|like|are|:)\s+([^.!?\n]{3,260})", re.I)),
+    ("service", "services", re.compile(r"\bservices?\s+(?:include|such as|like|are|:)\s+([^.!?\n]{3,260})", re.I)),
+    ("business", "businesses", re.compile(r"\b(?:businesses|companies|stores|dealers|vendors)\s+(?:include|such as|like|are|:)\s+([^.!?\n]{3,260})", re.I)),
+    ("place", "places", re.compile(r"\b(?:places|locations|attractions|destinations|parks|museums)\s+(?:include|such as|like|are|:)\s+([^.!?\n]{3,260})", re.I)),
+    ("person", "people", re.compile(r"\b(?:people|authors|speakers|artists|team members)\s+(?:include|such as|like|are|:)\s+([^.!?\n]{3,260})", re.I)),
+    ("organization", "organizations", re.compile(r"\b(?:organizations|agencies|institutions|partners)\s+(?:include|such as|like|are|:)\s+([^.!?\n]{3,260})", re.I)),
+    ("event", "events", re.compile(r"\b(?:events|conferences|exhibitions)\s+(?:include|such as|like|are|:)\s+([^.!?\n]{3,260})", re.I)),
+    ("dataset", "datasets", re.compile(r"\b(?:datasets|data sets|registries)\s+(?:include|such as|like|are|:)\s+([^.!?\n]{3,260})", re.I)),
+    ("article", "articles", re.compile(r"\b(?:articles|publications|reports|papers)\s+(?:include|such as|like|are|:)\s+([^.!?\n]{3,260})", re.I)),
+    ("software", "software", re.compile(r"\b(?:software|tools|packages|libraries)\s+(?:include|such as|like|are|:)\s+([^.!?\n]{3,260})", re.I)),
+    ("subject", "subjects", re.compile(r"\b(?:subjects|topics|themes)\s+(?:include|such as|like|are|:)\s+([^.!?\n]{3,260})", re.I)),
+)
+DEFAULT_CATALOG_PATHS = {
+    "product": "/products", "model": "/models", "brand": "/brands",
+    "service": "/services", "business": "/businesses", "place": "/places",
+    "person": "/people", "organization": "/organizations", "event": "/events",
+    "dataset": "/datasets", "article": "/articles", "media": "/media",
+    "software": "/software", "resource": "/resources", "subject": "/subjects",
+}
 
 def stable_id(prefix: str, key: str) -> str:
     return prefix + ":" + hashlib.sha256(key.encode("utf-8")).hexdigest()[:24]
@@ -149,7 +182,7 @@ def _record_type(page: dict, segments: list[str]) -> str | None:
     lane = str(page.get("lane") or "").casefold()
     path_types = [SEGMENT_TYPES[x] for x in segments if x in SEGMENT_TYPES]
     priority = ("model", "product", "business", "place", "service", "event", "dataset",
-                "person", "organization", "article", "media", "software", "brand", "resource")
+                "person", "organization", "subject", "article", "media", "software", "brand", "resource")
     if lane == "shopping":
         return "model" if "model" in path_types else "product"
     if lane == "business":
@@ -212,6 +245,33 @@ def _record_entity_key(kind: str, host: str, title: str) -> str:
     return kind + "|" + host + "|" + normalized
 
 
+def _content_group_path(record_type: str, segments: list[str]) -> str:
+    if not any(segment in ROOTS_BY_TYPE.get(record_type, set()) for segment in segments):
+        return DEFAULT_CATALOG_PATHS[record_type]
+    return _group_path(record_type, segments)
+
+
+def _extract_list_entities(body: str) -> list[tuple[str, str, str]]:
+    """Extract only explicitly enumerated, title-cased entities from page text."""
+    found = {}
+    for record_type, cue, pattern in LIST_ENTITY_PATTERNS:
+        for match in pattern.finditer(body):
+            parts = re.split(r"\s*[,;•]\s*|\s+\band\b\s+|\s+\bor\b\s+", match.group(1), flags=re.I)
+            for part in parts:
+                name = re.sub(r"^(?:the|a|an)\s+", "", part.strip(), flags=re.I)
+                name = re.sub(r"\s+(?:etc\.?|and more|among others|and others)$", "", name, flags=re.I)
+                name = name.strip(" \t:-–—'\"()[]{}")
+                normalized = _norm(name)
+                if not 3 <= len(name) <= 100 or not re.search(r"[A-Z0-9]", name):
+                    continue
+                if normalized in {"more", "other", "others", "various", "etc"}:
+                    continue
+                found[(record_type, normalized)] = (record_type, name, cue)
+                if len(found) >= 30:
+                    return list(found.values())
+    return list(found.values())
+
+
 def _catalog_title(host: str, kind: str, path: str, source_titles: list[str]) -> str:
 
     explicit = [x for x in source_titles if CATALOG_TITLE_RE.search(x) or TYPE_LABEL[kind].casefold() in x.casefold()]
@@ -249,8 +309,10 @@ def analyze_pages(
     explicit_groups: dict[str, dict] = {}
     page_rows = []
     media_urls = set()
+    media_references = {}
     eligible = 0
     pages_with_signals = 0
+    content_entity_mentions = 0
 
     for page in pages:
         if not isinstance(page, dict):
@@ -270,8 +332,19 @@ def analyze_pages(
         is_eligible = page.get("robots_allowed") is not False and bool(title or description or text) and _valid_title(title)
         if is_eligible:
             eligible += 1
-        page_media = {x.rstrip(".,);]") for x in MEDIA_URL_RE.findall(text)}
+        page_media = {
+            normalized for raw_media in MEDIA_URL_RE.findall(text)
+            if (normalized := canonical_url(raw_media.rstrip(".,);]")))
+        }
         media_urls.update(page_media)
+        for media_url in page_media:
+            media_references[(page_id, media_url)] = {
+                "media_id": stable_id("media", media_url),
+                "media_url": media_url,
+                "source_page_id": page_id,
+                "source_url": url,
+                "discovered_at": page.get("fetched_at"),
+            }
         kind = _record_type(page, segments) if is_eligible else None
         group_key = host + "|" + kind + "|" + _group_path(kind, segments) if kind else None
         record_id = None
@@ -297,6 +370,8 @@ def analyze_pages(
                 group_titles[group_key].append(title)
 
         explicit = _candidate_groups(page, host, segments, body, title) if is_eligible else []
+        content_entities = _extract_list_entities(body) if is_eligible else []
+        content_entity_mentions += len(content_entities)
         page_group_keys = []
         for key, catalog_kind, path, evidence in explicit:
             explicit_groups.setdefault(key, {
@@ -309,15 +384,41 @@ def analyze_pages(
             if title and title not in group_titles[key]:
                 group_titles[key].append(title)
             page_group_keys.append(key)
+        for entity_kind, entity_title, cue in content_entities:
+            entity_key = _record_entity_key(entity_kind, host, entity_title)
+            entity_id = stable_id("record", entity_key)
+            item = records.setdefault(entity_id, {
+                "record_id": entity_id, "canonical_entity_key": entity_key, "record_type": entity_kind,
+                "title": entity_title,
+                "description": f"Explicit {cue} list item extracted from {title or host}.",
+                "source_urls": [], "source_page_ids": [], "catalog_ids": [],
+                "last_seen_at": page.get("fetched_at"), "content_extracted": True,
+            })
+            item["content_extracted"] = True
+            if url not in item["source_urls"]:
+                item["source_urls"].append(url)
+            if page_id not in item["source_page_ids"]:
+                item["source_page_ids"].append(page_id)
+            if page.get("fetched_at") and (not item.get("last_seen_at") or page["fetched_at"] > item["last_seen_at"]):
+                item["last_seen_at"] = page["fetched_at"]
+            content_path = _content_group_path(entity_kind, segments)
+            content_key = host + "|" + entity_kind + "|" + content_path
+            record_groups[content_key].add(entity_id)
+            group_pages[content_key].add(page_id)
+            group_urls[content_key].add(url)
+            if title and title not in group_titles[content_key]:
+                group_titles[content_key].append(title)
+            page_group_keys.append(content_key)
         if group_key:
             page_group_keys.append(group_key)
-        if kind or explicit:
+        if kind or explicit or content_entities:
             pages_with_signals += 1
         page_rows.append({
             "page_id": page_id, "url": url, "eligible": is_eligible,
             "record_type": kind, "record_id": record_id,
             "catalog_group_keys": sorted(set(page_group_keys)),
             "media_reference_count": len(page_media),
+            "content_entity_count": len(content_entities),
             "fetched_at": page.get("fetched_at"),
         })
 
@@ -390,7 +491,10 @@ def analyze_pages(
         "subcatalogs_discovered": sum(bool(x["parent_catalog_id"]) for x in catalog_list),
         "unique_records": len(record_list),
         "unique_records_by_type": type_counts,
-        "media_references": len(media_urls),
+        "content_entity_mentions": content_entity_mentions,
+        "content_extracted_unique_records": sum(1 for item in record_list if item.get("content_extracted")),
+        "media_references": len(media_references),
+        "unique_media_urls": len(media_urls),
         "records_published": 0,
         "catalogs_verified": 0,
         "pages_with_catalog_signals": pages_with_signals,
@@ -399,6 +503,7 @@ def analyze_pages(
     }
     return {
         "schema_version": 1,
+        "analysis_version": ANALYZER_VERSION,
         "strategy": "page-content-derived-catalog-candidates",
         "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
         "source_index_pages": source_total,
@@ -409,6 +514,7 @@ def analyze_pages(
         "records": record_list,
         "pages": page_rows,
         "media_urls": sorted(media_urls),
+        "media_references": sorted(media_references.values(), key=lambda x: (x["media_url"], x["source_page_id"])),
     }
 
 
@@ -432,6 +538,8 @@ def analyze_pages_incremental(
         grouped[host or "_invalid_public_url"].append(page)
     all_catalogs, all_records, all_page_rows = [], [], []
     all_media: set[str] = set()
+    all_media_references = []
+    content_entity_mentions = 0
     eligible = signals = 0
     reused = rebuilt = 0
     for host, host_pages in sorted(grouped.items()):
@@ -442,14 +550,14 @@ def analyze_pages_incremental(
         if cache_path.exists():
             try:
                 cached = json.loads(gzip.decompress(cache_path.read_bytes()).decode("utf-8"))
-                if cached.get("input_sha256") == digest:
+                if cached.get("analyzer_version") == ANALYZER_VERSION and cached.get("input_sha256") == digest:
                     shard = cached.get("analysis")
                     reused += 1
             except (OSError, ValueError, json.JSONDecodeError):
                 shard = None
         if shard is None:
             shard = analyze_pages(host_pages, source_total=len(host_pages))
-            raw = json.dumps({"input_sha256": digest, "analysis": shard}, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+            raw = json.dumps({"analyzer_version": ANALYZER_VERSION, "input_sha256": digest, "analysis": shard}, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
             temp = cache_path.with_suffix(".tmp")
             temp.write_bytes(gzip.compress(raw, compresslevel=6, mtime=0))
             temp.replace(cache_path)
@@ -458,6 +566,8 @@ def analyze_pages_incremental(
         all_records.extend(shard["records"])
         all_page_rows.extend(shard["pages"])
         all_media.update(shard["media_urls"])
+        all_media_references.extend(shard.get("media_references", []))
+        content_entity_mentions += shard["metrics"].get("content_entity_mentions", 0)
         eligible += shard["metrics"]["eligible_pages"]
         signals += shard["metrics"]["pages_with_catalog_signals"]
     all_catalogs.sort(key=lambda x: (x["catalog_type"], x["title"].casefold(), x["catalog_id"]))
@@ -473,19 +583,27 @@ def analyze_pages_incremental(
         "duplicate_catalog_candidates": max(0, page_refs - len(all_catalogs)),
         "subcatalogs_discovered": sum(bool(x["parent_catalog_id"]) for x in all_catalogs),
         "unique_records": len(all_records), "unique_records_by_type": type_counts,
-        "media_references": len(all_media), "records_published": 0, "catalogs_verified": 0,
+        "content_entity_mentions": content_entity_mentions,
+        "content_extracted_unique_records": sum(1 for item in all_records if item.get("content_extracted")),
+        "media_references": len({(x["source_page_id"], x["media_url"]) for x in all_media_references}),
+        "unique_media_urls": len(all_media), "records_published": 0, "catalogs_verified": 0,
         "pages_with_catalog_signals": signals,
         "coverage_percentage": round((len(pages) / source_total * 100.0) if source_total else 0.0, 4),
         "eligible_page_coverage_percentage": round((eligible / source_total * 100.0) if source_total else 0.0, 4),
         "host_partitions_reused": reused, "host_partitions_rebuilt": rebuilt,
     }
     return {
-        "schema_version": 1, "strategy": "incremental-host-partitioned-page-content-derived-catalog-candidates",
+        "schema_version": 1, "analysis_version": ANALYZER_VERSION,
+        "strategy": "incremental-host-partitioned-page-content-derived-catalog-candidates",
         "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
         "source_index_pages": source_total, "source_index_updated_at": source_updated_at,
         "source_index_sha256": source_index_sha256, "metrics": metrics,
         "catalogs": all_catalogs, "records": all_records, "pages": all_page_rows,
         "media_urls": sorted(all_media),
+        "media_references": sorted(
+            {(x["source_page_id"], x["media_url"]): x for x in all_media_references}.values(),
+            key=lambda x: (x["media_url"], x["source_page_id"]),
+        ),
     }
 
 
@@ -554,6 +672,37 @@ def search_catalog_network(query: str, analysis: dict, limit: int = 10) -> list[
     )[:limit]
 
 
+def search_source_page_evidence(query: str, pages: list[dict], limit: int = 5) -> list[dict]:
+    """Return bounded source-page evidence without promoting snippets to catalogs."""
+    tokens = set(_norm(query).split())
+    if not tokens or limit <= 0:
+        return []
+    matches = []
+    for page in pages:
+        if not isinstance(page, dict):
+            continue
+        url = canonical_url(page.get("url"))
+        if not url:
+            continue
+        title = _title(page.get("title"))
+        description = re.sub(r"\s+", " ", str(page.get("description") or "")).strip()
+        body = re.sub(r"\s+", " ", str(page.get("text") or "")).strip()
+        combined = set(_norm(" ".join((title, description, body))).split())
+        if not tokens.issubset(combined):
+            continue
+        title_tokens = set(_norm(title).split())
+        score = 20 + (30 if tokens.issubset(title_tokens) else 0)
+        score += 3 * len(tokens & set(_norm(description).split()))
+        matches.append({
+            "url": url, "title": title, "lane": page.get("lane"),
+            "matched_in_title": tokens.issubset(title_tokens),
+            "snippet": (description or body)[:280],
+            "score": score,
+        })
+    matches.sort(key=lambda x: (-x["score"], x["title"].casefold(), x["url"]))
+    return matches[:limit]
+
+
 def _write_gzip(path: Path, payload: dict) -> tuple[int, str]:
     path.parent.mkdir(parents=True, exist_ok=True)
     raw = (json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n").encode("utf-8")
@@ -578,7 +727,8 @@ def write_outputs(analysis: dict, output_dir: Path) -> dict:
     })
     files.append({"file": "pages.json.gz", "bytes": size, "sha256": digest, "items": len(analysis["pages"])})
     size, digest = _write_gzip(output_dir / "registry.json.gz", {
-        "version": 1, "status": "candidate_staging_not_production",
+        "version": 1, "analysis_version": analysis.get("analysis_version", ANALYZER_VERSION),
+        "status": "candidate_staging_not_production",
         "metrics": analysis["metrics"], "catalogs": analysis["catalogs"],
     })
     files.append({"file": "registry.json.gz", "bytes": size, "sha256": digest, "items": len(analysis["catalogs"])})
@@ -600,11 +750,13 @@ def write_outputs(analysis: dict, output_dir: Path) -> dict:
     })
     files.append({"file": "records.json.gz", "bytes": size, "sha256": digest, "items": len(analysis["records"])})
     size, digest = _write_gzip(output_dir / "media-references.json.gz", {
-        "version": 1, "media_urls": analysis["media_urls"],
+        "version": 2, "references": analysis["media_references"],
+        "unique_media_urls": analysis["media_urls"],
     })
-    files.append({"file": "media-references.json.gz", "bytes": size, "sha256": digest, "items": len(analysis["media_urls"])})
+    files.append({"file": "media-references.json.gz", "bytes": size, "sha256": digest, "items": len(analysis["media_references"])})
     report = {
-        "schema_version": 1, "generated_at": analysis["generated_at"],
+        "schema_version": 1, "analysis_version": analysis.get("analysis_version", ANALYZER_VERSION),
+        "generated_at": analysis["generated_at"],
         "source_index_pages": analysis["source_index_pages"],
         "source_index_updated_at": analysis["source_index_updated_at"],
         "source_index_sha256": analysis.get("source_index_sha256"),
@@ -613,7 +765,8 @@ def write_outputs(analysis: dict, output_dir: Path) -> dict:
     }
     (output_dir / "report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     manifest = {
-        "version": 1, "integrity": "sha256",
+        "version": 1, "analysis_version": analysis.get("analysis_version", ANALYZER_VERSION),
+        "integrity": "sha256",
         "source_index_pages": analysis["source_index_pages"],
         "source_index_updated_at": analysis["source_index_updated_at"],
         "source_index_sha256": analysis.get("source_index_sha256"),
@@ -634,6 +787,25 @@ def validate_outputs(output_dir: Path) -> dict:
     registry = json.loads(gzip.decompress(registry_raw).decode("utf-8"))
     pages_raw = (output_dir / "pages.json.gz").read_bytes()
     pages = json.loads(gzip.decompress(pages_raw).decode("utf-8"))["pages"]
+    page_by_id = {item["page_id"]: item for item in pages if item.get("page_id")}
+    media_payload = json.loads(gzip.decompress((output_dir / "media-references.json.gz").read_bytes()).decode("utf-8"))
+    media_references = media_payload.get("references", [])
+    media_pairs = [(x.get("source_page_id"), x.get("media_url")) for x in media_references]
+    if len(media_pairs) != len(set(media_pairs)):
+        raise ValueError("media references contain duplicate page/media pairs")
+    for reference in media_references:
+        source_page = page_by_id.get(reference.get("source_page_id"))
+        media_url = reference.get("media_url", "")
+        if (
+            source_page is None
+            or reference.get("source_url") != source_page.get("url")
+            or canonical_url(media_url) != media_url
+            or stable_id("media", media_url) != reference.get("media_id")
+        ):
+            raise ValueError("media reference provenance or stable ID is invalid")
+    unique_media_urls = sorted({x.get("media_url") for x in media_references})
+    if unique_media_urls != media_payload.get("unique_media_urls", []):
+        raise ValueError("media URL registry does not match its provenance references")
     records_raw = (output_dir / "records.json.gz").read_bytes()
     records = json.loads(gzip.decompress(records_raw).decode("utf-8"))["records"]
     page_ids = {
@@ -701,6 +873,8 @@ def validate_outputs(output_dir: Path) -> dict:
         "catalogs": len(catalog_ids),
         "pages_analyzed": len(pages),
         "records_validated": len(records),
+        "media_references_validated": len(media_references),
+        "unique_media_urls": len(unique_media_urls),
         "files_validated": len(manifest["files"]),
         "per_catalog_indexes_validated": len(index_catalog_ids),
     }
@@ -731,7 +905,11 @@ def main() -> None:
     manifest = write_outputs(analysis, args.output_dir)
     print(json.dumps({"metrics": analysis["metrics"], "catalog_index_files": manifest["catalog_count"], "files": len(manifest["files"])}, indent=2))
     for query in (args.query or ["Rolex", "Las Vegas"]):
-        print(json.dumps({"query": query, "results": search_catalog_network(query, analysis)}, ensure_ascii=False))
+        print(json.dumps({
+            "query": query,
+            "results": search_catalog_network(query, analysis),
+            "source_page_evidence": search_source_page_evidence(query, index.get("pages", []), limit=5),
+        }, ensure_ascii=False))
 
 
 if __name__ == "__main__":
