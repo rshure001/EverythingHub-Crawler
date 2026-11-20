@@ -34,13 +34,32 @@ class HourlyProductionTests(unittest.TestCase):
         self.assertEqual(interval["after_pages"], 140)
         self.assertEqual(interval["new_unique_records"], 40)
         self.assertEqual(interval["elapsed_seconds"], 600)
-        self.assertEqual(interval["records_per_minute"], 4.0)
-        self.assertEqual(interval["records_per_hour"], 240.0)
+        self.assertEqual(interval["run_duration_seconds"], 100.0)
+        self.assertEqual(interval["records_per_minute"], 24.0)
+        self.assertEqual(interval["records_per_hour"], 1440.0)
+        self.assertEqual(interval["wall_clock_records_per_minute"], 4.0)
+        self.assertEqual(interval["wall_clock_records_per_hour"], 240.0)
         self.assertEqual(result["runs"][-1]["indexed_records_processed"], 500)
         self.assertNotEqual(
             result["runs"][-1]["indexed_records_processed"],
             interval["new_unique_records"],
         )
+
+    def test_missing_run_duration_does_not_publish_a_unique_rate(self):
+        before_time = self.now - timedelta(minutes=5)
+        result = build_snapshot(
+            {"pages_indexed_this_run": 50},
+            now=self.now,
+            run_id="no-duration",
+            manifest_before=self.manifest(100, before_time),
+            manifest_after=self.manifest(120, self.now),
+        )
+        interval = result["latest_manifest_interval"]
+        self.assertTrue(interval["valid"])
+        self.assertEqual(interval["new_unique_records"], 20)
+        self.assertIsNone(interval["records_per_minute"])
+        self.assertEqual(interval["rate_reason"], "crawler_run_duration_unavailable")
+        self.assertEqual(interval["wall_clock_records_per_minute"], 4.0)
 
     def test_missing_manifest_pair_never_falls_back_to_run_upserts(self):
         result = build_snapshot(
@@ -58,7 +77,7 @@ class HourlyProductionTests(unittest.TestCase):
     def test_manifest_shrink_is_reported_as_negative_net_change(self):
         before_time = self.now - timedelta(minutes=5)
         result = build_snapshot(
-            {"pages_indexed_this_run": 20},
+            {"pages_indexed_this_run": 20, "run_duration_seconds": 300},
             now=self.now,
             run_id="shrink",
             manifest_before=self.manifest(200, before_time),
@@ -70,6 +89,7 @@ class HourlyProductionTests(unittest.TestCase):
         self.assertEqual(interval["new_unique_records"], -10)
         self.assertEqual(interval["records_per_minute"], -2.0)
         self.assertEqual(interval["records_per_hour"], -120.0)
+        self.assertEqual(interval["wall_clock_records_per_minute"], -2.0)
 
     def test_rerun_replaces_same_run_instead_of_double_counting(self):
         history = {"runs": [{
