@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "updated_at": "2026-11-20T15:01:20.053Z",
-  "reason": "Push-triggered fallback: latest scheduled crawl.yml run #263 at 2026-11-20T09:15:54Z was 345 minutes old (>25 minutes); no queued or running crawl; public manifest was 17 minutes old (>10 minutes). One bounded recovery crawl; normal schedule, robots pacing, and source restrictions unchanged.",
-  "manifest_before_pages": 101179,
-  "manifest_before_updated_at": "2026-11-20T14:43:28Z"
+  "updated_at": "2026-11-20T16:04:55Z",
+  "reason": "Bounded recovery trigger: latest scheduled crawl.yml run #263 at 2026-11-20T09:15:54Z was more than 25 minutes old; no queued or running crawler; public manifest was older than 10 minutes. Baseline captured before one bounded crawl; normal schedule and source protections unchanged.",
+  "manifest_before_pages": 107498,
+  "manifest_before_updated_at": "2026-11-20T15:43:42Z"
 }
