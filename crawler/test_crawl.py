@@ -139,6 +139,21 @@ class CrawlerTests(unittest.TestCase):
             "https://example.com/sitemap.xml",
         )
 
+    def test_robots_preload_fetches_each_distinct_site_once(self):
+        calls = []
+        result = crawl.preload_robots_policies(
+            ["https://one.example", "https://two.example", "https://one.example"],
+            loader=lambda site: calls.append(site) or f"policy:{site}",
+            workers=2,
+        )
+        self.assertEqual(set(calls), {
+            "https://one.example", "https://two.example",
+        })
+        self.assertEqual(result, {
+            "https://one.example": "policy:https://one.example",
+            "https://two.example": "policy:https://two.example",
+        })
+
     def test_frontier_restore_discards_legacy_non_html_and_bad_urls(self):
         restored = crawl.restore_frontier_queue([
             {"url": "https://example.com/article", "depth": 1},
