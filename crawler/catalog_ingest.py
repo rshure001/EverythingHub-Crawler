@@ -38,6 +38,7 @@ def adapt(manifest: dict[str, Any]) -> dict[str, Any]:
         )
         catalog_policy_approved = (
             source_terms_status in ("reviewed", "reviewed_per_dataset")
+            and bool(source.get("source_terms_reviewed_at"))
             and catalog_type != "library_archive"
         )
         catalog = normalize_catalog({
