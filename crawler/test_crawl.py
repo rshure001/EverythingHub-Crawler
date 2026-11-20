@@ -124,6 +124,21 @@ class CrawlerTests(unittest.TestCase):
             "https://example.com/a?id=7",
         )
 
+    def test_clean_skips_non_html_assets_but_keeps_xml_sitemaps(self):
+        for url in (
+            "https://example.com/file.pdf",
+            "https://example.com/image.JPG",
+            "https://example.com/video.mp4",
+            "https://example.com/site.css",
+            "https://example.com/font.woff2",
+        ):
+            with self.subTest(url=url):
+                self.assertIsNone(crawl.clean(url))
+        self.assertEqual(
+            crawl.clean("https://example.com/sitemap.xml"),
+            "https://example.com/sitemap.xml",
+        )
+
     def test_clean_rejects_non_web_and_credential_bearing_urls(self):
         self.assertIsNone(crawl.clean("javascript:alert(1)"))
         self.assertIsNone(crawl.clean("mailto:test@example.com"))
