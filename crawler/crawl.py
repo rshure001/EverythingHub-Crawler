@@ -21,12 +21,15 @@ from safe_http import UnsafeTargetError, build_pinned_opener
 from media_discovery import discover_media, merge_media_candidates
 from seed_coverage import DEFAULT_SEED_RETRY_SECONDS, schedule_missing_seed_urls
 from index_store import load_index, save_index
+from catalog_frontier import load_catalog_seed_urls
 
 ROOT = Path(__file__).resolve().parents[1]
 SEEDS = ROOT / "crawler" / "seeds.txt"
 OUTPUT = ROOT / "data" / "index.json"
 FRONTIER = ROOT / "data" / "frontier.json"
 MEDIA_DISCOVERY = ROOT / "data" / "media-discovery.json"
+CATALOG_RECORDS = ROOT / "data" / "universal-catalog-records.json.gz"
+MAX_CATALOG_SEEDS_PER_RUN = 20000
 WORKERS = 250
 QUEUE_LIMIT = 100000
 MAX_DEPTH = 3
@@ -931,6 +934,26 @@ def main():
         if url not in indexed_urls
     )
     seen.update(url for url, _depth in queue)
+    # Feed normalized dataset landing pages into the durable HTML frontier.
+    # Bulk CSV/JSON/media resource URLs remain metadata, not HTML crawl targets.
+    catalog_seed_urls = load_catalog_seed_urls(
+        CATALOG_RECORDS, limit=MAX_CATALOG_SEEDS_PER_RUN
+    )
+    queued_urls = {url for url, _depth in queue}
+    catalog_seed_urls_added = 0
+    for raw_url in catalog_seed_urls:
+        candidate = clean(raw_url)
+        if (
+            candidate
+            and candidate not in indexed_urls
+            and candidate not in seen
+            and candidate not in queued_urls
+            and len(queue) < QUEUE_LIMIT
+        ):
+            queue.append((candidate, 0))
+            seen.add(candidate)
+            queued_urls.add(candidate)
+            catalog_seed_urls_added += 1
     for seed in seeds:
         if seed not in seen and seed not in indexed_urls and len(queue) < QUEUE_LIMIT:
             seen.add(seed)
@@ -1370,7 +1393,8 @@ def main():
           f"robots blocked {robots_blocked_count[0]}; access challenges excluded {access_challenge_pages_count[0]}; "
           f"duration {run_duration:.2f}s; "
           f"depth counts {depth_counts}; frontier remaining {len(queue)}; "
-          f"discovered {len(seen)} URLs; total index {len(merged)}.")
+          f"discovered {len(seen)} URLs; catalog landing pages queued {catalog_seed_urls_added}; "
+          f"total index {len(merged)}.")
 
 if __name__ == "__main__":
     main()
