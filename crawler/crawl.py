@@ -445,6 +445,18 @@ def load_robots_policy(site):
     return parser
 
 
+def preload_robots_policies(sites, loader=load_robots_policy, workers=WORKERS):
+    """Fetch each distinct seed host's robots policy concurrently, fail-closed."""
+    unique_sites = list(dict.fromkeys(sites))
+    if not unique_sites:
+        return {}
+    with concurrent.futures.ThreadPoolExecutor(
+        max_workers=max(1, min(int(workers), len(unique_sites)))
+    ) as pool:
+        parsers = list(pool.map(loader, unique_sites))
+    return dict(zip(unique_sites, parsers))
+
+
 def parse_robots_groups(body):
     """Parse robots groups and retain path plus per-host rate directives."""
     groups = []
@@ -894,6 +906,15 @@ def main():
     # Sitemap discovery is deliberately separate from the page-fetch budget:
     # use only robots.txt declarations, stay on the same host, and cap every run.
     run_started = time.monotonic()
+    # Loading robots.txt one host at a time serialized the crawl startup.
+    # Preload one policy request per distinct seed origin concurrently; all
+    # later URL checks reuse these cached policies and remain robots-paced.
+    robots.update(preload_robots_policies(origin(seed) for seed in seeds))
+    for site, parser in robots.items():
+        failure = getattr(parser, "everythinghub_policy_error", None)
+        if failure:
+            robots_policy_failures[host_key(site)] = failure
+
     sitemap_hosts_checked = 0
     sitemap_fetches = 0
     sitemap_urls_added = 0
