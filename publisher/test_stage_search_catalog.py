@@ -159,7 +159,7 @@ class StageSearchCatalogTests(unittest.TestCase):
 
     def test_accepts_catalog_above_100000_pages_within_new_safety_limit(self):
         shards = []
-        remaining = 100_001
+        remaining = 125_643
         for index in range(1, 102):
             pages = min(1000, remaining)
             remaining -= pages
@@ -174,12 +174,12 @@ class StageSearchCatalogTests(unittest.TestCase):
             "version": 1,
             "integrity": "sha256",
             "updated_at": 1795140000,
-            "total_pages": 100_001,
+            "total_pages": 125_643,
             "shard_count": len(shards),
             "shards": shards,
         }
         checked = validate_manifest(manifest)
-        self.assertEqual(checked["total_pages"], 100_001)
+        self.assertEqual(checked["total_pages"], 125_643)
         self.assertEqual(len(checked["shards"]), 101)
 
 if __name__ == "__main__":
