@@ -299,3 +299,43 @@ test('small-page pagination starts after the crawler results actually shown on p
   assert.equal(secondCrawler[0].url, 'https://example.com/small-pagination/8');
   assert.equal(firstCrawler.some(a => secondCrawler.some(b => a.url === b.url)), false);
 });
+
+
+test('exact phrase matches outrank scattered token matches for place searches', () => {
+  const pages = [
+    {
+      url: 'https://example.com/general-report',
+      title: 'A report on regional programs',
+      description: 'Programs in Nevada and nearby areas',
+      text: 'Las Vegas appears only in a passing reference.'
+    },
+    {
+      url: 'https://example.com/las-vegas-guide',
+      title: 'Las Vegas visitor guide',
+      description: 'A guide to Las Vegas places and services',
+      text: 'Hotels, museums, and local resources.'
+    }
+  ];
+  const results = searchCatalog(pages, 'Las Vegas', '');
+  assert.equal(results[0].url, 'https://example.com/las-vegas-guide');
+  assert.ok(results[0].score > results[1].score);
+});
+
+test('exact phrase in description outranks scattered body mentions', () => {
+  const pages = [
+    {
+      url: 'https://example.com/body-only',
+      title: 'Regional information',
+      description: 'A general overview',
+      text: 'Las Vegas '.repeat(20)
+    },
+    {
+      url: 'https://example.com/description-phrase',
+      title: 'Local guide',
+      description: 'Everything about Las Vegas services',
+      text: 'Useful local links.'
+    }
+  ];
+  const results = searchCatalog(pages, 'Las Vegas', '');
+  assert.equal(results[0].url, 'https://example.com/description-phrase');
+});
