@@ -202,7 +202,7 @@ def build_catalog(rows: int = 250, max_pages: int = 20) -> dict[str, Any]:
         "datasets": datasets,
     }
 
-def maindef main() -> None:
+def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--rows", type=int, default=250)
     parser.add_argument("--max-pages", type=int, default=20)
