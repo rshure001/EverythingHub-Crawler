@@ -4,7 +4,7 @@ from __future__ import annotations
 import math
 from collections.abc import Callable, Iterable, MutableMapping
 
-DEFAULT_SEED_RETRY_SECONDS = 24 * 60 * 60
+DEFAULT_SEED_RETRY_SECONDS = 10 * 60
 
 
 def schedule_missing_seed_urls(
@@ -57,6 +57,9 @@ def schedule_missing_seed_urls(
         except (TypeError, ValueError, OverflowError):
             next_retry = 0
         if next_retry > now:
+            # Old 24-hour cooldowns must not strand missing seed hosts after
+            # the retry policy is shortened; clamp them to the new bounded window.
+            retry_after[seed] = int(min(next_retry, now + cooldown_seconds))
             continue
         if len(queued) + len(scheduled) >= queue_limit:
             break
