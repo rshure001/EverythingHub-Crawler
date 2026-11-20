@@ -136,7 +136,7 @@ def main():
         f"- Run duration: **{duration:.1f} seconds**",
         f"- Measured indexed rate (this run): **{indexed_rate:,.1f} pages/minute**",
         f"- Run-rate equivalent: **{indexed_hourly_equivalent:,.0f} indexed records/hour** (short-run projection, not proof of a sustained hour)",
-        f"- 1,000-new-records/hour target: **{hourly_target_status}**",
+        f"- 1,000-new-unique-pages/minute target (60,000/hour): **{hourly_target_status}**",
         f"- Last index update (UTC): **{updated_text}**",
         "",
         "### Indexed content quality",
