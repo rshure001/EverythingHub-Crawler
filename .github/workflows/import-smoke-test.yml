@@ -106,7 +106,13 @@ jobs:
           expected_catalog_counts=$(python - <<'PY'
           import gzip, json
           data = json.load(gzip.open("data/universal-catalog-records.json.gz", "rt", encoding="utf-8"))
-          print(len(data["catalogs"]), len(data["records"]))
+          eligible = sum(
+              1 for row in data["records"]
+              if isinstance(row, dict)
+              and isinstance(row.get("attributes"), dict)
+              and row["attributes"].get("public_search_allowed") is True
+          )
+          print(len(data["catalogs"]), eligible)
           PY
           )
           expected_catalogs=$(echo "$expected_catalog_counts" | awk '{print $1}')
