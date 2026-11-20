@@ -198,13 +198,13 @@ async function testCurrentPublishedManifestFitsClientLimits() {
   const compressedShards = currentManifest.shards[0]?.file?.endsWith(".json.gz") === true;
 
   assert.ok(
-    currentManifest.total_pages <= 125_000,
-    "current catalog must fit the 125,000-page browser limit; decoded shard data remains capped at 256 MB"
+    currentManifest.total_pages <= 150_000,
+    "current catalog must fit the 150,000-page browser limit; decoded shard data remains capped at 256 MB"
   );
   assert.ok(
-    currentManifest.shard_count <= 512 &&
+    currentManifest.shard_count <= 640 &&
       currentManifest.shards.length === currentManifest.shard_count,
-    "current manifest must fit the 512-shard browser safety limit"
+    "current manifest must fit the 640-shard browser safety limit"
   );
   if (currentManifest.catalog_gzip) {
     assert.ok(
@@ -214,11 +214,11 @@ async function testCurrentPublishedManifestFitsClientLimits() {
     );
   }
   assert.ok(
-    totalShardBytes <= (compressedShards ? 64_000_000 : 100_000_000),
+    totalShardBytes <= (compressedShards ? 80_000_000 : 100_000_000),
     "current shard catalog must fit its compressed or legacy transfer limit"
   );
 
-  assert.ok(totalUncompressedBytes <= 256_000_000, "current shard catalog must fit the 256 MB decoded safety limit");
+  assert.ok(totalUncompressedBytes <= 320_000_000, "current shard catalog must fit the 320 MB decoded safety limit");
 
   globalThis.fetch = async url => {
     const value = String(url);
@@ -258,17 +258,17 @@ async function testRejectsClientLimitOverruns() {
   const previousFetch = globalThis.fetch;
   const overPageManifest = {
     ...manifest,
-    total_pages: 125_001,
+    total_pages: 150_001,
     shards: [
-      { ...manifest.shards[0], pages: 125_000 },
+      { ...manifest.shards[0], pages: 150_000 },
       { ...manifest.shards[1], pages: 1 }
     ]
   };
   const maxDecodedBoundaryManifest = {
     ...manifest,
-    total_pages: 512,
-    shard_count: 512,
-    shards: Array.from({ length: 512 }, (_, index) => ({
+    total_pages: 640,
+    shard_count: 640,
+    shards: Array.from({ length: 640 }, (_, index) => ({
       file: "shard-" + String(index + 1).padStart(4, "0") + ".json.gz",
       pages: 1,
       bytes: 1,
@@ -289,8 +289,8 @@ async function testRejectsClientLimitOverruns() {
       }
       return new Response(new Uint8Array([0]), { status: 200 });
     };
-    // The 256 MB aggregate boundary is exactly the maximum allowed by
-    // 512 shards × 500,000 decoded bytes; validation must reach shard integrity.
+    // The 320 MB aggregate boundary is exactly the maximum allowed by
+    // 640 shards × 500,000 decoded bytes; validation must reach shard integrity.
     await assert.rejects(
       engine.create({ manifestUrl: decodedBoundaryUrl }),
       /SHA-256 mismatch/
@@ -304,7 +304,7 @@ testShardOnlyLoader()
   .then(testGzipLoader)
   .then(testCurrentPublishedManifestFitsClientLimits)
   .then(testRejectsClientLimitOverruns)
-  .then(() => console.log("Browser ranking, gzip, shard integrity, current-manifest, and 125k/256 MB bound tests passed"))
+  .then(() => console.log("Browser ranking, gzip, shard integrity, current-manifest, and 150k/320 MB bound tests passed"))
   .catch(error => {
     console.error(error);
     process.exitCode = 1;
