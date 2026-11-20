@@ -124,6 +124,7 @@ def discover_source(source: dict[str, str], rows: int, max_pages: int, pause: fl
         "id": source["id"],
         "name": source["name"],
         "base_url": source["base"],
+        "api_path": source.get("api_path", "/api/3/action/package_search"),
         "category": source["category"],
         "datasets_discovered": len(datasets),
         "resources_discovered": sum(item["resource_count"] for item in datasets),
