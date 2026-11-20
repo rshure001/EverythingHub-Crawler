@@ -91,12 +91,35 @@ def run(input_path: Path, output_path: Path, limit: int, offset: int, pause: flo
         verified = [x for x in evidence if x.get("evidence")]
         results.append({"host": host, "source_pages": item.get("source_pages", 0), "probes": evidence, "verified_interfaces": verified, "status": "interface_evidence_found" if verified else "no_interface_verified"})
         time.sleep(pause)
-    output = {"schema_version": 1, "strategy": "bounded-same-host-https-probes", "source_inventory_pages": inventory.get("source_index_pages", 0), "hosts_in_inventory": len(hosts), "batch_offset": offset, "batch_limit": limit, "hosts_probed": len(results), "verified_interface_hosts": sum(bool(x["verified_interfaces"]) for x in results), "verified_interfaces": sum(len(x["verified_interfaces"]) for x in results), "results": results}
+    # Merge batches so the inventory accumulates evidence for every host.
+    previous = {}
+    if output_path.exists():
+        try:
+            prior = json.loads(output_path.read_text(encoding="utf-8"))
+            previous = {x.get("host"): x for x in prior.get("results", [])
+                        if isinstance(x, dict) and x.get("host")}
+        except (OSError, json.JSONDecodeError):
+            previous = {}
+    previous.update({x["host"]: x for x in results})
+    cumulative = sorted(previous.values(), key=lambda x: x.get("host", ""))
+    output = {
+        "schema_version": 1,
+        "strategy": "bounded-same-host-https-probes-cumulative",
+        "source_inventory_pages": inventory.get("source_index_pages", 0),
+        "hosts_in_inventory": len(hosts),
+        "last_batch_offset": offset,
+        "last_batch_limit": limit,
+        "last_batch_hosts_probed": len(results),
+        "hosts_probed": len(cumulative),
+        "verified_interface_hosts": sum(bool(x["verified_interfaces"]) for x in cumulative),
+        "verified_interfaces": sum(len(x["verified_interfaces"]) for x in cumulative),
+        "results": cumulative,
+    }
     output_path.parent.mkdir(parents=True, exist_ok=True)
     temp = output_path.with_suffix(output_path.suffix + ".tmp")
     temp.write_text(json.dumps(output, ensure_ascii=False, separators=(",", ":")) + "\n", encoding="utf-8")
     temp.replace(output_path)
-    print(json.dumps({k: output[k] for k in ("hosts_in_inventory", "batch_offset", "hosts_probed", "verified_interface_hosts", "verified_interfaces")}, indent=2))
+    print(json.dumps({k: output[k] for k in ("hosts_in_inventory", "last_batch_offset", "last_batch_hosts_probed", "hosts_probed", "verified_interface_hosts", "verified_interfaces")}, indent=2))
     return output
 
 if __name__ == "__main__":
