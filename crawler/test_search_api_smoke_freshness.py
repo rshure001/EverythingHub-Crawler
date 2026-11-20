@@ -13,15 +13,19 @@ class SearchApiSmokeFreshnessTests(unittest.TestCase):
 
         self.assertIn("timeout-minutes: 8", workflow)
         self.assertIn("- uses: actions/checkout@v4", workflow)
-        self.assertIn('manifest = json.loads(Path("public-search/manifest.json")', workflow)
+        self.assertIn('manifest_path = Path("public-search/manifest.json")', workflow)
+        self.assertIn("manifest_raw = manifest_path.read_bytes()", workflow)
         self.assertIn('expected_pages = manifest.get("total_pages")', workflow)
         self.assertIn('expected_updated_at = manifest.get("updated_at")', workflow)
-        self.assertIn('expected_sha = catalog.get("sha256")', workflow)
+        self.assertIn('expected_shas = {"shards": manifest_sha}', workflow)
+        self.assertIn('transport = production.get("indexTransport")', workflow)
+        self.assertIn("expected_sha = expected_shas.get(transport)", workflow)
+        self.assertIn('production.get("indexIntegrity") == "sha256"', workflow)
+        self.assertIn('production.get("indexShardCount") == manifest.get("shard_count")', workflow)
         self.assertIn("deadline = time.monotonic() + 360", workflow)
         self.assertIn("time.sleep(min(30, remaining))", workflow)
         self.assertIn('production.get("indexedPages") == expected_pages', workflow)
         self.assertIn('production.get("indexUpdatedAt") == expected_updated_at', workflow)
-        self.assertIn('str(production.get("indexSha256", "")).lower() == expected_sha', workflow)
 
     def test_search_smoke_keeps_catalog_and_workflow_dispatch_paths(self):
         smoke = (
