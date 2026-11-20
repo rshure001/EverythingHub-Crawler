@@ -160,7 +160,7 @@ class StageSearchCatalogTests(unittest.TestCase):
     def test_accepts_catalog_above_100000_pages_within_new_safety_limit(self):
         shards = []
         remaining = 125_643
-        for index in range(1, 102):
+        for index in range(1, 127):
             pages = min(1000, remaining)
             remaining -= pages
             shards.append({
