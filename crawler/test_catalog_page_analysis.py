@@ -135,26 +135,128 @@ class PageDerivedCatalogAnalysisTests(unittest.TestCase):
         result = analyze_pages(pages, source_total=2)
         self.assertEqual(search_catalog_network("Rolex", result), [])
 
-    def test_single_article_mention_does_not_masquerade_as_location_catalog(self):
+    def test_article_only_catalogs_do_not_masquerade_as_place_catalogs(self):
         pages = [
             {
-                "url": "https://census.gov/library/stories/super-bowl",
-                "title": "The Chiefs and 49ers Meet in Las Vegas",
-                "description": "A story about the championship event.",
-                "text": "Las Vegas hosted the game.",
+                "url": "https://bbc.example/sport/las-vegas/game-one",
+                "title": "Las Vegas Hosts Championship Game One",
+                "description": "Sports coverage from Las Vegas.",
+                "text": "The game was played in Las Vegas.",
                 "lane": "news", "robots_allowed": True,
             },
             {
-                "url": "https://census.gov/library/stories/children",
-                "title": "Children Under Five Were Undercounted",
-                "description": "A census methodology story.",
-                "text": "Population measurement and census methods.",
+                "url": "https://bbc.example/sport/las-vegas/game-two",
+                "title": "Las Vegas Hosts Championship Game Two",
+                "description": "More sports coverage from Las Vegas.",
+                "text": "The second game was played in Las Vegas.",
                 "lane": "news", "robots_allowed": True,
             },
         ]
         result = analyze_pages(pages, source_total=2)
+        self.assertTrue(any(x["record_type"] == "article" for x in result["catalogs"]))
         self.assertEqual(search_catalog_network("Las Vegas", result), [])
+        self.assertTrue(search_catalog_network("Las Vegas articles", result))
 
+
+    def test_product_catalog_can_match_verified_description_terms(self):
+        pages = [
+            {
+                "url": "https://watchshop.example/watches/submariner",
+                "title": "Submariner",
+                "description": "Rolex automatic watch model.",
+                "text": "Technical details for the Submariner.",
+                "lane": "shopping", "robots_allowed": True,
+            },
+            {
+                "url": "https://watchshop.example/watches/day-date",
+                "title": "Day-Date",
+                "description": "Rolex automatic watch model.",
+                "text": "Technical details for the Day-Date.",
+                "lane": "shopping", "robots_allowed": True,
+            },
+        ]
+        result = analyze_pages(pages, source_total=2)
+        hits = search_catalog_network("Rolex", result)
+        self.assertEqual(len(hits), 1)
+        self.assertEqual(hits[0]["record_count"], 2)
+
+    def test_same_title_on_different_hosts_is_not_false_deduplicated(self):
+        pages = [
+            {
+                "url": "https://retailer-one.example/watches/standard",
+                "title": "Standard Watch",
+                "description": "Automatic wristwatch.",
+                "text": "Product details.",
+                "lane": "shopping", "robots_allowed": True,
+            },
+            {
+                "url": "https://retailer-two.example/watches/standard",
+                "title": "Standard Watch",
+                "description": "Automatic wristwatch.",
+                "text": "Product details.",
+                "lane": "shopping", "robots_allowed": True,
+            },
+        ]
+        result = analyze_pages(pages, source_total=2)
+        self.assertEqual(result["metrics"]["unique_records"], 2)
+
+    def test_duplicate_candidate_count_uses_unique_page_catalog_pairs(self):
+        pages = [
+            {
+                "url": "https://shop.example/products/a",
+                "title": "Product A",
+                "description": "Browse all products.",
+                "text": "Browse all products and compare items.",
+                "lane": "shopping", "robots_allowed": True,
+            },
+            {
+                "url": "https://shop.example/products/b",
+                "title": "Product B",
+                "description": "Browse all products.",
+                "text": "Browse all products and compare items.",
+                "lane": "shopping", "robots_allowed": True,
+            },
+        ]
+        result = analyze_pages(pages, source_total=2)
+        self.assertEqual(result["metrics"]["unique_catalogs_discovered"], 1)
+        self.assertEqual(result["metrics"]["catalog_candidate_page_references"], 2)
+        self.assertEqual(result["metrics"]["duplicate_catalog_candidates"], 1)
+
+    def test_common_title_words_do_not_masquerade_as_catalog_titles(self):
+        pages = [
+            {
+                "url": "https://news.example/articles/active-directory",
+                "title": "What Is Active Directory?",
+                "description": "An enterprise identity overview.",
+                "text": "Technical explanation.",
+                "lane": "news", "robots_allowed": True,
+            },
+            {
+                "url": "https://news.example/articles/dna-collection",
+                "title": "DNA Collection Policy",
+                "description": "A policy explainer.",
+                "text": "Public policy information.",
+                "lane": "news", "robots_allowed": True,
+            },
+        ]
+        result = analyze_pages(pages, source_total=2)
+        self.assertEqual(result["metrics"]["unique_catalogs_discovered"], 1)
+        title = result["catalogs"][0]["title"]
+        self.assertIn("Articles", title)
+        self.assertNotIn("Active Directory", title)
+        self.assertNotIn("DNA Collection", title)
+
+    def test_source_index_digest_is_preserved_in_manifest(self):
+        pages = [
+            {"url": "https://shop.example/products/a", "title": "Product A", "lane": "shopping", "robots_allowed": True},
+            {"url": "https://shop.example/products/b", "title": "Product B", "lane": "shopping", "robots_allowed": True},
+        ]
+        digest = "a" * 64
+        result = analyze_pages(pages, source_total=2, source_index_sha256=digest)
+        with tempfile.TemporaryDirectory() as tmp:
+            manifest = write_outputs(result, Path(tmp))
+            self.assertEqual(manifest["source_index_sha256"], digest)
+            self.assertEqual(validate_outputs(Path(tmp))["pages_analyzed"], 2)
 
 
 if __name__ == "__main__":

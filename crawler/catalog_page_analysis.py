@@ -25,8 +25,14 @@ TRACKING_KEYS = {"fbclid", "gclid", "dclid", "mc_cid", "mc_eid", "ref", "source"
 STOP_TOKENS = {"the", "and", "for", "with", "from", "our", "your", "all", "new", "home", "page", "official", "welcome"}
 GENERIC_TITLES = {"home", "homepage", "welcome", "404", "not found", "access denied", "page not found"}
 MEDIA_URL_RE = re.compile(r"https?://[^\s<>\"']+\.(?:jpg|jpeg|png|webp|gif|svg|mp4|webm|mov|mp3|wav|m4a)(?:\?[^\s<>\"']*)?", re.I)
-LISTING_RE = re.compile(r"\b(?:browse|view all|all products|all models|filter by|sort by|search results|showing \d+|catalog(?:ue)?|directory|store locator|find a location)\b", re.I)
-CATALOG_TITLE_RE = re.compile(r"\b(?:catalog(?:ue)?|collection|directory|all (?:products|models|services|locations|places|events|datasets|articles|brands)|browse all|shop all|store locator)\b", re.I)
+LISTING_RE = re.compile(
+    r"\b(?:browse(?:\s+all)?|view\s+all|all\s+(?:products|models|services|locations|places|events|datasets|articles|brands)|filter\s+by|sort\s+by|search\s+results|showing\s+\d+|catalog(?:ue)?|store\s+locator|find\s+(?:a\s+)?(?:location|business|place)|business\s+directory|places\s+directory)\b",
+    re.I,
+)
+CATALOG_TITLE_RE = re.compile(
+    r"\b(?:catalog(?:ue)?|all\s+(?:products|models|services|locations|places|events|datasets|articles|brands)|browse\s+all|shop\s+all|store\s+locator|product\s+listing|model\s+listing|business\s+directory|places\s+directory|service\s+directory)\b",
+    re.I,
+)
 
 SEGMENT_TYPES = {
     "products": "product", "product": "product", "items": "product", "item": "product",
@@ -84,6 +90,10 @@ TYPE_LABEL = {
     "business": "Businesses", "place": "Places", "person": "People",
     "organization": "Organizations", "event": "Events", "dataset": "Datasets",
     "article": "Articles", "media": "Media", "software": "Software", "resource": "Resources",
+}
+CONTENT_INTENT_TOKENS = {
+    "news", "article", "articles", "story", "stories", "research", "paper", "papers",
+    "report", "reports", "media", "image", "images", "video", "videos", "resource", "resources",
 }
 
 def stable_id(prefix: str, key: str) -> str:
@@ -197,11 +207,13 @@ def _candidate_groups(page: dict, host: str, segments: list[str], body: str, tit
 
 def _record_entity_key(kind: str, host: str, title: str) -> str:
     normalized = _norm(title)
-    scope = host if kind in ("person", "article", "event", "resource") else ""
-    return kind + "|" + scope + "|" + normalized
+    # Without a verified global identifier, host scope prevents false merges
+    # such as unrelated products or businesses sharing a generic display title.
+    return kind + "|" + host + "|" + normalized
 
 
 def _catalog_title(host: str, kind: str, path: str, source_titles: list[str]) -> str:
+
     explicit = [x for x in source_titles if CATALOG_TITLE_RE.search(x) or TYPE_LABEL[kind].casefold() in x.casefold()]
     if explicit:
         return sorted(explicit, key=lambda x: (len(x), x.casefold()))[0]
@@ -223,19 +235,22 @@ def _catalog_title(host: str, kind: str, path: str, source_titles: list[str]) ->
     return _host_label(host) + " " + TYPE_LABEL[kind]
 
 
-def analyze_pages(pages: list[dict], source_total: int | None = None, source_updated_at: str | None = None) -> dict:
+def analyze_pages(
+    pages: list[dict],
+    source_total: int | None = None,
+    source_updated_at: str | None = None,
+    source_index_sha256: str | None = None,
+) -> dict:
     records: dict[str, dict] = {}
     record_groups: dict[str, set[str]] = defaultdict(set)
     group_pages: dict[str, set[str]] = defaultdict(set)
     group_titles: dict[str, list[str]] = defaultdict(list)
     group_urls: dict[str, set[str]] = defaultdict(set)
     explicit_groups: dict[str, dict] = {}
-    explicit_page_refs: dict[str, set[str]] = defaultdict(set)
     page_rows = []
     media_urls = set()
     eligible = 0
     pages_with_signals = 0
-    candidate_events = 0
 
     for page in pages:
         if not isinstance(page, dict):
@@ -289,13 +304,11 @@ def analyze_pages(pages: list[dict], source_total: int | None = None, source_upd
                 "record_type": catalog_kind, "path": path, "evidence": set(),
             })
             explicit_groups[key]["evidence"].update(evidence)
-            explicit_page_refs[key].add(page_id)
             group_pages[key].add(page_id)
             group_urls[key].add(url)
             if title and title not in group_titles[key]:
                 group_titles[key].append(title)
             page_group_keys.append(key)
-            candidate_events += 1
         if group_key:
             page_group_keys.append(group_key)
         if kind or explicit:
@@ -312,7 +325,6 @@ def analyze_pages(pages: list[dict], source_total: int | None = None, source_upd
     for key, ids in record_groups.items():
         if len(ids) >= 2:
             candidate_keys.add(key)
-            candidate_events += len(group_pages[key])
 
     catalogs = {}
     for key in sorted(candidate_keys):
@@ -370,7 +382,11 @@ def analyze_pages(pages: list[dict], source_total: int | None = None, source_upd
         "pages_analyzed": len(pages),
         "eligible_pages": eligible,
         "unique_catalogs_discovered": len(catalog_list),
-        "duplicate_catalog_candidates": max(0, candidate_events - len(catalog_list)),
+        "catalog_candidate_page_references": sum(len(x.get("source_page_ids", [])) for x in catalog_list),
+        "duplicate_catalog_candidates": max(
+            0,
+            sum(len(x.get("source_page_ids", [])) for x in catalog_list) - len(catalog_list),
+        ),
         "subcatalogs_discovered": sum(bool(x["parent_catalog_id"]) for x in catalog_list),
         "unique_records": len(record_list),
         "unique_records_by_type": type_counts,
@@ -387,6 +403,7 @@ def analyze_pages(pages: list[dict], source_total: int | None = None, source_upd
         "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
         "source_index_pages": source_total,
         "source_index_updated_at": source_updated_at,
+        "source_index_sha256": source_index_sha256,
         "metrics": metrics,
         "catalogs": catalog_list,
         "records": record_list,
@@ -410,28 +427,31 @@ def search_catalog_network(query: str, analysis: dict, limit: int = 10) -> list[
         )))
         catalog_tokens = set(catalog_text.split())
         catalog_match = token_set.issubset(catalog_tokens)
+        record_type = str(catalog.get("record_type", ""))
+        # Article/resource/media catalogs are searchable only when the query
+        # explicitly asks for that content type; a city or brand name alone
+        # must not surface an unrelated news publisher's generic archive.
+        if record_type in ("article", "resource", "media") and not (token_set & CONTENT_INTENT_TOKENS):
+            continue
         matched = []
         for record in related:
             title_norm = _norm(record.get("title", ""))
             title_tokens = set(title_norm.split())
+            description_tokens = set(_norm(record.get("description", "")).split())
             combined_tokens = catalog_tokens | title_tokens
+            if record_type not in ("article", "resource", "media"):
+                combined_tokens |= description_tokens
             if not token_set.issubset(combined_tokens):
                 continue
-            description_tokens = set(_norm(record.get("description", "")).split())
             score = 20
             if token_set.issubset(title_tokens):
                 score += 40
             if query_phrase and query_phrase in title_norm:
                 score += 10
-            score += len(token_set & description_tokens)
+            score += 2 * len(token_set & description_tokens)
             matched.append((score, record))
-        if not catalog_match:
-            if not matched:
-                continue
-            # A single incidental article/resource mention must not masquerade
-            # as a geographic, brand, or subject catalog.
-            if catalog.get("record_type") in ("article", "resource", "media") and len(matched) < 2:
-                continue
+        if not catalog_match and not matched:
+            continue
         elif not matched:
             matched = [(0, record) for record in related]
         catalog_score = 100 + (10 * len(tokens)) if catalog_match else 0
@@ -510,6 +530,7 @@ def write_outputs(analysis: dict, output_dir: Path) -> dict:
         "schema_version": 1, "generated_at": analysis["generated_at"],
         "source_index_pages": analysis["source_index_pages"],
         "source_index_updated_at": analysis["source_index_updated_at"],
+        "source_index_sha256": analysis.get("source_index_sha256"),
         "metrics": analysis["metrics"],
         "catalogs_verified": 0, "records_published": 0,
     }
@@ -518,6 +539,7 @@ def write_outputs(analysis: dict, output_dir: Path) -> dict:
         "version": 1, "integrity": "sha256",
         "source_index_pages": analysis["source_index_pages"],
         "source_index_updated_at": analysis["source_index_updated_at"],
+        "source_index_sha256": analysis.get("source_index_sha256"),
         "catalog_count": len(analysis["catalogs"]), "record_count": len(analysis["records"]),
         "files": sorted(files, key=lambda x: x["file"]),
     }
@@ -528,6 +550,9 @@ def write_outputs(analysis: dict, output_dir: Path) -> dict:
 
 def validate_outputs(output_dir: Path) -> dict:
     manifest = json.loads((output_dir / "manifest.json").read_text(encoding="utf-8"))
+    source_index_sha256 = manifest.get("source_index_sha256")
+    if source_index_sha256 is not None and not re.fullmatch(r"[0-9a-f]{64}", str(source_index_sha256)):
+        raise ValueError("source index SHA-256 is malformed")
     registry_raw = (output_dir / "registry.json.gz").read_bytes()
     registry = json.loads(gzip.decompress(registry_raw).decode("utf-8"))
     pages_raw = (output_dir / "pages.json.gz").read_bytes()
@@ -620,6 +645,7 @@ def main() -> None:
         index.get("pages", []),
         source_total=source_manifest.get("total_pages"),
         source_updated_at=datetime.fromtimestamp(source_manifest.get("updated_at", 0), timezone.utc).isoformat().replace("+00:00", "Z") if source_manifest.get("updated_at") else None,
+        source_index_sha256=hashlib.sha256(args.index.read_bytes()).hexdigest(),
     )
     manifest = write_outputs(analysis, args.output_dir)
     print(json.dumps({"metrics": analysis["metrics"], "catalog_index_files": manifest["catalog_count"], "files": len(manifest["files"])}, indent=2))
