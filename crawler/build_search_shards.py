@@ -55,6 +55,17 @@ def compact(doc):
         "text": str(doc.get("text", ""))[:1600],
         "lane": lane,
     }
+    product = doc.get("product")
+    if isinstance(product, dict) and product.get("type") == "product" and product.get("name"):
+        compact_product = {"type": "product"}
+        for key, limit in {
+            "name": 500, "brand": 160, "sku": 120, "price": 64,
+            "currency": 8, "availability": 80, "image": 2048, "url": 2048,
+        }.items():
+            value = product.get(key)
+            if isinstance(value, (str, int, float)) and str(value).strip():
+                compact_product[key] = str(value).strip()[:limit]
+        compact_page["product"] = compact_product
     # Preserve crawl timestamps for freshness scoring; omit malformed values.
     fetched_at = doc.get("fetched_at")
     if isinstance(fetched_at, (int, float)) and fetched_at > 0:
