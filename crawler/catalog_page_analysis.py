@@ -202,7 +202,7 @@ def _record_entity_key(kind: str, host: str, title: str) -> str:
 
 
 def _catalog_title(host: str, kind: str, path: str, source_titles: list[str]) -> str:
-    explicit = [x for x in source_titles if CATALOG_TITLE_RE.search(x)]
+    explicit = [x for x in source_titles if CATALOG_TITLE_RE.search(x) or TYPE_LABEL[kind].casefold() in x.casefold()]
     if explicit:
         return sorted(explicit, key=lambda x: (len(x), x.casefold()))[0]
     token_sets = []
@@ -436,6 +436,11 @@ def _write_gzip(path: Path, payload: dict) -> tuple[int, str]:
 def write_outputs(analysis: dict, output_dir: Path) -> dict:
     output_dir.mkdir(parents=True, exist_ok=True)
     files = []
+    for catalog in analysis["catalogs"]:
+        filename = hashlib.sha256(catalog["catalog_id"].encode("utf-8")).hexdigest()[:24] + ".json.gz"
+        catalog["index_file"] = "indexes/" + filename
+        catalog["record_count"] = len(catalog.get("record_ids", []))
+        catalog["source_page_count"] = len(catalog.get("source_page_ids", []))
     size, digest = _write_gzip(output_dir / "pages.json.gz", {
         "version": 1, "source_index_pages": analysis["source_index_pages"],
         "pages": analysis["pages"],
@@ -448,7 +453,7 @@ def write_outputs(analysis: dict, output_dir: Path) -> dict:
     files.append({"file": "registry.json.gz", "bytes": size, "sha256": digest, "items": len(analysis["catalogs"])})
     index_dir = output_dir / "indexes"
     for catalog in analysis["catalogs"]:
-        filename = hashlib.sha256(catalog["catalog_id"].encode("utf-8")).hexdigest()[:24] + ".json.gz"
+        filename = catalog["index_file"].split("/", 1)[1]
         related = [x for x in analysis["records"] if catalog["catalog_id"] in x["catalog_ids"]]
         size, digest = _write_gzip(index_dir / filename, {
             "version": 1, "catalog_id": catalog["catalog_id"],
@@ -499,6 +504,9 @@ def validate_outputs(output_dir: Path) -> dict:
     if len(pages) != manifest["source_index_pages"]:
         raise ValueError("page-analysis coverage does not match source index page count")
     catalog_ids = [x["catalog_id"] for x in registry["catalogs"]]
+    listed_index_files = {x["file"] for x in manifest["files"]}
+    if any(x.get("index_file") not in listed_index_files for x in registry["catalogs"]):
+        raise ValueError("registry references a missing per-catalog index")
     if len(catalog_ids) != len(set(catalog_ids)):
         raise ValueError("duplicate catalog IDs remain after deduplication")
     for entry in manifest["files"]:

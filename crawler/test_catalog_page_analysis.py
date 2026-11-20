@@ -109,6 +109,9 @@ class PageDerivedCatalogAnalysisTests(unittest.TestCase):
             self.assertEqual(manifest["catalog_count"], 1)
             self.assertEqual(verified["pages_analyzed"], 2)
             self.assertEqual(len(registry["catalogs"]), 1)
+            index_file = registry["catalogs"][0]["index_file"]
+            self.assertTrue((output / index_file).exists())
+            self.assertEqual(registry["catalogs"][0]["record_count"], 2)
             self.assertTrue(list((output / "indexes").glob("*.json.gz")))
 
 
