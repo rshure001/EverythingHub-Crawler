@@ -78,12 +78,12 @@ class ContactPagePilotTests(unittest.TestCase):
         request = urllib.request.Request("https://veterans.nv.gov/contact/")
         allowed = SameOriginRedirectHandler(origin, is_allowed=lambda url: url.endswith("/allowed"))
         result = allowed.redirect_request(
-            request, io.BytesIO(), 302, "Found", {}, "/allowed"
+            request, io.BytesIO(), 302, "Found", {}, "https://veterans.nv.gov/allowed"
         )
         self.assertEqual(result.full_url, "https://veterans.nv.gov/allowed")
         with self.assertRaisesRegex(urllib.error.HTTPError, "robots.txt"):
             allowed.redirect_request(
-                request, io.BytesIO(), 302, "Found", {}, "/blocked"
+                request, io.BytesIO(), 302, "Found", {}, "https://veterans.nv.gov/blocked"
             )
         with self.assertRaisesRegex(urllib.error.HTTPError, "cross-origin"):
             allowed.redirect_request(
