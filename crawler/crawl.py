@@ -20,6 +20,7 @@ from lane_classifier import VALID_LANES, classify_lane
 from safe_http import UnsafeTargetError, build_pinned_opener
 from media_discovery import discover_media, merge_media_candidates
 from seed_coverage import DEFAULT_SEED_RETRY_SECONDS, schedule_missing_seed_urls
+from index_store import load_index, save_index
 
 ROOT = Path(__file__).resolve().parents[1]
 SEEDS = ROOT / "crawler" / "seeds.txt"
@@ -783,7 +784,7 @@ def main():
     # Resume the durable frontier and retry missing configured seed hosts on a
     # long cooldown. A seed that was seen but blocked, noindexed, or permanently
     # failed must not disappear from coverage forever.
-    old_index = load_json(OUTPUT, {"version": 1, "pages": []})
+    old_index = load_index(OUTPUT, {"version": 1, "pages": []})
     old_pages = old_index.get("pages", []) if isinstance(old_index, dict) else []
     indexed_hosts = {
         host_key(page.get("url"))
@@ -1125,7 +1126,7 @@ def main():
         "version": 1, "updated_at": updated_at,
         "total_candidates": len(media_merged), "candidates": media_merged,
     })
-    save_json(OUTPUT, {
+    save_index(OUTPUT, {
         "version": 1, "updated_at": updated_at,
         "pages_crawled_this_run": fetched,
         "fetch_attempts_this_run": fetch_metrics["fetch_attempts"],
