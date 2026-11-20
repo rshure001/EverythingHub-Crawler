@@ -534,6 +534,41 @@ class CrawlerTests(unittest.TestCase):
                 request, None, 301, "Moved", {}, "https://example.com/private"
             )
 
+    def test_robots_file_redirect_handler_allows_cross_authority_https_redirect(self):
+        handler = crawl.RobotsFileRedirectHandler()
+        request = crawl.urllib.request.Request("https://example.com/robots.txt")
+        redirected = handler.redirect_request(
+            request, None, 301, "Moved", {}, "https://cdn.example.net/robots.txt"
+        )
+        self.assertEqual(redirected.full_url, "https://cdn.example.net/robots.txt")
+        self.assertEqual(handler.max_redirections, 5)
+        self.assertEqual(handler.max_repeats, 5)
+
+    def test_robots_file_redirect_handler_rejects_downgrade_and_unsafe_targets(self):
+        handler = crawl.RobotsFileRedirectHandler()
+        request = crawl.urllib.request.Request("https://example.com/robots.txt")
+        for target in (
+            "http://cdn.example.net/robots.txt",
+            "ftp://cdn.example.net/robots.txt",
+            "https://user:pass@cdn.example.net/robots.txt",
+        ):
+            with self.subTest(target=target), self.assertRaises(crawl.urllib.error.HTTPError):
+                handler.redirect_request(
+                    request, None, 302, "Found", {}, target
+                )
+
+    def test_robots_policy_uses_bounded_cross_authority_redirect_handler(self):
+        body = b"User-agent: *\\nAllow: /\\nDisallow: /private\\n"
+        opener = mock.Mock()
+        opener.open.return_value = FakeRobotsResponse(body)
+        with mock.patch.object(crawl, "build_pinned_opener", return_value=opener) as builder:
+            parser = crawl.load_robots_policy("https://example.com")
+        handler = builder.call_args.args[0]
+        self.assertIsInstance(handler, crawl.RobotsFileRedirectHandler)
+        self.assertEqual(handler.max_redirections, 5)
+        self.assertTrue(crawl.robots_can_fetch(parser, crawl.UA, "https://example.com/public"))
+        self.assertFalse(crawl.robots_can_fetch(parser, crawl.UA, "https://example.com/private"))
+
     def test_robots_parser_reads_sitemap_declarations(self):
         parser = urllib.robotparser.RobotFileParser()
         parser.parse([

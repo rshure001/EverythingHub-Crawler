@@ -276,6 +276,31 @@ class RobotsAwareRedirectHandler(urllib.request.HTTPRedirectHandler):
             )
         return super().redirect_request(req, fp, code, msg, headers, target)
 
+class RobotsFileRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Follow bounded RFC 9309 robots.txt redirects, including across authorities."""
+    max_redirections = 5
+    max_repeats = 5
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        target = urllib.parse.urljoin(req.full_url, newurl)
+        source = urllib.parse.urlsplit(req.full_url)
+        destination = urllib.parse.urlsplit(target)
+        if (
+            destination.scheme.lower() not in ("http", "https")
+            or not destination.hostname
+            or destination.username is not None
+            or destination.password is not None
+        ):
+            raise urllib.error.HTTPError(
+                req.full_url, code, "unsafe robots redirect target", headers, fp
+            )
+        if source.scheme.lower() == "https" and destination.scheme.lower() != "https":
+            raise urllib.error.HTTPError(
+                req.full_url, code, "HTTPS robots redirect downgrade blocked", headers, fp
+            )
+        return super().redirect_request(req, fp, code, msg, headers, target)
+
+
 class PageParser(HTMLParser):
     """Extract readable text and links while excluding repeated page chrome."""
     def __init__(self):
@@ -427,9 +452,10 @@ def load_robots_policy(site):
         req = urllib.request.Request(robots_url, headers={
             "User-Agent": UA, "Accept": "text/plain,*/*"
         })
-        opener = build_pinned_opener(
-            RobotsAwareRedirectHandler(lambda target: same_origin(robots_url, target))
-        )
+        # RFC 9309 permits robots.txt redirects across authorities. The rules
+        # still apply to the original host; every redirect target remains DNS-pinned
+        # to a public address, HTTPS downgrades are rejected, and the chain is bounded.
+        opener = build_pinned_opener(RobotsFileRedirectHandler())
         with opener.open(req, timeout=TIMEOUT) as response:
             if response.status >= 400:
                 raise RuntimeError(f"robots.txt returned HTTP {response.status}")
