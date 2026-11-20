@@ -258,17 +258,17 @@ async function testRejectsClientLimitOverruns() {
   const previousFetch = globalThis.fetch;
   const overPageManifest = {
     ...manifest,
-    total_pages: 125_001,
+    total_pages: 150_001,
     shards: [
-      { ...manifest.shards[0], pages: 125_000 },
+      { ...manifest.shards[0], pages: 150_000 },
       { ...manifest.shards[1], pages: 1 }
     ]
   };
   const maxDecodedBoundaryManifest = {
     ...manifest,
-    total_pages: 512,
-    shard_count: 512,
-    shards: Array.from({ length: 512 }, (_, index) => ({
+    total_pages: 640,
+    shard_count: 640,
+    shards: Array.from({ length: 640 }, (_, index) => ({
       file: "shard-" + String(index + 1).padStart(4, "0") + ".json.gz",
       pages: 1,
       bytes: 1,
@@ -289,8 +289,8 @@ async function testRejectsClientLimitOverruns() {
       }
       return new Response(new Uint8Array([0]), { status: 200 });
     };
-    // The 256 MB aggregate boundary is exactly the maximum allowed by
-    // 512 shards × 500,000 decoded bytes; validation must reach shard integrity.
+    // The 320 MB aggregate boundary is exactly the maximum allowed by
+    // 640 shards × 500,000 decoded bytes; validation must reach shard integrity.
     await assert.rejects(
       engine.create({ manifestUrl: decodedBoundaryUrl }),
       /SHA-256 mismatch/
