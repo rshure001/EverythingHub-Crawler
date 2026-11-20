@@ -227,7 +227,7 @@ def build_page_record(url, title, description, text, depth, directives, publishe
         record["published_at"] = normalized_published_at
     if isinstance(product_metadata, dict) and product_metadata.get("type") == "product":
         product = {
-            key: normalize_text(value, limit)
+            key: normalize_text(product_metadata[key], limit)
             for key, limit in {
                 "name": 500, "brand": 160, "sku": 120, "price": 64,
                 "currency": 8, "availability": 80, "image": 2048, "url": 2048,
