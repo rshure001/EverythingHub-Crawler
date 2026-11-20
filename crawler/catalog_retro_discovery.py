@@ -62,14 +62,13 @@ def build_candidates(index: dict) -> dict:
         matched = [name for name, pattern in HINTS.items() if pattern.search(text) or pattern.search(url)]
         page_seeds.append({
             "page_id": __import__("hashlib").sha256(url.encode("utf-8")).hexdigest()[:24],
-            "catalog_candidate_id": "page-catalog:" + __import__("hashlib").sha256(url.encode("utf-8")).hexdigest()[:24],
-            "catalog_candidate_status": "needs_page_catalog_extraction",
+            "discovery_seed_id": "page-seed:" + __import__("hashlib").sha256(url.encode("utf-8")).hexdigest()[:24],
+            "analysis_status": "pending_page_content_analysis",
             "url": url[:2048],
             "host": host,
             "title": str(page.get("title") or "")[:240],
             "lane": lane if isinstance(lane, str) else None,
             "catalog_signals": matched,
-            "status": "needs_page_catalog_extraction",
         })
         if matched:
             item["hint_pages"] += 1
@@ -105,7 +104,7 @@ def build_candidates(index: dict) -> dict:
         "page_catalog_seeds": page_seeds,
         "metrics": {
             "pages_as_discovery_seeds": len(page_seeds),
-            "page_catalog_candidates": len(page_seeds),
+            "unique_catalog_candidates": 0,
             "verified_page_catalogs": 0,
             "pages_with_catalog_signals": sum(bool(x["catalog_signals"]) for x in page_seeds),
             "page_catalog_signal_references": sum(len(x["catalog_signals"]) for x in page_seeds),
@@ -131,9 +130,9 @@ def main() -> None:
     temp.replace(args.output)
     page_result = {
         "schema_version": 1,
-        "strategy": "one-discovery-seed-per-indexed-page",
+        "strategy": "one-source-page-discovery-seed-per-indexed-page",
         "source_index_pages": result["source_index_pages"],
-        "metrics": {key: value for key, value in result["metrics"].items() if key.startswith("pages_") or key in ("page_catalog_signal_references", "page_catalog_candidates", "verified_page_catalogs")},
+        "metrics": {key: value for key, value in result["metrics"].items() if key.startswith("pages_") or key in ("page_catalog_signal_references", "unique_catalog_candidates", "verified_page_catalogs")},
         "pages": result["page_catalog_seeds"],
     }
     args.page_output.parent.mkdir(parents=True, exist_ok=True)

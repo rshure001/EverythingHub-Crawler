@@ -5,6 +5,8 @@ on:
     paths:
       - "crawler/catalog_retro_discovery.py"
       - "crawler/test_catalog_retro_discovery.py"
+      - "crawler/catalog_page_analysis.py"
+      - "crawler/test_catalog_page_analysis.py"
       - "data/index.json"
       - ".github/workflows/retroactive-catalog-index.yml"
   workflow_dispatch:
@@ -21,7 +23,7 @@ concurrency:
 jobs:
   inventory:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -30,18 +32,45 @@ jobs:
       - name: Test retroactive discovery
         working-directory: crawler
         run: python -m unittest test_catalog_retro_discovery.py -v
+      - name: Test page-derived catalog analysis
+        working-directory: crawler
+        run: python -m unittest test_catalog_page_analysis.py -v
       - name: Inventory every existing indexed host
         run: python crawler/catalog_retro_discovery.py
-      - name: Publish host candidates and per-page discovery seeds
+      - name: Analyze every eligible existing indexed page
+        run: python crawler/catalog_page_analysis.py --query Rolex --query "Las Vegas"
+      - name: Validate registry and every per-catalog index before publishing
+        run: python crawler/catalog_page_analysis.py --validate-only
+      - name: Publish validated catalog analysis on main
+        if: github.ref == 'refs/heads/main'
         run: |
-          git add -f data/host-catalog-candidates.json data/page-catalog-seeds.json.gz
-          git rm -f --ignore-unmatch data/page-catalog-seeds.json
-          if git diff --cached --quiet; then
-            echo "No host inventory changes."
-            exit 0
-          fi
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "Inventory catalog candidates from existing search index"
-          git pull --rebase origin main
-          git push
+          for attempt in 1 2 3; do
+            git add -f data/host-catalog-candidates.json data/page-catalog-seeds.json.gz data/page-derived-catalogs
+            git rm -f --ignore-unmatch data/page-catalog-seeds.json
+            if git diff --cached --quiet; then
+              echo "No catalog analysis changes."
+              exit 0
+            fi
+            git commit -m "Publish validated page-derived catalog candidates"
+            if git push origin HEAD:main; then
+              exit 0
+            fi
+            echo "Main advanced during publish; rebuilding from the latest canonical index (attempt $attempt)."
+            git fetch origin main
+            git reset --hard origin/main
+            python crawler/catalog_retro_discovery.py
+            python crawler/catalog_page_analysis.py --query Rolex --query "Las Vegas"
+            python crawler/catalog_page_analysis.py --validate-only
+          done
+          echo "Unable to publish validated catalog analysis after three protected attempts."
+          exit 1
+      - name: Upload catalog analysis preview from non-main branches
+        if: github.ref != 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: page-derived-catalog-analysis-preview
+          path: data/page-derived-catalogs/
+          if-no-files-found: error
