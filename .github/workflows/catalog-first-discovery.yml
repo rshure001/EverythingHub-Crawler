@@ -31,7 +31,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: catalog-first-discovery
+  group: catalog-data-publish
   cancel-in-progress: false
 
 jobs:
