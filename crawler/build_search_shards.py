@@ -170,7 +170,7 @@ def main():
         if batch and candidate_size > MAX_BYTES:
             write_batch(batch)
             batch = []
-                        batch_payload_size = 0
+            batch_payload_size = 0
             candidate_size = prefix_bytes + page_size + suffix_bytes
         if candidate_size > MAX_BYTES:
             raise ValueError("single compacted page exceeds the public shard size limit")
