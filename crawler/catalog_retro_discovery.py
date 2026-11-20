@@ -19,6 +19,7 @@ from index_store import load_index
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_INDEX = ROOT / "data" / "index.json"
 DEFAULT_OUTPUT = ROOT / "data" / "host-catalog-candidates.json"
+DEFAULT_PAGE_OUTPUT = ROOT / "data" / "page-catalog-seeds.json"
 
 HINTS = {
     "sitemap": re.compile(r"sitemap|site-map", re.I),
@@ -113,6 +114,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--index", type=Path, default=DEFAULT_INDEX)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--page-output", type=Path, default=DEFAULT_PAGE_OUTPUT)
     args = parser.parse_args()
     index = load_index(args.index)
     result = build_candidates(index)
@@ -120,6 +122,17 @@ def main() -> None:
     temp = args.output.with_suffix(args.output.suffix + ".tmp")
     temp.write_text(json.dumps(result, ensure_ascii=False, separators=(",", ":")) + "\n", encoding="utf-8")
     temp.replace(args.output)
+    page_result = {
+        "schema_version": 1,
+        "strategy": "one-discovery-seed-per-indexed-page",
+        "source_index_pages": result["source_index_pages"],
+        "metrics": {key: value for key, value in result["metrics"].items() if key.startswith("pages_") or key == "page_catalog_signal_references"},
+        "pages": result["page_catalog_seeds"],
+    }
+    args.page_output.parent.mkdir(parents=True, exist_ok=True)
+    page_temp = args.page_output.with_suffix(args.page_output.suffix + ".tmp")
+    page_temp.write_text(json.dumps(page_result, ensure_ascii=False, separators=(",", ":")) + "\\n", encoding="utf-8")
+    page_temp.replace(args.page_output)
     print(json.dumps({"source_index_pages": result["source_index_pages"], **result["metrics"]}, indent=2))
 
 if __name__ == "__main__":
