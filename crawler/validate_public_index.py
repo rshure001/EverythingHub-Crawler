@@ -17,7 +17,7 @@ MAX_SHARD_BYTES = 350_000
 # Keep validation aligned with the independent Vercel backend's bounded decoder.
 # The Supabase Edge Function uses a smaller 30 MB budget and delegates larger
 # catalogs to Vercel rather than scanning all shards in its CPU-limited isolate.
-MAX_CATALOG_GZIP_BYTES = 12_000_000
+MAX_CATALOG_GZIP_BYTES = 16_000_000
 MAX_CATALOG_UNCOMPRESSED_BYTES = 64_000_000
 # GitHub recommends keeping individual repository files at or below 50 MB.
 # Stop before the 100 MB hard limit so a growing canonical index cannot make
