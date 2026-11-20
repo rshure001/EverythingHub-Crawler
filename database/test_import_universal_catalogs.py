@@ -18,7 +18,7 @@ class UniversalCatalogImporterTests(unittest.TestCase):
                 "record_id": "record:one", "catalog_id": "catalog:one",
                 "record_type": "dataset", "title": "Dataset One",
                 "source_key": "dataset-one", "source_url": "https://example.org/dataset/one",
-                "attributes": {"formats": ["CSV"]},
+                "attributes": {"formats": ["CSV"], "public_search_allowed": True},
             }],
         }
 
@@ -64,6 +64,23 @@ class UniversalCatalogImporterTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             importer.build_record_rows(bad)
 
+
+    def test_skips_records_without_explicit_source_rights_approval(self):
+        restricted = {
+            "catalogs": [{
+                "catalog_id": "catalog:restricted", "source_id": "restricted", "title": "Restricted",
+                "catalog_type": "library_archive", "source_url": "https://example.org/api",
+                "record_count": 1,
+            }],
+            "records": [{
+                "record_id": "record:restricted", "catalog_id": "catalog:restricted",
+                "record_type": "document", "title": "Restricted work",
+                "source_key": "work-1", "source_url": "https://example.org/work/1",
+                "attributes": {"public_search_allowed": False},
+            }],
+        }
+        self.assertEqual(importer.build_record_rows(restricted), [])
+        self.assertEqual(importer.build_catalog_rows(restricted)[0][11], 0)
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "default_policy": "deny",
+  "sources": {
+    "catalog.data.gov": {
+      "terms_url": "https://resources.data.gov/catalog-api/",
+      "terms_status": "reviewed_per_dataset",
+      "reviewed_at": "2026-11-20",
+      "discovery_allowed": true,
+      "metadata_only": true,
+      "per_dataset_rights_required": true,
+      "attribution_required": "per_dataset",
+      "allowed_api_paths": ["/api/3/action/package_search"],
+      "allowed_probe_paths": ["/api/3/action/package_search"],
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 80,
+      "policy_note": "Data.gov is a metadata catalog. Preserve dataset-level access, use, and license information; do not fetch bulk resources through this adapter."
+    },
+    "open.canada.ca": {
+      "terms_url": "https://open.canada.ca/en/open-government-licence-canada/",
+      "terms_status": "reviewed_per_dataset",
+      "reviewed_at": "2026-11-20",
+      "discovery_allowed": true,
+      "metadata_only": true,
+      "per_dataset_rights_required": true,
+      "attribution_required": true,
+      "allowed_api_paths": ["/data/en/api/3/action/package_search"],
+      "allowed_probe_paths": ["/data/en/api/3/action/package_search"],
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 80,
+      "policy_note": "Apply the Open Government Licence where it is actually attached to the record; federated datasets may carry different terms."
+    },
+    "opendata.swiss": {
+      "terms_url": "https://opendata.swiss/en/terms-of-use",
+      "terms_status": "reviewed_per_dataset",
+      "discovery_allowed": true,
+      "metadata_only": true,
+      "per_dataset_rights_required": true,
+      "attribution_required": "per_dataset",
+      "allowed_api_paths": ["/api/3/action/package_search"],
+      "allowed_probe_paths": ["/api/3/action/package_search"],
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 80,
+      "policy_note": "Preserve the dataset usage symbol and license; commercial permission and attribution vary by dataset."
+    },
+    "data.gov.au": {
+      "terms_url": "",
+      "terms_status": "unreviewed",
+      "discovery_allowed": false,
+      "metadata_only": true,
+      "per_dataset_rights_required": true,
+      "allowed_api_paths": [],
+      "allowed_probe_paths": [],
+      "reason": "Source terms and dataset-level reuse conditions have not been reviewed."
+    },
+    "openlibrary.org": {
+      "terms_url": "https://openlibrary.org/developers/api",
+      "terms_status": "restricted",
+      "discovery_allowed": false,
+      "metadata_only": true,
+      "per_dataset_rights_required": true,
+      "allowed_api_paths": [],
+      "allowed_probe_paths": [],
+      "reason": "The API is not intended as a bulk-data backend or high-traffic commercial infrastructure; use the official data dumps or obtain permission before bulk harvesting."
+    }
+  }
+}
