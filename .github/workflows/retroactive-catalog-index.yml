@@ -4,9 +4,7 @@ on:
   push:
     paths:
       - "crawler/catalog_retro_discovery.py"
-      - "crawler/test_catalog_retro_discovery.py"
       - "crawler/catalog_page_analysis.py"
-      - "crawler/test_catalog_page_analysis.py"
       - "data/index.json"
       - ".github/workflows/retroactive-catalog-index.yml"
   workflow_dispatch:
