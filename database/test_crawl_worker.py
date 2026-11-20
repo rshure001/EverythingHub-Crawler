@@ -23,6 +23,11 @@ class EhQuadCrawlerSafetyTests(unittest.TestCase):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 WORKER.validate_schema(value)
 
+    def test_media_parser_removes_nul_from_alt_text(self):
+        parser = WORKER.MediaPageParser()
+        parser.feed('<img src="/image.png" alt="A\\x00B">')
+        self.assertEqual(parser.media[0][2], "AB")
+
     def test_loopback_test_mode_requires_exact_isolated_database_name(self):
         self.assertTrue(WORKER.validate_test_database("everythinghub_test"))
         for name in ("production", "everythinghub-control", "everythinghub_test_copy"):

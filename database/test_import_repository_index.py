@@ -13,6 +13,12 @@ class SchemaIsolationTests(unittest.TestCase):
     def test_default_schema_is_eh_quad(self):
         self.assertEqual(IMPORTER.target_schema("eh_quad"), "eh_quad")
 
+    def test_page_text_fields_remove_nul_before_postgres_insert(self):
+        self.assertEqual(
+            IMPORTER.page_text_fields({"title": "Ti\\x00tle", "description": "Desc\\x00ription", "text": "Bo\\x00dy"}),
+            ("Title", "Description", "Body"),
+        )
+
     def test_importer_skips_explicit_robots_denials(self):
         self.assertFalse(IMPORTER.is_robots_allowed({"robots_allowed": False}))
         self.assertTrue(IMPORTER.is_robots_allowed({}))

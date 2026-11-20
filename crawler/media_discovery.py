@@ -30,7 +30,7 @@ SENSITIVE_QUERY_KEYS = {
 
 
 def _text(value: Any, limit: int = MAX_TEXT_LENGTH) -> str:
-    return re.sub(r"\s+", " ", str(value or "")).strip()[:limit]
+    return re.sub(r"\s+", " ", str(value or "").replace("\x00", "")).strip()[:limit]
 
 
 def safe_media_url(base_url: str, value: Any) -> str:

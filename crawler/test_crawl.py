@@ -69,6 +69,12 @@ def patched_pinned_opener(response=None, side_effect=None):
 
 
 class CrawlerTests(unittest.TestCase):
+    def test_normalize_text_removes_nul_and_collapses_whitespace(self):
+        self.assertEqual(crawl.normalize_text(" Alpha\x00Beta\n Gamma ", 100), "AlphaBeta Gamma")
+
+    def test_media_discovery_removes_nul_from_alt_text(self):
+        candidates = crawl.discover_media('<img src="/image.png" alt="A\x00B">', "https://example.com/")
+        self.assertEqual(candidates[0]["alt_text"], "AB")
     def test_summarize_fetch_outcomes_separates_http_html_and_failures(self):
         outcomes = [
             {"http_success": True, "html_parsed": True, "non_html": False, "failed": False},

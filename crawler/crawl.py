@@ -193,19 +193,24 @@ def parse_published_at(value):
         return None
 
 
+def normalize_text(value, limit):
+    """Remove NUL bytes and normalize text before indexing or database writes."""
+    return re.sub(r"\s+", " ", str(value or "").replace("\x00", "")).strip()[:limit]
+
+
 def build_page_record(url, title, description, text, depth, directives, published_at=None):
     """Build a page record while retaining crawl depth for noindex pages."""
     if "noindex" in directives:
         # noindex suppresses publication, not link discovery; keep depth so
         # permitted links on this page can still be queued safely.
         return {"url": url, "_eh_noindex": True, "depth": depth}
-    display_title = re.sub(r"\s+", " ", str(title or "")).strip() or fallback_page_title(url)
+    display_title = normalize_text(title, 2000) or fallback_page_title(url)
     record = {
         "url": url,
         "title": display_title,
         "lane": classify_lane(url),
-        "description": description,
-        "text": text,
+        "description": normalize_text(description, 500),
+        "text": normalize_text(text, 4000),
         "depth": depth,
         "fetched_at": int(time.time()),
         "robots_allowed": True,
@@ -985,9 +990,9 @@ def main():
             directives.update(parse_indexing_directives(x_robots_tags))
             if "nofollow" in directives:
                 nofollow_pages_count[0] += 1
-            title = re.sub(r"\s+", " ", " ".join(parser.title)).strip()
-            text = re.sub(r"\s+", " ", " ".join(parser.text)).strip()[:4000]
-            description = parser.description[:500]
+            title = normalize_text(" ".join(parser.title), 2000)
+            text = normalize_text(" ".join(parser.text), 4000)
+            description = normalize_text(parser.description, 500)
             if apply_access_challenge_policy(title, description, text, directives):
                 access_challenge_pages_count[0] += 1
             page_media = []

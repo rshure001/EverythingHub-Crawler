@@ -19,6 +19,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "crawler"))
 from lane_classifier import VALID_LANES, classify_lane
 from index_store import load_index
+from crawl import normalize_text
 
 INDEX = ROOT / "data" / "index.json"
 TARGET_SCHEMA = "eh_quad"
@@ -86,6 +87,15 @@ def page_lane(page, url):
     if isinstance(lane, str) and lane in VALID_LANES:
         return lane
     return classify_lane(url)
+
+
+def page_text_fields(page):
+    """Prepare NUL-free text values for PostgreSQL's text columns."""
+    return (
+        normalize_text(page.get("title"), 2000),
+        normalize_text(page.get("description"), 5000),
+        normalize_text(page.get("text"), 200000),
+    )
 
 
 def build_upsert_statement():
@@ -157,9 +167,7 @@ def main():
             continue
         parsed = urlsplit(url)
 
-        title = str(page.get("title") or "")[:2000]
-        description = str(page.get("description") or "")[:5000]
-        body = str(page.get("text") or "")[:200000]
+        title, description, body = page_text_fields(page)
         fetched = iso_timestamp(page.get("fetched_at")) or datetime.now(timezone.utc)
         digest = hashlib.sha256(
             (title + "\n" + description + "\n" + body).encode("utf-8")

@@ -193,7 +193,7 @@ class MediaPageParser(HTMLParser):
                 media_type = "video"
             elif declared.startswith("audio/"):
                 media_type = "audio"
-            self.media.append((attrs["src"], media_type, str(attrs.get("alt", ""))[:500]))
+            self.media.append((attrs["src"], media_type, public_crawler.normalize_text(attrs.get("alt", ""), 500)))
         if tag in SKIP_TEXT_TAGS:
             self.skip_depth += 1
 
@@ -309,9 +309,9 @@ def fetch_page(url, policy, last_request, minimum_delay, test_mode=False):
     parser = MediaPageParser()
     parser.feed(body.decode("utf-8", "replace"))
     directives = parser.directives | public_crawler.parse_indexing_directives(x_robots)
-    title = re.sub(r"\s+", " ", " ".join(parser.title_parts)).strip()[:2000]
-    description = re.sub(r"\s+", " ", parser.description).strip()[:5000]
-    text = re.sub(r"\s+", " ", " ".join(parser.text_parts)).strip()[:200000]
+    title = public_crawler.normalize_text(" ".join(parser.title_parts), 2000)
+    description = public_crawler.normalize_text(parser.description, 5000)
+    text = public_crawler.normalize_text(" ".join(parser.text_parts), 200000)
     public_crawler.apply_access_challenge_policy(title, description, text, directives)
     if "noindex" in directives:
         return {"noindex": True, "final_url": final_url}
@@ -324,7 +324,7 @@ def fetch_page(url, policy, last_request, minimum_delay, test_mode=False):
     for raw, media_type, alt_text in parser.media:
         candidate = clean_url(urllib.parse.urljoin(final_url, raw))
         if candidate:
-            media.append((candidate, media_type, alt_text))
+            media.append((candidate, media_type, public_crawler.normalize_text(alt_text, 500)))
     return {
         "url": final_url,
         "host": public_crawler.host_key(final_url),
