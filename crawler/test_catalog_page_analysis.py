@@ -419,6 +419,8 @@ class PageDerivedCatalogAnalysisTests(unittest.TestCase):
         ]
         result = analyze_pages(pages, source_total=2)
         self.assertTrue(result["catalogs"])
+        self.assertEqual(len(result["catalogs"]), 1)
+        self.assertEqual(len(result["catalogs"][0]["record_ids"]), 2)
         self.assertFalse(any("lock" in x["title"].casefold() for x in result["catalogs"]))
 
     def test_geographic_catalog_ranks_above_event_catalog_for_location_query(self):

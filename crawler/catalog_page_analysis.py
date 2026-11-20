@@ -21,7 +21,7 @@ from index_store import load_index
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_INDEX = ROOT / "data" / "index.json"
 DEFAULT_OUTPUT = ROOT / "data" / "page-derived-catalogs"
-ANALYZER_VERSION = 3
+ANALYZER_VERSION = 4
 TRACKING_KEYS = {"fbclid", "gclid", "dclid", "mc_cid", "mc_eid", "ref", "source"}
 STOP_TOKENS = {
     "the", "and", "for", "with", "from", "our", "your", "all", "new", "home", "page",
@@ -257,9 +257,7 @@ def _group_path(record_type: str, segments: list[str]) -> str:
         end = i + 1
         if i + 1 < len(segments):
             nxt = segments[i + 1]
-            if record_type in ("place", "business") and len(nxt) > 2:
-                end = i + 2
-            elif record_type in ("product", "model") and nxt in CATEGORY_SEGMENTS:
+            if record_type in ("place", "business", "product", "model") and nxt in CATEGORY_SEGMENTS:
                 end = i + 2
         return "/" + "/".join(segments[:end])
     return "/" + "/".join(segments[:-1]) if len(segments) > 1 else "/"
@@ -721,7 +719,7 @@ def search_catalog_network(query: str, analysis: dict, limit: int = 10) -> list[
             "catalog_id": catalog["catalog_id"],
             "title": catalog["title"],
             "catalog_type": catalog["catalog_type"],
-            "status": catalog["status"],
+            "status": catalog.get("status", "candidate_needs_source_validation"),
             "match_scope": "catalog" if catalog_match else "records",
             "score": catalog_score + type_bonus + sum(x[0] for x in ranked),
             "record_count": len(related),
