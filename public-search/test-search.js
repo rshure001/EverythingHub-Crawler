@@ -179,7 +179,7 @@ async function testCurrentPublishedManifestFitsClientLimits() {
 
   assert.ok(
     currentManifest.total_pages <= 100_000,
-    "current catalog must fit the 100,000-page browser limit; decoded shard data remains capped at 192 MB"
+    "current catalog must fit the 125,000-page browser limit; decoded shard data remains capped at 256 MB"
   );
   assert.ok(
     currentManifest.shard_count <= 512 &&
@@ -198,7 +198,7 @@ async function testCurrentPublishedManifestFitsClientLimits() {
     "current shard catalog must fit its compressed or legacy transfer limit"
   );
 
-  assert.ok(totalUncompressedBytes <= 192_000_000, "current shard catalog must fit the 192 MB decoded safety limit");
+  assert.ok(totalUncompressedBytes <= 192_000_000, "current shard catalog must fit the 256 MB decoded safety limit");
 
   globalThis.fetch = async url => {
     const value = String(url);
@@ -265,7 +265,7 @@ async function testRejectsClientLimitOverruns() {
     globalThis.fetch = async () => new Response(JSON.stringify(overDecodedManifest), { status: 200 });
     await assert.rejects(
       engine.create({ manifestUrl: "https://example.test/over-decoded/manifest.json" }),
-      /192 MB decoded safety limit/
+      /256 MB decoded safety limit/
     );
   } finally {
     globalThis.fetch = previousFetch;
@@ -276,7 +276,7 @@ testShardOnlyLoader()
   .then(testGzipLoader)
   .then(testCurrentPublishedManifestFitsClientLimits)
   .then(testRejectsClientLimitOverruns)
-  .then(() => console.log("Browser ranking, gzip, shard integrity, current-manifest, and 100k/192 MB bound tests passed"))
+  .then(() => console.log("Browser ranking, gzip, shard integrity, current-manifest, and 100k/256 MB bound tests passed"))
   .catch(error => {
     console.error(error);
     process.exitCode = 1;
