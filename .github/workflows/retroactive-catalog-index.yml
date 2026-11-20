@@ -68,6 +68,10 @@ jobs:
       - name: Test page-derived catalog analysis
         working-directory: crawler
         run: python -m unittest test_catalog_page_analysis.py -v
+
+      - name: Test public search publisher limits
+        working-directory: publisher
+        run: python -m unittest test_stage_search_catalog.py -v
       - name: Inventory every existing indexed host
         run: python crawler/catalog_retro_discovery.py
       - name: Analyze every eligible existing indexed page
