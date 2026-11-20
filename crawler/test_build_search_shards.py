@@ -123,6 +123,30 @@ class SearchShardBatchBoundaryTests(unittest.TestCase):
         self.assertIsNotNone(catalog_metadata(b"small compressed catalog", 3, MAX_CATALOG_UNCOMPRESSED_BYTES))
 
 
+    def test_compact_preserves_structured_product_fields(self):
+        page = compact({
+            "url": "https://shop.example/item-1",
+            "title": "Diamond ring",
+            "product": {
+                "type": "product", "name": "18K Diamond Pinky Ring",
+                "brand": "Example Jewelers", "sku": "RING-18K",
+                "price": "1299.00", "currency": "USD",
+                "availability": "InStock",
+                "image": "https://shop.example/ring.jpg",
+                "url": "https://shop.example/item-1",
+            },
+        })
+        self.assertEqual(page["product"]["name"], "18K Diamond Pinky Ring")
+        self.assertEqual(page["product"]["price"], "1299.00")
+        self.assertEqual(page["product"]["image"], "https://shop.example/ring.jpg")
+
+    def test_compact_ignores_malformed_product_metadata(self):
+        page = compact({
+            "url": "https://shop.example/item-2",
+            "product": {"type": "product", "brand": "No product name"},
+        })
+        self.assertNotIn("product", page)
+
     def test_compact_preserves_crawl_timestamps(self):
         page = compact({
             "url": "https://example.com/fresh",
