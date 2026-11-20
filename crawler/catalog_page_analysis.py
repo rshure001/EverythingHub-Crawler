@@ -228,6 +228,7 @@ def analyze_pages(pages: list[dict], source_total: int | None = None, source_upd
     record_groups: dict[str, set[str]] = defaultdict(set)
     group_pages: dict[str, set[str]] = defaultdict(set)
     group_titles: dict[str, list[str]] = defaultdict(list)
+    group_urls: dict[str, set[str]] = defaultdict(set)
     explicit_groups: dict[str, dict] = {}
     explicit_page_refs: dict[str, set[str]] = defaultdict(set)
     page_rows = []
@@ -276,6 +277,7 @@ def analyze_pages(pages: list[dict], source_total: int | None = None, source_upd
                 item["last_seen_at"] = page["fetched_at"]
             record_groups[group_key].add(record_id)
             group_pages[group_key].add(page_id)
+            group_urls[group_key].add(url)
             if title and title not in group_titles[group_key]:
                 group_titles[group_key].append(title)
 
@@ -289,6 +291,7 @@ def analyze_pages(pages: list[dict], source_total: int | None = None, source_upd
             explicit_groups[key]["evidence"].update(evidence)
             explicit_page_refs[key].add(page_id)
             group_pages[key].add(page_id)
+            group_urls[key].add(url)
             if title and title not in group_titles[key]:
                 group_titles[key].append(title)
             page_group_keys.append(key)
@@ -326,9 +329,7 @@ def analyze_pages(pages: list[dict], source_total: int | None = None, source_upd
             "title": _catalog_title(key.split("|", 1)[0], kind, path, group_titles.get(key, [])),
             "catalog_type": CATALOG_TYPE[kind], "record_type": kind,
             "subject": path.strip("/").split("/")[-1].replace("-", " ")[:160],
-            "source_url": sorted(
-                [row["url"] for row in page_rows if row["page_id"] in group_pages[key]]
-            )[0] if group_pages.get(key) else "",
+            "source_url": min(group_urls[key]) if group_urls.get(key) else "",
             "source_page_ids": sorted(group_pages.get(key, set())),
             "record_ids": sorted(record_groups.get(key, set())),
             "parent_catalog_id": None, "evidence": evidence,
@@ -452,9 +453,13 @@ def write_outputs(analysis: dict, output_dir: Path) -> dict:
     })
     files.append({"file": "registry.json.gz", "bytes": size, "sha256": digest, "items": len(analysis["catalogs"])})
     index_dir = output_dir / "indexes"
+    records_by_catalog = defaultdict(list)
+    for record in analysis["records"]:
+        for catalog_id in record.get("catalog_ids", []):
+            records_by_catalog[catalog_id].append(record)
     for catalog in analysis["catalogs"]:
         filename = catalog["index_file"].split("/", 1)[1]
-        related = [x for x in analysis["records"] if catalog["catalog_id"] in x["catalog_ids"]]
+        related = records_by_catalog.get(catalog["catalog_id"], [])
         size, digest = _write_gzip(index_dir / filename, {
             "version": 1, "catalog_id": catalog["catalog_id"],
             "title": catalog["title"], "status": catalog["status"], "records": related,
