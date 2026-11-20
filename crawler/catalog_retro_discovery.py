@@ -8,6 +8,7 @@ collections, directories, catalogs, APIs, feeds, or registries.
 from __future__ import annotations
 
 import argparse
+import gzip
 import json
 import re
 from collections import defaultdict
@@ -19,7 +20,7 @@ from index_store import load_index
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_INDEX = ROOT / "data" / "index.json"
 DEFAULT_OUTPUT = ROOT / "data" / "host-catalog-candidates.json"
-DEFAULT_PAGE_OUTPUT = ROOT / "data" / "page-catalog-seeds.json"
+DEFAULT_PAGE_OUTPUT = ROOT / "data" / "page-catalog-seeds.json.gz"
 
 HINTS = {
     "sitemap": re.compile(r"sitemap|site-map", re.I),
@@ -133,7 +134,11 @@ def main() -> None:
     }
     args.page_output.parent.mkdir(parents=True, exist_ok=True)
     page_temp = args.page_output.with_suffix(args.page_output.suffix + ".tmp")
-    page_temp.write_text(json.dumps(page_result, ensure_ascii=False, separators=(",", ":")) + "\n", encoding="utf-8")
+    page_payload = json.dumps(page_result, ensure_ascii=False, separators=(",", ":")).encode("utf-8") + b"\n"
+    if args.page_output.suffix == ".gz":
+        page_temp.write_bytes(gzip.compress(page_payload, mtime=0))
+    else:
+        page_temp.write_bytes(page_payload)
     page_temp.replace(args.page_output)
     print(json.dumps({"source_index_pages": result["source_index_pages"], **result["metrics"]}, indent=2))
 
