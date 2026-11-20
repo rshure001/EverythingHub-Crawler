@@ -13,7 +13,8 @@ class CatalogFrontierTests(unittest.TestCase):
             {"url":"http://catalog.example/dataset/b","fetched":False,"policy_allowed":True},
             {"url":"https://catalog.example/dataset/c","fetched":True,"policy_allowed":True},
             {"url":"https://user:pass@catalog.example/dataset/d","fetched":False,"policy_allowed":True},
-            {"url":"https://catalog.example/dataset/e","fetched":False,"policy_allowed":True},\n            {"url":"https://catalog.example/dataset/f","fetched":False}]}
+            {"url":"https://catalog.example/dataset/e","fetched":False,"policy_allowed":True},
+            {"url":"https://catalog.example/dataset/f","fetched":False}]}
         with tempfile.TemporaryDirectory() as tmp:
             path=Path(tmp)/"catalog.json.gz"
             path.write_bytes(gzip.compress(json.dumps(payload).encode("utf-8")))
