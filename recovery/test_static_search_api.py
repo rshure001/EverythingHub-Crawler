@@ -61,6 +61,37 @@ class StaticSearchTests(unittest.TestCase):
         (root / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
         return manifest
 
+    def test_capacity_bounds_cover_current_public_catalog(self):
+        # Verified production snapshot at 2026-11-20T12:21:30Z:
+        # 84,885 pages, 319 shards, 40,097,435 compressed bytes,
+        # and 158,864,711 decoded bytes.
+        self.assertEqual(
+            api._manifest_int(84_885, "total_pages", 1, api.MAX_PAGES),
+            84_885,
+        )
+        self.assertEqual(
+            api._manifest_int(
+                158_864_711,
+                "total uncompressed bytes",
+                1,
+                api.MAX_TOTAL_UNCOMPRESSED_BYTES,
+            ),
+            158_864_711,
+        )
+        self.assertEqual(
+            api._manifest_int(
+                40_097_435,
+                "total compressed bytes",
+                1,
+                api.MAX_TOTAL_COMPRESSED_BYTES,
+            ),
+            40_097_435,
+        )
+        self.assertEqual(
+            api._manifest_int(319, "shard_count", 1, api.MAX_SHARDS),
+            319,
+        )
+
     def test_title_hits_rank_first(self):
         result = api.search("Apollo", "", 10, 0)
         self.assertEqual(result["total"], 1)
