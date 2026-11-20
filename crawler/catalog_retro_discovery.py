@@ -42,7 +42,7 @@ def host_key(url: str) -> str | None:
         return None
 
 def build_candidates(index: dict) -> dict:
-    grouped = defaultdict(lambda: {"source_pages": 0, "examples": [], "hint_counts": defaultdict(int), "lanes": defaultdict(int)})
+    grouped = defaultdict(lambda: {"source_pages": 0, "hint_pages": 0, "examples": [], "hint_counts": defaultdict(int), "lanes": defaultdict(int)})
     for page in index.get("pages", []):
         if not isinstance(page, dict):
             continue
@@ -73,7 +73,7 @@ def build_candidates(index: dict) -> dict:
         hosts.append({
             "host": host,
             "source_pages": item["source_pages"],
-            "catalog_hint_pages": sum(1 for ex in item["examples"] if ex["catalog_hints"]),
+            "catalog_hint_pages": item["hint_pages"],
             "hint_counts": hints,
             "lanes": lanes,
             "examples": item["examples"],
