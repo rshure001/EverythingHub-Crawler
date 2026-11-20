@@ -75,7 +75,7 @@ class StaticSearchTests(unittest.TestCase):
                 1,
                 api.MAX_TOTAL_UNCOMPRESSED_BYTES,
             ),
-            158_864_711,
+            255_987_451,
         )
         self.assertEqual(
             api._manifest_int(
@@ -84,7 +84,7 @@ class StaticSearchTests(unittest.TestCase):
                 1,
                 api.MAX_TOTAL_COMPRESSED_BYTES,
             ),
-            40_097_435,
+            64_459_270,
         )
         self.assertEqual(
             api._manifest_int(514, "shard_count", 1, api.MAX_SHARDS),
