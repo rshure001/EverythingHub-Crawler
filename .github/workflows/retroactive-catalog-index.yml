@@ -9,11 +9,10 @@ on:
       - "crawler/test_catalog_retro_discovery.py"
       - "crawler/product_metadata.py"
       - "crawler/test_product_metadata.py"
-      - "data/index.json"
       - ".github/workflows/retroactive-catalog-index.yml"
   workflow_dispatch:
   schedule:
-    - cron: "43 */6 * * *"
+    - cron: "23 * * * *"
 
 permissions:
   contents: write
