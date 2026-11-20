@@ -45,6 +45,14 @@ function searchCatalog(pages, query, lane) {
     }
     if (!matched) continue;
     score += matched * 5;
+    // Exact multi-word phrases are a stronger relevance signal than scattered
+    // token mentions. This is especially important for place and brand queries.
+    const phrase = String(query || '').trim().toLowerCase().replace(/\\s+/g, ' ');
+    if (phrase.length >= 3) {
+      if (String(page.title || '').toLowerCase().includes(phrase)) score += 80;
+      else if (String(page.description || '').toLowerCase().includes(phrase)) score += 35;
+      else if (String(page.url || '').toLowerCase().includes(phrase.replace(/ /g, '-'))) score += 25;
+    }
     // Reward complete matches only when every query term appears in a
     // high-signal field. Repeated body-only mentions must not look exact.
     if (strongMatched === terms.length) score += 15;
