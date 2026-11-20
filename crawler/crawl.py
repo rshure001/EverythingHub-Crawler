@@ -221,17 +221,20 @@ def build_page_record(url, title, description, text, depth, directives, publishe
     return record
 
 
-def enqueue_discovered_links(queue, seen, links, record, queue_limit=QUEUE_LIMIT):
-    """Queue unseen same-page discoveries using the fetched record's depth."""
+def enqueue_discovered_links(queue, seen, links, record, queue_limit=QUEUE_LIMIT,
+                            indexed_urls=None):
+    """Queue unseen links while bounding pending work, not lifetime history."""
     depth = record.get("depth")
     if not isinstance(depth, int) or depth < 0:
         raise ValueError("page record is missing a valid crawl depth")
+    indexed = indexed_urls if indexed_urls is not None else set()
     added = 0
     for candidate in links:
-        if candidate not in seen and len(seen) < queue_limit:
-            seen.add(candidate)
-            queue.append((candidate, depth + 1))
-            added += 1
+        if candidate in seen or candidate in indexed or len(queue) >= queue_limit:
+            continue
+        seen.add(candidate)
+        queue.append((candidate, depth + 1))
+        added += 1
     return added
 
 
@@ -846,14 +849,22 @@ def main():
     # failed must not disappear from coverage forever.
     old_index = load_index(OUTPUT, {"version": 1, "pages": []})
     old_pages = old_index.get("pages", []) if isinstance(old_index, dict) else []
-    indexed_hosts = {
-        host_key(page.get("url"))
+    indexed_urls = {
+        page.get("url")
         for page in old_pages
         if isinstance(page, dict) and isinstance(page.get("url"), str)
     }
+    indexed_hosts = {host_key(url) for url in indexed_urls}
 
     frontier = load_json(FRONTIER, {"queue": [], "seen": []})
-    seen = set(frontier.get("seen", []))
+    # "seen" is a deduplication history, not the pending-queue budget.
+    # Drop already-indexed and now-invalid entries so the history does not
+    # permanently fill the queue's capacity.
+    seen = {
+        candidate
+        for raw in frontier.get("seen", [])
+        if (candidate := clean(raw)) and candidate not in indexed_urls
+    }
     seed_retry_after = frontier.get("seed_retry_after", {})
     if not isinstance(seed_retry_after, dict):
         seed_retry_after = {}
@@ -875,9 +886,14 @@ def main():
     # The saved frontier predates current URL filters. Re-clean it on
     # resume so old PDFs, images, scripts, and malformed URLs never consume
     # another network request.
-    queue = restore_frontier_queue(frontier.get("queue", []))
+    queue = deque(
+        (url, depth)
+        for url, depth in restore_frontier_queue(frontier.get("queue", []))
+        if url not in indexed_urls
+    )
+    seen.update(url for url, _depth in queue)
     for seed in seeds:
-        if seed not in seen and len(seen) < QUEUE_LIMIT:
+        if seed not in seen and seed not in indexed_urls and len(queue) < QUEUE_LIMIT:
             seen.add(seed)
 
     # Do not spend requests on a seed URL when that host already has indexed
@@ -1052,7 +1068,7 @@ def main():
         if next_allowed is not None:
             host_next_allowed[host] = next_allowed
         for candidate in discovered_pages:
-            if candidate not in seen and len(seen) < QUEUE_LIMIT:
+            if candidate not in seen and candidate not in indexed_urls and len(queue) < QUEUE_LIMIT:
                 seen.add(candidate)
                 queue.append((candidate, 1))
                 sitemap_urls_added += 1
@@ -1230,8 +1246,12 @@ def main():
                     noindex_urls.add(record["url"])
                 else:
                     records[record["url"]] = record
+                    indexed_urls.add(record["url"])
+                    seen.discard(record["url"])
                     depth_counts[str(record["depth"])] = depth_counts.get(str(record["depth"]), 0) + 1
-                enqueue_discovered_links(queue, seen, links, record)
+                enqueue_discovered_links(
+                    queue, seen, links, record, indexed_urls=indexed_urls
+                )
 
     run_duration = round(time.monotonic() - run_started, 2)
     fetch_metrics = summarize_fetch_outcomes(fetch_outcomes)
