@@ -2,6 +2,7 @@
 """Additively import staged universal catalogs and records into eh_quad only."""
 from __future__ import annotations
 
+import gzip
 import json
 import os
 from datetime import datetime, timezone
@@ -9,7 +10,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
-INPUT = ROOT / "data" / "universal-catalog-records.json"
+INPUT = ROOT / "data" / "universal-catalog-records.json.gz"
 TARGET_SCHEMA = "eh_quad"
 
 
@@ -129,7 +130,8 @@ def main():
     database_url = os.environ.get("DATABASE_URL")
     if not database_url:
         raise SystemExit("DATABASE_URL is required; no destination was modified.")
-    payload = json.loads(INPUT.read_text(encoding="utf-8"))
+    raw = gzip.decompress(INPUT.read_bytes()) if INPUT.suffix == ".gz" else INPUT.read_bytes()
+    payload = json.loads(raw.decode("utf-8"))
     catalogs = build_catalog_rows(payload)
     records = build_record_rows(payload)
     try:
