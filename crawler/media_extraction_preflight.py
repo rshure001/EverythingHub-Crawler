@@ -22,7 +22,9 @@ from media_discovery import MEDIA_TYPES, safe_media_url
 ROOT = Path(__file__).resolve().parents[1]
 CATALOG = ROOT / "data" / "media-discovery.json"
 POLICY_REGISTRY = ROOT / "crawler" / "media-source-terms.json"
-MAX_CATALOG_BYTES = 20_000_000
+# Match validate_media_catalog.py and remain below GitHub's recommended 50 MB per-file size.
+# If it approaches 40 MB, move to compressed/sharded storage instead of raising this cap.
+MAX_CATALOG_BYTES = 40_000_000
 MAX_POLICY_BYTES = 1_000_000
 MAX_POLICY_REVIEWS = 2_000
 MAX_ROBOTS_AGE_SECONDS = 24 * 60 * 60
@@ -272,8 +274,9 @@ def evaluate_preflight(catalog: Any, registry: Any, *, now: datetime | None = No
 def _load_json(path: Path, max_bytes: int) -> Any:
     if not path.is_file():
         return None
-    if path.stat().st_size > max_bytes:
-        raise ValueError(f"{path.name} exceeds its safety size limit")
+    size_bytes = path.stat().st_size
+    if size_bytes > max_bytes:
+        raise ValueError(f"{path.name} is {size_bytes:,} bytes, above its {max_bytes:,}-byte safety size limit")
     try:
         return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as error:
