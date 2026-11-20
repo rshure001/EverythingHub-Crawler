@@ -24,7 +24,7 @@ def load_catalog_seed_urls(path: Path, limit: int = 20000) -> list[str]:
     urls: list[str] = []
     seen: set[str] = set()
     for row in rows:
-        if not isinstance(row, dict) or row.get("fetched") is True:
+        if not isinstance(row, dict) or row.get("fetched") is True or row.get("policy_allowed") is not True:
             continue
         value = row.get("canonical_url") or row.get("url")
         if not isinstance(value, str) or value != value.strip():
