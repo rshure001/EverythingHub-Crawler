@@ -54,7 +54,17 @@ class SeedCoverageTests(unittest.TestCase):
             now=1_000, host_key=host_key,
         )
         self.assertEqual(scheduled, [])
-        self.assertEqual(retry_after[seed], 5_000)
+        self.assertEqual(retry_after[seed], 1_000 + DEFAULT_SEED_RETRY_SECONDS)
+
+    def test_old_long_cooldown_is_clamped_to_new_retry_window(self):
+        seed = "https://missing.example/"
+        retry_after = {seed: 90_000}
+        scheduled = schedule_missing_seed_urls(
+            [seed], set(), set(), retry_after,
+            now=1_000, host_key=host_key,
+        )
+        self.assertEqual(scheduled, [])
+        self.assertEqual(retry_after[seed], 1_000 + DEFAULT_SEED_RETRY_SECONDS)
 
     def test_expired_seed_is_requeued_and_cooldown_advanced(self):
         seed = "https://missing.example/"
