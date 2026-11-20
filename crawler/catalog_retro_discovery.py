@@ -42,6 +42,7 @@ def host_key(url: str) -> str | None:
         return None
 
 def build_candidates(index: dict) -> dict:
+    page_seeds = []
     grouped = defaultdict(lambda: {"source_pages": 0, "hint_pages": 0, "examples": [], "hint_counts": defaultdict(int), "lanes": defaultdict(int)})
     for page in index.get("pages", []):
         if not isinstance(page, dict):
@@ -57,6 +58,15 @@ def build_candidates(index: dict) -> dict:
             item["lanes"][lane] += 1
         text = " ".join(str(page.get(k) or "") for k in ("title", "description", "text"))[:2500]
         matched = [name for name, pattern in HINTS.items() if pattern.search(text) or pattern.search(url)]
+        page_seeds.append({
+            "page_id": __import__("hashlib").sha256(url.encode("utf-8")).hexdigest()[:24],
+            "url": url[:2048],
+            "host": host,
+            "title": str(page.get("title") or "")[:240],
+            "lane": lane if isinstance(lane, str) else None,
+            "catalog_signals": matched,
+            "status": "needs_page_catalog_extraction",
+        })
         if matched:
             item["hint_pages"] += 1
         for name in matched:
@@ -88,7 +98,11 @@ def build_candidates(index: dict) -> dict:
         "source_index_pages": int(index.get("total_pages", len(index.get("pages", [])))),
         "hosts_discovered": len(hosts),
         "host_candidates": hosts,
+        "page_catalog_seeds": page_seeds,
         "metrics": {
+            "pages_as_discovery_seeds": len(page_seeds),
+            "pages_with_catalog_signals": sum(bool(x["catalog_signals"]) for x in page_seeds),
+            "page_catalog_signal_references": sum(len(x["catalog_signals"]) for x in page_seeds),
             "source_pages_grouped": sum(x["source_pages"] for x in hosts),
             "hosts_with_catalog_hints": sum(bool(x["hint_counts"]) for x in hosts),
             "candidate_hosts": len(hosts),
