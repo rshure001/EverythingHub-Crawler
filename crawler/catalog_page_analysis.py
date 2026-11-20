@@ -1023,23 +1023,10 @@ def search_catalog_network(query: str, analysis: dict, limit: int = 10) -> list[
             description_tokens = set(_norm(record.get("description", "")).split())
             attribute_tokens = set(_norm(_searchable_attribute_text(record.get("attributes", {}))).split())
             title_match = token_set.issubset(title_tokens)
-            description_match = token_set.issubset(description_tokens)
-            corroborated_article_description_match = (
-                record_type == "article"
-                and len(record.get("source_urls", [])) >= 2
-                and description_match
-            )
-            if content_record and not content_intent and not (
-                title_match or corroborated_article_description_match
-            ):
+            if content_record and not content_intent and not title_match:
                 continue
             combined_tokens = catalog_tokens | title_tokens | attribute_tokens
-            if (
-                not content_record
-                or content_intent
-                or corroborated_article_description_match
-                or record_type == "subject"
-            ):
+            if not content_record or content_intent:
                 combined_tokens |= description_tokens
             if not token_set.issubset(combined_tokens):
                 continue

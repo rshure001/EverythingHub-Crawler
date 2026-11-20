@@ -398,31 +398,37 @@ class PageDerivedCatalogAnalysisTests(unittest.TestCase):
         self.assertEqual(evidence[0]["url"], "https://example.org/las-vegas-story")
 
 
-    def test_explicit_subject_and_corroborated_article_records_support_brand_search(self):
+    def test_title_matched_subject_and_article_records_support_brand_search(self):
         analysis = {
             "catalogs": [
                 {"catalog_id": "subject-catalog", "catalog_type": "knowledge_base",
                  "record_type": "subject", "title": "National Geographic Subjects",
                  "subject": "subjects", "record_ids": ["rolextopic"], "source_host": "nationalgeographic.com"},
                 {"catalog_id": "article-catalog", "catalog_type": "knowledge_base",
-                 "record_type": "article", "title": "BBC Articles", "subject": "articles",
+                 "record_type": "article", "title": "Rolex Articles", "subject": "articles",
                  "record_ids": ["rolexcoverage"], "source_host": "bbc.com"},
                 {"catalog_id": "incidental-catalog", "catalog_type": "knowledge_base",
                  "record_type": "article", "title": "Single Source Articles", "subject": "articles",
-                 "record_ids": ["incidental"], "source_host": "example.org"},
+                 "record_ids": ["incidental"], "source_host": "bbc.com"},
             ],
             "records": [
                 {"record_id": "rolextopic", "title": "National Geographic and Rolex Committed to a Perpetual Planet",
                  "record_type": "subject", "description": "Rolex conservation partnership",
                  "source_url": "https://nationalgeographic.com/story",
                  "source_urls": ["https://nationalgeographic.com/story"]},
-                {"record_id": "rolexcoverage", "title": "BBC Arts in Motion", "record_type": "article",
-                 "description": "Rolex and National Geographic partnership coverage",
+                {"record_id": "rolexcoverage", "title": "Rolex and National Geographic Partnership Coverage",
+                 "record_type": "article", "description": "Partnership coverage",
                  "source_urls": ["https://bbc.com/arts/one", "https://bbc.com/arts/two"],
                  "source_url": "https://bbc.com/arts/one"},
-                {"record_id": "incidental", "title": "General Conservation Story", "record_type": "article",
-                 "description": "A passing mention of Rolex", "source_urls": ["https://example.org/story"],
-                 "source_url": "https://example.org/story"},
+                {"record_id": "incidental", "title": "BBC British Broadcasting Corporation",
+                 "record_type": "article", "description": "A passing mention of Rolex",
+                 "source_urls": [
+                     "https://bbc.com/arts/home", "https://bbc.com/business/opening-bell",
+                     "https://bbc.com/news/science", "https://bbc.com/pages/app",
+                     "https://bbc.com/search/news", "https://bbc.com/search/sport",
+                     "https://bbc.com/travel/earth",
+                 ],
+                 "source_url": "https://bbc.com/arts/home"},
             ],
         }
         hits = search_catalog_network("Rolex", analysis)
