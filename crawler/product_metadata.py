@@ -102,7 +102,7 @@ def extract_product_metadata(html, page_url):
         return {}
     product = product or {}
 
-    brand = product.get("brand") or {}
+    brand = product.get("brand") or parser.meta.get("product:brand") or {}
     if isinstance(brand, dict):
         brand = brand.get("name", "")
     offers = product.get("offers") or {}
