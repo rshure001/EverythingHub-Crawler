@@ -55,6 +55,18 @@ class EhQuadCrawlerSafetyTests(unittest.TestCase):
             "https://example.org/a?keep=1",
         )
 
+    def test_media_url_normalization_preserves_asset_extensions(self):
+        raw = "HTTPS://Example.org/image.png?utm_source=x&keep=1#preview"
+        self.assertIsNone(WORKER.clean_url(raw))
+        self.assertEqual(
+            WORKER.clean_media_url(raw),
+            "https://example.org/image.png?keep=1",
+        )
+        self.assertEqual(
+            WORKER.clean_media_url("https://example.org/clip.mp4"),
+            "https://example.org/clip.mp4",
+        )
+
     def test_private_targets_rejected_and_loopback_allowed_only_in_test_mode(self):
         self.assertFalse(WORKER.is_safe_target("http://127.0.0.1:8080/test", False))
         self.assertTrue(WORKER.is_safe_target("http://127.0.0.1:8080/test", True))
