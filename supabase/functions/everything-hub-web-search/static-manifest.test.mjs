@@ -18,8 +18,8 @@ function makeManifest(shardCount = 35, totalPages = 6350) {
   };
 }
 
-test("accepts the current 101,179-page, 381-shard public catalog", () => {
-  assert.equal(isValidStaticManifest(makeManifest(381, 101179)), true);
+test("accepts the current 127,175-page, 489-shard public catalog", () => {
+  assert.equal(isValidStaticManifest(makeManifest(489, 127175)), true);
 });
 
 test("accepts the configured shard ceiling", () => {
