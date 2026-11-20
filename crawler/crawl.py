@@ -652,7 +652,7 @@ def effective_host_delay(parser):
 
 
 def select_batch(queue, is_allowed, host_next_allowed, now, workers=WORKERS,
-                 priority_urls=()):
+                 priority_urls=(), in_flight_hosts=()):
     """Select configured seed URLs first, then deeper work, with one URL per host."""
     priority = set(priority_urls or ())
     pending = list(queue)
@@ -660,7 +660,7 @@ def select_batch(queue, is_allowed, host_next_allowed, now, workers=WORKERS,
     pending.sort(key=lambda item: (item[0] not in priority, -item[1]))
     selected = []
     deferred = []
-    selected_hosts = set()
+    selected_hosts = set(in_flight_hosts or ())
 
     for index, (url, depth) in enumerate(pending):
         if depth > MAX_DEPTH:
@@ -961,143 +961,84 @@ def main():
     requests_by_host = {}
     fetch_outcomes = []
 
-    while queue and fetched < MAX_FETCH_PER_RUN:
-        elapsed = time.monotonic() - run_started
-        if elapsed >= MAX_RUN_SECONDS:
-            break
+    # Keep the worker pool full as individual hosts finish instead of waiting
+    # for the slowest response in a 150-request wave. A host remains reserved
+    # while its request is in flight, then its robots-derived delay starts at
+    # completion, preserving the existing per-host politeness guarantees.
+    with concurrent.futures.ThreadPoolExecutor(max_workers=WORKERS) as pool:
+        in_flight = {}
+        while queue or in_flight:
+            elapsed = time.monotonic() - run_started
+            may_submit = elapsed < MAX_RUN_SECONDS and fetched < MAX_FETCH_PER_RUN
 
-        remaining_fetches = MAX_FETCH_PER_RUN - fetched
-        batch = select_batch(
-            queue, allowed, host_next_allowed, time.time(),
-            workers=min(WORKERS, remaining_fetches), priority_urls=seeds
-        )
-        if not batch:
-            wait = next_host_wait(queue, host_next_allowed, time.time())
-            remaining = MAX_RUN_SECONDS - (time.monotonic() - run_started)
-            if wait > 0 and wait <= remaining:
-                time.sleep(wait)
-                continue
-            break
-
-        def fetch(item):
-            url, depth = item
-            http_success = False
-            html_parsed = False
-            non_html = False
-            try:
-                final, content_type, x_robots_tags, body = request(url, allowed)
-                http_success = True
-                delay = max(host_delay(origin(url)), host_delay(origin(final)))
-                if content_type != "text/html":
-                    non_html = True
-                    outcome = {
-                        "http_success": True, "html_parsed": False,
-                        "non_html": True, "failed": False,
-                    }
-                    return None, None, delay, False, outcome
-                html = body.decode("utf-8", "replace")
-                parser = PageParser()
-                parser.feed(html)
-                html_parsed = True
-                directives = set(parser.robots_directives)
-                directives.update(parse_indexing_directives(x_robots_tags))
-                if "nofollow" in directives:
-                    nofollow_pages_count[0] += 1
-                title = re.sub(r"\s+", " ", " ".join(parser.title)).strip()
-                text = re.sub(r"\s+", " ", " ".join(parser.text)).strip()[:4000]
-                description = parser.description[:500]
-                if apply_access_challenge_policy(title, description, text, directives):
-                    access_challenge_pages_count[0] += 1
-                page_media = []
-                page_media_robots_blocked = 0
-                page_media_external_deferred = 0
-                if "noindex" not in directives and "nofollow" not in directives:
-                    for candidate in discover_media(html, final, title, description):
-                        if not same_origin(final, candidate["url"]):
-                            page_media_external_deferred += 1
-                            continue
-                        if robots_can_fetch(policy(origin(final)), UA, candidate["url"]):
-                            candidate["robots_allowed"] = True
-                            candidate["robots_checked_at"] = int(time.time())
-                            page_media.append(candidate)
-                        else:
-                            page_media_robots_blocked += 1
-                text, description = apply_snippet_policy(text, description, directives)
-                record = build_page_record(
-                    final, title, description, text, depth, directives, parser.published_at
+            if may_submit and len(in_flight) < WORKERS and queue:
+                available_slots = min(
+                    WORKERS - len(in_flight),
+                    MAX_FETCH_PER_RUN - fetched,
                 )
-                links = []
-                if depth < MAX_DEPTH and "nofollow" not in directives:
-                    host = urllib.parse.urlsplit(final).netloc
-                    for href in parser.links:
-                        candidate = clean(urllib.parse.urljoin(final, href))
-                        if candidate and urllib.parse.urlsplit(candidate).netloc == host:
-                            links.append(candidate)
-                outcome = {
-                    "http_success": True, "html_parsed": True,
-                    "non_html": False, "failed": False,
-                    "media_candidates": page_media,
-                    "media_robots_blocked": page_media_robots_blocked,
-                    "media_external_deferred": page_media_external_deferred,
-                }
-                return record, links, delay, False, outcome
-            except Exception as error:
-                status = getattr(error, "code", None)
-                if status in (429, 503):
-                    rate_limited_count[0] += 1
-                is_http_error = isinstance(error, urllib.error.HTTPError)
-                if status == 429:
-                    backoff = max(DEFAULT_429_BACKOFF_SECONDS, retry_after_seconds(error, DEFAULT_429_BACKOFF_SECONDS))
-                elif status in (500, 502, 503, 504):
-                    backoff = max(DEFAULT_5XX_BACKOFF_SECONDS, retry_after_seconds(error, DEFAULT_5XX_BACKOFF_SECONDS))
-                elif not is_http_error and isinstance(error, urllib.error.URLError):
-                    backoff = max(DEFAULT_NETWORK_BACKOFF_SECONDS, retry_after_seconds(error, DEFAULT_NETWORK_BACKOFF_SECONDS))
-                elif isinstance(error, TimeoutError):
-                    backoff = DEFAULT_NETWORK_BACKOFF_SECONDS
-                else:
-                    backoff = host_delay(origin(url))
-                retryable = status in (429, 500, 502, 503, 504) or (
-                    not is_http_error and isinstance(error, urllib.error.URLError)
-                ) or isinstance(error, TimeoutError)
-                delay = max(host_delay(origin(url)), backoff)
-                print(f"skip {url}: {error}; host cooldown {delay:.0f}s")
-                outcome = {
-                    "http_success": http_success, "html_parsed": html_parsed,
-                    "non_html": non_html, "failed": True,
-                }
-                return None, None, delay, retryable, outcome
+                batch = select_batch(
+                    queue, allowed, host_next_allowed, time.time(),
+                    workers=available_slots, priority_urls=seeds,
+                    in_flight_hosts={host_key(item[0]) for item in in_flight.values()},
+                )
+                for item in batch:
+                    future = pool.submit(fetch, item)
+                    in_flight[future] = item
+                    fetched += 1
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=min(WORKERS, len(batch))) as pool:
-            results = list(pool.map(fetch, batch))
-
-        fetched += len(batch)
-        completed_at = time.time()
-        for (url, depth), result in zip(batch, results):
-            host = host_key(url)
-            delay = result[2] if result else host_delay(origin(url))
-            host_next_allowed[host] = completed_at + delay
-            if result and len(result) > 3 and result[3]:
-                queue.append((url, depth))
-                transient_retries_queued += 1
-            requests_by_host[host] = requests_by_host.get(host, 0) + 1
-            if result and len(result) > 4 and isinstance(result[4], dict):
-                outcome = result[4]
-                fetch_outcomes.append(outcome)
-                media_candidates_this_run.extend(outcome.get("media_candidates", []))
-                media_robots_blocked_count += int(outcome.get("media_robots_blocked", 0) or 0)
-                media_external_deferred_count += int(outcome.get("media_external_deferred", 0) or 0)
-
-        for result in results:
-            if not result or not result[0]:
+            if not in_flight:
+                if not queue or fetched >= MAX_FETCH_PER_RUN:
+                    break
+                remaining = MAX_RUN_SECONDS - (time.monotonic() - run_started)
+                if remaining <= 0:
+                    break
+                wait = next_host_wait(queue, host_next_allowed, time.time())
+                if wait > remaining:
+                    break
+                if wait > 0:
+                    time.sleep(wait)
                 continue
-            record, links, _delay, _retryable, _outcome = result
-            if record.get("_eh_noindex"):
-                index_policy_blocked_count[0] += 1
-                noindex_urls.add(record["url"])
-            else:
-                records[record["url"]] = record
-                depth_counts[str(record["depth"])] = depth_counts.get(str(record["depth"]), 0) + 1
-            enqueue_discovered_links(queue, seen, links, record)
+
+            remaining = MAX_RUN_SECONDS - (time.monotonic() - run_started)
+            completed, _pending = concurrent.futures.wait(
+                in_flight,
+                timeout=max(0.0, remaining) if remaining > 0 else None,
+                return_when=concurrent.futures.FIRST_COMPLETED,
+            )
+            if not completed:
+                # The run budget has elapsed. Drain already-started requests,
+                # but do not submit additional work beyond the budget.
+                continue
+
+            for future in completed:
+                url, depth = in_flight.pop(future)
+                result = future.result()
+                completed_at = time.time()
+                host = host_key(url)
+                delay = result[2] if result else host_delay(origin(url))
+                host_next_allowed[host] = completed_at + delay
+
+                if result and len(result) > 3 and result[3]:
+                    queue.append((url, depth))
+                    transient_retries_queued += 1
+                requests_by_host[host] = requests_by_host.get(host, 0) + 1
+                if result and len(result) > 4 and isinstance(result[4], dict):
+                    outcome = result[4]
+                    fetch_outcomes.append(outcome)
+                    media_candidates_this_run.extend(outcome.get("media_candidates", []))
+                    media_robots_blocked_count += int(outcome.get("media_robots_blocked", 0) or 0)
+                    media_external_deferred_count += int(outcome.get("media_external_deferred", 0) or 0)
+
+                if not result or not result[0]:
+                    continue
+                record, links, _delay, _retryable, _outcome = result
+                if record.get("_eh_noindex"):
+                    index_policy_blocked_count[0] += 1
+                    noindex_urls.add(record["url"])
+                else:
+                    records[record["url"]] = record
+                    depth_counts[str(record["depth"])] = depth_counts.get(str(record["depth"]), 0) + 1
+                enqueue_discovered_links(queue, seen, links, record)
 
     run_duration = round(time.monotonic() - run_started, 2)
     fetch_metrics = summarize_fetch_outcomes(fetch_outcomes)

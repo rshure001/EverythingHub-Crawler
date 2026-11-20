@@ -612,6 +612,20 @@ class CrawlerTests(unittest.TestCase):
         self.assertEqual(len(batch), 2)
         self.assertEqual(len(queue), 1)
 
+    def test_select_batch_skips_hosts_with_requests_already_in_flight(self):
+        queue = deque([
+            ("https://busy.example/next", 0),
+            ("https://ready.example/page", 1),
+        ])
+
+        batch = crawl.select_batch(
+            queue, lambda _url: True, {}, now=100.0, workers=1,
+            in_flight_hosts={"busy.example"},
+        )
+
+        self.assertEqual(batch, [("https://ready.example/page", 1)])
+        self.assertEqual(list(queue), [("https://busy.example/next", 0)])
+
     def test_select_batch_prioritizes_seed_urls_ahead_of_deeper_frontier(self):
         seed = "https://www.britannica.com/"
         queue = deque([
