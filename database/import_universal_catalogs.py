@@ -5,6 +5,7 @@ from __future__ import annotations
 import gzip
 import json
 import os
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -45,6 +46,10 @@ def parse_timestamp(value):
 
 
 def build_catalog_rows(payload):
+    eligible_counts = Counter(
+        item.get("catalog_id") for item in payload.get("records", [])
+        if isinstance(item, dict) and (item.get("attributes") or {}).get("public_search_allowed") is True
+    )
     rows = []
     for item in payload.get("catalogs", []):
         if not isinstance(item, dict) or not valid_https_url(item.get("source_url")):
@@ -58,7 +63,7 @@ def build_catalog_rows(payload):
             item.get("geography") or "", item["source_url"],
             item.get("access_method") or "web",
             item.get("coverage_status") or "unknown",
-            max(0, int(item.get("record_count") or 0)),
+            max(0, int(eligible_counts.get(item["catalog_id"], 0))),
             parse_timestamp(item.get("last_discovered_at")),
             parse_timestamp(item.get("last_synced_at")),
         ))
@@ -75,6 +80,8 @@ def build_record_rows(payload):
         attrs = item.get("attributes") or {}
         if not isinstance(attrs, dict):
             raise ValueError("record attributes must be a JSON object")
+        if attrs.get("public_search_allowed") is not True:
+            continue
         rows.append((
             item["record_id"], item["catalog_id"], item["record_type"],
             item["title"], item.get("description") or "", item["source_key"],
