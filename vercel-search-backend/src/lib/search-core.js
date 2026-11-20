@@ -146,6 +146,7 @@ function buildResponse(options) {
     indexSource: options.indexSource || null,
     indexIntegrity: options.indexIntegrity || null,
     indexShardCount: Number.isInteger(options.indexShardCount) ? options.indexShardCount : null,
+    indexTransport: options.indexTransport || null,
     staleCatalog: Boolean(options.staleCatalog),
     results,
     providers
