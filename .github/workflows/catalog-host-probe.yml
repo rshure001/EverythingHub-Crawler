@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - "crawler/catalog_host_probe.py"
+      - "crawler/test_catalog_host_probe.py"
       - "data/host-catalog-candidates.json"
       - ".github/workflows/catalog-host-probe.yml"
   workflow_dispatch:
@@ -31,6 +32,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Test cumulative host probe inventory
+        working-directory: crawler
+        run: python -m unittest test_catalog_host_probe.py -v
       - name: Probe a bounded host batch
         env:
           INPUT_OFFSET: ${{ github.event.inputs.offset }}
