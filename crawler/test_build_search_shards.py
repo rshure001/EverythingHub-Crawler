@@ -35,11 +35,11 @@ class SearchShardBatchBoundaryTests(unittest.TestCase):
         self.assertFalse(batch_fits([page], len(raw) - 1))
 
     def test_compressed_catalog_cap_supports_the_independent_search_backend(self):
-        self.assertEqual(MAX_CATALOG_GZIP_BYTES, 12_000_000)
+        self.assertEqual(MAX_CATALOG_GZIP_BYTES, 16_000_000)
 
     def test_builder_and_validator_share_the_compressed_catalog_cap(self):
         self.assertEqual(MAX_CATALOG_GZIP_BYTES, VALIDATOR_MAX_CATALOG_GZIP_BYTES)
-        self.assertEqual(MAX_CATALOG_GZIP_BYTES, 12_000_000)
+        self.assertEqual(MAX_CATALOG_GZIP_BYTES, 16_000_000)
 
     def test_compressed_catalog_at_current_observed_size_is_kept(self):
         observed_size = 10_113_629
