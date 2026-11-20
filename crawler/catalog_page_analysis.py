@@ -21,7 +21,7 @@ from index_store import load_index
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_INDEX = ROOT / "data" / "index.json"
 DEFAULT_OUTPUT = ROOT / "data" / "page-derived-catalogs"
-ANALYZER_VERSION = 4
+ANALYZER_VERSION = 5
 TRACKING_KEYS = {"fbclid", "gclid", "dclid", "mc_cid", "mc_eid", "ref", "source"}
 STOP_TOKENS = {
     "the", "and", "for", "with", "from", "our", "your", "all", "new", "home", "page",
@@ -32,11 +32,11 @@ STOP_TOKENS = {
 GENERIC_TITLES = {"home", "homepage", "welcome", "404", "not found", "access denied", "page not found"}
 MEDIA_URL_RE = re.compile(r"https?://[^\s<>\"']+\.(?:jpg|jpeg|png|webp|gif|svg|mp4|webm|mov|mp3|wav|m4a)(?:\?[^\s<>\"']*)?", re.I)
 LISTING_RE = re.compile(
-    r"\b(?:browse(?:\s+all)?|view\s+all|all\s+(?:products|models|services|locations|places|events|datasets|articles|brands)|filter\s+by|sort\s+by|search\s+results|showing\s+\d+|catalog(?:ue)?|store\s+locator|find\s+(?:a\s+)?(?:location|business|place)|business\s+directory|places\s+directory)\b",
+    r"\b(?:browse(?:\s+all)?|view\s+all|all\s+(?:products|models|services|locations|places|events|datasets|articles|brands|offices)|filter\s+by|sort\s+by|search\s+results|showing\s+\d+|catalog(?:ue)?\s+(?:of|for)|(?:product|model|service|business|place|event|dataset|article|brand)\s+catalog(?:ue)?|store\s+locator|find\s+(?:a\s+)?(?:location|business|place|office)|business\s+directory|places\s+directory|office\s+directory)\b",
     re.I,
 )
 CATALOG_TITLE_RE = re.compile(
-    r"\b(?:catalog(?:ue)?|all\s+(?:products|models|services|locations|places|events|datasets|articles|brands)|browse\s+all|shop\s+all|store\s+locator|product\s+listing|model\s+listing|business\s+directory|places\s+directory|service\s+directory)\b",
+    r"\b(?:catalog(?:ue)?\s+(?:of|for)|(?:product|model|service|business|place|event|dataset|article|brand)\s+catalog(?:ue)?|all\s+(?:products|models|services|locations|places|events|datasets|articles|brands|offices)|browse\s+all|shop\s+all|store\s+locator|product\s+listing|model\s+listing|business\s+directory|places\s+directory|service\s+directory|office\s+directory)\b",
     re.I,
 )
 
@@ -52,7 +52,7 @@ SEGMENT_TYPES = {
     "museums": "place", "attractions": "place", "destinations": "place",
     "people": "person", "person": "person", "authors": "person", "author": "person",
     "profiles": "person", "profile": "person", "staff": "person", "team": "person",
-    "organizations": "organization", "organization": "organization", "agencies": "organization",
+    "organizations": "organization", "organization": "organization", "offices": "organization", "office": "organization", "agencies": "organization",
     "agency": "organization", "institutions": "organization", "foundation": "organization",
     "events": "event", "event": "event", "calendar": "event", "conferences": "event",
     "datasets": "dataset", "dataset": "dataset", "data": "dataset", "api": "dataset",
@@ -75,7 +75,7 @@ ROOTS_BY_TYPE = {
     "business": {"businesses", "business", "stores", "dealers", "restaurants", "hotels", "directory"},
     "place": {"places", "locations", "location", "parks", "museums", "attractions", "destinations"},
     "person": {"people", "person", "authors", "author", "profiles", "profile", "staff", "team"},
-    "organization": {"organizations", "organization", "agencies", "agency", "institutions", "foundation"},
+    "organization": {"organizations", "organization", "offices", "office", "agencies", "agency", "institutions", "foundation"},
     "event": {"events", "event", "calendar", "conferences"},
     "dataset": {"datasets", "dataset", "data", "api", "registries", "registry"},
     "article": {"news", "articles", "article", "blog", "posts", "post", "research", "publications", "publication", "papers", "reports", "archive", "archives", "library"},
@@ -275,7 +275,7 @@ def _candidate_groups(page: dict, host: str, segments: list[str], body: str, tit
             continue
         kind = SEGMENT_TYPES[segment]
         end = i + 1
-        if kind in ("place", "business") and i + 1 < len(segments) and len(segments[i + 1]) > 2:
+        if kind in ("place", "business", "product", "model") and i + 1 < len(segments) and segments[i + 1] in CATEGORY_SEGMENTS:
             end = i + 2
         path = "/" + "/".join(segments[:end])
         key = host + "|" + kind + "|" + path
@@ -312,6 +312,8 @@ def _extract_list_entities(body: str) -> list[tuple[str, str, str]]:
                 name = re.sub(r"\s+(?:etc\.?|and more|among others|and others)$", "", name, flags=re.I)
                 name = name.strip(" \t:-–—'\"()[]{}")
                 normalized = _norm(name)
+                if name.split() and name.split()[0].casefold() in {"its", "their", "our", "his", "her", "this", "that", "these", "those"}:
+                    continue
                 if not 3 <= len(name) <= 100 or not re.search(r"[A-Z0-9]", name):
                     continue
                 if normalized in {"more", "other", "others", "various", "etc"}:
@@ -324,7 +326,7 @@ def _extract_list_entities(body: str) -> list[tuple[str, str, str]]:
 
 def _catalog_title(host: str, kind: str, path: str, source_titles: list[str]) -> str:
 
-    explicit = [x for x in source_titles if CATALOG_TITLE_RE.search(x) or TYPE_LABEL[kind].casefold() in x.casefold()]
+    explicit = [x for x in source_titles if CATALOG_TITLE_RE.search(x)]
     if explicit:
         return sorted(explicit, key=lambda x: (len(x), x.casefold()))[0]
     token_sets = []
@@ -397,14 +399,17 @@ def analyze_pages(
                 "source_url": url,
                 "discovered_at": page.get("fetched_at"),
             }
+        explicit = _candidate_groups(page, host, segments, body, title) if is_eligible else []
+        is_catalog_definition = bool(explicit)
         kind = _record_type(page, segments) if is_eligible else None
-        group_key = host + "|" + kind + "|" + _group_path(kind, segments) if kind else None
+        group_key = host + "|" + kind + "|" + _group_path(kind, segments) if kind and not is_catalog_definition else None
         record_id = None
-        if kind:
+        if kind and not is_catalog_definition:
             entity_key = _record_entity_key(kind, host, title)
             record_id = stable_id("record", entity_key)
             item = records.setdefault(record_id, {
-                "record_id": record_id, "canonical_entity_key": entity_key, "record_type": kind,
+                "record_id": record_id, "entity_id": stable_id("entity", entity_key),
+                "canonical_entity_key": entity_key, "record_type": kind,
                 "title": title, "description": description or text[:500],
                 "source_urls": [], "source_page_ids": [], "catalog_ids": [],
                 "last_seen_at": page.get("fetched_at"),
@@ -421,7 +426,6 @@ def analyze_pages(
             if title and title not in group_titles[group_key]:
                 group_titles[group_key].append(title)
 
-        explicit = _candidate_groups(page, host, segments, body, title) if is_eligible else []
         content_entities = _extract_list_entities(body) if is_eligible else []
         content_entity_mentions += len(content_entities)
         page_group_keys = []
@@ -438,9 +442,10 @@ def analyze_pages(
             page_group_keys.append(key)
         for entity_kind, entity_title, cue in content_entities:
             entity_key = _record_entity_key(entity_kind, host, entity_title)
-            entity_id = stable_id("record", entity_key)
-            item = records.setdefault(entity_id, {
-                "record_id": entity_id, "canonical_entity_key": entity_key, "record_type": entity_kind,
+            content_record_id = stable_id("record", entity_key)
+            item = records.setdefault(content_record_id, {
+                "record_id": content_record_id, "entity_id": stable_id("entity", entity_key),
+                "canonical_entity_key": entity_key, "record_type": entity_kind,
                 "title": entity_title,
                 "description": f"Explicit {cue} list item extracted from {title or host}.",
                 "source_urls": [], "source_page_ids": [], "catalog_ids": [],
@@ -455,7 +460,7 @@ def analyze_pages(
                 item["last_seen_at"] = page["fetched_at"]
             content_path = _content_group_path(entity_kind, segments)
             content_key = host + "|" + entity_kind + "|" + content_path
-            record_groups[content_key].add(entity_id)
+            record_groups[content_key].add(content_record_id)
             group_pages[content_key].add(page_id)
             group_urls[content_key].add(url)
             if title and title not in group_titles[content_key]:
@@ -467,6 +472,7 @@ def analyze_pages(
             pages_with_signals += 1
         page_rows.append({
             "page_id": page_id, "url": url, "eligible": is_eligible,
+            "catalog_definition": is_catalog_definition,
             "record_type": kind, "record_id": record_id,
             "catalog_group_keys": sorted(set(page_group_keys)),
             "media_reference_count": len(page_media),
@@ -544,8 +550,14 @@ def analyze_pages(
             0,
             sum(len(x.get("source_page_ids", [])) for x in catalog_list) - len(catalog_list),
         ),
+        "duplicate_catalog_candidate_page_references": max(
+            0,
+            sum(len(x.get("source_page_ids", [])) for x in catalog_list) - len(catalog_list),
+        ),
         "subcatalogs_discovered": sum(bool(x["parent_catalog_id"]) for x in catalog_list),
+        "catalog_definition_pages": sum(bool(x.get("catalog_definition")) for x in page_rows),
         "unique_records": len(record_list),
+        "unique_entities": len({x.get("entity_id") for x in record_list if x.get("entity_id")}),
         "unique_records_by_type": type_counts,
         "content_entity_mentions": content_entity_mentions,
         "content_extracted_unique_records": sum(1 for item in record_list if item.get("content_extracted")),
@@ -644,8 +656,12 @@ def analyze_pages_incremental(
         "unique_catalogs_discovered": len(all_catalogs),
         "catalog_candidate_page_references": page_refs,
         "duplicate_catalog_candidates": max(0, page_refs - len(all_catalogs)),
+        "duplicate_catalog_candidate_page_references": max(0, page_refs - len(all_catalogs)),
         "subcatalogs_discovered": sum(bool(x["parent_catalog_id"]) for x in all_catalogs),
-        "unique_records": len(all_records), "unique_records_by_type": type_counts,
+        "catalog_definition_pages": sum(bool(x.get("catalog_definition")) for x in all_page_rows),
+        "unique_records": len(all_records),
+        "unique_entities": len({x.get("entity_id") for x in all_records if x.get("entity_id")}),
+        "unique_records_by_type": type_counts,
         "content_entity_mentions": content_entity_mentions,
         "content_extracted_unique_records": sum(1 for item in all_records if item.get("content_extracted")),
         "media_references": len({(x["source_page_id"], x["media_url"]) for x in all_media_references}),
@@ -725,6 +741,7 @@ def search_catalog_network(query: str, analysis: dict, limit: int = 10) -> list[
             "record_count": len(related),
             "matched_records": [{
                 "record_id": x["record_id"],
+                "entity_id": x.get("entity_id"),
                 "title": x["title"],
                 "record_type": x["record_type"],
                 "source_url": x["source_url"],
@@ -883,6 +900,8 @@ def validate_outputs(output_dir: Path) -> dict:
     for record in records:
         if stable_id("record", record.get("canonical_entity_key", "")) != record.get("record_id"):
             raise ValueError("record ID does not match its canonical entity key")
+        if stable_id("entity", record.get("canonical_entity_key", "")) != record.get("entity_id"):
+            raise ValueError("entity ID does not match its canonical entity key")
         if not set(record.get("source_page_ids", [])).issubset(page_ids):
             raise ValueError("record provenance references an unknown source page")
         source_urls = record.get("source_urls", [])

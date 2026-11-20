@@ -6,7 +6,7 @@ from pathlib import Path
 
 from catalog_page_analysis import (
     ANALYZER_VERSION, analyze_pages, analyze_pages_incremental,
-    search_catalog_network, search_source_page_evidence, write_outputs, validate_outputs,
+    search_catalog_network, search_source_page_evidence, write_outputs, validate_outputs, stable_id,
 )
 
 
@@ -494,6 +494,106 @@ class PageDerivedCatalogAnalysisTests(unittest.TestCase):
         self.assertEqual(metrics["duplicate_source_page_rows"], 1)
         self.assertEqual(metrics["eligible_pages"], 1)
         self.assertEqual(metrics["coverage_percentage"], 100.0)
+
+
+    def test_catalog_definition_page_is_not_counted_as_an_individual_record(self):
+        result = analyze_pages([{
+            "url": "https://example.org/locations",
+            "title": "All State Offices",
+            "description": "Browse all locations and find an office.",
+            "text": "Browse all locations. Contact a field office for help.",
+            "lane": "places", "robots_allowed": True,
+        }], source_total=1)
+        self.assertEqual(result["metrics"]["unique_catalogs_discovered"], 1)
+        self.assertEqual(result["metrics"]["catalog_definition_pages"], 1)
+        self.assertEqual(result["metrics"]["unique_records"], 0)
+        self.assertTrue(result["pages"][0]["catalog_definition"])
+        self.assertIsNone(result["pages"][0]["record_id"])
+
+    def test_list_entity_extraction_rejects_possessive_context_fragments(self):
+        result = analyze_pages([{
+            "url": "https://example.org/events/list",
+            "title": "Events in Las Vegas",
+            "description": "Events include Formula 1's Las Vegas Grand Prix and its New Year's Eve celebrations.",
+            "text": "Events include Formula 1's Las Vegas Grand Prix and its New Year's Eve celebrations.",
+            "lane": "events", "robots_allowed": True,
+        }], source_total=1)
+        titles = [x["title"] for x in result["records"] if x["record_type"] == "event"]
+        self.assertIn("Formula 1's Las Vegas Grand Prix", titles)
+        self.assertNotIn("its New Year's Eve celebrations", titles)
+
+    def test_field_office_pages_form_an_organization_catalog(self):
+        pages = [
+            {
+                "url": "https://blm.gov/office/las-vegas-field-office",
+                "title": "Las Vegas Field Office | Bureau of Land Management",
+                "description": "The Las Vegas Field Office handles local land management operations.",
+                "text": "Contact the Las Vegas Field Office for permits and access.",
+                "lane": "nature", "robots_allowed": True,
+            },
+            {
+                "url": "https://blm.gov/office/eastern-interior-field-office",
+                "title": "Eastern Interior Field Office | Bureau of Land Management",
+                "description": "The Eastern Interior Field Office handles local land management operations.",
+                "text": "Contact the Eastern Interior Field Office for permits and access.",
+                "lane": "nature", "robots_allowed": True,
+            },
+        ]
+        result = analyze_pages(pages, source_total=2)
+        catalogs = [x for x in result["catalogs"] if x["record_type"] == "organization"]
+        self.assertEqual(len(catalogs), 1)
+        self.assertEqual(len(catalogs[0]["record_ids"]), 2)
+        matches = search_catalog_network("Las Vegas", result)
+        self.assertTrue(any(x["catalog_id"] == catalogs[0]["catalog_id"] for x in matches))
+
+    def test_entity_ids_are_stable_across_catalog_memberships(self):
+        pages = [
+            {"url": "https://example.org/products/widget", "title": "Widget", "lane": "shopping", "robots_allowed": True},
+            {"url": "https://example.org/products/gadget", "title": "Gadget", "lane": "shopping", "robots_allowed": True},
+            {"url": "https://example.org/items/widget", "title": "Widget", "lane": "shopping", "robots_allowed": True},
+            {"url": "https://example.org/items/gadget", "title": "Gadget", "lane": "shopping", "robots_allowed": True},
+        ]
+        result = analyze_pages(pages, source_total=4)
+        widget = next(x for x in result["records"] if x["title"] == "Widget")
+        self.assertEqual(widget["entity_id"], stable_id("entity", widget["canonical_entity_key"]))
+        self.assertEqual(widget["record_id"], stable_id("record", widget["canonical_entity_key"]))
+        self.assertEqual(len(widget["catalog_ids"]), 2)
+
+    def test_article_word_does_not_create_a_false_catalog_title(self):
+        pages = [
+            {
+                "url": "https://example.org/articles/a",
+                "title": "Thomas Massie introduces articles of impeachment against Pete Hegseth | Example News",
+                "lane": "news", "robots_allowed": True,
+            },
+            {
+                "url": "https://example.org/articles/b",
+                "title": "New climate research report published | Example News",
+                "lane": "news", "robots_allowed": True,
+            },
+        ]
+        result = analyze_pages(pages, source_total=2)
+        catalogs = [x for x in result["catalogs"] if x["record_type"] == "article"]
+        self.assertEqual(len(catalogs), 1)
+        self.assertNotIn("impeachment", catalogs[0]["title"].casefold())
+
+    def test_catalog_release_phrase_does_not_become_a_catalog_title(self):
+        pages = [
+            {
+                "url": "https://urban.org/events/a",
+                "title": "DC Housing Preservation Catalog Release | Urban Institute",
+                "lane": "events", "robots_allowed": True,
+            },
+            {
+                "url": "https://urban.org/events/b",
+                "title": "Housing research update | Urban Institute",
+                "lane": "events", "robots_allowed": True,
+            },
+        ]
+        result = analyze_pages(pages, source_total=2)
+        catalogs = [x for x in result["catalogs"] if x["record_type"] == "event"]
+        self.assertEqual(len(catalogs), 1)
+        self.assertNotIn("catalog release", catalogs[0]["title"].casefold())
 
 
 if __name__ == "__main__":
