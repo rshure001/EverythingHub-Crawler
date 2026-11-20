@@ -203,3 +203,26 @@ jobs:
           assert data["tentacle"] == "science", data
           print("Science lane filter returned only the science fixture.")
           PY
+
+          catalog_query=$(python - <<'PY'
+          import json
+          data = json.load(open("data/universal-catalog-records.json", encoding="utf-8"))
+          print(data["records"][0]["title"])
+          PY
+          )
+          encoded_catalog_query=$(python -c "import urllib.parse; print(urllib.parse.quote('''$catalog_query'''))")
+          curl --silent --fail -H "Authorization: Bearer isolated-test-token" \
+            "http://127.0.0.1:8080/search?q=$encoded_catalog_query&type=catalog&record_type=dataset&limit=1" \
+            > /tmp/eh-catalog-search.json
+          python - <<'PY'
+          import json
+          data = json.load(open("/tmp/eh-catalog-search.json"))
+          assert data["type"] == "catalog_records", data
+          assert data["total"] >= 1, data
+          assert len(data["results"]) == 1, data
+          record = data["results"][0]
+          assert record["record_type"] == "dataset", record
+          assert record["url"].startswith("https://"), record
+          assert record["catalog_id"], record
+          print("Authenticated catalog-record search returned a staged dataset record.")
+          PY
