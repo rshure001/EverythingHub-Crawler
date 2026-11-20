@@ -1,3 +1,5 @@
+import ast
+import textwrap
 import unittest
 from pathlib import Path
 
@@ -26,6 +28,9 @@ class SearchApiSmokeFreshnessTests(unittest.TestCase):
         self.assertIn("time.sleep(min(30, remaining))", workflow)
         self.assertIn('production.get("indexedPages") == expected_pages', workflow)
         self.assertIn('production.get("indexUpdatedAt") == expected_updated_at', workflow)
+        script = workflow.split("run: |", 1)[1].split("\n          PY", 1)[0]
+        ast.parse(textwrap.dedent(script))
+
 
     def test_search_smoke_keeps_catalog_and_workflow_dispatch_paths(self):
         smoke = (
