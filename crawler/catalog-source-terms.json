@@ -3,8 +3,9 @@
   "default_policy": "deny",
   "sources": {
     "catalog.data.gov": {
-      "terms_url": "https://data.gov/contact/",
+      "terms_url": "https://resources.data.gov/catalog-api/",
       "terms_status": "reviewed_per_dataset",
+      "reviewed_at": "2026-11-20",
       "discovery_allowed": true,
       "metadata_only": true,
       "per_dataset_rights_required": true,
@@ -18,6 +19,7 @@
     "open.canada.ca": {
       "terms_url": "https://open.canada.ca/en/open-government-licence-canada/",
       "terms_status": "reviewed_per_dataset",
+      "reviewed_at": "2026-11-20",
       "discovery_allowed": true,
       "metadata_only": true,
       "per_dataset_rights_required": true,
