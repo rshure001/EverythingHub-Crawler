@@ -31,7 +31,7 @@ class ScheduleWatchdogTests(unittest.TestCase):
 
     def test_crawler_push_watches_hourly_automation_fallback_marker(self):
         workflow = (Path(__file__).resolve().parents[1] / ".github" / "workflows" / "crawl.yml").read_text(encoding="utf-8")
-        push = workflow.split("  push:\\n", 1)[1].split("  schedule:", 1)[0]
+        push = workflow.split("  push:" + chr(10), 1)[1].split("  schedule:", 1)[0]
         self.assertIn('      - "crawler/automation-trigger.json"', push)
 
     def test_crawler_schedule_uses_staggered_ten_minute_cadence(self):
@@ -42,7 +42,7 @@ class ScheduleWatchdogTests(unittest.TestCase):
 
     def test_watchdog_runs_after_crawler_completion_without_redundant_workflow_fanout(self):
         workflow = (Path(__file__).resolve().parents[1] / ".github" / "workflows" / "crawl-watchdog.yml").read_text(encoding="utf-8")
-        workflow_run = workflow.split("  workflow_run:\\n", 1)[1].split("  workflow_dispatch:", 1)[0]
+        workflow_run = workflow.split("  workflow_run:" + chr(10), 1)[1].split("  workflow_dispatch:", 1)[0]
         self.assertEqual(workflow_run.count('- "'), 1)
         self.assertIn('- "Everything Hub crawler"', workflow_run)
         self.assertNotIn("EverythingHub isolated importer smoke test", workflow_run)
