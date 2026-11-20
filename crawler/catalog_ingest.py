@@ -43,8 +43,10 @@ def adapt(manifest: dict[str, Any]) -> dict[str, Any]:
         catalogs.append(catalog)
         for dataset in datasets:
             landing = dataset.get("landing_url")
-            if not isinstance(landing, str) or not landing.startswith("https://"):
+            if not isinstance(landing, str):
                 continue
+            if not landing.startswith("https://"):
+                raise ValueError("dataset landing URLs must use HTTPS")
             raw = {
                 "source_key": dataset.get("dataset_id") or dataset.get("id"),
                 "record_type": "dataset",
