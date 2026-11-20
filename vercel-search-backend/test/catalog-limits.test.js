@@ -19,11 +19,11 @@ test("Vercel catalog loader accepts the current 14,112,415-byte compressed catal
 });
 
 test("Vercel catalog loader accepts the 100,000-page bounded shard envelope", () => {
-  assert.equal(MAX_INDEXED_PAGES, 100_000);
+  assert.equal(MAX_INDEXED_PAGES, 125_000);
   assert.equal(MAX_SHARD_COUNT, 512);
   assert.equal(MAX_SHARD_BYTES, 350_000);
   assert.equal(MAX_SHARD_UNCOMPRESSED_BYTES, 500_000);
-  assert.equal(MAX_TOTAL_SHARD_BYTES, 100_000_000);
+  assert.equal(MAX_TOTAL_SHARD_BYTES, 125_000_000);
   assert.equal(MAX_TOTAL_COMPRESSED_SHARD_BYTES, 64_000_000);
   assert.equal(MAX_TOTAL_SHARD_UNCOMPRESSED_BYTES, 256_000_000);
   assert.equal(MAX_SHARD_CONCURRENCY, 32);
