@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Append verified, idempotent events to the Everything Hub project ledger."""
 from __future__ import annotations
-import argparse, json, os, pathlib, tempfile
+import argparse, gzip, json, os, pathlib, tempfile
 from datetime import datetime, timezone
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -40,16 +40,38 @@ def append_event(event, path=LEDGER):
             os.unlink(temp_name)
     return True
 
+def _read_json_or_gzip(path):
+    raw = gzip.decompress(path.read_bytes()) if path.suffix == ".gz" else path.read_bytes()
+    return json.loads(raw.decode("utf-8"))
+
 def record_catalog():
-    manifest = json.loads((ROOT / "data" / "catalogs.json").read_text(encoding="utf-8"))
+    data = ROOT / "data"
+    manifest = _read_json_or_gzip(data / "catalogs.json.gz")
+    openlibrary_path = data / "openlibrary-catalogs.json.gz"
+    openlibrary = _read_json_or_gzip(openlibrary_path) if openlibrary_path.exists() else {
+        "catalog_count": 0, "datasets_discovered": 0, "errors": []
+    }
+    universal_path = data / "universal-catalog-records.json.gz"
+    universal = _read_json_or_gzip(universal_path) if universal_path.exists() else {"metrics": {}}
     run_id = os.environ.get("GITHUB_RUN_ID", "manual")
+    metrics = universal.get("metrics", {})
     event = {
         "id": "catalog-discovery-" + run_id,
         "timestamp": manifest.get("updated_at") or datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
         "type": "catalog_discovery",
         "status": "success",
-        "summary": "Catalog-first public data discovery completed.",
-        "metrics": {"catalogs": manifest["catalog_count"], "datasets": manifest["datasets_discovered"], "resources": manifest["resources_discovered"]},
+        "summary": "Catalog-first discovery completed across CKAN and Open Library subject collections.",
+        "metrics": {
+            "catalogs": manifest["catalog_count"] + openlibrary["catalog_count"],
+            "catalog_records": metrics.get("catalog_records", manifest["datasets_discovered"] + openlibrary["datasets_discovered"]),
+            "unique_entities": metrics.get("unique_entities", 0),
+            "ckan_datasets": manifest["datasets_discovered"],
+            "ckan_resources": manifest["resources_discovered"],
+            "openlibrary_records": openlibrary["datasets_discovered"],
+            "source_page_references": metrics.get("source_page_references", 0),
+            "source_pages_fetched": metrics.get("source_pages_fetched", 0),
+            "indexed_records": metrics.get("indexed_records", 0),
+        },
         "source": {"workflow_run_id": run_id, "repository": "rshure001/EverythingHub-Crawler"}
     }
     return append_event(event)
