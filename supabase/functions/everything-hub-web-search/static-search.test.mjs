@@ -15,6 +15,29 @@ test("title and phrase matches rank above body-only matches", () => {
   assert.equal(result.count, 2);
 });
 
+test("structured product name, brand, SKU, and price are searchable and returned", () => {
+  const productPage = {
+    url: "https://jewel.example/ring-18k",
+    title: "Jewelry collection",
+    description: "Fine jewelry",
+    text: "Shop our collection",
+    lane: "shopping",
+    product: {
+      type: "product", name: "18K Diamond Pinky Ring",
+      brand: "Rolex Fine Jewelry", sku: "RING-18K-442",
+      price: "1299.00", currency: "USD", availability: "InStock",
+      image: "https://jewel.example/images/ring.jpg",
+      url: "https://jewel.example/ring-18k",
+    },
+  };
+  for (const query of ["Rolex", "RING-18K-442", "1299.00", "InStock"]) {
+    const result = searchStaticPages([productPage], query);
+    assert.equal(result.count, 1, query);
+    assert.equal(result.results[0].product.name, "18K Diamond Pinky Ring");
+    assert.equal(result.results[0].product.image, "https://jewel.example/images/ring.jpg");
+  }
+});
+
 test("multi-term queries require all terms", () => {
   const result = searchStaticPages(pages, "NASA Mars");
   assert.equal(result.count, 1);
