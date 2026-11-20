@@ -74,7 +74,7 @@ def record_catalog():
         },
         "source": {"workflow_run_id": run_id, "repository": "rshure001/EverythingHub-Crawler"}
     }
-    return append_event(event)
+    return append_event(event, LEDGER)
 
 def main():
     parser = argparse.ArgumentParser()
