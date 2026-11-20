@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - "database/**"
+      - "data/universal-catalog-records.json.gz"
       - "engine/intelligence_core.py"
       - ".github/workflows/import-smoke-test.yml"
   pull_request:
