@@ -769,10 +769,10 @@ class CrawlerTests(unittest.TestCase):
         self.assertEqual(batch, [("https://ready.example/two", 0)])
         self.assertEqual(list(queue), [("https://slow.example/one", 0)])
 
-    def test_default_batch_uses_one_hundred_fifty_distinct_hosts(self):
+    def test_default_batch_uses_two_hundred_fifty_distinct_hosts(self):
         queue = deque([
             (f"https://host-{index}.example/page", 0)
-            for index in range(150)
+            for index in range(250)
         ])
         # HTTP and HTTPS for one hostname must still count as the same host.
         queue.append(("http://host-0.example/second", 0))
@@ -781,10 +781,10 @@ class CrawlerTests(unittest.TestCase):
             queue, lambda _url: True, {}, now=100.0
         )
 
-        self.assertEqual(crawl.WORKERS, 150)
-        self.assertEqual(crawl.MAX_FETCH_PER_RUN, 8000)
+        self.assertEqual(crawl.WORKERS, 250)
+        self.assertEqual(crawl.MAX_FETCH_PER_RUN, 12000)
         self.assertEqual(crawl.QUEUE_LIMIT, 100000)
-        self.assertEqual(len(batch), 150)
+        self.assertEqual(len(batch), 250)
         self.assertEqual(
             len({crawl.host_key(url) for url, _depth in batch}),
             len(batch),
