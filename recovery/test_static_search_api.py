@@ -62,33 +62,37 @@ class StaticSearchTests(unittest.TestCase):
         return manifest
 
     def test_capacity_bounds_cover_current_public_catalog(self):
-        # Verified production snapshot at 2026-11-20T14:43:28Z: 101,179 pages.
-        # The recovery service must accept the same 125k ceiling as the publisher.
+        # Verified production snapshot at 2026-11-20T19:49:25Z: 125,643 pages,
+        # 482 compressed shards, 60,689,761 compressed bytes and 240,013,197 decoded bytes.
+        self.assertEqual(api.MAX_PAGES, 150_000)
+        self.assertEqual(api.MAX_SHARDS, 640)
+        self.assertEqual(api.MAX_TOTAL_COMPRESSED_BYTES, 80_000_000)
+        self.assertEqual(api.MAX_TOTAL_UNCOMPRESSED_BYTES, 320_000_000)
         self.assertEqual(
-            api._manifest_int(101_179, "total_pages", 1, api.MAX_PAGES),
-            101_179,
+            api._manifest_int(125_643, "total_pages", 1, api.MAX_PAGES),
+            125_643,
         )
         self.assertEqual(
             api._manifest_int(
-                158_864_711,
+                240_013_197,
                 "total uncompressed bytes",
                 1,
                 api.MAX_TOTAL_UNCOMPRESSED_BYTES,
             ),
-            158_864_711,
+            240_013_197,
         )
         self.assertEqual(
             api._manifest_int(
-                40_097_435,
+                60_689_761,
                 "total compressed bytes",
                 1,
                 api.MAX_TOTAL_COMPRESSED_BYTES,
             ),
-            40_097_435,
+            60_689_761,
         )
         self.assertEqual(
-            api._manifest_int(319, "shard_count", 1, api.MAX_SHARDS),
-            319,
+            api._manifest_int(482, "shard_count", 1, api.MAX_SHARDS),
+            482,
         )
 
     def test_title_hits_rank_first(self):
