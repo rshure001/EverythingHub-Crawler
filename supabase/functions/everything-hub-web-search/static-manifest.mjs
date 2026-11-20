@@ -1,6 +1,6 @@
 // Keep the public manifest guard ahead of the current catalog while retaining a hard bound.
-export const MAX_STATIC_INDEX_PAGES = 50_000;
-export const MAX_STATIC_INDEX_SHARDS = 256;
+export const MAX_STATIC_INDEX_PAGES = 60_000;
+export const MAX_STATIC_INDEX_SHARDS = 512;
 
 /**
  * Validate the bounded public catalog manifest contract shared by the Edge Function
