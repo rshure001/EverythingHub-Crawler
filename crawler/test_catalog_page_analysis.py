@@ -115,5 +115,47 @@ class PageDerivedCatalogAnalysisTests(unittest.TestCase):
             self.assertTrue(list((output / "indexes").glob("*.json.gz")))
 
 
+    def test_incidental_description_mentions_do_not_create_false_catalog_matches(self):
+        pages = [
+            {
+                "url": "https://nationalgeographic.com/articles/frozen-edge",
+                "title": "Conserving Life at the Frozen Edge",
+                "description": "A conservation story supported by Rolex.",
+                "text": "Research about polar ecosystems.",
+                "lane": "news", "robots_allowed": True,
+            },
+            {
+                "url": "https://nationalgeographic.com/articles/forest",
+                "title": "Protecting Ancient Forests",
+                "description": "A field report about biodiversity.",
+                "text": "Research about forests.",
+                "lane": "news", "robots_allowed": True,
+            },
+        ]
+        result = analyze_pages(pages, source_total=2)
+        self.assertEqual(search_catalog_network("Rolex", result), [])
+
+    def test_single_article_mention_does_not_masquerade_as_location_catalog(self):
+        pages = [
+            {
+                "url": "https://census.gov/library/stories/super-bowl",
+                "title": "The Chiefs and 49ers Meet in Las Vegas",
+                "description": "A story about the championship event.",
+                "text": "Las Vegas hosted the game.",
+                "lane": "news", "robots_allowed": True,
+            },
+            {
+                "url": "https://census.gov/library/stories/children",
+                "title": "Children Under Five Were Undercounted",
+                "description": "A census methodology story.",
+                "text": "Population measurement and census methods.",
+                "lane": "news", "robots_allowed": True,
+            },
+        ]
+        result = analyze_pages(pages, source_total=2)
+        self.assertEqual(search_catalog_network("Las Vegas", result), [])
+
+
+
 if __name__ == "__main__":
     unittest.main()
