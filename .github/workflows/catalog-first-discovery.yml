@@ -4,7 +4,9 @@ on:
   push:
     paths:
       - "crawler/catalog_discovery.py"
-      - "crawler/test_catalog_discovery.py"\n      - "crawler/catalog_retro_discovery.py"\n      - "crawler/test_catalog_retro_discovery.py"
+      - "crawler/test_catalog_discovery.py"
+      - "crawler/catalog_retro_discovery.py"
+      - "crawler/test_catalog_retro_discovery.py"
       - "crawler/catalog_model.py"
       - "crawler/test_catalog_model.py"
       - "project/**"
@@ -45,7 +47,12 @@ jobs:
       - name: Validate universal catalog model
         working-directory: crawler
         run: python -m unittest test_catalog_model.py -v
-      - name: Validate retroactive catalog discovery\n        working-directory: crawler\n        run: python -m unittest test_catalog_retro_discovery.py -v\n      - name: Build catalog backlog from all existing indexed pages\n        run: python crawler/catalog_retro_discovery.py\n      - name: Validate project ledger
+      - name: Validate retroactive catalog discovery
+        working-directory: crawler
+        run: python -m unittest test_catalog_retro_discovery.py -v
+      - name: Build catalog backlog from all existing indexed pages
+        run: python crawler/catalog_retro_discovery.py
+      - name: Validate project ledger
         run: python -m unittest discover -s project -p 'test_*.py' -v
       - name: Validate feedback learner
         run: python -m unittest discover -s learning -p 'test_*.py' -v
