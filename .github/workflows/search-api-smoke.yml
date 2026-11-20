@@ -9,14 +9,10 @@ on:
       - "public-search/shard-*.json.gz"
       - "public-search/catalog-v1.json.gz"
   workflow_dispatch:
-  workflow_run:
-    workflows: ["EverythingHub Publisher"]
-    types: [completed]
 permissions:
   contents: read
 jobs:
   smoke-test:
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 8
     env:
