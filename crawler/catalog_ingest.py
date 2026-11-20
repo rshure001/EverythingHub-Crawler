@@ -14,6 +14,7 @@ from catalog_model import catalog_metrics, normalize_catalog, normalize_record
 ROOT = Path(__file__).resolve().parents[1]
 INPUT = ROOT / "data" / "catalogs.json.gz"
 OUTPUT = ROOT / "data" / "universal-catalog-records.json.gz"
+OPENLIBRARY_INPUT = ROOT / "data" / "openlibrary-catalogs.json.gz"
 
 def adapt(manifest: dict[str, Any]) -> dict[str, Any]:
     catalogs, records, source_pages = [], [], []
@@ -30,13 +31,13 @@ def adapt(manifest: dict[str, Any]) -> dict[str, Any]:
         catalog = normalize_catalog({
             "source_id": source_id,
             "title": source.get("name") or source_id,
-            "description": "Public open-data dataset collection discovered through its CKAN API.",
-            "catalog_type": "open_data",
+            "description": source.get("description") or "Public collection discovered through a machine-readable catalog interface.",
+            "catalog_type": source.get("catalog_type") or "open_data",
             "subject": source.get("category") or "open data",
             "publisher": source.get("name") or "",
-            "source_url": base.rstrip("/") + source.get("api_path", "/api/3/action/package_search"),
-            "access_method": "api",
-            "coverage_status": "partial" if errors or datasets else "unknown",
+            "source_url": source.get("source_url") or base.rstrip("/") + source.get("api_path", "/api/3/action/package_search"),
+            "access_method": source.get("access_method") or "api",
+            "coverage_status": source.get("coverage_status") or ("partial" if errors or datasets else "unknown"),
             "record_count": len(datasets),
             "last_discovered_at": manifest.get("updated_at") or "",
         })
@@ -49,13 +50,13 @@ def adapt(manifest: dict[str, Any]) -> dict[str, Any]:
                 raise ValueError("dataset landing URLs must use HTTPS")
             raw = {
                 "source_key": dataset.get("dataset_id") or dataset.get("id"),
-                "record_type": "dataset",
+                "record_type": dataset.get("record_type") or "dataset",
                 "title": dataset.get("title") or dataset.get("dataset_id"),
                 "description": dataset.get("description") or "",
                 "source_url": landing,
-                "canonical_entity_key": "dataset:" + str(dataset.get("id") or dataset.get("dataset_id")),
-                "subject": ", ".join(dataset.get("tags") or [])[:200],
-                "attributes": {
+                "canonical_entity_key": dataset.get("canonical_entity_key") or ("dataset:" + str(dataset.get("id") or dataset.get("dataset_id"))),
+                "subject": dataset.get("subject") or ", ".join(dataset.get("tags") or [])[:200],
+                "attributes": dataset.get("attributes") or {
                     "organization": dataset.get("organization") or "",
                     "tags": dataset.get("tags") or [],
                     "resources": dataset.get("resources") or [],
@@ -88,6 +89,14 @@ def main() -> None:
     args = parser.parse_args()
     raw = gzip.decompress(args.input.read_bytes()) if args.input.suffix == ".gz" else args.input.read_bytes()
     manifest = json.loads(raw.decode("utf-8"))
+    if OPENLIBRARY_INPUT.exists():
+        extra_raw = gzip.decompress(OPENLIBRARY_INPUT.read_bytes())
+        extra = json.loads(extra_raw.decode("utf-8"))
+        manifest = {
+            **manifest,
+            "catalogs": manifest.get("catalogs", []) + extra.get("catalogs", []),
+            "datasets": manifest.get("datasets", []) + extra.get("datasets", []),
+        }
     result = adapt(manifest)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     temp = args.output.with_suffix(args.output.suffix + ".tmp")
