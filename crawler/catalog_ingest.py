@@ -55,6 +55,7 @@ def adapt(manifest: dict[str, Any]) -> dict[str, Any]:
         })
         catalog["source_terms_url"] = source_terms_url
         catalog["source_terms_status"] = source_terms_status
+        catalog["source_terms_reviewed_at"] = source.get("source_terms_reviewed_at") or ""
         catalog["attribution_required"] = source.get("attribution_required", "per_dataset")
         catalog["public_search_allowed"] = catalog_policy_approved
         catalogs.append(catalog)
@@ -83,6 +84,7 @@ def adapt(manifest: dict[str, Any]) -> dict[str, Any]:
                 "license": license_info,
                 "source_terms_url": dataset.get("source_terms_url") or source_terms_url,
                 "source_terms_status": source_terms_status,
+                "source_terms_reviewed_at": dataset.get("source_terms_reviewed_at") or source.get("source_terms_reviewed_at") or "",
                 "attribution_required": dataset.get("attribution_required", catalog.get("attribution_required")),
                 "rights_status": "license_metadata_present" if license_present else "review_required",
                 "public_search_allowed": public_search_allowed,
