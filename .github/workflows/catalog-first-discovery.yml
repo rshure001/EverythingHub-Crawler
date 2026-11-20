@@ -55,8 +55,6 @@ jobs:
       - name: Validate universal catalog ingestion
         working-directory: crawler
         run: python -m unittest test_catalog_ingest.py -v
-      - name: Build catalog backlog from all existing indexed pages
-        run: python crawler/catalog_retro_discovery.py
       - name: Validate project ledger
         run: python -m unittest discover -s project -p 'test_*.py' -v
       - name: Validate feedback learner
