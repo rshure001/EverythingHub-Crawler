@@ -7,21 +7,29 @@ kept here so production behavior is reviewable and testable in GitHub.
 
 - Entry points: src/api/search.js and src/api/health.js
 - Runtime: Node.js 26, built-in modules only
-- Catalog source: the versioned public-search manifest and compressed catalog
-  pinned to one immutable Git commit resolved from the main-branch ref
+- Catalog source: the versioned public-search manifest and either its optional
+  compressed catalog or bounded SHA-pinned shards from the same immutable Git commit
 - Database dependency: none
 - External discovery provider: Bing RSS, cached per query for two minutes
 
 ## Integrity and safety
 
-- Fetches the Git ref first, then retrieves the manifest and gzip catalog from the same immutable commit SHA to prevent mixed CDN revisions.
-- Verifies manifest version, timestamps, page count, shard count, compressed byte count, and catalog SHA-256 before accepting the catalog.
-- Rejects invalid URLs and any record explicitly marked robots-denied.
-- Bounds the compressed catalog to 12,000,000 bytes, decompressed JSON to 64,000,000 bytes, the index to 30,000 pages and 256 shard entries, and all external requests by timeout.
-- Retains a separately tested bounded shard validator/loader for future fallback work; it is not the active production load path.
+- Fetches the Git ref first, then retrieves the manifest and all catalog
+  objects from that same immutable commit SHA; shard requests never follow a
+  moving main-branch URL.
+- Verifies manifest version, timestamp, page count, shard count, compressed
+  byte count, and SHA-256 before accepting a gzip catalog.
+- When the optional gzip file is absent, too large, or fails integrity checks,
+  the backend loads the bounded shard set and verifies each shard's byte count,
+  SHA-256, page count, schema, URL safety, and robots-denied exclusions.
+- Bounds gzip to 16,000,000 bytes and decoded JSON to 64,000,000 bytes; bounds
+  the index to 40,000 pages, 256 shards, 1,000,000 bytes per shard, and
+  80,000,000 aggregate shard bytes. Shard downloads use a 32-worker pool and
+  per-request timeouts.
 - Keeps a last-known-good in-memory catalog for up to one hour if GitHub has a
   transient outage; responses identify stale catalog use.
-- Does not fetch or download indexed source pages; it reads only the repository's own generated index shards.
+- Does not fetch or download indexed source pages; it reads only the
+  repository's generated index shards and optional compressed catalog.
 
 ## Pagination
 
@@ -33,9 +41,13 @@ duplicates. Regression tests cover pages one through three.
 
 ## Deployment packaging
 
-- The direct Vercel upload maps `vercel-search-backend/src/api/` to `src/api/`, `vercel-search-backend/src/lib/` to `src/lib/`, and the package manifest to `src/package.json` in the deployment payload.
-- That folder's `package.json` explicitly pins CommonJS and Node.js 26.x; the backend uses built-in Node modules only.
-- Keep the package manifest in Git so direct Vercel API deployments remain reproducible and reviewable.
+- The direct Vercel upload maps vercel-search-backend/src/api/ to src/api/,
+  vercel-search-backend/src/lib/ to src/lib/, and the package manifest to
+  src/package.json in the deployment payload.
+- That folder's package.json explicitly pins CommonJS and Node.js 26.x; the
+  backend uses built-in Node modules only.
+- Keep the package manifest in Git so direct Vercel API deployments remain
+  reproducible and reviewable.
 
 ## Tests
 
