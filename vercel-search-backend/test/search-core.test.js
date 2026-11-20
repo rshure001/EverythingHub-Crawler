@@ -234,3 +234,68 @@ test('complete-query bonus requires every term in a high-signal field', () => {
   assert.equal(results[0].url, 'https://example.com/nasa/14');
   assert.ok(results[0].score < 100);
 });
+
+
+test('small first pages reserve only a small Bing supplement and show crawler results', () => {
+  const ranked = Array.from({ length: 30 }, (_, index) => ({
+    url: 'https://example.com/small-page/' + index,
+    title: 'Rolex result ' + index,
+    source: 'Everything Hub Crawler',
+    origin: 'Everything Hub Index',
+    mediaType: 'web',
+    provider: 'everythinghub-catalog',
+    lane: 'general',
+    score: 100 - index
+  }));
+  const bing = Array.from({ length: 10 }, (_, index) => ({
+    url: 'https://bing.example/small/' + index,
+    title: 'Bing result ' + index,
+    source: 'Bing Web Search',
+    origin: 'Bing',
+    mediaType: 'web',
+    provider: 'bing-rss'
+  }));
+  const ten = buildResponse({
+    query: 'Rolex', limit: 10, offset: 0, ranked, bingResults: bing, indexedPages: 107498
+  });
+  assert.equal(ten.results.length, 10);
+  assert.equal(ten.results.filter(item => item.provider === 'bing-rss').length, 2);
+  assert.equal(ten.results.filter(item => item.provider === 'everythinghub-catalog').length, 8);
+  const three = buildResponse({
+    query: 'Rolex', limit: 3, offset: 0, ranked, bingResults: bing, indexedPages: 107498
+  });
+  assert.equal(three.results.length, 3);
+  assert.equal(three.results.every(item => item.provider === 'everythinghub-catalog'), true);
+});
+
+test('small-page pagination starts after the crawler results actually shown on page one', () => {
+  const ranked = Array.from({ length: 20 }, (_, index) => ({
+    url: 'https://example.com/small-pagination/' + index,
+    title: 'Rolex result ' + index,
+    source: 'Everything Hub Crawler',
+    origin: 'Everything Hub Index',
+    mediaType: 'web',
+    provider: 'everythinghub-catalog',
+    lane: 'general',
+    score: 100 - index
+  }));
+  const bing = Array.from({ length: 10 }, (_, index) => ({
+    url: 'https://bing.example/pagination/' + index,
+    title: 'Bing result ' + index,
+    source: 'Bing Web Search',
+    origin: 'Bing',
+    mediaType: 'web',
+    provider: 'bing-rss'
+  }));
+  const first = buildResponse({
+    query: 'Rolex', limit: 10, offset: 0, ranked, bingResults: bing, indexedPages: 107498
+  });
+  const second = buildResponse({
+    query: 'Rolex', limit: 10, offset: 10, ranked, bingResults: bing, indexedPages: 107498
+  });
+  const firstCrawler = first.results.filter(item => item.provider === 'everythinghub-catalog');
+  const secondCrawler = second.results.filter(item => item.provider === 'everythinghub-catalog');
+  assert.equal(firstCrawler.length, 8);
+  assert.equal(secondCrawler[0].url, 'https://example.com/small-pagination/8');
+  assert.equal(firstCrawler.some(a => secondCrawler.some(b => a.url === b.url)), false);
+});
