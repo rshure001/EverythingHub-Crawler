@@ -5,12 +5,14 @@ class UniversalCatalogIngestTests(unittest.TestCase):
     def test_ckan_datasets_become_catalog_records_not_pages(self):
         result = adapt({
             "updated_at": "2026-11-20T00:00:00Z",
-            "catalogs": [{"id":"test","name":"Test Data","base_url":"https://data.example.org","errors":[]}],
+            "catalogs": [{"id":"test","name":"Test Data","base_url":"https://data.example.org","source_terms_url":"https://data.gov/contact/","source_terms_status":"reviewed_per_dataset","source_terms_reviewed_at":"2026-11-20","attribution_required":"per_dataset","errors":[]}],
             "datasets": [{
                 "catalog_id":"test","id":"test:roads","dataset_id":"roads","title":"Road Network",
                 "description":"Roads and routes","landing_url":"https://data.example.org/dataset/roads",
                 "organization":"Transport","tags":["roads","maps"],
                 "resources":[{"name":"GeoJSON","format":"GEOJSON","url":"https://data.example.org/roads.geojson"}],
+                "license":{"id":"cc-by","url":"https://creativecommons.org/licenses/by/4.0/","title":"CC BY"},
+                "source_terms_url":"https://data.gov/contact/","source_terms_status":"reviewed_per_dataset",
                 "resource_count":1,"metadata_modified":"2026-11-19"
             }]
         })
@@ -22,6 +24,9 @@ class UniversalCatalogIngestTests(unittest.TestCase):
         self.assertFalse(result["production_indexed"])
         self.assertEqual(result["records"][0]["record_type"],"dataset")
         self.assertEqual(result["records"][0]["attributes"]["resource_count"],1)
+        self.assertTrue(result["records"][0]["attributes"]["public_search_allowed"])
+        self.assertTrue(result["source_pages"][0]["policy_allowed"])
+        self.assertEqual(result["metrics"]["production_eligible_records"],1)
 
     def test_merges_library_archive_catalogs_and_document_records(self):
         result = adapt({
@@ -52,6 +57,9 @@ class UniversalCatalogIngestTests(unittest.TestCase):
         self.assertEqual(result["metrics"]["catalog_records"], 1)
         self.assertEqual(result["records"][0]["record_type"], "document")
         self.assertEqual(result["records"][0]["attributes"]["edition_count"], 4)
+        self.assertFalse(result["records"][0]["attributes"]["public_search_allowed"])
+        self.assertFalse(result["source_pages"][0]["policy_allowed"])
+        self.assertEqual(result["metrics"]["restricted_records"], 1)
         self.assertEqual(result["catalogs"][0]["catalog_type"], "library_archive")
 
     def test_rejects_untrusted_http_landing_url(self):
