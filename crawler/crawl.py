@@ -971,22 +971,20 @@ def main():
             elapsed = time.monotonic() - run_started
             may_submit = elapsed < MAX_RUN_SECONDS and fetched < MAX_FETCH_PER_RUN
 
-            while may_submit and len(in_flight) < WORKERS and queue:
+            if may_submit and len(in_flight) < WORKERS and queue:
+                available_slots = min(
+                    WORKERS - len(in_flight),
+                    MAX_FETCH_PER_RUN - fetched,
+                )
                 batch = select_batch(
                     queue, allowed, host_next_allowed, time.time(),
-                    workers=1, priority_urls=seeds,
+                    workers=available_slots, priority_urls=seeds,
                     in_flight_hosts={host_key(item[0]) for item in in_flight.values()},
                 )
-                if not batch:
-                    break
-                item = batch[0]
-                future = pool.submit(fetch, item)
-                in_flight[future] = item
-                fetched += 1
-                may_submit = (
-                    time.monotonic() - run_started < MAX_RUN_SECONDS
-                    and fetched < MAX_FETCH_PER_RUN
-                )
+                for item in batch:
+                    future = pool.submit(fetch, item)
+                    in_flight[future] = item
+                    fetched += 1
 
             if not in_flight:
                 if not queue or fetched >= MAX_FETCH_PER_RUN:
