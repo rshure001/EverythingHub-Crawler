@@ -277,6 +277,28 @@
         "workflow_run_id": "44765800764",
         "repository": "rshure001/EverythingHub-Crawler"
       }
+    },
+    {
+      "id": "catalog-discovery-44770466757",
+      "timestamp": "2026-11-20T16:15:18Z",
+      "type": "catalog_discovery",
+      "status": "success",
+      "summary": "Catalog-first discovery completed across CKAN and Open Library subject collections.",
+      "metrics": {
+        "catalogs": 26,
+        "catalog_records": 18500,
+        "unique_entities": 17484,
+        "ckan_datasets": 10000,
+        "ckan_resources": 52018,
+        "openlibrary_records": 8500,
+        "source_page_references": 17484,
+        "source_pages_fetched": 0,
+        "indexed_records": 0
+      },
+      "source": {
+        "workflow_run_id": "44770466757",
+        "repository": "rshure001/EverythingHub-Crawler"
+      }
     }
   ]
 }
