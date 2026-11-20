@@ -19,7 +19,11 @@
   const DEFAULT_CATALOG_URL =
     "https://raw.githubusercontent.com/rshure001/EverythingHub-Crawler/main/public-search/catalog-v1.json.gz";
   const TOKEN_RE = /[\p{L}\p{N}]+/gu;
-  const WEIGHTS = { title: 4, url: 2.2, description: 1.7, text: 1 };
+  const WEIGHTS = {
+    title: 4, url: 2.2, description: 1.7, text: 1,
+    productName: 4.5, productBrand: 3.5, productSku: 3.2,
+    productPrice: 1.5, productAvailability: 1.2
+  };
   const MAX_SHARDS = 512;
   const MAX_PAGES = 125000;
   const MAX_SHARD_BYTES = 350000;
@@ -69,8 +73,14 @@
 
       const fields = {};
       const all = [];
+      const product = page.product && page.product.type === "product" ? page.product : {};
+      const values = {
+        title: page.title, url: url, description: page.description, text: page.text,
+        productName: product.name, productBrand: product.brand, productSku: product.sku,
+        productPrice: product.price, productAvailability: product.availability
+      };
       for (const field of Object.keys(WEIGHTS)) {
-        fields[field] = tokenize(page[field]);
+        fields[field] = tokenize(values[field]);
         all.push(...fields[field]);
       }
       if (!all.length) continue;
@@ -103,7 +113,17 @@
         description: description.slice(0, 500),
         lane: String(page.lane || ""),
         snippet: makeSnippet(body, new Set(terms)),
-        score: Math.round(score * 1e6) / 1e6
+        score: Math.round(score * 1e6) / 1e6,
+        ...(product.name ? { product: {
+          type: "product", name: String(product.name).slice(0, 500),
+          ...(product.brand ? { brand: String(product.brand).slice(0, 160) } : {}),
+          ...(product.sku ? { sku: String(product.sku).slice(0, 120) } : {}),
+          ...(product.price ? { price: String(product.price).slice(0, 64) } : {}),
+          ...(product.currency ? { currency: String(product.currency).slice(0, 8) } : {}),
+          ...(product.availability ? { availability: String(product.availability).slice(0, 80) } : {}),
+          ...(canonicalHttpUrl(product.image) ? { image: canonicalHttpUrl(product.image) } : {}),
+          ...(canonicalHttpUrl(product.url) ? { productUrl: canonicalHttpUrl(product.url) } : {})
+        } } : {})
       };
       const previous = bestByUrl.get(url);
       if (!previous || candidate.score > previous.score) bestByUrl.set(url, candidate);
