@@ -63,8 +63,22 @@ def compact(doc):
             "currency": 8, "availability": 80, "image": 2048, "url": 2048,
         }.items():
             value = product.get(key)
-            if isinstance(value, (str, int, float)) and str(value).strip():
-                compact_product[key] = str(value).strip()[:limit]
+            if not isinstance(value, (str, int, float)) or not str(value).strip():
+                continue
+            normalized = str(value).strip()[:limit]
+            if key in ("image", "url"):
+                try:
+                    parsed_value = urlsplit(normalized)
+                    if (
+                        parsed_value.scheme not in ("http", "https")
+                        or not parsed_value.hostname
+                        or parsed_value.username is not None
+                        or parsed_value.password is not None
+                    ):
+                        continue
+                except ValueError:
+                    continue
+            compact_product[key] = normalized
         compact_page["product"] = compact_product
     # Preserve crawl timestamps for freshness scoring; omit malformed values.
     fetched_at = doc.get("fetched_at")
