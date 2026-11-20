@@ -21,10 +21,10 @@
   const TOKEN_RE = /[\p{L}\p{N}]+/gu;
   const WEIGHTS = { title: 4, url: 2.2, description: 1.7, text: 1 };
   const MAX_SHARDS = 256;
-  const MAX_PAGES = 30000;
+  const MAX_PAGES = 40000;
   const MAX_SHARD_BYTES = 350000;
-  const MAX_TOTAL_BYTES = 48000000;
-  const MAX_GZIP_BYTES = 12000000;
+  const MAX_TOTAL_BYTES = 80000000;
+  const MAX_GZIP_BYTES = 16000000;
   const MAX_DECOMPRESSED_BYTES = 64000000;
   const DEFAULT_PARALLEL = 4;
   const MAX_PARALLEL = 6;
@@ -205,7 +205,7 @@
       throw new Error("Search manifest page totals do not match its shard descriptors.");
     }
     if (totalBytes > MAX_TOTAL_BYTES) {
-      throw new Error("Search shard catalog exceeds the 48 MB browser safety limit.");
+      throw new Error("Search shard catalog exceeds the 80 MB browser safety limit.");
     }
     return { totalBytes };
   }
