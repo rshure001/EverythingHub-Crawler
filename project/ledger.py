@@ -76,12 +76,121 @@ def record_catalog():
     }
     return append_event(event, LEDGER)
 
+
+def record_page_derived_catalog_analysis():
+    report_path = ROOT / "data" / "page-derived-catalogs" / "report.json"
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    metrics = report.get("metrics")
+    if not isinstance(metrics, dict):
+        raise ValueError("page-derived catalog report metrics must be an object")
+    source_pages = report.get("source_index_pages")
+    if isinstance(source_pages, bool) or not isinstance(source_pages, int) or source_pages < 0:
+        raise ValueError("page-derived report source_index_pages must be a non-negative integer")
+    source_sha = report.get("source_index_sha256")
+    if (not isinstance(source_sha, str) or len(source_sha) != 64
+            or any(char not in "0123456789abcdef" for char in source_sha.lower())):
+        raise ValueError("page-derived report source_index_sha256 must be a SHA-256 digest")
+    timestamp = report.get("generated_at")
+    if not isinstance(timestamp, str) or not timestamp:
+        raise ValueError("page-derived report generated_at timestamp is required")
+    try:
+        datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError("page-derived report generated_at must be ISO 8601") from exc
+
+    count_keys = (
+        "pages_analyzed", "eligible_pages", "unique_catalogs_discovered",
+        "duplicate_catalog_candidates", "subcatalogs_discovered", "unique_records",
+        "media_references", "unique_media_urls", "records_staged",
+        "source_terms_reviewed_records", "commercially_eligible_records",
+        "records_with_provenance", "records_with_timestamps",
+        "cross_host_record_merges", "catalogs_with_records",
+        "catalogs_without_records", "unassigned_records",
+    )
+    for key in count_keys:
+        value = metrics.get(key)
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            raise ValueError(f"page-derived report metric {key} must be a non-negative integer")
+    for key in (
+        "coverage_percentage", "unique_source_coverage_percentage",
+        "eligible_page_coverage_percentage", "eligible_unique_source_page_coverage_percentage",
+    ):
+        value = metrics.get(key)
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 <= value <= 100:
+            raise ValueError(f"page-derived report metric {key} must be a percentage from 0 to 100")
+    by_type = metrics.get("unique_records_by_type")
+    if not isinstance(by_type, dict) or any(
+        not isinstance(kind, str) or isinstance(count, bool) or not isinstance(count, int) or count < 0
+        for kind, count in by_type.items()
+    ):
+        raise ValueError("page-derived unique_records_by_type must contain non-negative integer counts")
+
+    throughput = report.get("throughput")
+    if throughput is not None:
+        if not isinstance(throughput, dict):
+            raise ValueError("page-derived throughput must be an object or null")
+        for key in ("pages_per_minute", "catalogs_per_minute", "records_per_minute"):
+            value = throughput.get(key)
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0:
+                raise ValueError(f"page-derived throughput {key} must be a non-negative rate")
+        if throughput.get("measurement") != "persisted_count_delta_over_wall_clock_interval":
+            raise ValueError("page-derived throughput must use persisted count deltas over wall-clock time")
+
+    previous_counts = report.get("previous_counts")
+    count_deltas = report.get("count_deltas")
+    if previous_counts is not None and not isinstance(previous_counts, dict):
+        raise ValueError("page-derived previous_counts must be an object or null")
+    if count_deltas is not None and not isinstance(count_deltas, dict):
+        raise ValueError("page-derived count_deltas must be an object or null")
+    elapsed = report.get("elapsed_wall_clock_seconds")
+    if elapsed is not None and (
+        isinstance(elapsed, bool) or not isinstance(elapsed, (int, float)) or elapsed <= 0
+    ):
+        raise ValueError("page-derived elapsed_wall_clock_seconds must be positive or null")
+
+    run_id = os.environ.get("GITHUB_RUN_ID", "manual")
+    metric_keys = count_keys + (
+        "unique_records_by_type", "coverage_percentage", "unique_source_coverage_percentage",
+        "eligible_page_coverage_percentage", "eligible_unique_source_page_coverage_percentage",
+    )
+    event_metrics = {key: metrics[key] for key in metric_keys}
+    event_metrics.update({
+        "source_index_pages": source_pages,
+        "records_published": report.get("records_published", metrics.get("records_published", 0)),
+        "catalogs_verified": report.get("catalogs_verified", metrics.get("catalogs_verified", 0)),
+        "previous_counts": previous_counts,
+        "count_deltas": count_deltas,
+        "elapsed_wall_clock_seconds": elapsed,
+        "analysis_elapsed_seconds": report.get("analysis_elapsed_seconds"),
+        "throughput": throughput,
+    })
+    event = {
+        "id": "page-derived-catalog-analysis-" + run_id,
+        "timestamp": timestamp,
+        "type": "page_derived_catalog_analysis",
+        "status": "validated_staging",
+        "summary": (
+            "Page-derived catalog registry and per-catalog indexes passed integrity validation; "
+            "candidate records remain staging-only pending source-terms review and production indexing."
+        ),
+        "metrics": event_metrics,
+        "source": {
+            "workflow_run_id": run_id,
+            "repository": "rshure001/EverythingHub-Crawler",
+            "source_index_sha256": source_sha,
+        },
+    }
+    return append_event(event, LEDGER)
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--record-catalog-discovery", action="store_true")
+    parser.add_argument("--record-page-derived-catalog-analysis", action="store_true")
     args = parser.parse_args()
     if args.record_catalog_discovery:
         print("Ledger event recorded." if record_catalog() else "Ledger event already exists; no duplicate added.")
+    elif args.record_page_derived_catalog_analysis:
+        print("Ledger event recorded." if record_page_derived_catalog_analysis() else "Ledger event already exists; no duplicate added.")
     else:
         ledger = load_ledger()
         print(json.dumps({"events": len(ledger["events"]), "latest": ledger["events"][-1] if ledger["events"] else None}, indent=2))
