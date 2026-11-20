@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from stage_search_catalog import stage_search_catalog
+from stage_search_catalog import stage_search_catalog, validate_manifest
 
 
 def page(url, title):
@@ -156,6 +156,31 @@ class StageSearchCatalogTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "mixes compressed and legacy"):
                 stage_search_catalog(source, target)
 
+
+    def test_accepts_catalog_above_100000_pages_within_new_safety_limit(self):
+        shards = []
+        remaining = 100_001
+        for index in range(1, 102):
+            pages = min(1000, remaining)
+            remaining -= pages
+            shards.append({
+                "file": f"shard-{index:04d}.json.gz",
+                "pages": pages,
+                "bytes": 1,
+                "uncompressed_bytes": 1,
+                "sha256": "a" * 64,
+            })
+        manifest = {
+            "version": 1,
+            "integrity": "sha256",
+            "updated_at": 1795140000,
+            "total_pages": 100_001,
+            "shard_count": len(shards),
+            "shards": shards,
+        }
+        checked = validate_manifest(manifest)
+        self.assertEqual(checked["total_pages"], 100_001)
+        self.assertEqual(len(checked["shards"]), 101)
 
 if __name__ == "__main__":
     unittest.main()
