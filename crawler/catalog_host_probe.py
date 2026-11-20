@@ -48,7 +48,7 @@ def probe_one(host: str, kind: str, path: str) -> dict:
         return {"kind": kind, "url": url, "status": type(exc).__name__}
 
 
-def rundef run(input_path: Path, output_path: Path, limit: int, offset: int, pause: float) -> dict:
+def run(input_path: Path, output_path: Path, limit: int, offset: int, pause: float) -> dict:
     inventory = json.loads(input_path.read_text(encoding="utf-8"))
     hosts = inventory.get("host_candidates", [])
     ordered = sorted(hosts, key=lambda x: (-sum((x.get("hint_counts") or {}).values()), -x.get("source_pages", 0), x.get("host", "")))
