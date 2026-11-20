@@ -1,7 +1,13 @@
+import gzip
+import hashlib
 import importlib.util
+import json
+import os
 import pathlib
+import tempfile
 import unittest
 
+os.environ["EH_SKIP_INDEX_LOAD"] = "1"
 MODULE_PATH = pathlib.Path(__file__).with_name("static_search_api.py")
 SPEC = importlib.util.spec_from_file_location("eh_static_search", MODULE_PATH)
 api = importlib.util.module_from_spec(SPEC)
@@ -11,15 +17,15 @@ SPEC.loader.exec_module(api)
 class StaticSearchTests(unittest.TestCase):
     def setUp(self):
         pages = [
-            {"url":"https://nasa.gov/moon","title":"NASA Apollo Moon Mission",
-             "description":"Space exploration mission","text":"NASA Apollo lunar mission",
-             "lane":"science"},
-            {"url":"https://example.com/rolex","title":"Rolex Watches",
-             "description":"Luxury watch information","text":"Rolex watch models",
-             "lane":"business"},
-            {"url":"https://example.com/nasa-news","title":"NASA latest news",
-             "description":"NASA agency update","text":"NASA space science",
-             "lane":"news"},
+            {"url": "https://nasa.gov/moon", "title": "NASA Apollo Moon Mission",
+             "description": "Space exploration mission", "text": "NASA Apollo lunar mission",
+             "lane": "science"},
+            {"url": "https://example.com/rolex", "title": "Rolex Watches",
+             "description": "Luxury watch information", "text": "Rolex watch models",
+             "lane": "business"},
+            {"url": "https://example.com/nasa-news", "title": "NASA latest news",
+             "description": "NASA agency update", "text": "NASA space science",
+             "lane": "news"},
         ]
         api.DOCS = []
         from collections import Counter
@@ -28,6 +34,32 @@ class StaticSearchTests(unittest.TestCase):
             tok = lambda value: Counter(re.findall(r"[a-z0-9]{2,}", value.lower()))
             api.DOCS.append((page, tok(page["title"]), tok(page["description"]),
                              tok(page["text"]), tok(page["url"])))
+
+    def make_catalog(self, root, pages):
+        payload = json.dumps(
+            {"version": 1, "pages": pages},
+            ensure_ascii=False,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        compressed = gzip.compress(payload, mtime=0)
+        filename = "shard-0001.json.gz"
+        (root / filename).write_bytes(compressed)
+        manifest = {
+            "version": 1,
+            "integrity": "sha256",
+            "updated_at": 1795068644,
+            "total_pages": len(pages),
+            "shard_count": 1,
+            "shards": [{
+                "file": filename,
+                "pages": len(pages),
+                "bytes": len(compressed),
+                "uncompressed_bytes": len(payload),
+                "sha256": hashlib.sha256(compressed).hexdigest(),
+            }],
+        }
+        (root / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+        return manifest
 
     def test_title_hits_rank_first(self):
         result = api.search("Apollo", "", 10, 0)
@@ -53,6 +85,71 @@ class StaticSearchTests(unittest.TestCase):
     def test_query_terms_match_without_case_sensitivity(self):
         result = api.search("nAsA", "", 10, 0)
         self.assertEqual(result["total"], 2)
+
+    def test_load_index_reads_and_verifies_compressed_shards(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            self.make_catalog(root, [{
+                "url": "https://example.com/nasa",
+                "title": "NASA research",
+                "description": "Space science",
+                "text": "Verified compressed shard",
+                "lane": "science",
+            }])
+
+            pages = api.load_index(root)
+
+        self.assertEqual(len(pages), 1)
+        self.assertEqual(pages[0]["title"], "NASA research")
+        self.assertEqual(pages[0]["lane"], "science")
+
+    def test_load_index_rejects_a_tampered_shard_digest(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            self.make_catalog(root, [{"url": "https://example.com/a", "title": "A"}])
+            shard = root / "shard-0001.json.gz"
+            shard.write_bytes(shard.read_bytes() + b"x")
+
+            with self.assertRaisesRegex(ValueError, "compressed byte count|SHA-256"):
+                api.load_index(root)
+
+    def test_load_index_rejects_manifest_page_total_mismatch(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            manifest = self.make_catalog(
+                root,
+                [{"url": "https://example.com/a", "title": "A"}],
+            )
+            manifest["total_pages"] = 2
+            (root / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "page total"):
+                api.load_index(root)
+
+    def test_load_index_rejects_oversized_decoded_shard_metadata(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            manifest = self.make_catalog(
+                root,
+                [{"url": "https://example.com/a", "title": "A"}],
+            )
+            manifest["shards"][0]["uncompressed_bytes"] = api.MAX_SHARD_UNCOMPRESSED_BYTES + 1
+            (root / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "uncompressed bytes"):
+                api.load_index(root)
+
+    def test_load_index_rejects_robots_denied_records(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            self.make_catalog(root, [{
+                "url": "https://example.com/blocked",
+                "title": "Blocked",
+                "robots_allowed": False,
+            }])
+
+            with self.assertRaisesRegex(ValueError, "robots-denied"):
+                api.load_index(root)
 
 
 if __name__ == "__main__":

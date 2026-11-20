@@ -25,15 +25,17 @@ class PostCrawlDispatchTests(unittest.TestCase):
         self.assertIn('workflows: ["EverythingHub Publisher"]', search)
         self.assertIn("github.event.workflow_run.conclusion == 'success'", search)
 
-    def test_push_triggers_still_cover_direct_code_and_catalog_changes(self):
+    def test_search_smoke_push_trigger_is_limited_to_catalog_artifacts(self):
         publisher = (ROOT / ".github" / "workflows" / "publish-site.yml").read_text(encoding="utf-8")
         search = (ROOT / ".github" / "workflows" / "search-api-smoke.yml").read_text(encoding="utf-8")
         self.assertIn('      - "public-search/**"', publisher)
         self.assertIn('      - "publisher/**"', publisher)
-        self.assertIn('      - "public-search/**"', search)
-        self.assertIn('      - "supabase/functions/everything-hub-web-search/**"', search)
+        self.assertIn('      - "public-search/manifest.json"', search)
+        self.assertIn('      - "public-search/shard-*.json.gz"', search)
+        self.assertNotIn('      - "public-search/**"', search)
+        self.assertNotIn('      - "supabase/functions/everything-hub-web-search/**"', search)
+        self.assertNotIn('      - ".github/workflows/search-api-smoke.yml"', search)
         self.assertNotIn(".github/workflows/publish-site.yml", publisher)
-        self.assertIn('      - ".github/workflows/search-api-smoke.yml"', search)
 
 
 if __name__ == "__main__":

@@ -4,10 +4,10 @@ on:
   push:
     branches: [main]
     paths:
-      - "supabase/functions/everything-hub-web-search/**"
-      - "vercel-search-backend/**"
-      - "public-search/**"
-      - ".github/workflows/search-api-smoke.yml"
+      - "public-search/manifest.json"
+      - "public-search/shard-*.json"
+      - "public-search/shard-*.json.gz"
+      - "public-search/catalog-v1.json.gz"
   workflow_dispatch:
   workflow_run:
     workflows: ["EverythingHub Publisher"]
