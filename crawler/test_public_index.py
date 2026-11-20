@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 
 from build_search_shards import is_publishable
+from index_store import save_index
 from validate_public_index import (
     MAX_CANONICAL_INDEX_BYTES,
     RECOMMENDED_CANONICAL_INDEX_BYTES,
@@ -155,6 +156,18 @@ class PublicIndexValidationTests(unittest.TestCase):
             {"url": "https://example.org/b", "title": "B"},
         ]
         self.write_fixture(pages, pages)
+        self.assertEqual(validate(self.root), [])
+
+    def test_sharded_canonical_index_matches_public_search_shards(self):
+        pages = [
+            {"url": "https://example.com/a", "title": "A"},
+            {"url": "https://example.org/b", "title": "B"},
+        ]
+        self.write_fixture(pages, pages)
+        save_index(
+            self.root / "data" / "index.json",
+            {"version": 1, "updated_at": 1700000000, "pages": pages},
+        )
         self.assertEqual(validate(self.root), [])
 
     def test_validation_summary_supports_shard_only_manifest(self):

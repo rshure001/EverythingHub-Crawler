@@ -9,7 +9,6 @@ Optional guard:
 The import is additive/upsert-only. It never deletes destination records.
 """
 import hashlib
-import json
 import os
 import sys
 from datetime import datetime, timezone
@@ -19,6 +18,7 @@ from urllib.parse import urlsplit
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "crawler"))
 from lane_classifier import VALID_LANES, classify_lane
+from index_store import load_index
 
 INDEX = ROOT / "data" / "index.json"
 TARGET_SCHEMA = "eh_quad"
@@ -136,7 +136,7 @@ def main():
     except ImportError as exc:
         raise SystemExit("Install psycopg[binary]>=3.2 before importing.") from exc
 
-    payload = json.loads(INDEX.read_text(encoding="utf-8"))
+    payload = load_index(INDEX)
     pages = payload.get("pages", [])
     rows = []
     skipped = 0

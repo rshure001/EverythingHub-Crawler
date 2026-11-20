@@ -9,6 +9,7 @@ from urllib.parse import urlsplit
 
 from lane_classifier import VALID_LANES, classify_lane
 from crawl import is_access_challenge_page
+from index_store import load_index
 
 ROOT = Path(__file__).resolve().parents[1]
 INDEX = ROOT / "data" / "index.json"
@@ -51,7 +52,7 @@ def summarize_seed_coverage(seed_urls, pages):
 
 
 def main():
-    index = load(INDEX)
+    index = load_index(INDEX)
     frontier = load(FRONTIER)
     pages = [p for p in index.get("pages", []) if isinstance(p, dict) and p.get("url")]
     seed_urls = [

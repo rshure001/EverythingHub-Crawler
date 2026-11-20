@@ -7,6 +7,8 @@ import os
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
+
+from index_store import load_index
 from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -168,7 +170,7 @@ def render(metrics: dict) -> str:
 
 
 def main():
-    index = json.loads((ROOT / "data" / "index.json").read_text(encoding="utf-8"))
+    index = load_index(ROOT / "data" / "index.json")
     frontier = json.loads((ROOT / "data" / "frontier.json").read_text(encoding="utf-8"))
     media_path = ROOT / "data" / "media-discovery.json"
     media_catalog = json.loads(media_path.read_text(encoding="utf-8")) if media_path.exists() else None

@@ -7,6 +7,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from lane_classifier import VALID_LANES, classify_lane
+from index_store import load_index
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "data" / "index.json"
@@ -95,7 +96,7 @@ def catalog_metadata(raw, page_count, uncompressed_bytes=None):
 
 
 def main():
-    source = json.loads(SOURCE.read_text(encoding="utf-8"))
+    source = load_index(SOURCE)
     pages = [compact(p) for p in source.get("pages", []) if is_publishable(p)]
     pages.sort(key=lambda p: (p["title"].casefold(), p["url"]))
     OUT.mkdir(parents=True, exist_ok=True)
