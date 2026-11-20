@@ -658,30 +658,43 @@ def effective_host_delay(parser):
 
 def select_batch(queue, is_allowed, host_next_allowed, now, workers=WORKERS,
                  priority_urls=(), in_flight_hosts=()):
-    """Select configured seed URLs first, then deeper work, with one URL per host."""
+    """Select URLs with stable linear-time priority buckets and one URL per host."""
     priority = set(priority_urls or ())
     pending = list(queue)
     queue.clear()
-    pending.sort(key=lambda item: (item[0] not in priority, -item[1]))
     selected = []
     deferred = []
     selected_hosts = set(in_flight_hosts or ())
 
-    for index, (url, depth) in enumerate(pending):
+    # Preserve the original stable order: seed URLs first, then deeper pages,
+    # with original queue order retained inside each priority/depth group.
+    bucket_count = 2 * (MAX_DEPTH + 1)
+    buckets = [[] for _ in range(bucket_count)]
+    for item in pending:
+        url, depth = item
         if depth > MAX_DEPTH:
             continue
-        host = host_key(url)
-        next_allowed = float(host_next_allowed.get(host, 0) or 0)
-        if host in selected_hosts or next_allowed > now:
-            deferred.append((url, depth))
-            continue
-        if not is_allowed(url):
-            continue
-        selected.append((url, depth))
-        selected_hosts.add(host)
-        if len(selected) >= workers:
-            deferred.extend(pending[index + 1:])
-            break
+        priority_group = 0 if url in priority else 1
+        depth_group = MAX_DEPTH - depth
+        buckets[priority_group * (MAX_DEPTH + 1) + depth_group].append(item)
+
+    for bucket_index, bucket in enumerate(buckets):
+        for item_index, (url, depth) in enumerate(bucket):
+            host = host_key(url)
+            next_allowed = float(host_next_allowed.get(host, 0) or 0)
+            if host in selected_hosts or next_allowed > now:
+                deferred.append((url, depth))
+                continue
+            if not is_allowed(url):
+                continue
+            selected.append((url, depth))
+            selected_hosts.add(host)
+            if len(selected) >= workers:
+                deferred.extend(bucket[item_index + 1:])
+                for remaining_bucket in buckets[bucket_index + 1:]:
+                    deferred.extend(remaining_bucket)
+                queue.extend(deferred)
+                return selected
 
     queue.extend(deferred)
     return selected

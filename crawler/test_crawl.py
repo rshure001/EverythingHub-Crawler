@@ -608,6 +608,33 @@ class CrawlerTests(unittest.TestCase):
             float(crawl.MAX_RETRY_AFTER_SECONDS),
         )
 
+    def test_select_batch_preserves_stable_order_within_priority_depth_groups(self):
+        first = "https://priority-a.example/first"
+        second = "https://priority-b.example/second"
+        same_host_later = "https://priority-a.example/later"
+        third = "https://priority-c.example/third"
+        shallow = "https://priority-d.example/shallow"
+        regular = "https://regular.example/page"
+        queue = deque([
+            (first, 3),
+            (second, 3),
+            (same_host_later, 3),
+            (third, 3),
+            (shallow, 0),
+            (regular, 3),
+        ])
+
+        batch = crawl.select_batch(
+            queue, lambda _url: True, {}, now=100.0, workers=3,
+            priority_urls={first, second, same_host_later, third, shallow},
+        )
+
+        self.assertEqual(batch, [(first, 3), (second, 3), (third, 3)])
+        self.assertEqual(
+            list(queue),
+            [(same_host_later, 3), (shallow, 0), (regular, 3)],
+        )
+
     def test_select_batch_respects_remaining_worker_limit(self):
         queue = deque([
             ("https://one.example/a", 0),
