@@ -12,7 +12,7 @@ from index_store import load_index
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "data" / "index.json"
 OUT = ROOT / "public-search"
-MAX_BYTES = 500_000  # Decoded shard target; gzip transport remains below 350 KB.
+MAX_BYTES = 450_000  # Leave 50 KB below the 500 KB reader cap; gzip stays below 350 KB.
 MAX_COMPRESSED_BYTES = 350_000
 MAX_SHARD_COUNT = 640
 SHARD_GZIP_LEVEL = 6
