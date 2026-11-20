@@ -21,7 +21,7 @@
   const TOKEN_RE = /[\p{L}\p{N}]+/gu;
   const WEIGHTS = { title: 4, url: 2.2, description: 1.7, text: 1 };
   const MAX_SHARDS = 512;
-  const MAX_PAGES = 60000;
+  const MAX_PAGES = 65000;
   const MAX_SHARD_BYTES = 350000;
   const MAX_TOTAL_BYTES = 100000000;
   const MAX_TOTAL_COMPRESSED_BYTES = 64000000;

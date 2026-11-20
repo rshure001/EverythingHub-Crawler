@@ -178,8 +178,8 @@ async function testCurrentPublishedManifestFitsClientLimits() {
   const compressedShards = currentManifest.shards[0]?.file?.endsWith(".json.gz") === true;
 
   assert.ok(
-    currentManifest.total_pages <= 60_000,
-    "current catalog must fit the 60,000-page browser safety limit"
+    currentManifest.total_pages <= 65_000,
+    "current catalog must fit the 65,000-page secondary limit; decoded bytes remain capped at 128 MB"
   );
   assert.ok(
     currentManifest.shard_count <= 512 &&
