@@ -11,6 +11,7 @@ import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
+from catalog_source_policy import SourcePolicyError, request_source_bytes
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "data" / "openlibrary-catalogs.json.gz"
@@ -28,20 +29,21 @@ USER_AGENT = "EverythingHubCatalogDiscovery/1.0 (+https://github.com/rshure001/E
 
 def request_subject(slug: str) -> dict:
     url = f"{BASE}/subjects/{urllib.parse.quote(slug, safe='')}.json?limit={LIMIT}"
-    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "application/json"})
-    with urllib.request.urlopen(req, timeout=TIMEOUT) as response:
-        if response.status != 200:
-            raise ValueError(f"Open Library returned HTTP {response.status}")
-        raw = response.read(8_000_001)
-    if len(raw) > 8_000_000:
-        raise ValueError("Open Library response exceeded 8 MB")
+    raw, status, _headers, _policy = request_source_bytes(
+        url, purpose="discovery", max_bytes=8_000_000,
+        timeout=TIMEOUT, accept="application/json",
+    )
+    if status != 200:
+        raise ValueError(f"Open Library returned HTTP {status}")
     data = json.loads(raw.decode("utf-8"))
     if not isinstance(data, dict) or not isinstance(data.get("works"), list):
         raise ValueError("Open Library subject response missing works")
     return data
 
 
-def discover(pause: float = 1.0) -> dict:
+def discover(pause: float = 1.0, allow_api: bool = False) -> dict:
+    if not allow_api:
+        raise SourcePolicyError("Open Library API discovery is disabled pending approved bulk-use terms or an official dump workflow.")
     catalogs, datasets = [], []
     errors = []
     for index, slug in enumerate(SUBJECTS):
@@ -128,10 +130,14 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", type=Path, default=OUTPUT)
     parser.add_argument("--pause", type=float, default=1.0)
+    parser.add_argument("--allow-api", action="store_true", help="Explicitly enable API requests only after source-policy approval.")
     args = parser.parse_args()
     if not 0 <= args.pause <= 5:
         parser.error("pause must be between 0 and 5 seconds")
-    result = discover(args.pause)
+    if not args.allow_api:
+        print(json.dumps({"skipped": True, "reason": "Open Library API is not approved for bulk catalog backend use; previous snapshot preserved."}, indent=2))
+        return
+    result = discover(args.pause, allow_api=True)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     temp = args.output.with_suffix(args.output.suffix + ".tmp")
     payload = json.dumps(result, ensure_ascii=False, separators=(",", ":")).encode("utf-8") + b"\n"
