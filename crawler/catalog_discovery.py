@@ -59,7 +59,7 @@ def _request_json(url: str) -> dict[str, Any]:
         raise ValueError("catalog API response was not a JSON object")
     return payload
 
-def _clean_textdef _clean_text(value: Any, limit: int = 2000) -> str:
+def _clean_text(value: Any, limit: int = 2000) -> str:
     return " ".join(str(value or "").split())[:limit]
 
 def normalize_dataset(dataset: dict[str, Any], source: dict[str, Any]) -> dict[str, Any] | None:
