@@ -17,7 +17,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: catalog-data-publish
+  group: page-derived-catalog-analysis
   cancel-in-progress: false
 
 jobs:
