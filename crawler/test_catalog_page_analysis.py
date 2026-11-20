@@ -375,5 +375,79 @@ class PageDerivedCatalogAnalysisTests(unittest.TestCase):
         self.assertEqual(evidence[0]["url"], "https://example.org/las-vegas-story")
 
 
+    def test_subject_only_mentions_are_not_brand_catalog_results(self):
+        analysis = {
+            "catalogs": [{
+                "catalog_id": "subject-catalog", "catalog_type": "knowledge_base",
+                "record_type": "subject", "title": "National Geographic Subjects",
+                "subject": "subjects", "record_ids": ["rolextopic"],
+            }],
+            "records": [{
+                "record_id": "rolextopic", "title": "National Geographic and Rolex Committed to a Perpetual Planet",
+                "record_type": "subject", "description": "Rolex conservation partnership",
+                "source_url": "https://example.org/story",
+            }],
+        }
+        self.assertEqual(search_catalog_network("Rolex", analysis), [])
+
+    def test_people_are_sentence_does_not_create_person_records(self):
+        result = analyze_pages([{
+            "url": "https://example.org/stories/foreign-born",
+            "title": "Foreign-Born People Are Older When They First Marry",
+            "description": (
+                "People are older when they first marry; "
+                "Las Vegas where housing is cheaper is another comparison."
+            ),
+            "text": "", "lane": "general", "robots_allowed": True,
+        }], source_total=1)
+        self.assertNotIn("person", result["metrics"]["unique_records_by_type"])
+
+    def test_catalog_title_ignores_lock_and_navigation_noise(self):
+        pages = [
+            {
+                "url": "https://blm.gov/places/las-vegas-field-office",
+                "title": "Las Vegas Field Office | Bureau of Land Management Lock",
+                "description": "Las Vegas public lands field office.",
+                "text": "", "lane": "places", "robots_allowed": True,
+            },
+            {
+                "url": "https://blm.gov/places/sloan-canyon",
+                "title": "Sloan Canyon Area | Bureau of Land Management Lock",
+                "description": "Sloan Canyon public lands.",
+                "text": "", "lane": "places", "robots_allowed": True,
+            },
+        ]
+        result = analyze_pages(pages, source_total=2)
+        self.assertTrue(result["catalogs"])
+        self.assertFalse(any("lock" in x["title"].casefold() for x in result["catalogs"]))
+
+    def test_geographic_catalog_ranks_above_event_catalog_for_location_query(self):
+        analysis = {
+            "catalogs": [
+                {"catalog_id": "events", "catalog_type": "events", "record_type": "event",
+                 "title": "Las Vegas Events", "subject": "Las Vegas", "record_ids": ["event1"]},
+                {"catalog_id": "places", "catalog_type": "geographic", "record_type": "place",
+                 "title": "Las Vegas Places", "subject": "Las Vegas", "record_ids": ["place1"]},
+            ],
+            "records": [
+                {"record_id": "event1", "title": "Las Vegas Grand Prix", "record_type": "event",
+                 "description": "Formula 1 event", "source_url": "https://events.example.org"},
+                {"record_id": "place1", "title": "Las Vegas Strip", "record_type": "place",
+                 "description": "A destination in Las Vegas", "source_url": "https://places.example.org"},
+            ],
+        }
+        results = search_catalog_network("Las Vegas", analysis)
+        self.assertEqual(results[0]["catalog_id"], "places")
+
+    def test_source_page_evidence_excludes_robots_denied_pages(self):
+        pages = [{
+            "url": "https://example.org/las-vegas-story",
+            "title": "Las Vegas Story",
+            "description": "A report about Las Vegas.",
+            "text": "Coverage from Las Vegas.", "robots_allowed": False,
+        }]
+        self.assertEqual(search_source_page_evidence("Las Vegas", pages), [])
+
+
 if __name__ == "__main__":
     unittest.main()
