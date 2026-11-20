@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "updated_at": "2026-11-20T12:03:25.228Z",
-  "reason": "Push-triggered fallback after scheduled crawl delivery exceeded 25 minutes; no queued or running crawler and public manifest exceeded 10 minutes. One bounded recovery crawl; existing per-host robots pacing and 10-minute job budget remain unchanged.",
-  "manifest_before_pages": 78011,
-  "manifest_before_updated_at": "2026-11-20T11:22:48.000Z"
+  "updated_at": "2026-11-20T12:59:15.000Z",
+  "reason": "Push-triggered fallback after the latest scheduled crawl.yml run (#263, 2026-11-20T09:15:54Z) was cancelled and schedule delivery exceeded 25 minutes; no queued or running crawler was present and the public manifest was 37m45s old (>10 minutes). One bounded recovery crawl; normal schedule, robots pacing, source restrictions, and job timeout remain unchanged.",
+  "manifest_before_pages": 84885,
+  "manifest_before_updated_at": "2026-11-20T12:21:30Z"
 }
