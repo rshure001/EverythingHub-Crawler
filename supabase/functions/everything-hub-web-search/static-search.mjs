@@ -1,4 +1,8 @@
-const FIELD_WEIGHTS = { title: 4, url: 2.2, description: 1.7, text: 1 };
+const FIELD_WEIGHTS = {
+  title: 4, url: 2.2, description: 1.7, text: 1,
+  productName: 4.5, productBrand: 3.5, productSku: 3.2,
+  productPrice: 1.5, productAvailability: 1.2,
+};
 const MAX_QUERY_CHARS = 240;
 const MAX_TERMS = 12;
 const EVIDENCE_WEIGHTS = { relevance: 0.45, sourceQuality: 0.25, freshness: 0.15, corroboration: 0.15 };
@@ -125,6 +129,11 @@ export function searchStaticPages(pages, query, lane = null, limit = 10, offset 
       url: tokenize(parsed.href),
       description: tokenize(page.description),
       text: tokenize(page.text),
+      productName: tokenize(page.product?.name),
+      productBrand: tokenize(page.product?.brand),
+      productSku: tokenize(page.product?.sku),
+      productPrice: tokenize(page.product?.price),
+      productAvailability: tokenize(page.product?.availability),
     };
     const allTokens = Object.values(fields).flat();
     if (!allTokens.length) continue;
@@ -163,6 +172,12 @@ export function searchStaticPages(pages, query, lane = null, limit = 10, offset 
       fetchedAt: page.fetched_at,
       publishedAt: page.published_at,
       terms,
+      product: page.product && page.product.type === "product" && page.product.name
+        ? Object.fromEntries(Object.entries(page.product).filter(([key, value]) =>
+          ["type", "name", "brand", "sku", "price", "currency", "availability", "image", "url"].includes(key)
+          && typeof value === "string" && value.length <= 2048
+        ))
+        : null,
     };
 
     // A non-matching duplicate must not hide a later matching record. If
@@ -241,6 +256,7 @@ export function searchStaticPages(pages, query, lane = null, limit = 10, offset 
     evidenceBand: match.evidenceBand,
     evidenceComponents: match.evidenceComponents,
     corroboratingHosts: match.corroboratingHosts,
+    ...(match.product ? { product: match.product } : {}),
   }));
 
   return {

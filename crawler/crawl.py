@@ -22,6 +22,7 @@ from media_discovery import discover_media, merge_media_candidates
 from seed_coverage import DEFAULT_SEED_RETRY_SECONDS, schedule_missing_seed_urls
 from index_store import load_index, save_index
 from catalog_frontier import load_catalog_seed_urls
+from product_metadata import extract_product_metadata
 
 ROOT = Path(__file__).resolve().parents[1]
 SEEDS = ROOT / "crawler" / "seeds.txt"
@@ -203,7 +204,8 @@ def normalize_text(value, limit):
     return re.sub(r"\s+", " ", str(value or "").replace("\x00", "")).strip()[:limit]
 
 
-def build_page_record(url, title, description, text, depth, directives, published_at=None):
+def build_page_record(url, title, description, text, depth, directives, published_at=None,
+                      product_metadata=None):
     """Build a page record while retaining crawl depth for noindex pages."""
     if "noindex" in directives:
         # noindex suppresses publication, not link discovery; keep depth so
@@ -223,6 +225,18 @@ def build_page_record(url, title, description, text, depth, directives, publishe
     normalized_published_at = parse_published_at(published_at)
     if normalized_published_at:
         record["published_at"] = normalized_published_at
+    if isinstance(product_metadata, dict) and product_metadata.get("type") == "product":
+        product = {
+            key: normalize_text(product_metadata[key], limit)
+            for key, limit in {
+                "name": 500, "brand": 160, "sku": 120, "price": 64,
+                "currency": 8, "availability": 80, "image": 2048, "url": 2048,
+            }.items()
+            if isinstance(product_metadata.get(key), (str, int, float))
+            and str(product_metadata.get(key)).strip()
+        }
+        if product.get("name"):
+            record["product"] = {"type": "product", **product}
     return record
 
 
@@ -1186,8 +1200,17 @@ def main():
                     else:
                         page_media_robots_blocked += 1
             text, description = apply_snippet_policy(text, description, directives)
+            product_metadata = {}
+            if "noindex" not in directives:
+                try:
+                    product_metadata = extract_product_metadata(html, final)
+                except (ValueError, TypeError, RecursionError):
+                    # Product metadata is additive; malformed structured data
+                    # must never make an otherwise valid page fail to index.
+                    product_metadata = {}
             record = build_page_record(
-                final, title, description, text, depth, directives, parser.published_at
+                final, title, description, text, depth, directives,
+                parser.published_at, product_metadata,
             )
             links = []
             if depth < MAX_DEPTH and "nofollow" not in directives:

@@ -14,7 +14,11 @@ from typing import Iterable, Mapping, Any
 from intelligence_core import score_evidence_batch
 
 TOKEN_RE = re.compile(r"[^\W_]+", re.UNICODE)
-FIELD_WEIGHTS = {"title": 4.0, "url": 2.2, "description": 1.7, "text": 1.0}
+FIELD_WEIGHTS = {
+    "title": 4.0, "url": 2.2, "description": 1.7, "text": 1.0,
+    "product_name": 4.5, "product_brand": 3.5, "product_sku": 3.2,
+    "product_price": 1.5, "product_availability": 1.2,
+}
 DEFAULT_LIMIT = 20
 MAX_LIMIT = 50
 MAX_QUERY_CHARS = 240
@@ -28,7 +32,15 @@ def tokenize(value: Any) -> list[str]:
 
 
 def _field_tokens(page: Mapping[str, Any]) -> dict[str, list[str]]:
-    return {name: tokenize(page.get(name, "")) for name in FIELD_WEIGHTS}
+    product = page.get("product") if isinstance(page.get("product"), Mapping) else {}
+    values = {
+        "title": page.get("title", ""), "url": page.get("url", ""),
+        "description": page.get("description", ""), "text": page.get("text", ""),
+        "product_name": product.get("name", ""), "product_brand": product.get("brand", ""),
+        "product_sku": product.get("sku", ""), "product_price": product.get("price", ""),
+        "product_availability": product.get("availability", ""),
+    }
+    return {name: tokenize(values.get(name, "")) for name in FIELD_WEIGHTS}
 
 
 def _snippet(page: Mapping[str, Any], terms: set[str], max_chars: int = 220) -> str:
@@ -108,6 +120,12 @@ def search(
             "score": round(score, 6),
             "fetched_at": page.get("fetched_at"),
             "published_at": page.get("published_at"),
+            **({"product": {
+                key: str(value)[:2048]
+                for key, value in page["product"].items()
+                if key in {"type", "name", "brand", "sku", "price", "currency", "availability", "image", "url"}
+                and isinstance(value, (str, int, float))
+            }} if isinstance(page.get("product"), Mapping) and page["product"].get("type") == "product" and page["product"].get("name") else {}),
         })
 
     if candidates:

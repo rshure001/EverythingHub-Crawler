@@ -15,6 +15,26 @@ const pages = [
 ];
 
 assert.deepEqual(engine.tokenize("ＲＯＬＥＸ — Café"), ["rolex", "café"]);
+const productPage = {
+  url: "https://jewel.example/ring-18k",
+  title: "Jewelry collection",
+  description: "Fine jewelry",
+  text: "Shop our collection",
+  product: {
+    type: "product", name: "18K Diamond Pinky Ring",
+    brand: "Rolex Fine Jewelry", sku: "RING-18K-442",
+    price: "1299.00", currency: "USD", availability: "InStock",
+    image: "https://jewel.example/images/ring.jpg",
+    url: "https://jewel.example/ring-18k"
+  }
+};
+for (const query of ["Rolex", "RING-18K-442", "1299.00", "InStock"]) {
+  const found = engine.search([productPage], query);
+  assert.equal(found.length, 1, query);
+  assert.equal(found[0].product.name, "18K Diamond Pinky Ring");
+  assert.equal(found[0].product.image, "https://jewel.example/images/ring.jpg");
+}
+
 assert.equal(engine.search(pages, "Rolex")[0].url, "https://www.rolex.com/watches");
 assert.equal(engine.search(pages, "watch", { lane: "culture" }).length, 1);
 assert.equal(engine.search(pages, "  ").length, 0);
