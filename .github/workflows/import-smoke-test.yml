@@ -69,18 +69,19 @@ jobs:
       - name: Verify imported records and lane distribution
         run: |
           expected=$(python - <<'PY'
-          import json
           import sys
           from pathlib import Path
 
           sys.path.insert(0, str(Path("database").resolve()))
+          sys.path.insert(0, str(Path("crawler").resolve()))
           from import_repository_index import (
               collect_robots_denied_urls,
               is_public_http_url,
               is_robots_allowed,
           )
+          from index_store import load_index
 
-          pages = json.loads(Path("data/index.json").read_text(encoding="utf-8")).get("pages", [])
+          pages = load_index(Path("data/index.json")).get("pages", [])
           denied_urls = set(collect_robots_denied_urls(pages))
           allowed_urls = {
               page["url"]
