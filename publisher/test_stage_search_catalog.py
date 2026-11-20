@@ -180,7 +180,7 @@ class StageSearchCatalogTests(unittest.TestCase):
         }
         checked = validate_manifest(manifest)
         self.assertEqual(checked["total_pages"], 125_643)
-        self.assertEqual(len(checked["shards"]), 101)
+        self.assertEqual(len(checked["shards"]), 126)
 
 if __name__ == "__main__":
     unittest.main()
