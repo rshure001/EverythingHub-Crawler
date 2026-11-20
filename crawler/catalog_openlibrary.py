@@ -41,7 +41,7 @@ def request_subject(slug: str) -> dict:
     return data
 
 
-def discoverdef discover(pause: float = 1.0, allow_api: bool = False) -> dict:
+def discover(pause: float = 1.0, allow_api: bool = False) -> dict:
     if not allow_api:
         raise SourcePolicyError("Open Library API discovery is disabled pending approved bulk-use terms or an official dump workflow.")
     catalogs, datasets = [], []
