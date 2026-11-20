@@ -57,6 +57,8 @@ def build_candidates(index: dict) -> dict:
             item["lanes"][lane] += 1
         text = " ".join(str(page.get(k) or "") for k in ("title", "description", "text"))[:2500]
         matched = [name for name, pattern in HINTS.items() if pattern.search(text) or pattern.search(url)]
+        if matched:
+            item["hint_pages"] += 1
         for name in matched:
             item["hint_counts"][name] += 1
         if len(item["examples"]) < 8:
