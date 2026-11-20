@@ -84,6 +84,25 @@ def batch_fits(items, max_bytes=MAX_BYTES):
     return len(encode_batch(items)) <= max_bytes
 
 
+def encoded_page_size(page):
+    """Return exact UTF-8 JSON bytes for one compact page, without array framing."""
+    return len(json.dumps(
+        page, ensure_ascii=False, separators=(",", ":")
+    ).encode("utf-8"))
+
+
+def batch_size_from_item_sizes(item_sizes):
+    """Calculate exact encode_batch size from page sizes in linear time."""
+    if not item_sizes:
+        return len(b'{"version":1,"pages":[]}\\n')
+    return (
+        len(b'{"version":1,"pages":[')
+        + sum(item_sizes)
+        + len(item_sizes) - 1
+        + len(b']}\\n')
+    )
+
+
 def encode_shard(items):
     """Return deterministic gzip bytes and the exact decoded JSON length."""
     uncompressed = encode_batch(items)
@@ -119,6 +138,8 @@ def main():
 
     shards = []
     batch = []
+    batch_item_sizes = []
+    batch_payload_size = 0
     number = 0
 
     def write_batch(items):
@@ -139,15 +160,25 @@ def main():
             "sha256": hashlib.sha256(raw).hexdigest(),
         })
 
+    prefix_bytes = len(b'{"version":1,"pages":[')
+    suffix_bytes = len(b']}\\n')
     for page in pages:
-        trial = batch + [page]
-        if batch and not batch_fits(trial):
+        page_size = encoded_page_size(page)
+        candidate_size = (
+            prefix_bytes + batch_payload_size
+            + (1 if batch else 0) + page_size + suffix_bytes
+        )
+        if batch and candidate_size > MAX_BYTES:
             write_batch(batch)
-            batch = [page]
-            if not batch_fits(batch):
-                raise ValueError("single compacted page exceeds the public shard size limit")
-        else:
-            batch = trial
+            batch = []
+            batch_item_sizes = []
+            batch_payload_size = 0
+            candidate_size = prefix_bytes + page_size + suffix_bytes
+        if candidate_size > MAX_BYTES:
+            raise ValueError("single compacted page exceeds the public shard size limit")
+        batch.append(page)
+        batch_item_sizes.append(page_size)
+        batch_payload_size += page_size + (1 if len(batch) > 1 else 0)
     write_batch(batch)
 
     catalog_payload = json.dumps(
