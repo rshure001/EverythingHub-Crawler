@@ -1,0 +1,51 @@
+name: Catalog-first discovery
+
+on:
+  workflow_dispatch:
+    inputs:
+      rows:
+        description: Records per catalog API page
+        required: false
+        default: "250"
+      max_pages:
+        description: Maximum API pages per catalog
+        required: false
+        default: "20"
+  schedule:
+    - cron: "17 */2 * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: catalog-first-discovery
+  cancel-in-progress: false
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate catalog discovery
+        working-directory: crawler
+        run: python -m unittest test_catalog_discovery.py -v
+      - name: Discover whole catalogs and their bulk resources
+        env:
+          ROWS: ${{ inputs.rows || '250' }}
+          MAX_PAGES: ${{ inputs.max_pages || '20' }}
+        run: python crawler/catalog_discovery.py --rows "$ROWS" --max-pages "$MAX_PAGES"
+      - name: Publish catalog manifest
+        run: |
+          if git diff --quiet -- data/catalogs.json; then
+            echo "No catalog manifest changes."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/catalogs.json
+          git commit -m "Discover and refresh public data catalogs"
+          git push
