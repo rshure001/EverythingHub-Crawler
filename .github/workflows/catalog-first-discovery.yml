@@ -6,6 +6,7 @@ on:
       - "crawler/catalog_discovery.py"
       - "crawler/test_catalog_discovery.py"
       - "project/**"
+      - "learning/**"
       - ".github/workflows/catalog-first-discovery.yml"
   workflow_dispatch:
     inputs:
@@ -41,6 +42,8 @@ jobs:
         run: python -m unittest test_catalog_discovery.py -v
       - name: Validate project ledger
         run: python -m unittest discover -s project -p 'test_*.py' -v
+      - name: Validate feedback learner
+        run: python -m unittest discover -s learning -p 'test_*.py' -v
       - name: Discover whole catalogs and their bulk resources
         env:
           ROWS: ${{ inputs.rows || '250' }}
