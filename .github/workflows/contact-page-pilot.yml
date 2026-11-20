@@ -1,6 +1,12 @@
 name: Everything Hub Las Vegas veteran contact pilot
 
 on:
+  pull_request:
+    paths:
+      - ".github/workflows/contact-page-pilot.yml"
+      - "crawler/contact_page_pilot.py"
+      - "crawler/contact_pilot_sources.json"
+      - "crawler/test_contact_page_pilot.py"
   workflow_dispatch:
 
 permissions:
@@ -24,11 +30,13 @@ jobs:
           python -m py_compile crawler/contact_page_pilot.py crawler/safe_http.py
           python -m unittest discover -s crawler -p 'test_contact_page_pilot.py' -v
       - name: Fetch five explicitly allowlisted public pages
+        if: github.event_name == 'workflow_dispatch'
         run: |
           python crawler/contact_page_pilot.py \
             --config crawler/contact_pilot_sources.json \
             --output staging/contact-pilot/results.jsonl
       - name: Upload staging-only results
+        if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
           name: las-vegas-veteran-contact-pilot
