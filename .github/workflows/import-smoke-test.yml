@@ -218,12 +218,26 @@ jobs:
           print("Science lane filter returned only the science fixture.")
           PY
 
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO eh_quad.eh_catalogs
+            (catalog_id, source_id, title, description, catalog_type, subject, publisher,
+             geography, source_url, access_method, coverage_status, record_count)
+          VALUES
+            ('smoke-catalog', 'smoke-source', 'EverythingHub Catalog Smoke Test',
+             'Isolated catalog search fixture', 'open_data', 'testing', 'Everything Hub',
+             'test', 'https://example.org/catalog', 'web', 'complete', 1);
+          INSERT INTO eh_quad.eh_catalog_records
+            (record_id, catalog_id, record_type, title, description, source_key,
+             source_url, canonical_entity_key, subject, geography, attributes, last_seen_at)
+          VALUES
+            ('smoke-record', 'smoke-catalog', 'dataset',
+             'EverythingHub Catalog Search Fixture', 'Rights-approved isolated test record',
+             'smoke-key', 'https://example.org/catalog/smoke-record', 'smoke:catalog-record',
+             'testing', 'test', '{"public_search_allowed": true}', now());
+          SQL
           encoded_catalog_query=$(python - <<'PY'
-          import json
           from urllib.parse import quote
-          import gzip
-          data = json.load(gzip.open("data/universal-catalog-records.json.gz", "rt", encoding="utf-8"))
-          print(quote(data["records"][0]["title"]))
+          print(quote("EverythingHub Catalog Search Fixture"))
           PY
           )
           curl --silent --fail -H "Authorization: Bearer isolated-test-token" \
@@ -239,5 +253,5 @@ jobs:
           assert record["record_type"] == "dataset", record
           assert record["url"].startswith("https://"), record
           assert record["catalog_id"], record
-          print("Authenticated catalog-record search returned a staged dataset record.")
+          print("Authenticated catalog-record search returned the isolated approved fixture.")
           PY
