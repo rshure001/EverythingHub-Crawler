@@ -19,7 +19,7 @@ class PostCrawlDispatchTests(unittest.TestCase):
 
     def test_crawler_job_has_time_for_commit_and_post_commit_dispatch(self):
         workflow = (ROOT / ".github" / "workflows" / "crawl.yml").read_text(encoding="utf-8")
-        match = re.search(r"^    timeout-minutes:\\s*(\\d+)\\s*$", workflow, re.MULTILINE)
+        match = re.search(r"^    timeout-minutes:\s*(\d+)\s*$", workflow, re.MULTILINE)
         self.assertIsNotNone(match, "crawler job timeout must be explicit")
         self.assertGreaterEqual(int(match.group(1)), 15)
 
