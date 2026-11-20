@@ -31,6 +31,23 @@ class ProductMetadataTests(unittest.TestCase):
         self.assertEqual(result["price"], "1299")
         self.assertEqual(result["image"], "https://shop.example/ring.jpg")
 
+    def test_rejects_schema_product_without_commerce_identifiers_or_offer(self):
+        html = """<script type="application/ld+json">{
+          "@context":"https://schema.org","@type":"Product",
+          "name":"Editorial feature card","brand":{"@type":"Brand","name":"Example"}
+        }</script>"""
+        self.assertEqual(extract_product_metadata(html, "https://example.com/story"), {})
+
+    def test_accepts_gtin_without_price(self):
+        html = """<script type="application/ld+json">{
+          "@context":"https://schema.org","@type":"Product",
+          "name":"Example watch","brand":{"@type":"Brand","name":"Example"},
+          "gtin13":"1234567890123"
+        }</script>"""
+        result = extract_product_metadata(html, "https://shop.example/watch")
+        self.assertEqual(result["gtin"], "1234567890123")
+        self.assertEqual(result["type"], "product")
+
     def test_ignores_non_product_and_unsafe_urls(self):
         html = """<script type="application/ld+json">
         {"@type":"Article","name":"Not a product","image":"javascript:alert(1)"}
