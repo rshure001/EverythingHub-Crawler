@@ -107,6 +107,7 @@ def normalize_dataset(dataset: dict[str, Any], source: dict[str, Any]) -> dict[s
         "license": license_info,
         "source_terms_url": source.get("source_terms_url", ""),
         "source_terms_status": source.get("source_terms_status", "review_required"),
+        "source_terms_reviewed_at": source.get("source_terms_reviewed_at", ""),
         "attribution_required": source.get("attribution_required", "per_dataset"),
         "metadata_only": True,
     }
@@ -150,6 +151,7 @@ def discover_source(source: dict[str, Any], rows: int, max_pages: int, pause: fl
                 **source,
                 "source_terms_url": policy.get("terms_url", ""),
                 "source_terms_status": policy.get("terms_status", "reviewed_per_dataset"),
+                "source_terms_reviewed_at": policy.get("reviewed_at", ""),
                 "attribution_required": policy.get("attribution_required", "per_dataset"),
             }
             for raw in batch:
@@ -174,6 +176,7 @@ def discover_source(source: dict[str, Any], rows: int, max_pages: int, pause: fl
         "category": source["category"],
         "source_terms_url": policy.get("terms_url", ""),
         "source_terms_status": policy.get("terms_status", "reviewed_per_dataset"),
+        "source_terms_reviewed_at": policy.get("reviewed_at", ""),
         "attribution_required": policy.get("attribution_required", "per_dataset"),
         "metadata_only": True,
         "per_dataset_rights_required": bool(policy.get("per_dataset_rights_required", True)),
