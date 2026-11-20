@@ -412,6 +412,83 @@ def analyze_pages(
     }
 
 
+def analyze_pages_incremental(
+    pages: list[dict],
+    source_total: int | None = None,
+    source_updated_at: str | None = None,
+    source_index_sha256: str | None = None,
+    cache_dir: Path | None = None,
+) -> dict:
+    """Reuse per-host analysis shards when that host's indexed pages are unchanged.
+
+    Catalog and entity IDs are host-scoped, so host shards can be safely merged.
+    """
+    cache_dir = cache_dir or (DEFAULT_OUTPUT.parent / ".page-derived-catalog-cache")
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    grouped: dict[str, list[dict]] = defaultdict(list)
+    for page in pages:
+        url = canonical_url(page.get("url")) if isinstance(page, dict) else None
+        host = urlsplit(url).hostname if url else None
+        grouped[host or "_invalid_public_url"].append(page)
+    all_catalogs, all_records, all_page_rows = [], [], []
+    all_media: set[str] = set()
+    eligible = signals = 0
+    reused = rebuilt = 0
+    for host, host_pages in sorted(grouped.items()):
+        payload = json.dumps(host_pages, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        digest = hashlib.sha256(payload).hexdigest()
+        cache_path = cache_dir / (hashlib.sha256(host.encode("utf-8")).hexdigest()[:32] + ".json.gz")
+        shard = None
+        if cache_path.exists():
+            try:
+                cached = json.loads(gzip.decompress(cache_path.read_bytes()).decode("utf-8"))
+                if cached.get("input_sha256") == digest:
+                    shard = cached.get("analysis")
+                    reused += 1
+            except (OSError, ValueError, json.JSONDecodeError):
+                shard = None
+        if shard is None:
+            shard = analyze_pages(host_pages, source_total=len(host_pages))
+            raw = json.dumps({"input_sha256": digest, "analysis": shard}, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+            temp = cache_path.with_suffix(".tmp")
+            temp.write_bytes(gzip.compress(raw, compresslevel=6, mtime=0))
+            temp.replace(cache_path)
+            rebuilt += 1
+        all_catalogs.extend(shard["catalogs"])
+        all_records.extend(shard["records"])
+        all_page_rows.extend(shard["pages"])
+        all_media.update(shard["media_urls"])
+        eligible += shard["metrics"]["eligible_pages"]
+        signals += shard["metrics"]["pages_with_catalog_signals"]
+    all_catalogs.sort(key=lambda x: (x["catalog_type"], x["title"].casefold(), x["catalog_id"]))
+    all_records.sort(key=lambda x: (x["record_type"], x["title"].casefold(), x["record_id"]))
+    all_page_rows.sort(key=lambda x: (x.get("url") or "", x.get("page_id") or ""))
+    source_total = source_total if isinstance(source_total, int) and source_total >= 0 else len(pages)
+    page_refs = sum(len(x.get("source_page_ids", [])) for x in all_catalogs)
+    type_counts = dict(sorted(Counter(x["record_type"] for x in all_records).items()))
+    metrics = {
+        "pages_analyzed": len(pages), "eligible_pages": eligible,
+        "unique_catalogs_discovered": len(all_catalogs),
+        "catalog_candidate_page_references": page_refs,
+        "duplicate_catalog_candidates": max(0, page_refs - len(all_catalogs)),
+        "subcatalogs_discovered": sum(bool(x["parent_catalog_id"]) for x in all_catalogs),
+        "unique_records": len(all_records), "unique_records_by_type": type_counts,
+        "media_references": len(all_media), "records_published": 0, "catalogs_verified": 0,
+        "pages_with_catalog_signals": signals,
+        "coverage_percentage": round((len(pages) / source_total * 100.0) if source_total else 0.0, 4),
+        "eligible_page_coverage_percentage": round((eligible / source_total * 100.0) if source_total else 0.0, 4),
+        "host_partitions_reused": reused, "host_partitions_rebuilt": rebuilt,
+    }
+    return {
+        "schema_version": 1, "strategy": "incremental-host-partitioned-page-content-derived-catalog-candidates",
+        "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+        "source_index_pages": source_total, "source_index_updated_at": source_updated_at,
+        "source_index_sha256": source_index_sha256, "metrics": metrics,
+        "catalogs": all_catalogs, "records": all_records, "pages": all_page_rows,
+        "media_urls": sorted(all_media),
+    }
+
+
 def search_catalog_network(query: str, analysis: dict, limit: int = 10) -> list[dict]:
     tokens = list(dict.fromkeys(_norm(query).split()))
     if not tokens or limit <= 0:
@@ -635,17 +712,21 @@ def main() -> None:
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--query", action="append", default=[])
     parser.add_argument("--validate-only", action="store_true")
+    parser.add_argument("--no-incremental", action="store_true")
+    parser.add_argument("--cache-dir", type=Path, default=ROOT / "data" / ".page-derived-catalog-cache")
     args = parser.parse_args()
     if args.validate_only:
         print(json.dumps(validate_outputs(args.output_dir), indent=2))
         return
     source_manifest = json.loads(args.index.read_text(encoding="utf-8"))
     index = load_index(args.index)
-    analysis = analyze_pages(
+    analyze = analyze_pages if args.no_incremental else analyze_pages_incremental
+    analysis = analyze(
         index.get("pages", []),
         source_total=source_manifest.get("total_pages"),
         source_updated_at=datetime.fromtimestamp(source_manifest.get("updated_at", 0), timezone.utc).isoformat().replace("+00:00", "Z") if source_manifest.get("updated_at") else None,
         source_index_sha256=hashlib.sha256(args.index.read_bytes()).hexdigest(),
+        **({} if args.no_incremental else {"cache_dir": args.cache_dir}),
     )
     manifest = write_outputs(analysis, args.output_dir)
     print(json.dumps({"metrics": analysis["metrics"], "catalog_index_files": manifest["catalog_count"], "files": len(manifest["files"])}, indent=2))
