@@ -62,6 +62,8 @@ def build_candidates(index: dict) -> dict:
         matched = [name for name, pattern in HINTS.items() if pattern.search(text) or pattern.search(url)]
         page_seeds.append({
             "page_id": __import__("hashlib").sha256(url.encode("utf-8")).hexdigest()[:24],
+            "catalog_candidate_id": "page-catalog:" + __import__("hashlib").sha256(url.encode("utf-8")).hexdigest()[:24],
+            "catalog_candidate_status": "needs_page_catalog_extraction",
             "url": url[:2048],
             "host": host,
             "title": str(page.get("title") or "")[:240],
@@ -103,6 +105,8 @@ def build_candidates(index: dict) -> dict:
         "page_catalog_seeds": page_seeds,
         "metrics": {
             "pages_as_discovery_seeds": len(page_seeds),
+            "page_catalog_candidates": len(page_seeds),
+            "verified_page_catalogs": 0,
             "pages_with_catalog_signals": sum(bool(x["catalog_signals"]) for x in page_seeds),
             "page_catalog_signal_references": sum(len(x["catalog_signals"]) for x in page_seeds),
             "source_pages_grouped": sum(x["source_pages"] for x in hosts),
