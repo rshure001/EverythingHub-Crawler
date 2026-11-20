@@ -5,16 +5,15 @@ const crypto = require('node:crypto');
 
 const CATALOG_BASE_URL = 'https://raw.githubusercontent.com/rshure001/EverythingHub-Crawler/';
 const GIT_REF_URL = 'https://api.github.com/repos/rshure001/EverythingHub-Crawler/git/ref/heads/main';
-const SHARD_BASE_URL = 'https://raw.githubusercontent.com/rshure001/EverythingHub-Crawler/main/public-search/';
 const CACHE_TTL_MS = 300000;
 const STALE_TTL_MS = 3600000;
 const MAX_MANIFEST_BYTES = 128000;
-const MAX_CATALOG_GZIP_BYTES = 12000000;
+const MAX_CATALOG_GZIP_BYTES = 16000000;
 const MAX_CATALOG_JSON_BYTES = 64000000;
-const MAX_INDEXED_PAGES = 30000;
+const MAX_INDEXED_PAGES = 40000;
 const MAX_SHARD_COUNT = 256;
 const MAX_SHARD_BYTES = 1000000;
-const MAX_TOTAL_SHARD_BYTES = 48000000;
+const MAX_TOTAL_SHARD_BYTES = 80000000;
 const MAX_SHARD_CONCURRENCY = 32;
 const SHARD_FETCH_TIMEOUT_MS = 7000;
 const agent = new https.Agent({ keepAlive: true, maxSockets: MAX_SHARD_CONCURRENCY });
@@ -35,7 +34,7 @@ function getBuffer(url, maxBytes, timeoutMs = 10000) {
       request = https.get(url, {
         agent,
         headers: {
-          'user-agent': 'EverythingHub-IndependentSearch/2.1',
+          'user-agent': 'EverythingHub-IndependentSearch/2.2',
           accept: '*/*'
         }
       }, (response) => {
@@ -92,7 +91,10 @@ function validateManifestEnvelope(manifest) {
       !Array.isArray(manifest.shards) || manifest.shards.length !== manifest.shard_count) {
     throw new Error('manifest_shard_count_invalid');
   }
-  const meta = manifest.catalog_gzip;
+}
+
+function validateCatalogMetadata(manifest) {
+  const meta = manifest && manifest.catalog_gzip;
   if (!meta || meta.file !== 'catalog-v1.json.gz' ||
       meta.pages !== manifest.total_pages ||
       !Number.isSafeInteger(meta.bytes) || meta.bytes < 1 ||
@@ -118,7 +120,8 @@ function validatePage(page, prefix) {
 }
 
 function validateManifestAndCatalog(manifest, compressed) {
-  const meta = validateManifestEnvelope(manifest);
+  validateManifestEnvelope(manifest);
+  const meta = validateCatalogMetadata(manifest);
   if (!Buffer.isBuffer(compressed) || compressed.length !== meta.bytes) {
     throw new Error('catalog_size_mismatch');
   }
@@ -145,8 +148,9 @@ function validateManifestAndCatalog(manifest, compressed) {
     sha256: digest,
     indexedPages: payload.pages.length,
     source: 'git-commit-pinned-compressed-catalog',
-    integrity: 'catalog-sha256',
-    shardCount: manifest.shard_count
+    integrity: 'sha256',
+    shardCount: manifest.shard_count,
+    transport: 'gzip'
   };
 }
 
@@ -222,10 +226,21 @@ async function mapLimit(items, limit, mapper) {
   return results;
 }
 
-async function loadShardedCatalog(manifest) {
-  const { shards, totalBytes } = validateShardManifest(manifest);
-  const loaded = await mapLimit(shards, MAX_SHARD_CONCURRENCY, async (meta) => {
-    const buffer = await getBuffer(SHARD_BASE_URL + encodeURIComponent(meta.file), meta.bytes, SHARD_FETCH_TIMEOUT_MS);
+async function loadShardedCatalog(manifest, commitSha, manifestSha256, fetchBuffer = getBuffer) {
+  const checked = validateShardManifest(manifest);
+  if (typeof commitSha !== 'string' || !/^[a-f0-9]{40}$/i.test(commitSha)) {
+    throw new Error('catalog_git_ref_invalid');
+  }
+  if (typeof manifestSha256 !== 'string' || !/^[a-f0-9]{64}$/i.test(manifestSha256)) {
+    throw new Error('manifest_digest_invalid');
+  }
+  const baseUrl = CATALOG_BASE_URL + commitSha + '/public-search/';
+  const loaded = await mapLimit(checked.shards, MAX_SHARD_CONCURRENCY, async (meta) => {
+    const buffer = await fetchBuffer(
+      baseUrl + encodeURIComponent(meta.file),
+      meta.bytes,
+      SHARD_FETCH_TIMEOUT_MS
+    );
     return validateShardPayload(meta, buffer);
   });
   const pages = [];
@@ -239,33 +254,64 @@ async function loadShardedCatalog(manifest) {
   return {
     pages,
     updatedAt: manifest.updated_at,
-    sha256: manifest.catalog_gzip.sha256,
+    sha256: manifestSha256,
     indexedPages: pages.length,
-    source: 'public-search-shards',
-    integrity: 'per-shard-sha256',
-    shardCount: shards.length,
-    shardBytes: totalBytes
+    source: 'git-commit-pinned-public-search-shards',
+    integrity: 'sha256',
+    shardCount: checked.shards.length,
+    shardBytes: checked.totalBytes,
+    transport: 'shards'
   };
+}
+
+async function loadCatalogFromManifest(manifest, commitSha, manifestRaw, fetchBuffer = getBuffer) {
+  validateManifestEnvelope(manifest);
+  if (typeof commitSha !== 'string' || !/^[a-f0-9]{40}$/i.test(commitSha)) {
+    throw new Error('catalog_git_ref_invalid');
+  }
+  if (!Buffer.isBuffer(manifestRaw)) manifestRaw = Buffer.from(manifestRaw || '');
+  const manifestSha256 = crypto.createHash('sha256').update(manifestRaw).digest('hex');
+  const baseUrl = CATALOG_BASE_URL + commitSha + '/public-search/';
+  let gzipError = null;
+
+  if (manifest.catalog_gzip != null) {
+    try {
+      const meta = validateCatalogMetadata(manifest);
+      const compressed = await fetchBuffer(
+        baseUrl + encodeURIComponent(meta.file),
+        MAX_CATALOG_GZIP_BYTES
+      );
+      return validateManifestAndCatalog(manifest, compressed);
+    } catch (error) {
+      gzipError = error;
+    }
+  }
+
+  try {
+    return await loadShardedCatalog(manifest, commitSha, manifestSha256, fetchBuffer);
+  } catch (shardError) {
+    if (gzipError) throw new Error('catalog_gzip_and_shards_failed');
+    throw shardError;
+  }
 }
 
 async function loadCatalog() {
   if (cache && Date.now() - cache.loadedAt < CACHE_TTL_MS) return { ...cache, stale: false };
   try {
-    // Pin both files to one immutable Git revision to prevent stale CDN mixes.
     const gitRef = JSON.parse((await getBuffer(GIT_REF_URL + '?v=' + Date.now(), 4096)).toString('utf8'));
     const sha = gitRef && gitRef.object && gitRef.object.sha;
     if (typeof sha !== 'string' || !/^[a-f0-9]{40}$/i.test(sha)) {
       throw new Error('catalog_git_ref_invalid');
     }
-    const [manifestRaw, compressed] = await Promise.all([
-      getBuffer(CATALOG_BASE_URL + sha + '/public-search/manifest.json', MAX_MANIFEST_BYTES),
-      getBuffer(CATALOG_BASE_URL + sha + '/public-search/catalog-v1.json.gz', MAX_CATALOG_GZIP_BYTES)
-    ]);
+    const manifestRaw = await getBuffer(
+      CATALOG_BASE_URL + sha + '/public-search/manifest.json',
+      MAX_MANIFEST_BYTES
+    );
     let manifest;
     try { manifest = JSON.parse(manifestRaw.toString('utf8')); } catch {
       throw new Error('manifest_json_invalid');
     }
-    const validated = validateManifestAndCatalog(manifest, compressed);
+    const validated = await loadCatalogFromManifest(manifest, sha, manifestRaw, getBuffer);
     cache = { ...validated, loadedAt: Date.now(), stale: false };
     return { ...cache };
   } catch (error) {
@@ -290,6 +336,7 @@ module.exports = {
   validateShardManifest,
   validateShardPayload,
   loadShardedCatalog,
+  loadCatalogFromManifest,
   mapLimit,
   loadCatalog,
   clearCatalogCache

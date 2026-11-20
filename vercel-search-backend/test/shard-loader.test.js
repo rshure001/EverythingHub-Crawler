@@ -5,9 +5,11 @@ const crypto = require('node:crypto');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
+  MAX_INDEXED_PAGES,
   MAX_TOTAL_SHARD_BYTES,
   validateShardManifest,
   validateShardPayload,
+  loadCatalogFromManifest,
   mapLimit
 } = require('../src/lib/catalog');
 
@@ -32,13 +34,7 @@ function makeManifest(shards) {
     updated_at: Math.floor(Date.now() / 1000),
     total_pages: totalPages,
     shard_count: shards.length,
-    shards,
-    catalog_gzip: {
-      file: 'catalog-v1.json.gz',
-      pages: totalPages,
-      bytes: 1,
-      sha256: 'a'.repeat(64)
-    }
+    shards
   };
 }
 
@@ -52,13 +48,14 @@ function page(url) {
   };
 }
 
-test('current repository manifest fits the bounded shard reader', () => {
+test('current repository manifest fits the bounded shard reader without gzip metadata', () => {
   const manifestPath = path.resolve(__dirname, '../../public-search/manifest.json');
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
   const result = validateShardManifest(manifest);
   assert.equal(result.totalPages, manifest.total_pages);
   assert.equal(result.shards.length, manifest.shard_count);
   assert.ok(result.totalBytes <= MAX_TOTAL_SHARD_BYTES);
+  assert.ok(manifest.total_pages <= MAX_INDEXED_PAGES);
   assert.ok(manifest.total_pages >= 20000);
 });
 
@@ -84,7 +81,7 @@ test('unsafe shard paths are rejected', () => {
 });
 
 test('aggregate shard size is bounded before network requests', () => {
-  const shards = Array.from({ length: 49 }, (_, index) => ({
+  const shards = Array.from({ length: 81 }, (_, index) => ({
     file: 'shard-' + String(index + 1).padStart(4, '0') + '.json',
     pages: 1,
     bytes: 1_000_000,
@@ -109,6 +106,57 @@ test('robots-denied shard records are rejected', () => {
 test('unsafe shard URLs are rejected', () => {
   const shard = makeShard('shard-0001.json', [page('https://user:pass@example.com/private')]);
   assert.throws(() => validateShardPayload(shard.meta, shard.buffer), /shard_record_url_unsafe/);
+});
+
+test('shard-only catalog loader fetches from the immutable commit SHA and pins the manifest digest', async () => {
+  const shard = makeShard('shard-0001.json', [page('https://example.com/one')]);
+  const manifest = makeManifest([shard.meta]);
+  const commitSha = 'a'.repeat(40);
+  const manifestRaw = Buffer.from(JSON.stringify(manifest));
+  const manifestDigest = crypto.createHash('sha256').update(manifestRaw).digest('hex');
+  const calls = [];
+  const loaded = await loadCatalogFromManifest(
+    manifest,
+    commitSha,
+    manifestRaw,
+    async (url, maxBytes, timeoutMs) => {
+      calls.push({ url, maxBytes, timeoutMs });
+      return shard.buffer;
+    }
+  );
+  assert.equal(loaded.transport, 'shards');
+  assert.equal(loaded.integrity, 'sha256');
+  assert.equal(loaded.sha256, manifestDigest);
+  assert.equal(loaded.indexedPages, 1);
+  assert.deepEqual(calls.map(call => call.url), [
+    'https://raw.githubusercontent.com/rshure001/EverythingHub-Crawler/' +
+    commitSha + '/public-search/shard-0001.json'
+  ]);
+});
+
+test('catalog loader falls back to verified shards when the optional gzip object is missing', async () => {
+  const shard = makeShard('shard-0001.json', [page('https://example.com/one')]);
+  const manifest = makeManifest([shard.meta]);
+  manifest.catalog_gzip = {
+    file: 'catalog-v1.json.gz',
+    pages: 1,
+    bytes: 1,
+    sha256: 'a'.repeat(64)
+  };
+  const commitSha = 'b'.repeat(40);
+  const manifestRaw = Buffer.from(JSON.stringify(manifest));
+  const loaded = await loadCatalogFromManifest(
+    manifest,
+    commitSha,
+    manifestRaw,
+    async (url) => {
+      if (url.endsWith('/catalog-v1.json.gz')) throw new Error('upstream_http_404');
+      return shard.buffer;
+    }
+  );
+  assert.equal(loaded.transport, 'shards');
+  assert.equal(loaded.indexedPages, 1);
+  assert.equal(loaded.pages[0].url, 'https://example.com/one');
 });
 
 test('shard loader uses a bounded worker pool without batch barriers', async () => {

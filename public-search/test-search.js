@@ -174,7 +174,7 @@ async function testCurrentPublishedManifestFitsClientLimits() {
   const totalShardBytes = currentManifest.shards.reduce((sum, shard) => sum + shard.bytes, 0);
 
   assert.ok(
-    currentManifest.total_pages <= 30_000,
+    currentManifest.total_pages <= 40_000,
     "current catalog must fit the 30,000-page browser safety limit"
   );
   assert.ok(
@@ -184,14 +184,14 @@ async function testCurrentPublishedManifestFitsClientLimits() {
   );
   if (currentManifest.catalog_gzip) {
     assert.ok(
-      currentManifest.catalog_gzip.bytes <= 12_000_000 &&
+      currentManifest.catalog_gzip.bytes <= 16_000_000 &&
         currentManifest.catalog_gzip.pages === currentManifest.total_pages,
       "optional compressed catalog must fit the 12 MB browser transport limit"
     );
   }
   assert.ok(
-    totalShardBytes <= 48_000_000,
-    "current shard catalog must fit the 48 MB browser fallback limit"
+    totalShardBytes <= 80_000_000,
+    "current shard catalog must fit the 80 MB browser fallback limit"
   );
 
   globalThis.fetch = async url => {

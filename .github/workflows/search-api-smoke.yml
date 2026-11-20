@@ -28,6 +28,7 @@ jobs:
       - name: Check indexed ranking and database-independent fallback
         run: |
           python - <<'PY'
+          import hashlib
           import json
           import os
           import re
@@ -40,17 +41,25 @@ jobs:
           base = os.environ["BASE"]
           key = os.environ["KEY"]
 
-          manifest = json.loads(Path("public-search/manifest.json").read_text(encoding="utf-8"))
+          manifest_path = Path("public-search/manifest.json")
+          manifest_raw = manifest_path.read_bytes()
+          manifest = json.loads(manifest_raw.decode("utf-8"))
           expected_pages = manifest.get("total_pages")
           expected_updated_at = manifest.get("updated_at")
           catalog = manifest.get("catalog_gzip")
-          expected_sha = catalog.get("sha256") if isinstance(catalog, dict) else None
+          manifest_sha = hashlib.sha256(manifest_raw).hexdigest()
+          expected_shas = {"shards": manifest_sha}
           if not isinstance(expected_pages, int) or expected_pages < 1:
               raise SystemExit("Committed public search manifest has an invalid page count")
           if not isinstance(expected_updated_at, int) or expected_updated_at < 1:
               raise SystemExit("Committed public search manifest has an invalid update timestamp")
-          if not isinstance(expected_sha, str) or not re.fullmatch(r"[0-9a-f]{64}", expected_sha):
-              raise SystemExit("Committed public search manifest has no valid compressed-catalog SHA-256")
+          if catalog is not None:
+              if not isinstance(catalog, dict):
+                  raise SystemExit("Committed public search manifest has invalid compressed-catalog metadata")
+              gzip_sha = catalog.get("sha256")
+              if not isinstance(gzip_sha, str) or not re.fullmatch(r"[0-9a-f]{64}", gzip_sha):
+                  raise SystemExit("Committed public search manifest has an invalid compressed-catalog SHA-256")
+              expected_shas["gzip"] = gzip_sha
 
           def get(function, query, **extra):
               params = {"q": query, "limit": 10, **extra}
@@ -148,14 +157,22 @@ jobs:
               health = get_vercel("/api/health")
               production = get_vercel("/api/search?" + urllib.parse.urlencode({"q": "NASA", "limit": 50, "offset": 0}))
               pages_match = production.get("indexedPages") == expected_pages
-              digest_match = str(production.get("indexSha256", "")).lower() == expected_sha
+              transport = production.get("indexTransport")
+              expected_sha = expected_shas.get(transport)
+              digest_match = isinstance(expected_sha, str) and str(production.get("indexSha256", "")).lower() == expected_sha
               timestamp_match = production.get("indexUpdatedAt") == expected_updated_at
+              transport_match = expected_sha is not None
+              shards_match = production.get("indexShardCount") == manifest.get("shard_count")
+              integrity_match = production.get("indexIntegrity") == "sha256"
               if (
                   health.get("status") == "ok"
                   and production.get("indexStatus") == "crawler-catalog-active"
                   and pages_match
                   and digest_match
                   and timestamp_match
+                  and transport_match
+                  and shards_match
+                  and integrity_match
               ):
                   break
               last_observed = {
@@ -163,6 +180,8 @@ jobs:
                   "indexSha256": production.get("indexSha256"),
                   "indexUpdatedAt": production.get("indexUpdatedAt"),
                   "indexStatus": production.get("indexStatus"),
+                  "indexTransport": production.get("indexTransport"),
+                  "indexShardCount": production.get("indexShardCount"),
               }
               remaining = deadline - time.monotonic()
               if remaining <= 0:
@@ -170,7 +189,7 @@ jobs:
                       "Live Vercel catalog did not catch up to the committed manifest within 360 seconds: "
                       + json.dumps({
                           "expectedPages": expected_pages,
-                          "expectedSha256": expected_sha,
+                          "expectedSha256ByTransport": expected_shas,
                           "expectedUpdatedAt": expected_updated_at,
                           "observed": last_observed,
                       }, sort_keys=True)
@@ -202,11 +221,17 @@ jobs:
           assert production.get("indexStatus") == "crawler-catalog-active", production
           assert isinstance(production.get("indexedPages"), int) and production["indexedPages"] > 0, production
           assert isinstance(production.get("indexSha256"), str) and len(production["indexSha256"]) == 64, production
+          assert production.get("indexIntegrity") == "sha256", production
+          assert production.get("indexTransport") in expected_shas, production
+          assert production.get("indexSha256") == expected_shas[production["indexTransport"]], production
+          assert production.get("indexShardCount") == manifest.get("shard_count"), production
           assert production.get("page") == 1, production
           assert page2.get("page") == 2, page2
           assert page2.get("catalogOffset") == 40, page2
           assert page2.get("indexedPages") == production.get("indexedPages"), page2
           assert page2.get("indexSha256") == production.get("indexSha256"), page2
+          assert page2.get("indexTransport") == production.get("indexTransport"), page2
+          assert page2.get("indexShardCount") == production.get("indexShardCount"), page2
           local_results = [
               item for item in production.get("results", [])
               if item.get("source") == "Everything Hub Crawler"

@@ -128,6 +128,7 @@ module.exports = async function handler(req, res) {
     indexSource: catalog.source,
     indexIntegrity: catalog.integrity,
     indexShardCount: catalog.shardCount,
+    indexTransport: catalog.transport,
     staleCatalog: catalog.stale
   });
   if (bingResult.status !== 'fulfilled') payload.providers = ['Everything Hub Crawler'];

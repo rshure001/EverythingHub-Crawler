@@ -10,17 +10,18 @@ const {
   MAX_SHARD_CONCURRENCY
 } = require("../src/lib/catalog");
 
-test("Vercel shard reader accepts the current 10,930,449-byte gzip manifest export", () => {
-  assert.equal(MAX_CATALOG_GZIP_BYTES, 12_000_000);
-  assert.ok(MAX_CATALOG_GZIP_BYTES >= 10_930_449);
+test("Vercel catalog loader accepts the current 14,112,415-byte compressed catalog with headroom", () => {
+  assert.equal(MAX_CATALOG_GZIP_BYTES, 16_000_000);
+  assert.ok(MAX_CATALOG_GZIP_BYTES >= 14_112_415);
 });
 
-test("Vercel shard reader accepts the current 22,799-page, 130-shard index with headroom", () => {
-  assert.equal(MAX_INDEXED_PAGES, 30_000);
-  assert.ok(MAX_INDEXED_PAGES >= 22_799);
+test("Vercel catalog loader accepts the current 29,045-page, 164-shard index with headroom", () => {
+  assert.equal(MAX_INDEXED_PAGES, 40_000);
+  assert.ok(MAX_INDEXED_PAGES >= 29_045);
   assert.equal(MAX_SHARD_COUNT, 256);
-  assert.ok(MAX_SHARD_COUNT >= 130);
+  assert.ok(MAX_SHARD_COUNT >= 164);
   assert.equal(MAX_SHARD_BYTES, 1_000_000);
-  assert.equal(MAX_TOTAL_SHARD_BYTES, 48_000_000);
+  assert.equal(MAX_TOTAL_SHARD_BYTES, 80_000_000);
+  assert.ok(MAX_TOTAL_SHARD_BYTES >= 55_460_106);
   assert.equal(MAX_SHARD_CONCURRENCY, 32);
 });
