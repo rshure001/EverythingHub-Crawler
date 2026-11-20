@@ -76,7 +76,7 @@ def authorize_source_url(url: str, purpose: str = "discovery") -> tuple[dict, ob
     policy = policy_for_host(host)
     if not policy or policy.get("discovery_allowed") is not True:
         raise SourcePolicyError(f"source terms do not authorize discovery for {host}")
-    if policy.get("terms_status") not in _REVIEWED_STATUSES or not policy.get("terms_url"):
+    if policy.get("terms_status") not in _REVIEWED_STATUSES or not policy.get("terms_url") or not policy.get("reviewed_at"):
         raise SourcePolicyError(f"source terms are not reviewed for {host}")
     if purpose == "discovery":
         allowed_paths = policy.get("allowed_api_paths") or []
