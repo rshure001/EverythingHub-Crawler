@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "updated_at": "2026-11-20T13:23:07.332Z",
-  "reason": "Push-triggered fallback after latest scheduled crawl.yml run #263 at 2026-11-20T09:15:54Z was 14833s old (>25 minutes); no queued or running crawler; public manifest was 803s old (>10 minutes). One bounded recovery crawl; normal schedule, robots pacing, and source restrictions unchanged.",
-  "manifest_before_pages": 88389,
-  "manifest_before_updated_at": "2026-11-20T13:09:44Z"
+  "updated_at": "2026-11-20T14:03:45.531Z",
+  "reason": "Push-triggered fallback: latest scheduled crawl.yml run #263 at 2026-11-20T09:15:54Z was 288 minutes old (>25 minutes); no queued or running crawl; public manifest was 33 minutes old (>10 minutes). One bounded recovery crawl; normal schedule, robots pacing, and source restrictions unchanged.",
+  "manifest_before_pages": 91616,
+  "manifest_before_updated_at": "2026-11-20T13:30:31Z"
 }
