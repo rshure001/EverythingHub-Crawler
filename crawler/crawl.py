@@ -961,93 +961,94 @@ def main():
     requests_by_host = {}
     fetch_outcomes = []
 
-        def fetch(item):
-            url, depth = item
-            http_success = False
-            html_parsed = False
-            non_html = False
-            try:
-                final, content_type, x_robots_tags, body = request(url, allowed)
-                http_success = True
-                delay = max(host_delay(origin(url)), host_delay(origin(final)))
-                if content_type != "text/html":
-                    non_html = True
-                    outcome = {
-                        "http_success": True, "html_parsed": False,
-                        "non_html": True, "failed": False,
-                    }
-                    return None, None, delay, False, outcome
-                html = body.decode("utf-8", "replace")
-                parser = PageParser()
-                parser.feed(html)
-                html_parsed = True
-                directives = set(parser.robots_directives)
-                directives.update(parse_indexing_directives(x_robots_tags))
-                if "nofollow" in directives:
-                    nofollow_pages_count[0] += 1
-                title = re.sub(r"\s+", " ", " ".join(parser.title)).strip()
-                text = re.sub(r"\s+", " ", " ".join(parser.text)).strip()[:4000]
-                description = parser.description[:500]
-                if apply_access_challenge_policy(title, description, text, directives):
-                    access_challenge_pages_count[0] += 1
-                page_media = []
-                page_media_robots_blocked = 0
-                page_media_external_deferred = 0
-                if "noindex" not in directives and "nofollow" not in directives:
-                    for candidate in discover_media(html, final, title, description):
-                        if not same_origin(final, candidate["url"]):
-                            page_media_external_deferred += 1
-                            continue
-                        if robots_can_fetch(policy(origin(final)), UA, candidate["url"]):
-                            candidate["robots_allowed"] = True
-                            candidate["robots_checked_at"] = int(time.time())
-                            page_media.append(candidate)
-                        else:
-                            page_media_robots_blocked += 1
-                text, description = apply_snippet_policy(text, description, directives)
-                record = build_page_record(
-                    final, title, description, text, depth, directives, parser.published_at
-                )
-                links = []
-                if depth < MAX_DEPTH and "nofollow" not in directives:
-                    host = urllib.parse.urlsplit(final).netloc
-                    for href in parser.links:
-                        candidate = clean(urllib.parse.urljoin(final, href))
-                        if candidate and urllib.parse.urlsplit(candidate).netloc == host:
-                            links.append(candidate)
+    def fetch(item):
+        url, depth = item
+        http_success = False
+        html_parsed = False
+        non_html = False
+        try:
+            final, content_type, x_robots_tags, body = request(url, allowed)
+            http_success = True
+            delay = max(host_delay(origin(url)), host_delay(origin(final)))
+            if content_type != "text/html":
+                non_html = True
                 outcome = {
-                    "http_success": True, "html_parsed": True,
-                    "non_html": False, "failed": False,
-                    "media_candidates": page_media,
-                    "media_robots_blocked": page_media_robots_blocked,
-                    "media_external_deferred": page_media_external_deferred,
+                    "http_success": True, "html_parsed": False,
+                    "non_html": True, "failed": False,
                 }
-                return record, links, delay, False, outcome
-            except Exception as error:
-                status = getattr(error, "code", None)
-                if status in (429, 503):
-                    rate_limited_count[0] += 1
-                is_http_error = isinstance(error, urllib.error.HTTPError)
-                if status == 429:
-                    backoff = max(DEFAULT_429_BACKOFF_SECONDS, retry_after_seconds(error, DEFAULT_429_BACKOFF_SECONDS))
-                elif status in (500, 502, 503, 504):
-                    backoff = max(DEFAULT_5XX_BACKOFF_SECONDS, retry_after_seconds(error, DEFAULT_5XX_BACKOFF_SECONDS))
-                elif not is_http_error and isinstance(error, urllib.error.URLError):
-                    backoff = max(DEFAULT_NETWORK_BACKOFF_SECONDS, retry_after_seconds(error, DEFAULT_NETWORK_BACKOFF_SECONDS))
-                elif isinstance(error, TimeoutError):
-                    backoff = DEFAULT_NETWORK_BACKOFF_SECONDS
-                else:
-                    backoff = host_delay(origin(url))
-                retryable = status in (429, 500, 502, 503, 504) or (
-                    not is_http_error and isinstance(error, urllib.error.URLError)
-                ) or isinstance(error, TimeoutError)
-                delay = max(host_delay(origin(url)), backoff)
-                print(f"skip {url}: {error}; host cooldown {delay:.0f}s")
-                outcome = {
-                    "http_success": http_success, "html_parsed": html_parsed,
-                    "non_html": non_html, "failed": True,
-                }
-                return None, None, delay, retryable, outcome
+                return None, None, delay, False, outcome
+            html = body.decode("utf-8", "replace")
+            parser = PageParser()
+            parser.feed(html)
+            html_parsed = True
+            directives = set(parser.robots_directives)
+            directives.update(parse_indexing_directives(x_robots_tags))
+            if "nofollow" in directives:
+                nofollow_pages_count[0] += 1
+            title = re.sub(r"\s+", " ", " ".join(parser.title)).strip()
+            text = re.sub(r"\s+", " ", " ".join(parser.text)).strip()[:4000]
+            description = parser.description[:500]
+            if apply_access_challenge_policy(title, description, text, directives):
+                access_challenge_pages_count[0] += 1
+            page_media = []
+            page_media_robots_blocked = 0
+            page_media_external_deferred = 0
+            if "noindex" not in directives and "nofollow" not in directives:
+                for candidate in discover_media(html, final, title, description):
+                    if not same_origin(final, candidate["url"]):
+                        page_media_external_deferred += 1
+                        continue
+                    if robots_can_fetch(policy(origin(final)), UA, candidate["url"]):
+                        candidate["robots_allowed"] = True
+                        candidate["robots_checked_at"] = int(time.time())
+                        page_media.append(candidate)
+                    else:
+                        page_media_robots_blocked += 1
+            text, description = apply_snippet_policy(text, description, directives)
+            record = build_page_record(
+                final, title, description, text, depth, directives, parser.published_at
+            )
+            links = []
+            if depth < MAX_DEPTH and "nofollow" not in directives:
+                host = urllib.parse.urlsplit(final).netloc
+                for href in parser.links:
+                    candidate = clean(urllib.parse.urljoin(final, href))
+                    if candidate and urllib.parse.urlsplit(candidate).netloc == host:
+                        links.append(candidate)
+            outcome = {
+                "http_success": True, "html_parsed": True,
+                "non_html": False, "failed": False,
+                "media_candidates": page_media,
+                "media_robots_blocked": page_media_robots_blocked,
+                "media_external_deferred": page_media_external_deferred,
+            }
+            return record, links, delay, False, outcome
+        except Exception as error:
+            status = getattr(error, "code", None)
+            if status in (429, 503):
+                rate_limited_count[0] += 1
+            is_http_error = isinstance(error, urllib.error.HTTPError)
+            if status == 429:
+                backoff = max(DEFAULT_429_BACKOFF_SECONDS, retry_after_seconds(error, DEFAULT_429_BACKOFF_SECONDS))
+            elif status in (500, 502, 503, 504):
+                backoff = max(DEFAULT_5XX_BACKOFF_SECONDS, retry_after_seconds(error, DEFAULT_5XX_BACKOFF_SECONDS))
+            elif not is_http_error and isinstance(error, urllib.error.URLError):
+                backoff = max(DEFAULT_NETWORK_BACKOFF_SECONDS, retry_after_seconds(error, DEFAULT_NETWORK_BACKOFF_SECONDS))
+            elif isinstance(error, TimeoutError):
+                backoff = DEFAULT_NETWORK_BACKOFF_SECONDS
+            else:
+                backoff = host_delay(origin(url))
+            retryable = status in (429, 500, 502, 503, 504) or (
+                not is_http_error and isinstance(error, urllib.error.URLError)
+            ) or isinstance(error, TimeoutError)
+            delay = max(host_delay(origin(url)), backoff)
+            print(f"skip {url}: {error}; host cooldown {delay:.0f}s")
+            outcome = {
+                "http_success": http_success, "html_parsed": html_parsed,
+                "non_html": non_html, "failed": True,
+            }
+            return None, None, delay, retryable, outcome
+
 
 
     # Keep the worker pool full as individual hosts finish instead of waiting
