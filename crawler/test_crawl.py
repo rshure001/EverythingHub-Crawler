@@ -558,7 +558,7 @@ class CrawlerTests(unittest.TestCase):
                 )
 
     def test_robots_policy_uses_bounded_cross_authority_redirect_handler(self):
-        body = b"User-agent: *\\nAllow: /\\nDisallow: /private\\n"
+        body = b"User-agent: *\nAllow: /\nDisallow: /private\n"
         opener = mock.Mock()
         opener.open.return_value = FakeRobotsResponse(body)
         with mock.patch.object(crawl, "build_pinned_opener", return_value=opener) as builder:
