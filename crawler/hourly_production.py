@@ -7,6 +7,8 @@ import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from index_store import load_index
+
 ROOT = Path(__file__).resolve().parents[1]
 INDEX_PATH = ROOT / "data" / "index.json"
 HISTORY_PATH = ROOT / "data" / "hourly-production.json"
@@ -82,7 +84,7 @@ def build_snapshot(index: dict, history: dict | None = None, *, now=None,
 
 
 def main():
-    index = json.loads(INDEX_PATH.read_text(encoding="utf-8"))
+    index = load_index(INDEX_PATH)
     history = json.loads(HISTORY_PATH.read_text(encoding="utf-8")) if HISTORY_PATH.exists() else {}
     snapshot = build_snapshot(
         index, history,
