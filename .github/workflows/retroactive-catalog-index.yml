@@ -15,7 +15,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: retroactive-catalog-inventory
+  group: catalog-data-publish
   cancel-in-progress: false
 
 jobs:
