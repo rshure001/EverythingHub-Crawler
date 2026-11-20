@@ -86,6 +86,59 @@ class Handler(BaseHTTPRequestHandler):
         requested_lane = (params.get("tentacle") or [""])[0].strip().lower()
         lane = requested_lane if requested_lane in VALID_LANES else ""
 
+        search_kind = (params.get("type") or ["pages"])[0].strip().lower()
+        if search_kind == "catalog":
+            catalog_type = (params.get("catalog_type") or [""])[0].strip().lower()
+            record_type = (params.get("record_type") or [""])[0].strip().lower()
+            catalog_count_sql = f"""
+              select count(*)
+              from "{SCHEMA}".eh_catalog_records r
+              join "{SCHEMA}".eh_catalogs c using (catalog_id)
+              where r.search_vector @@ plainto_tsquery('english', %s)
+                and (%s = '' or c.catalog_type = %s)
+                and (%s = '' or r.record_type = %s)
+            """
+            catalog_sql = f"""
+              select r.record_id, r.catalog_id, c.title, r.record_type,
+                     r.title, r.source_url, r.description, r.subject,
+                     r.attributes,
+                     ts_rank(r.search_vector, plainto_tsquery('english', %s)) as score
+              from "{SCHEMA}".eh_catalog_records r
+              join "{SCHEMA}".eh_catalogs c using (catalog_id)
+              where r.search_vector @@ plainto_tsquery('english', %s)
+                and (%s = '' or c.catalog_type = %s)
+                and (%s = '' or r.record_type = %s)
+              order by score desc, r.title asc, r.record_id asc
+              limit %s offset %s
+            """
+            try:
+                with connect() as conn, conn.cursor() as cur:
+                    cur.execute(catalog_count_sql, (query, catalog_type, catalog_type, record_type, record_type))
+                    total = cur.fetchone()[0]
+                    cur.execute(catalog_sql, (
+                        query, query, catalog_type, catalog_type, record_type,
+                        record_type, limit, offset
+                    ))
+                    rows = cur.fetchall()
+                results = [{
+                    "record_id": row[0], "catalog_id": row[1],
+                    "catalog": row[2], "record_type": row[3],
+                    "title": row[4], "url": row[5],
+                    "description": row[6], "subject": row[7],
+                    "attributes": row[8], "score": float(row[9])
+                } for row in rows]
+                self.send_json(200, {
+                    "query": query, "type": "catalog_records", "total": total,
+                    "limit": limit, "offset": offset,
+                    "hasMore": offset + len(results) < total, "results": results
+                })
+            except Exception:
+                self.send_json(503, {"error": "search_unavailable"})
+            return
+        if search_kind != "pages":
+            self.send_json(400, {"error": "invalid_search_type", "allowed": ["pages", "catalog"]})
+            return
+
         sql = f"""
           select canonical_url, source_host, title, description, lane,
                  ts_rank(search_vector, plainto_tsquery('english', %s)) as score
