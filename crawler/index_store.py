@@ -96,9 +96,12 @@ def load_index(index_path: str | Path, fallback: dict[str, Any] | None = None) -
             raise ValueError("canonical index contains a malformed shard entry")
         bucket = entry.get("bucket")
         name = entry.get("file")
+        digest = entry.get("sha256")
         if not isinstance(bucket, str) or not _BUCKET_RE.fullmatch(bucket):
             raise ValueError(f"canonical index contains an invalid bucket: {bucket!r}")
-        expected_name = f"index-{bucket}.json.gz"
+        if not isinstance(digest, str) or not _SHA_RE.fullmatch(digest):
+            raise ValueError(f"canonical index contains an invalid shard digest: {name!r}")
+        expected_name = f"index-{bucket}-{digest}.json.gz"
         if name != expected_name or bucket in seen_buckets:
             raise ValueError(f"canonical index contains an unsafe or duplicate shard: {name!r}")
         seen_buckets.add(bucket)
@@ -106,7 +109,6 @@ def load_index(index_path: str | Path, fallback: dict[str, Any] | None = None) -
         declared_bytes = entry.get("bytes")
         declared_uncompressed = entry.get("uncompressed_bytes")
         page_count = entry.get("pages")
-        digest = entry.get("sha256")
         if (
             not isinstance(declared_bytes, int) or isinstance(declared_bytes, bool)
             or not 2 <= declared_bytes <= MAX_SHARD_COMPRESSED_BYTES
@@ -119,9 +121,6 @@ def load_index(index_path: str | Path, fallback: dict[str, Any] | None = None) -
             raise ValueError(f"{name}: uncompressed byte count is invalid")
         if not isinstance(page_count, int) or isinstance(page_count, bool) or page_count < 1:
             raise ValueError(f"{name}: page count is invalid")
-        if not isinstance(digest, str) or not _SHA_RE.fullmatch(digest):
-            raise ValueError(f"{name}: SHA-256 is invalid")
-
         shard_path = shard_dir / name
         try:
             raw = shard_path.read_bytes()
@@ -212,7 +211,8 @@ def save_index(index_path: str | Path, index: dict[str, Any]) -> dict[str, Any]:
         if len(raw) > MAX_SHARD_COMPRESSED_BYTES:
             raise ValueError(f"canonical bucket {bucket} exceeds the compressed shard limit")
 
-        name = f"index-{bucket}.json.gz"
+        digest = hashlib.sha256(raw).hexdigest()
+        name = f"index-{bucket}-{digest}.json.gz"
         shard_path = shard_dir / name
         if not shard_path.is_file() or shard_path.read_bytes() != raw:
             _atomic_write(shard_path, raw)
@@ -222,7 +222,7 @@ def save_index(index_path: str | Path, index: dict[str, Any]) -> dict[str, Any]:
             "pages": len(bucket_pages),
             "bytes": len(raw),
             "uncompressed_bytes": len(uncompressed),
-            "sha256": hashlib.sha256(raw).hexdigest(),
+            "sha256": digest,
         })
 
     metadata = {
