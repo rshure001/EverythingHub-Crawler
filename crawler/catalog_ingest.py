@@ -5,15 +5,15 @@ Output is a normalized, deduplicated staging artifact. It is not advertised as
 production-indexed until a separate database/search ingestion step succeeds.
 """
 from __future__ import annotations
-import argparse, json
+import argparse, gzip, json
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from catalog_model import catalog_metrics, normalize_catalog, normalize_record
 
 ROOT = Path(__file__).resolve().parents[1]
-INPUT = ROOT / "data" / "catalogs.json"
-OUTPUT = ROOT / "data" / "universal-catalog-records.json"
+INPUT = ROOT / "data" / "catalogs.json.gz"
+OUTPUT = ROOT / "data" / "universal-catalog-records.json.gz"
 
 def adapt(manifest: dict[str, Any]) -> dict[str, Any]:
     catalogs, records, source_pages = [], [], []
@@ -86,11 +86,16 @@ def main() -> None:
     parser.add_argument("--input", type=Path, default=INPUT)
     parser.add_argument("--output", type=Path, default=OUTPUT)
     args = parser.parse_args()
-    manifest = json.loads(args.input.read_text(encoding="utf-8"))
+    raw = gzip.decompress(args.input.read_bytes()) if args.input.suffix == ".gz" else args.input.read_bytes()
+    manifest = json.loads(raw.decode("utf-8"))
     result = adapt(manifest)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     temp = args.output.with_suffix(args.output.suffix + ".tmp")
-    temp.write_text(json.dumps(result, ensure_ascii=False, separators=(",", ":")) + "\n", encoding="utf-8")
+    payload = json.dumps(result, ensure_ascii=False, separators=(",", ":")).encode("utf-8") + b"\n"
+    if args.output.suffix == ".gz":
+        temp.write_bytes(gzip.compress(payload, mtime=0))
+    else:
+        temp.write_bytes(payload)
     temp.replace(args.output)
     print(json.dumps(result["metrics"], indent=2))
 
