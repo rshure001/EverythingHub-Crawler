@@ -8,6 +8,8 @@ on:
       - "crawler/catalog_retro_discovery.py"
       - "crawler/test_catalog_retro_discovery.py"
       - "crawler/catalog_model.py"
+      - "crawler/catalog_ingest.py"
+      - "crawler/test_catalog_ingest.py"
       - "crawler/test_catalog_model.py"
       - "project/**"
       - "learning/**"
@@ -50,6 +52,9 @@ jobs:
       - name: Validate retroactive catalog discovery
         working-directory: crawler
         run: python -m unittest test_catalog_retro_discovery.py -v
+      - name: Validate universal catalog ingestion
+        working-directory: crawler
+        run: python -m unittest test_catalog_ingest.py -v
       - name: Build catalog backlog from all existing indexed pages
         run: python crawler/catalog_retro_discovery.py
       - name: Validate project ledger
@@ -61,11 +66,13 @@ jobs:
           ROWS: ${{ inputs.rows || '250' }}
           MAX_PAGES: ${{ inputs.max_pages || '20' }}
         run: python crawler/catalog_discovery.py --rows "$ROWS" --max-pages "$MAX_PAGES"
+      - name: Normalize datasets into universal catalog records
+        run: python crawler/catalog_ingest.py
       - name: Record discovery in the project ledger
         run: python project/ledger.py --record-catalog-discovery
       - name: Publish catalog manifest and project ledger
         run: |
-          git add -f data/catalogs.json data/host-catalog-candidates.json data/project-ledger.json
+          git add -f data/catalogs.json data/host-catalog-candidates.json data/project-ledger.json data/universal-catalog-records.json
           if git diff --cached --quiet; then
             echo "No catalog manifest or ledger changes."
             exit 0
