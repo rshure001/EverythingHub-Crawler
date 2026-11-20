@@ -139,6 +139,18 @@ class CrawlerTests(unittest.TestCase):
             "https://example.com/sitemap.xml",
         )
 
+    def test_sitemap_history_resets_once_for_new_discovery_version(self):
+        previous = {"sitemap_checked": {"old.example": 123}}
+        self.assertEqual(crawl.restore_sitemap_checked(previous), {})
+        current = {
+            "sitemap_discovery_version": crawl.SITEMAP_DISCOVERY_VERSION,
+            "sitemap_checked": {"current.example": 456},
+        }
+        self.assertEqual(
+            crawl.restore_sitemap_checked(current),
+            {"current.example": 456},
+        )
+
     def test_robots_preload_fetches_each_distinct_site_once(self):
         calls = []
         result = crawl.preload_robots_policies(
