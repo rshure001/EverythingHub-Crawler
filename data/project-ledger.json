@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "project": "Everything Hub",
+  "purpose": "Append-only record of verified engineering milestones, discovery runs, build/test outcomes, releases, and operational incidents.",
+  "events": [
+    {
+      "id": "historical-crawl-2026-11-20-1443",
+      "timestamp": "2026-11-20T14:43:28Z",
+      "type": "crawl_snapshot",
+      "status": "success",
+      "summary": "Production crawler completed a measured crawl.",
+      "metrics": {
+        "indexed_pages_total": 101179,
+        "new_unique_pages": 2987,
+        "shards": 381,
+        "represented_hosts": 113,
+        "frontier_backlog": 11378,
+        "fetch_parse_failures": 260,
+        "robots_policy_failures": 44,
+        "rate_limited_responses": 3,
+        "active_crawl_seconds": 421.53,
+        "active_pages_per_minute": 425.17,
+        "gap_inclusive_pages_per_minute": 148.98
+      },
+      "source": {
+        "workflow_run_id": 44756462727,
+        "repository": "rshure001/EverythingHub-Crawler"
+      }
+    },
+    {
+      "id": "publisher-limit-fix-968b8a499c61",
+      "timestamp": "2026-11-20T14:45:00Z",
+      "type": "publisher_fix",
+      "status": "committed",
+      "summary": "Raised publisher staging page ceiling to 125,000 and added a regression test for catalogs above 100,000 pages.",
+      "source": {
+        "commit": "968b8a499c61bb9a98419c5e0127ca474b929e4a"
+      }
+    },
+    {
+      "id": "publisher-limit-fix-ece8842f335c",
+      "timestamp": "2026-11-20T14:46:00Z",
+      "type": "publisher_fix",
+      "status": "committed",
+      "summary": "Completed the publisher page-cap regression coverage.",
+      "source": {
+        "commit": "ece8842f335ca4640d6b965ca9087ffddf0a09e1"
+      }
+    },
+    {
+      "id": "supabase-recovery-2026-11-20",
+      "timestamp": "2026-11-20T14:47:53Z",
+      "type": "database_incident",
+      "status": "investigating_read_only",
+      "summary": "Supabase control plane showed healthy while PostgreSQL connections returned SQLSTATE 57P03 during WAL recovery. Destructive recovery actions were intentionally withheld.",
+      "metrics": {
+        "sqlstate": "57P03"
+      },
+      "source": {
+        "project": "everything-hub-control",
+        "region": "us-west-1"
+      }
+    },
+    {
+      "id": "catalog-discovery-2026-11-20-145544",
+      "timestamp": "2026-11-20T14:55:44Z",
+      "type": "catalog_discovery",
+      "status": "success",
+      "summary": "First catalog-first discovery pass completed against four public open-data catalogs.",
+      "metrics": {
+        "catalogs": 4,
+        "datasets": 5000,
+        "resources": 32895,
+        "rows_per_page": 250,
+        "max_pages_per_catalog": 20
+      },
+      "source": {
+        "workflow_run_id": 44758051537,
+        "repository": "rshure001/EverythingHub-Crawler"
+      }
+    },
+    {
+      "id": "catalog-manifest-persist-issue-2026-11-20",
+      "timestamp": "2026-11-20T14:56:00Z",
+      "type": "catalog_persistence_issue",
+      "status": "identified",
+      "summary": "Discovery generated the catalog manifest, but the workflow git diff check did not detect an untracked file; persistence fix required staging before diff comparison.",
+      "source": {
+        "workflow_run_id": 44758051537
+      }
+    }
+  ]
+}
