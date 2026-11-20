@@ -21,9 +21,7 @@ class PostCrawlDispatchTests(unittest.TestCase):
             self.assertIn("  workflow_dispatch:", workflow)
 
         search = (ROOT / ".github" / "workflows" / "search-api-smoke.yml").read_text(encoding="utf-8")
-        self.assertIn("  workflow_run:", search)
-        self.assertIn('workflows: ["EverythingHub Publisher"]', search)
-        self.assertIn("github.event.workflow_run.conclusion == 'success'", search)
+        self.assertNotIn("  workflow_run:", search)
 
     def test_search_smoke_push_trigger_is_limited_to_catalog_artifacts(self):
         publisher = (ROOT / ".github" / "workflows" / "publish-site.yml").read_text(encoding="utf-8")
