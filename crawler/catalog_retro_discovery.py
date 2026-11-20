@@ -120,7 +120,9 @@ def main() -> None:
     result = build_candidates(index)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     temp = args.output.with_suffix(args.output.suffix + ".tmp")
-    temp.write_text(json.dumps(result, ensure_ascii=False, separators=(",", ":")) + "\n", encoding="utf-8")
+    host_result = dict(result)
+    host_result.pop("page_catalog_seeds", None)
+    temp.write_text(json.dumps(host_result, ensure_ascii=False, separators=(",", ":")) + "\n", encoding="utf-8")
     temp.replace(args.output)
     page_result = {
         "schema_version": 1,
@@ -131,7 +133,7 @@ def main() -> None:
     }
     args.page_output.parent.mkdir(parents=True, exist_ok=True)
     page_temp = args.page_output.with_suffix(args.page_output.suffix + ".tmp")
-    page_temp.write_text(json.dumps(page_result, ensure_ascii=False, separators=(",", ":")) + "\\n", encoding="utf-8")
+    page_temp.write_text(json.dumps(page_result, ensure_ascii=False, separators=(",", ":")) + "\n", encoding="utf-8")
     page_temp.replace(args.page_output)
     print(json.dumps({"source_index_pages": result["source_index_pages"], **result["metrics"]}, indent=2))
 
