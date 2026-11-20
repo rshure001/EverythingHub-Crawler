@@ -43,14 +43,16 @@ jobs:
           ROWS: ${{ inputs.rows || '250' }}
           MAX_PAGES: ${{ inputs.max_pages || '20' }}
         run: python crawler/catalog_discovery.py --rows "$ROWS" --max-pages "$MAX_PAGES"
-      - name: Publish catalog manifest
+      - name: Record discovery in the project ledger
+        run: python project/ledger.py --record-catalog-discovery
+      - name: Publish catalog manifest and project ledger
         run: |
-          if git diff --quiet -- data/catalogs.json; then
-            echo "No catalog manifest changes."
+          git add -f data/catalogs.json data/project-ledger.json
+          if git diff --cached --quiet; then
+            echo "No catalog manifest or ledger changes."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/catalogs.json
-          git commit -m "Discover and refresh public data catalogs"
+          git commit -m "Record catalog discovery and project history"
           git push
