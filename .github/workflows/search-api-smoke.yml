@@ -35,6 +35,7 @@ jobs:
           import urllib.parse
           import urllib.request
           from pathlib import Path
+          from crawler.pipeline_health import evaluate_manifest_freshness
 
           base = os.environ["BASE"]
           key = os.environ["KEY"]
@@ -225,6 +226,10 @@ jobs:
           second_urls = {item["url"] for item in page2_results}
           assert not first_urls.intersection(second_urls), {"page1": local_results, "page2": page2_results}
           assert page2.get("hasMore") is True, page2
+          freshness = evaluate_manifest_freshness(manifest)
+          print("Committed search manifest freshness:", json.dumps(freshness, sort_keys=True))
+          if freshness["status"] != "fresh":
+              raise SystemExit("Committed search manifest is stale: " + json.dumps(freshness, sort_keys=True))
           print("Production Vercel catalog passed:", production["indexedPages"], "indexed pages;",
                 len(local_results), "first-party page-one results;", len(page2_results),
                 "non-overlapping page-two results")

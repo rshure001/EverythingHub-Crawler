@@ -10,6 +10,8 @@ from typing import Any
 
 ACTIVE_STATUSES = {"queued", "in_progress", "pending", "waiting", "requested"}
 MAX_RELEASE_AGE_SECONDS = 30 * 60
+MAX_SEARCH_MANIFEST_AGE_SECONDS = 15 * 60
+MAX_MANIFEST_FUTURE_SKEW_SECONDS = 60
 
 
 def parse_time(value: str) -> datetime:
@@ -17,6 +19,37 @@ def parse_time(value: str) -> datetime:
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=timezone.utc)
     return parsed.astimezone(timezone.utc)
+
+
+
+def evaluate_manifest_freshness(
+    manifest: dict[str, Any],
+    now: datetime | None = None,
+    max_age_seconds: int = MAX_SEARCH_MANIFEST_AGE_SECONDS,
+) -> dict[str, Any]:
+    """Classify the committed search manifest by age; invalid timestamps fail closed."""
+    if not isinstance(manifest, dict):
+        raise ValueError("public search manifest must be a JSON object")
+    updated_at = manifest.get("updated_at")
+    if isinstance(updated_at, bool) or not isinstance(updated_at, int) or updated_at <= 0:
+        raise ValueError("public search manifest has an invalid updated_at timestamp")
+
+    try:
+        manifest_time = datetime.fromtimestamp(updated_at, timezone.utc)
+    except (OverflowError, OSError, ValueError) as exc:
+        raise ValueError("public search manifest has an invalid updated_at timestamp") from exc
+
+    now = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+    raw_age = (now - manifest_time).total_seconds()
+    if raw_age < -MAX_MANIFEST_FUTURE_SKEW_SECONDS:
+        raise ValueError("public search manifest updated_at timestamp is too far in the future")
+    age = max(0, int(raw_age))
+    return {
+        "status": "fresh" if age <= max_age_seconds else "stale",
+        "age_seconds": age,
+        "max_age_seconds": max_age_seconds,
+        "updated_at": updated_at,
+    }
 
 
 def evaluate_workflow(
