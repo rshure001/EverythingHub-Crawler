@@ -10,6 +10,7 @@ import json
 import pathlib
 import re
 import shutil
+import zlib
 from urllib.parse import urlsplit
 from typing import Any
 
@@ -31,7 +32,7 @@ def bounded_gunzip(raw: bytes, max_bytes: int) -> bytes:
     try:
         with gzip.GzipFile(fileobj=io.BytesIO(raw), mode="rb") as stream:
             decoded = stream.read(max_bytes + 1)
-    except (OSError, EOFError) as exc:
+    except (OSError, EOFError, zlib.error) as exc:
         raise ValueError("gzip payload is invalid") from exc
     if len(decoded) > max_bytes:
         raise ValueError("gzip payload exceeds its decompressed safety limit")
