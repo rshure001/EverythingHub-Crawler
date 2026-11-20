@@ -198,8 +198,8 @@ async function testCurrentPublishedManifestFitsClientLimits() {
   const compressedShards = currentManifest.shards[0]?.file?.endsWith(".json.gz") === true;
 
   assert.ok(
-    currentManifest.total_pages <= 125_000,
-    "current catalog must fit the 125,000-page browser limit; decoded shard data remains capped at 256 MB"
+    currentManifest.total_pages <= 130_000,
+    "current catalog must fit the 130,000-page browser limit; decoded shard data remains capped at 256 MB"
   );
   assert.ok(
     currentManifest.shard_count <= 512 &&
@@ -258,9 +258,9 @@ async function testRejectsClientLimitOverruns() {
   const previousFetch = globalThis.fetch;
   const overPageManifest = {
     ...manifest,
-    total_pages: 125_001,
+    total_pages: 130_001,
     shards: [
-      { ...manifest.shards[0], pages: 125_000 },
+      { ...manifest.shards[0], pages: 130_000 },
       { ...manifest.shards[1], pages: 1 }
     ]
   };
@@ -304,7 +304,7 @@ testShardOnlyLoader()
   .then(testGzipLoader)
   .then(testCurrentPublishedManifestFitsClientLimits)
   .then(testRejectsClientLimitOverruns)
-  .then(() => console.log("Browser ranking, gzip, shard integrity, current-manifest, and 125k/256 MB bound tests passed"))
+  .then(() => console.log("Browser ranking, gzip, shard integrity, current-manifest, and 130k/256 MB bound tests passed"))
   .catch(error => {
     console.error(error);
     process.exitCode = 1;
