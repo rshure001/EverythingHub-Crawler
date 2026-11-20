@@ -70,6 +70,26 @@ jobs:
             echo "current=true" >> "$GITHUB_OUTPUT"
             echo "Crawler inputs match current main; proceeding with bounded crawl."
           fi
+      - name: Capture canonical manifest baseline
+        if: steps.freshness.outputs.current == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY' >> "$GITHUB_ENV"
+          import json
+          from pathlib import Path
+
+          path = Path("public-search/manifest.json")
+          manifest = json.loads(path.read_text(encoding="utf-8"))
+          pages = manifest.get("total_pages")
+          updated_at = manifest.get("updated_at")
+          if type(pages) is not int or pages < 0:
+              raise SystemExit("Canonical manifest baseline has an invalid total_pages value.")
+          if type(updated_at) is not int or updated_at <= 0:
+              raise SystemExit("Canonical manifest baseline has an invalid updated_at value.")
+          print(f"EH_MANIFEST_BEFORE_PAGES={pages}")
+          print(f"EH_MANIFEST_BEFORE_UPDATED_AT={updated_at}")
+          PY
       - name: Validate crawler configuration and tests
         run: |
           python -m py_compile crawler/index_store.py crawler/crawl.py crawler/report.py crawler/hourly_production.py crawler/build_search_shards.py crawler/validate_public_index.py crawler/validate_media_catalog.py crawler/hurricane_strength.py crawler/media_discovery.py crawler/media_extraction_preflight.py crawler/crawl_revision_guard.py
@@ -94,7 +114,7 @@ jobs:
       - name: Publish crawler health summary
         if: steps.freshness.outputs.current == 'true'
         run: python crawler/report.py
-      - name: Record rolling 60-minute crawl production
+      - name: Measure unique additions from canonical manifest delta
         if: steps.freshness.outputs.current == 'true'
         run: python crawler/hourly_production.py
       - name: Measure Hurricane Core strength
