@@ -139,7 +139,7 @@ jobs:
           # Other Everything Hub workflows may advance main while a crawl runs.
           # Rebase this one isolated crawler commit instead of discarding its
           # fetched work and crawling the same hosts again. Never force-push.
-          for attempt in 1 2 3; do
+          for attempt in 1 2 3 4 5 6 7 8; do
             if git push origin HEAD:main; then
               echo "Crawler index and frontier committed successfully."
               exit 0
@@ -151,17 +151,19 @@ jobs:
               exit 1
             fi
 
-            if [ "$attempt" -eq 3 ]; then
-              echo "main kept advancing during three bounded rebase attempts; leaving the remote untouched."
+            if [ "$attempt" -eq 8 ]; then
+              echo "main kept advancing during eight bounded rebase attempts; leaving the remote untouched."
               exit 1
             fi
 
-            echo "main advanced during crawl; rebasing the crawler commit (attempt $((attempt + 1))/3)."
+            echo "main advanced during crawl; rebasing the crawler commit (attempt $((attempt + 1))/8)."
             if ! git rebase origin/main; then
               git rebase --abort || true
               echo "Crawler commit conflicts with newer main data; no remote changes were made."
               exit 1
             fi
+            # Give concurrent catalog/ledger writers a brief chance to finish.
+            sleep 1
           done
       - name: Dispatch catalog publishing and search verification
         if: steps.freshness.outputs.current == 'true'
