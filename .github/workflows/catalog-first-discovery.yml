@@ -66,6 +66,23 @@ jobs:
         run: python crawler/catalog_discovery.py --rows "$ROWS" --max-pages "$MAX_PAGES"
       - name: Normalize datasets into universal catalog records
         run: python crawler/catalog_ingest.py
+      - name: Verify compressed catalog staging artifacts
+        run: |
+          python - <<'PY'
+          import gzip, json
+          catalogs = json.load(gzip.open("data/catalogs.json.gz", "rt", encoding="utf-8"))
+          records = json.load(gzip.open("data/universal-catalog-records.json.gz", "rt", encoding="utf-8"))
+          assert records["production_indexed"] is False
+          assert len(records["catalogs"]) == records["metrics"]["catalogs_discovered"]
+          assert len(records["records"]) == records["metrics"]["catalog_records"]
+          assert len(records["records"]) == catalogs["datasets_discovered"]
+          print({
+              "catalogs": len(records["catalogs"]),
+              "catalog_records": len(records["records"]),
+              "resource_links": catalogs["resources_discovered"],
+              "indexed_records": records["metrics"]["indexed_records"],
+          })
+          PY
       - name: Record discovery in the project ledger
         run: python project/ledger.py --record-catalog-discovery
       - name: Publish catalog manifest and project ledger
