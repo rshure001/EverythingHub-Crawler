@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-11-20T04:23:36.933607+00:00",
+  "updated_at": "2026-11-20T04:35:11.908151+00:00",
   "target_new_records_per_hour": 1000,
   "runs": [
     {
@@ -118,15 +118,24 @@
       "fetch_attempts": 4209,
       "duration_seconds": 360.8,
       "commit_sha": "1707a4a610cc"
+    },
+    {
+      "run_id": "44674379904",
+      "run_number": "238",
+      "timestamp": "2026-11-20T04:35:11.908151+00:00",
+      "indexed_records": 1941,
+      "fetch_attempts": 2263,
+      "duration_seconds": 360.52,
+      "commit_sha": "d8302f2cad4a"
     }
   ],
   "rolling_60m": {
-    "indexed_records": 10870,
-    "fetch_attempts": 12209,
-    "run_count": 2,
-    "coverage_seconds": 2147.7,
+    "indexed_records": 12811,
+    "fetch_attempts": 14472,
+    "run_count": 3,
+    "coverage_seconds": 2842.6,
     "full_60_minute_window": false,
-    "hourly_pace_equivalent": 18220.8,
+    "hourly_pace_equivalent": 16224.3,
     "target_met": true
   }
 }
