@@ -1,6 +1,7 @@
 import unittest
 
-from validate_media_catalog import validate_document
+from media_extraction_preflight import MAX_CATALOG_BYTES as PREFLIGHT_MAX_CATALOG_BYTES
+from validate_media_catalog import MAX_CATALOG_BYTES, validate_document
 
 
 def candidate(**changes):
@@ -34,6 +35,11 @@ def document(*rows):
 
 
 class MediaCatalogValidationTests(unittest.TestCase):
+    def test_media_catalog_limits_match_and_stay_below_github_recommended_size(self):
+        self.assertEqual(MAX_CATALOG_BYTES, PREFLIGHT_MAX_CATALOG_BYTES)
+        self.assertGreater(MAX_CATALOG_BYTES, 20_000_000)
+        self.assertLess(MAX_CATALOG_BYTES, 50_000_000)
+
     def test_valid_metadata_only_candidate(self):
         errors, metrics = validate_document(document(candidate()))
         self.assertEqual(errors, [])
