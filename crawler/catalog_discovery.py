@@ -16,6 +16,7 @@ import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 from typing import Any
+from catalog_source_policy import policy_for_host, request_source_bytes
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "data" / "catalogs.json.gz"
@@ -23,34 +24,45 @@ MAX_RESPONSE_BYTES = 8_000_000
 TIMEOUT_SECONDS = 25
 USER_AGENT = "EverythingHubCatalogDiscovery/1.0 (+https://github.com/rshure001/EverythingHub-Crawler)"
 
-# Explicit public CKAN API hosts. No user-supplied URLs are fetched.
+# Explicit public CKAN API hosts with reviewed, per-dataset rights handling.
 SOURCES = (
-    {"id": "us-data-gov", "name": "Data.gov", "base": "https://catalog.data.gov", "category": "government"},
-    {"id": "canada-open-data", "name": "Open Government Canada", "base": "https://open.canada.ca/data", "category": "government"},
-    {"id": "australia-data-gov", "name": "Data.gov.au", "base": "https://data.gov.au", "api_path": "/data/api/3/action/package_search", "category": "government"},
-    {"id": "swiss-open-data", "name": "opendata.swiss", "base": "https://opendata.swiss", "category": "government"},
+    {
+        "id": "us-data-gov", "name": "Data.gov",
+        "base": "https://catalog.data.gov", "landing_base": "https://catalog.data.gov",
+        "api_path": "/api/3/action/package_search", "category": "government",
+    },
+    {
+        "id": "canada-open-data", "name": "Open Government Canada",
+        "base": "https://open.canada.ca", "landing_base": "https://open.canada.ca/data/en",
+        "api_path": "/data/en/api/3/action/package_search", "category": "government",
+    },
+    {
+        "id": "swiss-open-data", "name": "opendata.swiss",
+        "base": "https://opendata.swiss", "landing_base": "https://opendata.swiss",
+        "api_path": "/api/3/action/package_search", "category": "government",
+    },
+)
+EXCLUDED_SOURCES = (
+    {"id": "australia-data-gov", "name": "Data.gov.au",
+     "reason": "Source terms and dataset-level reuse conditions have not been reviewed."},
 )
 
 def _request_json(url: str) -> dict[str, Any]:
-    parsed = urllib.parse.urlsplit(url)
-    if parsed.scheme != "https" or not parsed.hostname:
-        raise ValueError("catalog API URL must use HTTPS")
-    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "application/json"})
-    with urllib.request.urlopen(req, timeout=TIMEOUT_SECONDS) as response:
-        if response.status != 200:
-            raise ValueError(f"catalog API returned HTTP {response.status}")
-        raw = response.read(MAX_RESPONSE_BYTES + 1)
-    if len(raw) > MAX_RESPONSE_BYTES:
-        raise ValueError("catalog API response exceeded size limit")
+    raw, status, _headers, _policy = request_source_bytes(
+        url, purpose="discovery", max_bytes=MAX_RESPONSE_BYTES,
+        timeout=TIMEOUT_SECONDS, accept="application/json",
+    )
+    if status != 200:
+        raise ValueError(f"catalog API returned HTTP {status}")
     payload = json.loads(raw.decode("utf-8"))
     if not isinstance(payload, dict):
         raise ValueError("catalog API response was not a JSON object")
     return payload
 
-def _clean_text(value: Any, limit: int = 2000) -> str:
+def _clean_textdef _clean_text(value: Any, limit: int = 2000) -> str:
     return " ".join(str(value or "").split())[:limit]
 
-def normalize_dataset(dataset: dict[str, Any], source: dict[str, str]) -> dict[str, Any] | None:
+def normalize_dataset(dataset: dict[str, Any], source: dict[str, Any]) -> dict[str, Any] | None:
     name = _clean_text(dataset.get("name") or dataset.get("id"), 300)
     title = _clean_text(dataset.get("title") or name, 500)
     if not name or not title:
@@ -69,7 +81,15 @@ def normalize_dataset(dataset: dict[str, Any], source: dict[str, str]) -> dict[s
             "url": url,
             "bytes": resource.get("size") if isinstance(resource.get("size"), int) else None,
         })
-    landing = source["base"].rstrip("/") + "/dataset/" + urllib.parse.quote(name, safe="")
+    landing_base = source.get("landing_base") or source["base"]
+    landing = landing_base.rstrip("/") + "/dataset/" + urllib.parse.quote(name, safe="")
+    license_info = {
+        "id": _clean_text(dataset.get("license_id"), 160),
+        "title": _clean_text(dataset.get("license_title"), 240),
+        "url": _clean_text(dataset.get("license_url"), 1000),
+        "rights": _clean_text(dataset.get("rights") or dataset.get("access_and_use"), 1000),
+        "is_open": dataset.get("isopen") if isinstance(dataset.get("isopen"), bool) else None,
+    }
     return {
         "id": source["id"] + ":" + name,
         "catalog_id": source["id"],
@@ -84,32 +104,58 @@ def normalize_dataset(dataset: dict[str, Any], source: dict[str, str]) -> dict[s
         "resources": resources,
         "resource_count": len(resources),
         "metadata_modified": _clean_text(dataset.get("metadata_modified"), 80),
+        "license": license_info,
+        "source_terms_url": source.get("source_terms_url", ""),
+        "source_terms_status": source.get("source_terms_status", "review_required"),
+        "attribution_required": source.get("attribution_required", "per_dataset"),
+        "metadata_only": True,
     }
 
-def discover_source(source: dict[str, str], rows: int, max_pages: int, pause: float = 0.2) -> dict[str, Any]:
+def discover_source(source: dict[str, Any], rows: int, max_pages: int, pause: float = 0.0) -> dict[str, Any]:
     datasets: list[dict[str, Any]] = []
     seen: set[str] = set()
     errors: list[str] = []
+    host = urllib.parse.urlsplit(source["base"]).hostname or ""
+    policy = policy_for_host(host)
+    if not policy or policy.get("discovery_allowed") is not True:
+        return {
+            "id": source["id"], "name": source["name"],
+            "base_url": source["base"], "api_path": source["api_path"],
+            "source_url": source["base"].rstrip("/") + source["api_path"],
+            "category": source["category"],
+            "source_terms_url": (policy or {}).get("terms_url", ""),
+            "source_terms_status": (policy or {}).get("terms_status", "unreviewed"),
+            "datasets_discovered": 0, "resources_discovered": 0,
+            "pages_requested": 0,
+            "errors": ["source terms do not authorize catalog discovery"],
+            "datasets": [],
+        }
+    pages_requested = 0
     for page in range(max_pages):
         params = urllib.parse.urlencode({
-            "q": "*:*",
-            "rows": rows,
-            "start": page * rows,
+            "q": "*:*", "rows": rows, "start": page * rows,
             "sort": "metadata_modified desc",
         })
-        url = source["base"].rstrip("/") + source.get("api_path", "/api/3/action/package_search") + "?" + params
+        url = source["base"].rstrip("/") + source["api_path"] + "?" + params
         try:
             payload = _request_json(url)
+            pages_requested += 1
             result = payload.get("result")
             if payload.get("success") is not True or not isinstance(result, dict):
                 raise ValueError("CKAN package_search did not return success")
             batch = result.get("results")
             if not isinstance(batch, list):
                 raise ValueError("CKAN package_search results were missing")
+            source_meta = {
+                **source,
+                "source_terms_url": policy.get("terms_url", ""),
+                "source_terms_status": policy.get("terms_status", "reviewed_per_dataset"),
+                "attribution_required": policy.get("attribution_required", "per_dataset"),
+            }
             for raw in batch:
                 if not isinstance(raw, dict):
                     continue
-                item = normalize_dataset(raw, source)
+                item = normalize_dataset(raw, source_meta)
                 if item and item["id"] not in seen:
                     seen.add(item["id"])
                     datasets.append(item)
@@ -122,16 +168,19 @@ def discover_source(source: dict[str, str], rows: int, max_pages: int, pause: fl
         if pause:
             time.sleep(pause)
     return {
-        "id": source["id"],
-        "name": source["name"],
-        "base_url": source["base"],
-        "api_path": source.get("api_path", "/api/3/action/package_search"),
+        "id": source["id"], "name": source["name"],
+        "base_url": source["base"], "api_path": source["api_path"],
+        "source_url": source["base"].rstrip("/") + source["api_path"],
         "category": source["category"],
+        "source_terms_url": policy.get("terms_url", ""),
+        "source_terms_status": policy.get("terms_status", "reviewed_per_dataset"),
+        "attribution_required": policy.get("attribution_required", "per_dataset"),
+        "metadata_only": True,
+        "per_dataset_rights_required": bool(policy.get("per_dataset_rights_required", True)),
         "datasets_discovered": len(datasets),
         "resources_discovered": sum(item["resource_count"] for item in datasets),
-        "pages_requested": page + 1 if max_pages else 0,
-        "errors": errors,
-        "datasets": datasets,
+        "pages_requested": pages_requested,
+        "errors": errors, "datasets": datasets,
     }
 
 def build_catalog(rows: int = 250, max_pages: int = 20) -> dict[str, Any]:
@@ -143,16 +192,17 @@ def build_catalog(rows: int = 250, max_pages: int = 20) -> dict[str, Any]:
     datasets = [item for result in results for item in result["datasets"]]
     return {
         "schema_version": 1,
-        "strategy": "catalog-first",
+        "strategy": "catalog-first-policy-gated",
         "updated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
         "catalog_count": len(results),
         "datasets_discovered": len(datasets),
         "resources_discovered": sum(item["resource_count"] for item in datasets),
+        "excluded_sources": list(EXCLUDED_SOURCES),
         "catalogs": [{key: value for key, value in result.items() if key != "datasets"} for result in results],
         "datasets": datasets,
     }
 
-def main() -> None:
+def maindef main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--rows", type=int, default=250)
     parser.add_argument("--max-pages", type=int, default=20)
