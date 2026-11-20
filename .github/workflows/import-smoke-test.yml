@@ -204,13 +204,13 @@ jobs:
           print("Science lane filter returned only the science fixture.")
           PY
 
-          catalog_query=$(python - <<'PY'
+          encoded_catalog_query=$(python - <<'PY'
           import json
+          from urllib.parse import quote
           data = json.load(open("data/universal-catalog-records.json", encoding="utf-8"))
-          print(data["records"][0]["title"])
+          print(quote(data["records"][0]["title"]))
           PY
           )
-          encoded_catalog_query=$(python -c "import urllib.parse; print(urllib.parse.quote('''$catalog_query'''))")
           curl --silent --fail -H "Authorization: Bearer isolated-test-token" \
             "http://127.0.0.1:8080/search?q=$encoded_catalog_query&type=catalog&record_type=dataset&limit=1" \
             > /tmp/eh-catalog-search.json
