@@ -21,9 +21,14 @@ from index_store import load_index
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_INDEX = ROOT / "data" / "index.json"
 DEFAULT_OUTPUT = ROOT / "data" / "page-derived-catalogs"
-ANALYZER_VERSION = 2
+ANALYZER_VERSION = 3
 TRACKING_KEYS = {"fbclid", "gclid", "dclid", "mc_cid", "mc_eid", "ref", "source"}
-STOP_TOKENS = {"the", "and", "for", "with", "from", "our", "your", "all", "new", "home", "page", "official", "welcome"}
+STOP_TOKENS = {
+    "the", "and", "for", "with", "from", "our", "your", "all", "new", "home", "page",
+    "official", "welcome", "lock", "menu", "search", "skip", "content", "login", "sign",
+    "subscribe", "close", "cookie", "accept", "privacy", "terms", "policy", "back", "next",
+    "previous", "print", "share",
+}
 GENERIC_TITLES = {"home", "homepage", "welcome", "404", "not found", "access denied", "page not found"}
 MEDIA_URL_RE = re.compile(r"https?://[^\s<>\"']+\.(?:jpg|jpeg|png|webp|gif|svg|mp4|webm|mov|mp3|wav|m4a)(?:\?[^\s<>\"']*)?", re.I)
 LISTING_RE = re.compile(
@@ -95,6 +100,7 @@ TYPE_LABEL = {
 CONTENT_INTENT_TOKENS = {
     "news", "article", "articles", "story", "stories", "research", "paper", "papers",
     "report", "reports", "media", "image", "images", "video", "videos", "resource", "resources",
+    "subject", "subjects", "topic", "topics",
 }
 SEGMENT_TYPES.update({
     "subjects": "subject", "subject": "subject", "topics": "subject",
@@ -107,19 +113,19 @@ CATALOG_TYPE["subject"] = "knowledge_base"
 TYPE_LABEL["subject"] = "Subjects"
 
 LIST_ENTITY_PATTERNS = (
-    ("product", "products", re.compile(r"\b(?:products?|items?)\s+(?:include|such as|like|are|:)\s+([^.!?\n]{3,260})", re.I)),
-    ("model", "models", re.compile(r"\bmodels?\s+(?:include|such as|like|are|:)\s+([^.!?\n]{3,260})", re.I)),
-    ("brand", "brands", re.compile(r"\bbrands?\s+(?:include|such as|like|are|:)\s+([^.!?\n]{3,260})", re.I)),
-    ("service", "services", re.compile(r"\bservices?\s+(?:include|such as|like|are|:)\s+([^.!?\n]{3,260})", re.I)),
-    ("business", "businesses", re.compile(r"\b(?:businesses|companies|stores|dealers|vendors)\s+(?:include|such as|like|are|:)\s+([^.!?\n]{3,260})", re.I)),
-    ("place", "places", re.compile(r"\b(?:places|locations|attractions|destinations|parks|museums)\s+(?:include|such as|like|are|:)\s+([^.!?\n]{3,260})", re.I)),
-    ("person", "people", re.compile(r"\b(?:people|authors|speakers|artists|team members)\s+(?:include|such as|like|are|:)\s+([^.!?\n]{3,260})", re.I)),
-    ("organization", "organizations", re.compile(r"\b(?:organizations|agencies|institutions|partners)\s+(?:include|such as|like|are|:)\s+([^.!?\n]{3,260})", re.I)),
-    ("event", "events", re.compile(r"\b(?:events|conferences|exhibitions)\s+(?:include|such as|like|are|:)\s+([^.!?\n]{3,260})", re.I)),
-    ("dataset", "datasets", re.compile(r"\b(?:datasets|data sets|registries)\s+(?:include|such as|like|are|:)\s+([^.!?\n]{3,260})", re.I)),
-    ("article", "articles", re.compile(r"\b(?:articles|publications|reports|papers)\s+(?:include|such as|like|are|:)\s+([^.!?\n]{3,260})", re.I)),
-    ("software", "software", re.compile(r"\b(?:software|tools|packages|libraries)\s+(?:include|such as|like|are|:)\s+([^.!?\n]{3,260})", re.I)),
-    ("subject", "subjects", re.compile(r"\b(?:subjects|topics|themes)\s+(?:include|such as|like|are|:)\s+([^.!?\n]{3,260})", re.I)),
+    ("product", "products", re.compile(r"\b(?:products?|items?)\s+(?:include|such as|like|:)\s+([^.!?\n]{3,260})", re.I)),
+    ("model", "models", re.compile(r"\bmodels?\s+(?:include|such as|like|:)\s+([^.!?\n]{3,260})", re.I)),
+    ("brand", "brands", re.compile(r"\bbrands?\s+(?:include|such as|like|:)\s+([^.!?\n]{3,260})", re.I)),
+    ("service", "services", re.compile(r"\bservices?\s+(?:include|such as|like|:)\s+([^.!?\n]{3,260})", re.I)),
+    ("business", "businesses", re.compile(r"\b(?:businesses|companies|stores|dealers|vendors)\s+(?:include|such as|like|:)\s+([^.!?\n]{3,260})", re.I)),
+    ("place", "places", re.compile(r"\b(?:places|locations|attractions|destinations|parks|museums)\s+(?:include|such as|like|:)\s+([^.!?\n]{3,260})", re.I)),
+    ("person", "people", re.compile(r"\b(?:people|authors|speakers|artists|team members)\s+(?:include|such as|like|:)\s+([^.!?\n]{3,260})", re.I)),
+    ("organization", "organizations", re.compile(r"\b(?:organizations|agencies|institutions|partners)\s+(?:include|such as|like|:)\s+([^.!?\n]{3,260})", re.I)),
+    ("event", "events", re.compile(r"\b(?:events|conferences|exhibitions)\s+(?:include|such as|like|:)\s+([^.!?\n]{3,260})", re.I)),
+    ("dataset", "datasets", re.compile(r"\b(?:datasets|data sets|registries)\s+(?:include|such as|like|:)\s+([^.!?\n]{3,260})", re.I)),
+    ("article", "articles", re.compile(r"\b(?:articles|publications|reports|papers)\s+(?:include|such as|like|:)\s+([^.!?\n]{3,260})", re.I)),
+    ("software", "software", re.compile(r"\b(?:software|tools|packages|libraries)\s+(?:include|such as|like|:)\s+([^.!?\n]{3,260})", re.I)),
+    ("subject", "subjects", re.compile(r"\b(?:subjects|topics|themes)\s+(?:include|such as|like|:)\s+([^.!?\n]{3,260})", re.I)),
 )
 DEFAULT_CATALOG_PATHS = {
     "product": "/products", "model": "/models", "brand": "/brands",
@@ -332,10 +338,10 @@ def analyze_pages(
         is_eligible = page.get("robots_allowed") is not False and bool(title or description or text) and _valid_title(title)
         if is_eligible:
             eligible += 1
-        page_media = {
+        page_media = ({
             normalized for raw_media in MEDIA_URL_RE.findall(text)
             if (normalized := canonical_url(raw_media.rstrip(".,);]")))
-        }
+        } if is_eligible else set())
         media_urls.update(page_media)
         for media_url in page_media:
             media_references[(page_id, media_url)] = {
@@ -626,7 +632,7 @@ def search_catalog_network(query: str, analysis: dict, limit: int = 10) -> list[
         # Article/resource/media catalogs are searchable only when the query
         # explicitly asks for that content type; a city or brand name alone
         # must not surface an unrelated news publisher's generic archive.
-        if record_type in ("article", "resource", "media") and not (token_set & CONTENT_INTENT_TOKENS):
+        if record_type in ("article", "resource", "media", "subject") and not (token_set & CONTENT_INTENT_TOKENS):
             continue
         matched = []
         for record in related:
@@ -650,6 +656,7 @@ def search_catalog_network(query: str, analysis: dict, limit: int = 10) -> list[
         elif not matched:
             matched = [(0, record) for record in related]
         catalog_score = 100 + (10 * len(tokens)) if catalog_match else 0
+        type_bonus = 30 if len(tokens) >= 2 and catalog.get("catalog_type") == "geographic" else 0
         ranked = sorted(matched, key=lambda x: (-x[0], x[1]["title"].casefold()))[:5]
         results.append({
             "catalog_id": catalog["catalog_id"],
@@ -657,7 +664,7 @@ def search_catalog_network(query: str, analysis: dict, limit: int = 10) -> list[
             "catalog_type": catalog["catalog_type"],
             "status": catalog["status"],
             "match_scope": "catalog" if catalog_match else "records",
-            "score": catalog_score + sum(x[0] for x in ranked),
+            "score": catalog_score + type_bonus + sum(x[0] for x in ranked),
             "record_count": len(related),
             "matched_records": [{
                 "record_id": x["record_id"],
@@ -679,7 +686,7 @@ def search_source_page_evidence(query: str, pages: list[dict], limit: int = 5) -
         return []
     matches = []
     for page in pages:
-        if not isinstance(page, dict):
+        if not isinstance(page, dict) or page.get("robots_allowed") is False:
             continue
         url = canonical_url(page.get("url"))
         if not url:
