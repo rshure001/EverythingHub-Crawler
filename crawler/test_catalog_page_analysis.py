@@ -164,7 +164,9 @@ class PageDerivedCatalogAnalysisTests(unittest.TestCase):
         ]
         result = analyze_pages(pages, source_total=2)
         self.assertTrue(any(x["record_type"] == "article" for x in result["catalogs"]))
-        self.assertEqual(search_catalog_network("Las Vegas", result), [])
+        hits = search_catalog_network("Las Vegas", result)
+        self.assertTrue(hits)
+        self.assertTrue(all(x["record_type"] == "article" for x in hits))
         self.assertTrue(search_catalog_network("Las Vegas articles", result))
 
 
@@ -396,20 +398,36 @@ class PageDerivedCatalogAnalysisTests(unittest.TestCase):
         self.assertEqual(evidence[0]["url"], "https://example.org/las-vegas-story")
 
 
-    def test_subject_only_mentions_are_not_brand_catalog_results(self):
+    def test_explicit_subject_and_corroborated_article_records_support_brand_search(self):
         analysis = {
-            "catalogs": [{
-                "catalog_id": "subject-catalog", "catalog_type": "knowledge_base",
-                "record_type": "subject", "title": "National Geographic Subjects",
-                "subject": "subjects", "record_ids": ["rolextopic"],
-            }],
-            "records": [{
-                "record_id": "rolextopic", "title": "National Geographic and Rolex Committed to a Perpetual Planet",
-                "record_type": "subject", "description": "Rolex conservation partnership",
-                "source_url": "https://example.org/story",
-            }],
+            "catalogs": [
+                {"catalog_id": "subject-catalog", "catalog_type": "knowledge_base",
+                 "record_type": "subject", "title": "National Geographic Subjects",
+                 "subject": "subjects", "record_ids": ["rolextopic"], "source_host": "nationalgeographic.com"},
+                {"catalog_id": "article-catalog", "catalog_type": "knowledge_base",
+                 "record_type": "article", "title": "BBC Articles", "subject": "articles",
+                 "record_ids": ["rolexcoverage"], "source_host": "bbc.com"},
+                {"catalog_id": "incidental-catalog", "catalog_type": "knowledge_base",
+                 "record_type": "article", "title": "Single Source Articles", "subject": "articles",
+                 "record_ids": ["incidental"], "source_host": "example.org"},
+            ],
+            "records": [
+                {"record_id": "rolextopic", "title": "National Geographic and Rolex Committed to a Perpetual Planet",
+                 "record_type": "subject", "description": "Rolex conservation partnership",
+                 "source_url": "https://nationalgeographic.com/story",
+                 "source_urls": ["https://nationalgeographic.com/story"]},
+                {"record_id": "rolexcoverage", "title": "BBC Arts in Motion", "record_type": "article",
+                 "description": "Rolex and National Geographic partnership coverage",
+                 "source_urls": ["https://bbc.com/arts/one", "https://bbc.com/arts/two"],
+                 "source_url": "https://bbc.com/arts/one"},
+                {"record_id": "incidental", "title": "General Conservation Story", "record_type": "article",
+                 "description": "A passing mention of Rolex", "source_urls": ["https://example.org/story"],
+                 "source_url": "https://example.org/story"},
+            ],
         }
-        self.assertEqual(search_catalog_network("Rolex", analysis), [])
+        hits = search_catalog_network("Rolex", analysis)
+        self.assertEqual({x["catalog_id"] for x in hits}, {"subject-catalog", "article-catalog"})
+        self.assertTrue(all(x["matched_records"] for x in hits))
 
     def test_people_are_sentence_does_not_create_person_records(self):
         result = analyze_pages([{
@@ -722,6 +740,49 @@ class PageDerivedCatalogAnalysisTests(unittest.TestCase):
         self.assertEqual(hits[0]["record_count"], 2)
         self.assertTrue(all(x["attributes"]["brand"] == "Rolex" for x in hits[0]["matched_records"]))
         self.assertTrue(all(len(x["record_ids"]) == 2 for x in result["pages"]))
+
+    def test_structured_products_deduplicate_across_hosts_with_brand_and_sku(self):
+        pages = [
+            {
+                "url": "https://shop-one.example/watches/126000",
+                "title": "Oyster Perpetual 36", "description": "Rolex watch model.",
+                "text": "Precision watch details.", "lane": "shopping",
+                "robots_allowed": True, "fetched_at": 100,
+                "product": {"type": "product", "name": "Oyster Perpetual 36", "brand": "Rolex",
+                            "sku": "126000", "price": "6500", "currency": "USD"},
+            },
+            {
+                "url": "https://shop-two.example/watches/126000",
+                "title": "Oyster Perpetual 36", "description": "Rolex watch model.",
+                "text": "Independent retailer listing.", "lane": "shopping",
+                "robots_allowed": True, "fetched_at": 101,
+                "product": {"type": "product", "name": "Oyster Perpetual 36", "brand": "Rolex",
+                            "sku": "126000", "price": "6500", "currency": "USD"},
+            },
+        ]
+        result = analyze_pages(pages, source_total=2)
+        self.assertEqual(result["metrics"]["unique_records_by_type"], {"brand": 1, "model": 1})
+        product = next(x for x in result["records"] if x["record_type"] == "model")
+        brand = next(x for x in result["records"] if x["record_type"] == "brand")
+        self.assertEqual(len(product["source_urls"]), 2)
+        self.assertEqual(len(product["source_page_ids"]), 2)
+        self.assertEqual(len(product["catalog_ids"]), 2)
+        self.assertEqual(len(brand["source_urls"]), 2)
+
+    def test_unqualified_schema_product_is_not_promoted_to_a_product_record(self):
+        result = analyze_pages([{
+            "url": "https://example.org/articles/editorial-card",
+            "title": "Editorial feature",
+            "description": "A story card with product-like structured metadata.",
+            "text": "Editorial content.", "lane": "general", "robots_allowed": True,
+            "product": {"type": "product", "name": "Editorial feature", "brand": "Example",
+                        "image": "https://example.org/card.jpg",
+                        "url": "https://example.org/articles/editorial-card"},
+        }], source_total=1)
+        self.assertEqual(result["metrics"]["structured_product_pages"], 0)
+        self.assertNotIn("product", result["metrics"]["unique_records_by_type"])
+        self.assertNotIn("model", result["metrics"]["unique_records_by_type"])
+        self.assertNotIn("brand", result["metrics"]["unique_records_by_type"])
 
 if __name__ == "__main__":
     unittest.main()

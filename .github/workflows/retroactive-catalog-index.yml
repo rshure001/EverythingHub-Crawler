@@ -7,6 +7,8 @@ on:
       - "crawler/catalog_page_analysis.py"
       - "crawler/test_catalog_page_analysis.py"
       - "crawler/test_catalog_retro_discovery.py"
+      - "crawler/product_metadata.py"
+      - "crawler/test_product_metadata.py"
       - "data/index.json"
       - ".github/workflows/retroactive-catalog-index.yml"
   workflow_dispatch:
@@ -61,6 +63,9 @@ jobs:
       - name: Test retroactive discovery
         working-directory: crawler
         run: python -m unittest test_catalog_retro_discovery.py -v
+      - name: Test conservative product metadata extraction
+        working-directory: crawler
+        run: python -m unittest test_product_metadata.py -v
       - name: Test page-derived catalog analysis
         working-directory: crawler
         run: python -m unittest test_catalog_page_analysis.py -v

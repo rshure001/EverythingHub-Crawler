@@ -22,7 +22,7 @@ from index_store import load_index
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_INDEX = ROOT / "data" / "index.json"
 DEFAULT_OUTPUT = ROOT / "data" / "page-derived-catalogs"
-ANALYZER_VERSION = 8
+ANALYZER_VERSION = 9
 TRACKING_KEYS = {"fbclid", "gclid", "dclid", "mc_cid", "mc_eid", "ref", "source"}
 STOP_TOKENS = {
     "the", "and", "for", "with", "from", "our", "your", "all", "new", "home", "page",
@@ -337,6 +337,32 @@ def _record_entity_key(kind: str, host: str, title: str) -> str:
     return kind + "|" + host + "|" + normalized
 
 
+def _has_commerce_signal(product: object) -> bool:
+    if not isinstance(product, dict):
+        return False
+    return any(
+        str(product.get(key) or "").strip()
+        for key in ("sku", "mpn", "gtin", "gtin8", "gtin12", "gtin13", "gtin14", "price", "availability")
+    )
+
+
+def _product_entity_key(record_type: str, host: str, title: str, attributes: dict) -> str:
+    gtin = _norm(attributes.get("gtin", ""))
+    sku = _norm(attributes.get("sku", ""))
+    brand = _norm(attributes.get("brand", ""))
+    if gtin:
+        return record_type + "|gtin|" + gtin
+    if sku and brand:
+        return record_type + "|brand|" + brand + "|sku|" + sku
+    if sku:
+        return record_type + "|host|" + host + "|sku|" + sku
+    return _record_entity_key(record_type, host, title)
+
+
+def _brand_entity_key(name: str) -> str:
+    return "brand|name|" + _norm(name)
+
+
 def _content_group_path(record_type: str, segments: list[str]) -> str:
     if not any(segment in ROOTS_BY_TYPE.get(record_type, set()) for segment in segments):
         return DEFAULT_CATALOG_PATHS[record_type]
@@ -435,7 +461,8 @@ def analyze_pages(
         product_metadata = page.get("product") if is_eligible else None
         structured_product = (
             product_metadata if isinstance(product_metadata, dict)
-            and product_metadata.get("type") == "product" else None
+            and product_metadata.get("type") == "product"
+            and _has_commerce_signal(product_metadata) else None
         )
         product_name = _title(structured_product.get("name")) if structured_product else ""
         if not _valid_title(product_name):
@@ -448,7 +475,7 @@ def analyze_pages(
         product_attributes = {}
         if structured_product:
             for key, limit in {
-                "brand": 160, "sku": 120, "price": 64, "currency": 8,
+                "brand": 160, "sku": 120, "gtin": 32, "price": 64, "currency": 8,
                 "availability": 80, "image": 2048, "url": 2048,
             }.items():
                 value = structured_product.get(key)
@@ -490,7 +517,11 @@ def analyze_pages(
         page_record_ids = []
         if kind and not is_catalog_definition:
             record_title = product_name if structured_product and kind == product_kind else title
-            entity_key = _record_entity_key(kind, host, record_title)
+            entity_key = (
+                _product_entity_key(kind, host, record_title, product_attributes)
+                if structured_product and kind == product_kind
+                else _record_entity_key(kind, host, record_title)
+            )
             record_id = stable_id("record", entity_key)
             item = records.setdefault(record_id, {
                 "record_id": record_id, "entity_id": stable_id("entity", entity_key),
@@ -532,7 +563,7 @@ def analyze_pages(
             page_group_keys.append(key)
 
         if structured_product:
-            product_entity_key = _record_entity_key(product_kind, host, product_name)
+            product_entity_key = _product_entity_key(product_kind, host, product_name, product_attributes)
             product_record_id = stable_id("record", product_entity_key)
             product_item = records.setdefault(product_record_id, {
                 "record_id": product_record_id,
@@ -570,7 +601,7 @@ def analyze_pages(
 
             brand_name = _title(product_attributes.get("brand", ""))
             if brand_name and _valid_title(brand_name) and _norm(brand_name) != _norm(product_name):
-                brand_entity_key = _record_entity_key("brand", host, brand_name)
+                brand_entity_key = _brand_entity_key(brand_name)
                 brand_record_id = stable_id("record", brand_entity_key)
                 brand_item = records.setdefault(brand_record_id, {
                     "record_id": brand_record_id,
@@ -983,28 +1014,43 @@ def search_catalog_network(query: str, analysis: dict, limit: int = 10) -> list[
         catalog_tokens = set(catalog_text.split())
         catalog_match = token_set.issubset(catalog_tokens)
         record_type = str(catalog.get("record_type", ""))
-        if record_type in ("article", "resource", "media", "subject") and not (token_set & CONTENT_INTENT_TOKENS):
-            continue
+        content_record = record_type in ("article", "resource", "media", "subject")
+        content_intent = bool(token_set & CONTENT_INTENT_TOKENS)
         matched = []
         for record in related:
             title_norm = _norm(record.get("title", ""))
             title_tokens = set(title_norm.split())
             description_tokens = set(_norm(record.get("description", "")).split())
             attribute_tokens = set(_norm(_searchable_attribute_text(record.get("attributes", {}))).split())
+            title_match = token_set.issubset(title_tokens)
+            description_match = token_set.issubset(description_tokens)
+            corroborated_article_description_match = (
+                record_type == "article"
+                and len(record.get("source_urls", [])) >= 2
+                and description_match
+            )
+            if content_record and not content_intent and not (
+                title_match or corroborated_article_description_match
+            ):
+                continue
             combined_tokens = catalog_tokens | title_tokens | attribute_tokens
-            if record_type not in ("article", "resource", "media"):
+            if (
+                not content_record
+                or content_intent
+                or corroborated_article_description_match
+                or record_type == "subject"
+            ):
                 combined_tokens |= description_tokens
             if not token_set.issubset(combined_tokens):
                 continue
             score = 20
-            if token_set.issubset(title_tokens):
+            if title_match:
                 score += 40
             if query_phrase and query_phrase in title_norm:
                 score += 10
             score += 2 * len(token_set & description_tokens)
             score += 4 * len(token_set & attribute_tokens)
             matched.append((score, record))
-        # A catalog title match without a relevant record is not a useful catalog result.
         if not matched:
             continue
         catalog_score = 100 + (10 * len(tokens)) if catalog_match else 0
@@ -1040,6 +1086,7 @@ def search_catalog_network(query: str, analysis: dict, limit: int = 10) -> list[
             } for _, record in ranked],
         })
     return sorted(results, key=lambda x: (-x["score"], -len(x["matched_records"]), x["title"].casefold()))[:limit]
+
 
 def search_source_page_evidence(query: str, pages: list[dict], limit: int = 5) -> list[dict]:
     """Return bounded source-page evidence without promoting snippets to catalogs."""
@@ -1301,6 +1348,8 @@ def _read_previous_snapshot(output_dir: Path) -> dict | None:
         return None
     try:
         report = json.loads(report_path.read_text(encoding="utf-8"))
+        if report.get("analysis_version") != ANALYZER_VERSION:
+            return None
         metrics = report.get("metrics", {})
         snapshot_at = report.get("persisted_snapshot_at") or report.get("generated_at")
         if not snapshot_at:

@@ -119,12 +119,25 @@ def extract_product_metadata(html, page_url):
     if isinstance(availability, str):
         availability = availability.rsplit("/", 1)[-1]
 
+    sku = _text(product.get("sku") or product.get("mpn"), 120)
+    gtin = _text(
+        product.get("gtin14") or product.get("gtin13") or
+        product.get("gtin12") or product.get("gtin8") or product.get("gtin"),
+        32,
+    )
+    price = _text(offers.get("price") or meta.get("product:price:amount"), 64)
+    # Product schema is also used for editorial cards and article metadata.
+    # Require a commerce identifier, price, or explicit availability.
+    if not any((sku, gtin, price, _text(availability, 80))):
+        return {}
+
     result = {
         "type": "product",
         "name": _text(product.get("name") or meta.get("og:title") or meta.get("twitter:title")),
         "brand": _text(brand, 160),
-        "sku": _text(product.get("sku") or product.get("mpn"), 120),
-        "price": _text(offers.get("price") or meta.get("product:price:amount"), 64),
+        "sku": sku,
+        "gtin": gtin,
+        "price": price,
         "currency": _text(offers.get("priceCurrency") or meta.get("product:price:currency"), 8),
         "availability": _text(availability, 80),
         "image": _absolute_http(image, page_url),
