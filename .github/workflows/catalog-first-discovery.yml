@@ -17,6 +17,8 @@ on:
       - "crawler/catalog_openlibrary.py"
       - "crawler/test_catalog_openlibrary.py"
       - "crawler/test_catalog_ingest.py"
+      - "database/import_universal_catalogs.py"
+      - "database/test_import_universal_catalogs.py"
       - "crawler/test_catalog_model.py"
       - "project/**"
       - "learning/**"
@@ -71,6 +73,8 @@ jobs:
       - name: Validate universal catalog ingestion
         working-directory: crawler
         run: python -m unittest test_catalog_ingest.py -v
+      - name: Validate eh_quad rights-aware importer
+        run: python -m unittest discover -s database -p "test_import_universal_catalogs.py" -v
       - name: Validate project ledger
         run: python -m unittest discover -s project -p 'test_*.py' -v
       - name: Validate feedback learner
