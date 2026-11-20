@@ -105,14 +105,33 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "Record catalog discovery and project history"
-          # Retry a non-conflicting concurrent main-branch update safely.
+          # Compressed manifests are binary: never rebase them across a concurrent
+          # catalog publication. If main advanced, restart the bounded discovery
+          # batch from the new main tip and regenerate a coherent snapshot.
           for attempt in 1 2 3; do
-            git pull --rebase origin main
+            base_commit="$(git rev-parse HEAD^)"
             if git push; then
               exit 0
             fi
-            echo "Push race on attempt $attempt; refreshing main before retry."
-            sleep "$((attempt * 2))"
+            git fetch origin main
+            remote_head="$(git rev-parse origin/main)"
+            if [ "$remote_head" = "$base_commit" ]; then
+              echo "Push failed without a main-branch race; check repository write permission."
+              exit 1
+            fi
+            echo "Main advanced during catalog publication; rebuilding snapshot from $remote_head (retry $attempt)."
+            git reset --hard origin/main
+            python crawler/catalog_discovery.py --rows "${{ inputs.rows || '250' }}" --max-pages "${{ inputs.max_pages || '20' }}"
+            python crawler/catalog_openlibrary.py --pause 1
+            python crawler/catalog_ingest.py
+            python project/ledger.py --record-catalog-discovery
+            git add -f data/catalogs.json.gz data/openlibrary-catalogs.json.gz data/project-ledger.json data/universal-catalog-records.json.gz
+            git rm -f --ignore-unmatch data/catalogs.json data/universal-catalog-records.json
+            if git diff --cached --quiet; then
+              echo "Latest main already contains this catalog snapshot."
+              exit 0
+            fi
+            git commit -m "Record catalog discovery and project history"
           done
-          echo "Unable to publish after three safe rebase attempts."
+          echo "Unable to publish a coherent catalog snapshot after three safe rebuilds."
           exit 1
