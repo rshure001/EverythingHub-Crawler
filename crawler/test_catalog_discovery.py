@@ -10,6 +10,7 @@ class CatalogDiscoveryTests(unittest.TestCase):
             "notes": "A public dataset",
             "organization": {"title": "Transport Agency"},
             "tags": [{"name": "transport"}],
+            "license_id": "cc-by", "license_title": "Creative Commons Attribution", "license_url": "https://creativecommons.org/licenses/by/4.0/",
             "resources": [
                 {"name": "CSV download", "format": "csv", "url": "https://downloads.example.org/data.csv", "size": 1200},
                 {"name": "Unsafe", "format": "zip", "url": "http://downloads.example.org/data.zip"},
@@ -17,6 +18,7 @@ class CatalogDiscoveryTests(unittest.TestCase):
         }, SOURCES[0])
         self.assertEqual(item["catalog_id"], "us-data-gov")
         self.assertEqual(item["resource_count"], 1)
+        self.assertEqual(item["license"]["id"], "cc-by")
         self.assertEqual(item["resources"][0]["format"], "CSV")
         self.assertTrue(item["landing_url"].startswith("https://catalog.data.gov/dataset/"))
 
@@ -25,6 +27,7 @@ class CatalogDiscoveryTests(unittest.TestCase):
 
     def test_catalog_sources_are_https(self):
         self.assertTrue(all(source["base"].startswith("https://") for source in SOURCES))
+        self.assertNotIn("australia-data-gov", {source["id"] for source in SOURCES})
 
 if __name__ == "__main__":
     unittest.main()
