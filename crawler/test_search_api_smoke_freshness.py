@@ -32,7 +32,7 @@ class SearchApiSmokeFreshnessTests(unittest.TestCase):
         script = run_block.split("python - <<'PY'", 1)[1].split("\n          PY", 1)[0]
         ast.parse(textwrap.dedent(script))
 
-    def test_search_smoke_uses_catalog_only_push_paths_and_post_publish_dispatch(self):
+    def test_search_smoke_uses_catalog_only_push_paths_and_explicit_post_commit_dispatch(self):
         smoke = (
             Path(__file__).resolve().parents[1]
             / ".github"
@@ -43,7 +43,8 @@ class SearchApiSmokeFreshnessTests(unittest.TestCase):
         self.assertIn('"public-search/manifest.json"', push_block)
         self.assertIn('"public-search/shard-*.json.gz"', push_block)
         self.assertNotIn('"public-search/**"', push_block)
-        self.assertIn('workflows: ["EverythingHub Publisher"]', smoke)
+        self.assertIn("  workflow_dispatch:", smoke)
+        self.assertNotIn("  workflow_run:", smoke)
 
         crawl = (
             Path(__file__).resolve().parents[1]
