@@ -742,32 +742,33 @@ class PageDerivedCatalogAnalysisTests(unittest.TestCase):
         self.assertTrue(all(len(x["record_ids"]) == 2 for x in result["pages"]))
 
     def test_structured_products_deduplicate_across_hosts_with_brand_and_sku(self):
-        pages = [
-            {
-                "url": "https://shop-one.example/watches/126000",
-                "title": "Oyster Perpetual 36", "description": "Rolex watch model.",
-                "text": "Precision watch details.", "lane": "shopping",
-                "robots_allowed": True, "fetched_at": 100,
-                "product": {"type": "product", "name": "Oyster Perpetual 36", "brand": "Rolex",
-                            "sku": "126000", "price": "6500", "currency": "USD"},
-            },
-            {
-                "url": "https://shop-two.example/watches/126000",
-                "title": "Oyster Perpetual 36", "description": "Rolex watch model.",
-                "text": "Independent retailer listing.", "lane": "shopping",
-                "robots_allowed": True, "fetched_at": 101,
-                "product": {"type": "product", "name": "Oyster Perpetual 36", "brand": "Rolex",
-                            "sku": "126000", "price": "6500", "currency": "USD"},
-            },
-        ]
-        result = analyze_pages(pages, source_total=2)
-        self.assertEqual(result["metrics"]["unique_records_by_type"], {"brand": 1, "model": 1})
-        product = next(x for x in result["records"] if x["record_type"] == "model")
+        pages = []
+        for host in ("shop-one.example", "shop-two.example"):
+            for index, (sku, name, price) in enumerate((
+                ("126000", "Oyster Perpetual 36", "6500"),
+                ("126500", "Cosmograph Daytona", "15500"),
+            )):
+                pages.append({
+                    "url": f"https://{host}/watches/{sku}",
+                    "title": name, "description": "Rolex watch model.",
+                    "text": "Structured retailer listing.", "lane": "shopping",
+                    "robots_allowed": True, "fetched_at": 100 + index,
+                    "product": {
+                        "type": "product", "name": name, "brand": "Rolex",
+                        "sku": sku, "price": price, "currency": "USD",
+                    },
+                })
+        result = analyze_pages(pages, source_total=4)
+        self.assertEqual(result["metrics"]["unique_records_by_type"], {"brand": 1, "model": 2})
+        product = next(
+            x for x in result["records"]
+            if x["record_type"] == "model" and x["attributes"].get("sku") == "126000"
+        )
         brand = next(x for x in result["records"] if x["record_type"] == "brand")
         self.assertEqual(len(product["source_urls"]), 2)
         self.assertEqual(len(product["source_page_ids"]), 2)
         self.assertEqual(len(product["catalog_ids"]), 2)
-        self.assertEqual(len(brand["source_urls"]), 2)
+        self.assertEqual(len(brand["source_urls"]), 4)
 
     def test_unqualified_schema_product_is_not_promoted_to_a_product_record(self):
         result = analyze_pages([{
