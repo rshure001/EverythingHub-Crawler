@@ -1,4 +1,5 @@
-export const MAX_STATIC_INDEX_PAGES = 30_000;
+// Keep the public manifest guard ahead of the current catalog while retaining a hard bound.
+export const MAX_STATIC_INDEX_PAGES = 50_000;
 export const MAX_STATIC_INDEX_SHARDS = 256;
 
 /**

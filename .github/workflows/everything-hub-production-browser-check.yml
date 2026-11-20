@@ -4,9 +4,12 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/everything-hub-production-browser-check.yml"
-      - "public-search/**"
       - "vercel-homepage/**"
   workflow_dispatch:
+  workflow_run:
+    workflows: ["EverythingHub Publisher"]
+    types: [completed]
+    branches: [main]
 permissions:
   contents: read
 concurrency:
@@ -14,6 +17,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   production-browser-check:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 8
     env:
