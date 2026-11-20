@@ -9,7 +9,6 @@ Optional guard:
 The import is additive/upsert-only. It never deletes destination records.
 """
 import hashlib
-import json
 import os
 import sys
 from datetime import datetime, timezone
