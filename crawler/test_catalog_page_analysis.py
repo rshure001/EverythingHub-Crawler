@@ -439,14 +439,59 @@ class PageDerivedCatalogAnalysisTests(unittest.TestCase):
         results = search_catalog_network("Las Vegas", analysis)
         self.assertEqual(results[0]["catalog_id"], "places")
 
-    def test_source_page_evidence_excludes_robots_denied_pages(self):
-        pages = [{
-            "url": "https://example.org/las-vegas-story",
-            "title": "Las Vegas Story",
-            "description": "A report about Las Vegas.",
-            "text": "Coverage from Las Vegas.", "robots_allowed": False,
-        }]
-        self.assertEqual(search_source_page_evidence("Las Vegas", pages), [])
+    def test_duplicate_canonical_source_pages_are_counted_once_and_robots_denial_wins(self):
+        pages = [
+            {
+                "url": "https://www.example.org/products/widget?utm_source=one",
+                "title": "Widget",
+                "description": "Product detail",
+                "text": "Product specifications.",
+                "lane": "shopping", "robots_allowed": True, "fetched_at": 100,
+            },
+            {
+                "url": "https://example.org/products/widget",
+                "title": "Widget",
+                "description": "Product detail",
+                "text": "Product specifications.",
+                "lane": "shopping", "robots_allowed": False, "fetched_at": 101,
+            },
+        ]
+        result = analyze_pages(pages, source_total=2)
+        metrics = result["metrics"]
+        self.assertEqual(metrics["pages_analyzed"], 1)
+        self.assertEqual(metrics["source_page_rows"], 2)
+        self.assertEqual(metrics["unique_source_pages"], 1)
+        self.assertEqual(metrics["duplicate_source_page_rows"], 1)
+        self.assertEqual(metrics["eligible_pages"], 0)
+        self.assertEqual(metrics["coverage_percentage"], 100.0)
+        self.assertEqual(metrics["eligible_page_coverage_percentage"], 0.0)
+        self.assertFalse(result["pages"][0]["eligible"])
+
+    def test_incremental_analysis_deduplicates_canonical_source_pages(self):
+        pages = [
+            {
+                "url": "https://www.example.org/products/widget?utm_source=one",
+                "title": "Widget",
+                "description": "Product detail",
+                "text": "Product specifications.",
+                "lane": "shopping", "robots_allowed": True, "fetched_at": 100,
+            },
+            {
+                "url": "https://example.org/products/widget",
+                "title": "Widget",
+                "description": "Product detail",
+                "text": "Product specifications.",
+                "lane": "shopping", "robots_allowed": True, "fetched_at": 101,
+            },
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            result = analyze_pages_incremental(pages, source_total=2, cache_dir=Path(tmp))
+        metrics = result["metrics"]
+        self.assertEqual(metrics["pages_analyzed"], 1)
+        self.assertEqual(metrics["source_page_rows"], 2)
+        self.assertEqual(metrics["duplicate_source_page_rows"], 1)
+        self.assertEqual(metrics["eligible_pages"], 1)
+        self.assertEqual(metrics["coverage_percentage"], 100.0)
 
 
 if __name__ == "__main__":

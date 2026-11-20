@@ -167,6 +167,52 @@ def _title(value: object) -> str:
     return re.sub(r"\s+", " ", str(value or "")).strip()[:240]
 
 
+def _dedupe_source_pages(pages: list[dict]) -> tuple[list[dict], int]:
+    """Deduplicate canonical source URLs; any robots denial wins conservatively."""
+    by_url: dict[str, dict] = {}
+    invalid_pages = []
+    duplicate_rows = 0
+
+    def quality(page: dict) -> tuple[int, int]:
+        content_size = sum(len(str(page.get(key) or "")) for key in ("title", "description", "text"))
+        try:
+            fetched_at = int(page.get("fetched_at") or 0)
+        except (TypeError, ValueError):
+            fetched_at = 0
+        return content_size, fetched_at
+
+    for page in pages:
+        if not isinstance(page, dict):
+            invalid_pages.append(page)
+            continue
+        url = canonical_url(page.get("url"))
+        if not url:
+            invalid_pages.append(page)
+            continue
+        current = by_url.get(url)
+        if current is None:
+            by_url[url] = dict(page)
+            continue
+        duplicate_rows += 1
+        candidates = (current, page)
+        winner = dict(max(candidates, key=quality))
+        if any(candidate.get("robots_allowed") is False for candidate in candidates):
+            winner["robots_allowed"] = False
+        timestamps = []
+        for candidate in candidates:
+            try:
+                timestamps.append(int(candidate.get("fetched_at") or 0))
+            except (TypeError, ValueError):
+                pass
+        if timestamps:
+            winner["fetched_at"] = max(timestamps)
+        by_url[url] = winner
+
+    deduplicated = [by_url[url] for url in sorted(by_url)]
+    deduplicated.extend(invalid_pages)
+    return deduplicated, duplicate_rows
+
+
 def _norm(value: str) -> str:
     return " ".join(re.findall(r"[a-z0-9]+", value.casefold()))
 
@@ -307,6 +353,8 @@ def analyze_pages(
     source_updated_at: str | None = None,
     source_index_sha256: str | None = None,
 ) -> dict:
+    source_page_rows = len(pages)
+    pages, duplicate_source_page_rows = _dedupe_source_pages(pages)
     records: dict[str, dict] = {}
     record_groups: dict[str, set[str]] = defaultdict(set)
     group_pages: dict[str, set[str]] = defaultdict(set)
@@ -483,10 +531,14 @@ def analyze_pages(
     record_list = sorted(records.values(), key=lambda x: (x["record_type"], x["title"].casefold(), x["record_id"]))
     catalog_list = sorted(catalogs.values(), key=lambda x: (x["catalog_type"], x["title"].casefold(), x["catalog_id"]))
     type_counts = dict(sorted(Counter(x["record_type"] for x in record_list).items()))
-    source_total = source_total if isinstance(source_total, int) and source_total >= 0 else len(pages)
-    coverage = (len(pages) / source_total * 100.0) if source_total else 0.0
+    source_total = source_total if isinstance(source_total, int) and source_total >= 0 else source_page_rows
+    unique_source_total = max(len(pages), source_total - duplicate_source_page_rows)
+    coverage = (len(pages) / unique_source_total * 100.0) if unique_source_total else 0.0
     metrics = {
         "pages_analyzed": len(pages),
+        "source_page_rows": source_page_rows,
+        "unique_source_pages": len(pages),
+        "duplicate_source_page_rows": duplicate_source_page_rows,
         "eligible_pages": eligible,
         "unique_catalogs_discovered": len(catalog_list),
         "catalog_candidate_page_references": sum(len(x.get("source_page_ids", [])) for x in catalog_list),
@@ -505,7 +557,7 @@ def analyze_pages(
         "catalogs_verified": 0,
         "pages_with_catalog_signals": pages_with_signals,
         "coverage_percentage": round(coverage, 4),
-        "eligible_page_coverage_percentage": round((eligible / source_total * 100.0) if source_total else 0.0, 4),
+        "eligible_page_coverage_percentage": round((eligible / unique_source_total * 100.0) if unique_source_total else 0.0, 4),
     }
     return {
         "schema_version": 1,
@@ -535,6 +587,8 @@ def analyze_pages_incremental(
 
     Catalog and entity IDs are host-scoped, so host shards can be safely merged.
     """
+    source_page_rows = len(pages)
+    pages, duplicate_source_page_rows = _dedupe_source_pages(pages)
     cache_dir = cache_dir or (DEFAULT_OUTPUT.parent / ".page-derived-catalog-cache")
     cache_dir.mkdir(parents=True, exist_ok=True)
     grouped: dict[str, list[dict]] = defaultdict(list)
@@ -579,11 +633,16 @@ def analyze_pages_incremental(
     all_catalogs.sort(key=lambda x: (x["catalog_type"], x["title"].casefold(), x["catalog_id"]))
     all_records.sort(key=lambda x: (x["record_type"], x["title"].casefold(), x["record_id"]))
     all_page_rows.sort(key=lambda x: (x.get("url") or "", x.get("page_id") or ""))
-    source_total = source_total if isinstance(source_total, int) and source_total >= 0 else len(pages)
+    source_total = source_total if isinstance(source_total, int) and source_total >= 0 else source_page_rows
+    unique_source_total = max(len(pages), source_total - duplicate_source_page_rows)
     page_refs = sum(len(x.get("source_page_ids", [])) for x in all_catalogs)
     type_counts = dict(sorted(Counter(x["record_type"] for x in all_records).items()))
     metrics = {
-        "pages_analyzed": len(pages), "eligible_pages": eligible,
+        "pages_analyzed": len(pages),
+        "source_page_rows": source_page_rows,
+        "unique_source_pages": len(pages),
+        "duplicate_source_page_rows": duplicate_source_page_rows,
+        "eligible_pages": eligible,
         "unique_catalogs_discovered": len(all_catalogs),
         "catalog_candidate_page_references": page_refs,
         "duplicate_catalog_candidates": max(0, page_refs - len(all_catalogs)),
@@ -594,8 +653,8 @@ def analyze_pages_incremental(
         "media_references": len({(x["source_page_id"], x["media_url"]) for x in all_media_references}),
         "unique_media_urls": len(all_media), "records_published": 0, "catalogs_verified": 0,
         "pages_with_catalog_signals": signals,
-        "coverage_percentage": round((len(pages) / source_total * 100.0) if source_total else 0.0, 4),
-        "eligible_page_coverage_percentage": round((eligible / source_total * 100.0) if source_total else 0.0, 4),
+        "coverage_percentage": round((len(pages) / unique_source_total * 100.0) if unique_source_total else 0.0, 4),
+        "eligible_page_coverage_percentage": round((eligible / unique_source_total * 100.0) if unique_source_total else 0.0, 4),
         "host_partitions_reused": reused, "host_partitions_rebuilt": rebuilt,
     }
     return {
