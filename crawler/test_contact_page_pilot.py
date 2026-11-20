@@ -1,9 +1,12 @@
+import io
 import json
+import urllib.error
+import urllib.request
 import tempfile
 import unittest
 from pathlib import Path
 
-from contact_page_pilot import run, validate_target
+from contact_page_pilot import SameOriginRedirectHandler, run, validate_target
 
 
 class ContactPagePilotTests(unittest.TestCase):
@@ -68,6 +71,24 @@ class ContactPagePilotTests(unittest.TestCase):
             self.assertEqual(len(calls), 2)
             self.assertTrue(all(row["production_published"] is False for row in rows))
             self.assertEqual(summary["production_published"], 0)
+
+
+    def test_redirects_must_stay_same_origin_and_obey_robots(self):
+        origin = ("https", "veterans.nv.gov", 443)
+        request = urllib.request.Request("https://veterans.nv.gov/contact/")
+        allowed = SameOriginRedirectHandler(origin, is_allowed=lambda url: url.endswith("/allowed"))
+        result = allowed.redirect_request(
+            request, io.BytesIO(), 302, "Found", {}, "/allowed"
+        )
+        self.assertEqual(result.full_url, "https://veterans.nv.gov/allowed")
+        with self.assertRaisesRegex(urllib.error.HTTPError, "robots.txt"):
+            allowed.redirect_request(
+                request, io.BytesIO(), 302, "Found", {}, "/blocked"
+            )
+        with self.assertRaisesRegex(urllib.error.HTTPError, "cross-origin"):
+            allowed.redirect_request(
+                request, io.BytesIO(), 302, "Found", {}, "https://other.example/allowed"
+            )
 
     def test_duplicate_urls_are_processed_once(self):
         with tempfile.TemporaryDirectory() as directory:
