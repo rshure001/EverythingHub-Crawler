@@ -22,17 +22,22 @@ MAX_TEXT = 1600
 
 class SameOriginRedirectHandler(urllib.request.HTTPRedirectHandler):
     """Reject redirects to a different origin, keeping the pilot host-bounded."""
-    def __init__(self, origin):
+    def __init__(self, origin, is_allowed=None):
         super().__init__()
         self.origin = origin
+        self.is_allowed = is_allowed or (lambda _url: True)
 
     def redirect_request(self, req, fp, code, msg, headers, newurl):
-        target = urllib.parse.urlsplit(urllib.parse.urljoin(req.full_url, newurl))
+        target_url = urllib.parse.urljoin(req.full_url, newurl)
+        target = urllib.parse.urlsplit(target_url)
         target_origin = (target.scheme.lower(), (target.hostname or "").lower(),
                          target.port or (443 if target.scheme.lower() == "https" else 80))
         if target_origin != self.origin:
             raise urllib.error.HTTPError(req.full_url, code,
                                          "cross-origin redirect blocked", headers, fp)
+        if not self.is_allowed(target_url):
+            raise urllib.error.HTTPError(req.full_url, code,
+                                         "redirect target blocked by robots.txt", headers, fp)
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
@@ -112,12 +117,19 @@ def fetch_page(target, allowed_hosts, timeout=15):
     if not robots.can_fetch(USER_AGENT, target["url"]):
         return {"status": "robots_disallowed"}
 
+    # Redirect destinations must also pass the same robots policy.
+    page_opener = build_pinned_opener(
+        SameOriginRedirectHandler(
+            origin,
+            is_allowed=lambda url: robots.can_fetch(USER_AGENT, url),
+        )
+    )
     page_request = urllib.request.Request(
         target["url"],
         headers={"User-Agent": USER_AGENT, "Accept": "text/html,application/xhtml+xml"},
     )
     try:
-        with opener.open(page_request, timeout=timeout) as response:
+        with page_opener.open(page_request, timeout=timeout) as response:
             content_type = response.headers.get("Content-Type", "").lower()
             if response.status != 200:
                 return {"status": "http_error", "http_status": response.status}
