@@ -94,12 +94,12 @@ def encoded_page_size(page):
 def batch_size_from_item_sizes(item_sizes):
     """Calculate exact encode_batch size from page sizes in linear time."""
     if not item_sizes:
-        return len(b'{"version":1,"pages":[]}\\n')
+        return len(b'{"version":1,"pages":[]}\n')
     return (
         len(b'{"version":1,"pages":[')
         + sum(item_sizes)
         + len(item_sizes) - 1
-        + len(b']}\\n')
+        + len(b']}\n')
     )
 
 
@@ -160,7 +160,7 @@ def main():
         })
 
     prefix_bytes = len(b'{"version":1,"pages":[')
-    suffix_bytes = len(b']}\\n')
+    suffix_bytes = len(b']}\n')
     for page in pages:
         page_size = encoded_page_size(page)
         candidate_size = (
