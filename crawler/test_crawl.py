@@ -422,7 +422,7 @@ class CrawlerTests(unittest.TestCase):
         )
         self.assertEqual(added, 1)
         self.assertEqual(list(queue), [("https://example.com/first", 1)])
-        self.assertIn("https://example.com/second", seen) if False else None
+        self.assertNotIn("https://example.com/second", seen)
 
     def test_discovery_skips_urls_already_in_canonical_index(self):
         queue = deque()
