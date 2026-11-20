@@ -28,7 +28,8 @@ class SearchApiSmokeFreshnessTests(unittest.TestCase):
         self.assertIn("time.sleep(min(30, remaining))", workflow)
         self.assertIn('production.get("indexedPages") == expected_pages', workflow)
         self.assertIn('production.get("indexUpdatedAt") == expected_updated_at', workflow)
-        script = workflow.split("run: |", 1)[1].split("\n          PY", 1)[0]
+        run_block = workflow.split("run: |", 1)[1]
+        script = run_block.split("python - <<'PY'", 1)[1].split("\n          PY", 1)[0]
         ast.parse(textwrap.dedent(script))
 
 
