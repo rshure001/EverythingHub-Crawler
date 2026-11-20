@@ -5,7 +5,7 @@ import { searchStaticPages } from "./static-search.mjs";
 import { isValidStaticManifest } from "./static-manifest.mjs";
 import vercelCatalog from "../../../vercel-search-backend/src/lib/catalog.js";
 
-const { validateManifestAndCatalog } = vercelCatalog;
+const { validateManifestAndCatalog, validateShardManifest, validateShardPayload } = vercelCatalog;
 const EDGE_MAX_CATALOG_GZIP_BYTES = 6_000_000;
 const EDGE_MAX_CATALOG_UNCOMPRESSED_BYTES = 30_000_000;
 
@@ -55,38 +55,18 @@ if (meta) {
   }
   compressedBytes = compressed.length;
 } else {
+  const checked = validateShardManifest(manifest);
   const seenUrls = new Set();
-  for (const shard of manifest.shards) {
-    if (
-      !shard ||
-      typeof shard.file !== "string" ||
-      !/^shard-\d{4}\.json$/.test(shard.file) ||
-      !Number.isInteger(shard.bytes) ||
-      shard.bytes < 2 ||
-      shard.bytes > 350_000 ||
-      !Number.isInteger(shard.pages) ||
-      shard.pages < 1 ||
-      typeof shard.sha256 !== "string" ||
-      !/^[a-f0-9]{64}$/.test(shard.sha256)
-    ) {
-      throw new Error("public shard metadata is invalid");
-    }
+  for (const shard of checked.shards) {
     const raw = await readFile(new URL("public-search/" + shard.file, root));
-    if (raw.length !== shard.bytes) throw new Error(shard.file + " byte count mismatch");
-    if (createHash("sha256").update(raw).digest("hex") !== shard.sha256) {
-      throw new Error(shard.file + " SHA-256 mismatch");
-    }
-    const payload = JSON.parse(raw.toString("utf8"));
-    if (payload.version !== 1 || !Array.isArray(payload.pages) || payload.pages.length !== shard.pages) {
-      throw new Error(shard.file + " payload does not match its manifest entry");
-    }
-    for (const page of payload.pages) {
-      if (!page || typeof page.url !== "string" || seenUrls.has(page.url)) {
-        throw new Error(shard.file + " contains an invalid or duplicate URL");
+    const shardPages = validateShardPayload(shard, raw);
+    for (const page of shardPages) {
+      if (seenUrls.has(page.url)) {
+        throw new Error(shard.file + " contains a duplicate URL across shards");
       }
       seenUrls.add(page.url);
     }
-    pages.push(...payload.pages);
+    pages.push(...shardPages);
   }
   if (pages.length !== manifest.total_pages) {
     throw new Error("verified shards do not match the manifest page count");

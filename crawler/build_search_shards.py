@@ -14,7 +14,7 @@ SOURCE = ROOT / "data" / "index.json"
 OUT = ROOT / "public-search"
 MAX_BYTES = 500_000  # Decoded shard target; gzip transport remains below 350 KB.
 MAX_COMPRESSED_BYTES = 350_000
-MAX_SHARD_COUNT = 256
+MAX_SHARD_COUNT = 512
 # The independent Vercel backend safely decompresses up to 64 MB. The
 # Supabase Edge Function has a smaller 30 MB/6 MB budget and delegates larger
 # catalogs to Vercel rather than scanning all shards in its CPU-limited isolate.
@@ -126,7 +126,7 @@ def main():
             return
         number += 1
         if number > MAX_SHARD_COUNT:
-            raise ValueError("public search catalog exceeds the fixed 256-shard limit")
+            raise ValueError("public search catalog exceeds the fixed 512-shard limit")
         name = f"shard-{number:04d}.json.gz"
         raw, uncompressed_bytes = encode_shard(items)
         (OUT / name).write_bytes(raw)

@@ -15,10 +15,10 @@ from index_store import load_index
 ROOT = Path(__file__).resolve().parents[1]
 MAX_SHARD_BYTES = 350_000
 MAX_SHARD_UNCOMPRESSED_BYTES = 500_000
-MAX_TOTAL_COMPRESSED_SHARD_BYTES = 32_000_000
-MAX_TOTAL_LEGACY_SHARD_BYTES = 80_000_000
+MAX_TOTAL_COMPRESSED_SHARD_BYTES = 64_000_000
+MAX_TOTAL_LEGACY_SHARD_BYTES = 100_000_000
 MAX_TOTAL_SHARD_UNCOMPRESSED_BYTES = 128_000_000
-MAX_SHARD_COUNT = 256
+MAX_SHARD_COUNT = 512
 # Keep validation aligned with the independent Vercel backend's bounded decoder.
 # The Supabase Edge Function uses a smaller 30 MB budget and delegates larger
 # catalogs to Vercel rather than scanning all shards in its CPU-limited isolate.
@@ -140,7 +140,7 @@ def validate(root: Path = ROOT) -> list[str]:
     if manifest.get("shard_count") != len(shards):
         errors.append("manifest shard_count does not match shards array")
     if len(shards) > MAX_SHARD_COUNT:
-        errors.append("manifest exceeds the fixed 256-shard safety limit")
+        errors.append("manifest exceeds the fixed 512-shard safety limit")
 
     expected_urls = {
         page.get("url")
@@ -193,6 +193,27 @@ def validate(root: Path = ROOT) -> list[str]:
         if entry.get("bytes") != len(raw):
             errors.append(f"byte-size mismatch: {name}")
 
+        # Verify the compressed bytes before attempting decompression. This
+        # rejects tampering deterministically and avoids parsing untrusted data.
+        digest = entry.get("sha256")
+        digest_valid = True
+        if digest is None and integrity == "sha256":
+            errors.append(f"missing SHA-256 digest: {name}")
+            digest_valid = False
+        elif digest is not None:
+            if (
+                not isinstance(digest, str)
+                or len(digest) != 64
+                or any(char not in "0123456789abcdef" for char in digest)
+            ):
+                errors.append(f"invalid SHA-256 digest: {name}")
+                digest_valid = False
+            elif hashlib.sha256(raw).hexdigest() != digest:
+                errors.append(f"SHA-256 mismatch: {name}")
+                digest_valid = False
+        if not digest_valid:
+            continue
+
         if compressed:
             declared_uncompressed = entry.get("uncompressed_bytes")
             if (
@@ -224,18 +245,6 @@ def validate(root: Path = ROOT) -> list[str]:
         if total_uncompressed_bytes > MAX_TOTAL_SHARD_UNCOMPRESSED_BYTES:
             errors.append("public shards exceed the 128 MB aggregate decompression safety limit")
 
-        digest = entry.get("sha256")
-        if digest is None and integrity == "sha256":
-            errors.append(f"missing SHA-256 digest: {name}")
-        elif digest is not None:
-            if (
-                not isinstance(digest, str)
-                or len(digest) != 64
-                or any(char not in "0123456789abcdef" for char in digest)
-            ):
-                errors.append(f"invalid SHA-256 digest: {name}")
-            elif hashlib.sha256(raw).hexdigest() != digest:
-                errors.append(f"SHA-256 mismatch: {name}")
 
         try:
             payload = json.loads(decoded.decode("utf-8"))

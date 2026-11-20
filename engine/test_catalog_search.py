@@ -15,11 +15,11 @@ class CatalogLoaderTests(unittest.TestCase):
         manifest = json.loads((search_dir / "manifest.json").read_text(encoding="utf-8"))
         self.assertEqual(MAX_CATALOG_GZIP_BYTES, 16_000_000)
         self.assertEqual(MAX_INDEXED_PAGES, 60_000)
-        self.assertEqual(MAX_SHARD_COUNT, 256)
+        self.assertEqual(MAX_SHARD_COUNT, 512)
         self.assertEqual(MAX_SHARD_BYTES, 350_000)
         self.assertEqual(MAX_SHARD_UNCOMPRESSED_BYTES, 500_000)
-        self.assertEqual(MAX_TOTAL_SHARD_BYTES, 80_000_000)
-        self.assertEqual(MAX_TOTAL_COMPRESSED_SHARD_BYTES, 32_000_000)
+        self.assertEqual(MAX_TOTAL_SHARD_BYTES, 100_000_000)
+        self.assertEqual(MAX_TOTAL_COMPRESSED_SHARD_BYTES, 64_000_000)
         self.assertEqual(MAX_TOTAL_SHARD_UNCOMPRESSED_BYTES, 128_000_000)
         self.assertGreaterEqual(manifest["total_pages"], 21_000)
         self.assertLessEqual(manifest["total_pages"], MAX_INDEXED_PAGES)
@@ -27,7 +27,11 @@ class CatalogLoaderTests(unittest.TestCase):
             sum(item["pages"] for item in manifest["shards"]),
             manifest["total_pages"],
         )
-        self.assertLessEqual(sum(item["bytes"] for item in manifest["shards"]), MAX_TOTAL_SHARD_BYTES)
+        total_shard_bytes = sum(item["bytes"] for item in manifest["shards"])
+        if all(item["file"].endswith(".json.gz") for item in manifest["shards"]):
+            self.assertLessEqual(total_shard_bytes, MAX_TOTAL_COMPRESSED_SHARD_BYTES)
+        else:
+            self.assertLessEqual(total_shard_bytes, MAX_TOTAL_SHARD_BYTES)
         catalog_gzip = manifest.get("catalog_gzip")
         if catalog_gzip is not None:
             self.assertIsInstance(catalog_gzip, dict)

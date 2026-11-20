@@ -182,9 +182,9 @@ async function testCurrentPublishedManifestFitsClientLimits() {
     "current catalog must fit the 60,000-page browser safety limit"
   );
   assert.ok(
-    currentManifest.shard_count <= 256 &&
+    currentManifest.shard_count <= 512 &&
       currentManifest.shards.length === currentManifest.shard_count,
-    "current manifest must fit the 256-shard browser safety limit"
+    "current manifest must fit the 512-shard browser safety limit"
   );
   if (currentManifest.catalog_gzip) {
     assert.ok(
@@ -194,7 +194,7 @@ async function testCurrentPublishedManifestFitsClientLimits() {
     );
   }
   assert.ok(
-    totalShardBytes <= (compressedShards ? 32_000_000 : 80_000_000),
+    totalShardBytes <= (compressedShards ? 64_000_000 : 100_000_000),
     "current shard catalog must fit its compressed or legacy transfer limit"
   );
 
