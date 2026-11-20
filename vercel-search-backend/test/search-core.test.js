@@ -37,16 +37,16 @@ function makeManifest(pages) {
 }
 
 
-test('accepts the current 47k-page, 266-shard catalog within bounded limits', () => {
-  const pages = Array.from({ length: 47343 }, (_, index) => makePage(index, 'science'));
+test('accepts a large 54k-page, 206-shard catalog within bounded limits', () => {
+  const pages = Array.from({ length: 54284 }, (_, index) => makePage(index, 'science'));
   const { manifest, compressed } = makeManifest(pages);
-  manifest.shard_count = 266;
-  manifest.shards = Array.from({ length: 266 }, (_, index) => ({
+  manifest.shard_count = 206;
+  manifest.shards = Array.from({ length: 206 }, (_, index) => ({
     file: 'shard-' + String(index + 1).padStart(4, '0') + '.json'
   }));
   const result = validateManifestAndCatalog(manifest, compressed);
-  assert.equal(result.indexedPages, 47343);
-  assert.equal(MAX_INDEXED_PAGES, 60000);
+  assert.equal(result.indexedPages, 54284);
+  assert.equal(MAX_INDEXED_PAGES, 100000);
   assert.equal(MAX_SHARD_COUNT, 512);
   assert.equal(MAX_CATALOG_GZIP_BYTES, 16000000);
 });

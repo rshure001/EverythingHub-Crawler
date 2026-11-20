@@ -14,13 +14,13 @@ import zlib
 from urllib.parse import urlsplit
 from typing import Any
 
-MAX_INDEXED_PAGES = 60_000
+MAX_INDEXED_PAGES = 100_000
 MAX_SHARD_COUNT = 512
 MAX_SHARD_BYTES = 350_000
 MAX_SHARD_UNCOMPRESSED_BYTES = 500_000
 MAX_TOTAL_COMPRESSED_SHARD_BYTES = 64_000_000
 MAX_TOTAL_LEGACY_SHARD_BYTES = 100_000_000
-MAX_TOTAL_SHARD_UNCOMPRESSED_BYTES = 128_000_000
+MAX_TOTAL_SHARD_UNCOMPRESSED_BYTES = 256_000_000
 MAX_CATALOG_GZIP_BYTES = 16_000_000
 MAX_CATALOG_UNCOMPRESSED_BYTES = 64_000_000
 SHARD_NAME = re.compile(r"shard-\d{4}\.json(?:\.gz)?\Z")
@@ -72,7 +72,7 @@ def validate_manifest(manifest: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(updated_at, int) or updated_at <= 0:
         raise ValueError("manifest updated_at must be a positive integer")
     if not isinstance(total_pages, int) or not 1 <= total_pages <= MAX_INDEXED_PAGES:
-        raise ValueError("manifest total_pages exceeds the 60,000-page safety limit")
+        raise ValueError("manifest total_pages exceeds the 100,000-page safety limit")
     if not isinstance(shard_count, int) or not 1 <= shard_count <= MAX_SHARD_COUNT:
         raise ValueError("manifest shard_count exceeds the 512-shard safety limit")
     if not isinstance(shards, list) or len(shards) != shard_count:
@@ -123,7 +123,7 @@ def validate_manifest(manifest: dict[str, Any]) -> dict[str, Any]:
         if not compressed and total_bytes > MAX_TOTAL_LEGACY_SHARD_BYTES:
             raise ValueError("legacy shards exceed the 100 MB transition limit")
         if total_uncompressed > MAX_TOTAL_SHARD_UNCOMPRESSED_BYTES:
-            raise ValueError("shards exceed the 128 MB decompressed safety limit")
+            raise ValueError("shards exceed the 256 MB decompressed safety limit")
 
     if total_shard_pages != total_pages:
         raise ValueError("shard page totals do not match manifest total_pages")

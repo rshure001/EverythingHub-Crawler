@@ -22,10 +22,11 @@ kept here so production behavior is reviewable and testable in GitHub.
 - When the optional gzip file is absent, too large, or fails integrity checks,
   the backend loads the bounded shard set and verifies each shard's byte count,
   SHA-256, page count, schema, URL safety, and robots-denied exclusions.
-- Bounds gzip to 16,000,000 bytes and decoded JSON to 64,000,000 bytes; bounds
-  the index to 40,000 pages, 256 shards, 1,000,000 bytes per shard, and
-  80,000,000 aggregate shard bytes. Shard downloads use a 32-worker pool and
-  per-request timeouts.
+- Bounds the optional gzip catalog to 16,000,000 bytes and decoded JSON to
+  64,000,000 bytes. The sharded path supports up to 100,000 pages, 512 shards,
+  350,000 compressed bytes and 500,000 decoded bytes per shard, 64,000,000
+  aggregate compressed bytes, and 256,000,000 aggregate decoded bytes. Shard
+  downloads use a 32-worker pool and per-request timeouts.
 - Keeps a last-known-good in-memory catalog for up to one hour if GitHub has a
   transient outage; responses identify stale catalog use.
 - Does not fetch or download indexed source pages; it reads only the

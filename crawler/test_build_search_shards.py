@@ -9,6 +9,7 @@ from validate_public_index import (
 from build_search_shards import (
     MAX_BYTES,
     MAX_COMPRESSED_BYTES,
+    SHARD_GZIP_LEVEL,
     MAX_CATALOG_GZIP_BYTES,
     MAX_CATALOG_UNCOMPRESSED_BYTES,
     batch_fits,
@@ -24,6 +25,7 @@ class SearchShardBatchBoundaryTests(unittest.TestCase):
         self.assertEqual(MAX_BYTES, 500_000)
         self.assertEqual(MAX_COMPRESSED_BYTES, 350_000)
         self.assertLess(MAX_COMPRESSED_BYTES, 1_000_000)
+        self.assertEqual(SHARD_GZIP_LEVEL, 6)
 
     def test_size_limit_counts_the_exact_trailing_newline(self):
         page = compact({
