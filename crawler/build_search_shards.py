@@ -94,14 +94,14 @@ def encoded_page_size(page):
 def batch_size_from_item_sizes(item_sizes):
     """Calculate exact encode_batch size from page sizes in linear time."""
     if not item_sizes:
-        return len(b'{"version":1,"pages":[]}\n')
+        return len(b'{"version":1,"pages":[]}') + 1
     return (
         len(b'{"version":1,"pages":[')
         + sum(item_sizes)
         + len(item_sizes) - 1
-        + len(b']}\n')
+        + len(b']}')
+        + 1
     )
-
 
 def encode_shard(items):
     """Return deterministic gzip bytes and the exact decoded JSON length."""
