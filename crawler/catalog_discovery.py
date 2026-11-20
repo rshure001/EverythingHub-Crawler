@@ -7,6 +7,7 @@ thousands of datasets, each with multiple bulk-download resources.
 from __future__ import annotations
 
 import argparse
+import gzip
 import json
 import pathlib
 import time
@@ -17,7 +18,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-OUTPUT = ROOT / "data" / "catalogs.json"
+OUTPUT = ROOT / "data" / "catalogs.json.gz"
 MAX_RESPONSE_BYTES = 8_000_000
 TIMEOUT_SECONDS = 25
 USER_AGENT = "EverythingHubCatalogDiscovery/1.0 (+https://github.com/rshure001/EverythingHub-Crawler)"
@@ -160,7 +161,11 @@ def main() -> None:
     catalog = build_catalog(args.rows, args.max_pages)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     temporary = args.output.with_suffix(args.output.suffix + ".tmp")
-    temporary.write_text(json.dumps(catalog, ensure_ascii=False, separators=(",", ":")) + "\n", encoding="utf-8")
+    payload = json.dumps(catalog, ensure_ascii=False, separators=(",", ":")).encode("utf-8") + b"\n"
+    if args.output.suffix == ".gz":
+        temporary.write_bytes(gzip.compress(payload, mtime=0))
+    else:
+        temporary.write_bytes(payload)
     temporary.replace(args.output)
     print(json.dumps({key: catalog[key] for key in ("catalog_count", "datasets_discovered", "resources_discovered", "updated_at")}, indent=2))
 
