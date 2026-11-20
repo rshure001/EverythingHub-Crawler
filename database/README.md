@@ -26,6 +26,23 @@ accepting connections and the target project has been positively identified. Bef
 Do not attempt recovery by dropping, resetting, recreating, or restoring the
 project.
 
+## Universal catalog storage and search
+
+`005_eh_quad_catalogs.sql` adds the catalog-first storage layer without
+altering the page index: `eh_catalogs` stores collection metadata and
+`eh_catalog_records` stores normalized records with structured JSON
+attributes and full-text search. It is additive, schema-locked to `eh_quad`,
+and grants only service-role read access. The authenticated search API accepts
+`/search?q=...&type=catalog` with optional `catalog_type` and
+`record_type` filters; the existing default remains page search.
+
+The staging importer `database/import_universal_catalogs.py` is additive and
+upsert-only. It accepts the compressed
+`data/universal-catalog-records.json.gz` artifact, validates HTTPS source
+URLs, and refuses any destination schema other than `eh_quad`. Its isolated
+PostgreSQL smoke test checks record counts and catalog-record search. It does
+not write to production while the managed PostgreSQL service is unavailable.
+
 ## Import the repository index
 
 The importer is locked to `eh_quad`; it rejects any other schema value.
