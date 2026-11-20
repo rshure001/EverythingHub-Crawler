@@ -238,11 +238,12 @@ class ScheduleWatchdogTests(unittest.TestCase):
         self.assertIn("actions/workflows/crawl.yml/runs?event=schedule&per_page=5", workflow)
         self.assertIn("actions/runs/${latest_scheduled_run_id}/jobs?per_page=100", workflow)
         self.assertIn("crawler/automation-trigger.json", workflow)
-        self.assertIn("force-with-lease=refs/heads/main", workflow)
+        self.assertIn("--force-with-lease=", workflow)
+        self.assertIn("refs/heads/main:${expected_head}", workflow)
         self.assertIn("status", workflow)
         self.assertIn("actions: read", workflow)
         self.assertIn("contents: write", workflow)
-        self.assertIn("group: everythinghub-crawler", workflow)
+        self.assertIn("group: eh-crawler-schedule-watchdog", workflow)
         self.assertNotIn("gh workflow run crawl.yml", workflow)
 
     def test_schedule_health_reports_unobserved_without_schedule_events(self):

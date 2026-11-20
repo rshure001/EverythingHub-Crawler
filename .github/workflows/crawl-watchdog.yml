@@ -9,7 +9,7 @@ on:
       - "crawler/pipeline_health.py"
       - "crawler/test_pipeline_health.py"
   schedule:
-    # Stagger lightweight 15-minute checks away from Actions peaks. The watchdog shares the crawler concurrency group and only writes the marker when schedule and manifest staleness are both confirmed.
+    # Stagger lightweight 15-minute checks away from Actions peaks. The watchdog rechecks active runs immediately before committing a marker; crawl.yml retains its own single-run concurrency guard.
     - cron: "7,22,37,52 * * * *"
   workflow_run:
     workflows:
@@ -22,7 +22,7 @@ permissions:
   actions: read
   contents: write
 concurrency:
-  group: everythinghub-crawler
+  group: eh-crawler-schedule-watchdog
   cancel-in-progress: false
 jobs:
   guard:
@@ -250,6 +250,60 @@ jobs:
                 exit 0
               fi
               git commit -m "Trigger one bounded crawler recovery after stale schedule"
+              gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/crawl.yml/runs?per_page=100" > /tmp/crawl-runs-prepush.json
+              gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/crawl.yml/runs?event=schedule&per_page=5" > /tmp/crawl-scheduled-prepush.json
+              gh api "repos/${GITHUB_REPOSITORY}/contents/public-search/manifest.json" > /tmp/public-manifest-prepush-envelope.json
+              python - <<'PY'
+              import base64
+              import json
+              from datetime import datetime, timezone
+              from pathlib import Path
+
+              active_statuses = {"queued", "in_progress", "pending", "waiting", "requested"}
+              runs_payload = json.loads(Path("/tmp/crawl-runs-prepush.json").read_text(encoding="utf-8"))
+              runs = runs_payload.get("workflow_runs", [])
+              if any(isinstance(run, dict) and run.get("status") in active_statuses for run in runs):
+                  print("A crawler became queued or active before push; aborting marker commit.")
+                  raise SystemExit(0)
+              scheduled_payload = json.loads(Path("/tmp/crawl-scheduled-prepush.json").read_text(encoding="utf-8"))
+              scheduled = scheduled_payload.get("workflow_runs", [])
+              if not scheduled:
+                  print("Scheduled crawl history is unavailable at final push check; aborting marker commit.")
+                  raise SystemExit(0)
+              latest = max(scheduled, key=lambda row: row.get("created_at") or "")
+              created_at = latest.get("created_at")
+              if not isinstance(created_at, str):
+                  raise SystemExit("Latest scheduled crawl event has no created_at timestamp")
+              scheduled_at = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+              if scheduled_at.tzinfo is None:
+                  scheduled_at = scheduled_at.replace(tzinfo=timezone.utc)
+              now = datetime.now(timezone.utc)
+              schedule_age = max(0, int((now - scheduled_at.astimezone(timezone.utc)).total_seconds()))
+              if schedule_age <= 25 * 60:
+                  print("Scheduled crawl delivery is no longer more than 25 minutes stale; aborting marker commit.")
+                  raise SystemExit(0)
+              envelope = json.loads(Path("/tmp/public-manifest-prepush-envelope.json").read_text(encoding="utf-8"))
+              encoded = envelope.get("content")
+              if not isinstance(encoded, str):
+                  raise SystemExit("Latest public manifest content is unavailable at final push check")
+              manifest = json.loads(base64.b64decode(encoded).decode("utf-8"))
+              updated_at = manifest.get("updated_at")
+              if type(updated_at) is not int or updated_at <= 0:
+                  raise SystemExit("Latest public manifest updated_at is invalid at final push check")
+              manifest_age = (now - datetime.fromtimestamp(updated_at, timezone.utc)).total_seconds()
+              if manifest_age < -60:
+                  raise SystemExit("Latest public manifest timestamp is too far in the future")
+              if manifest_age <= 10 * 60:
+                  print("Public manifest became fresh before push; aborting marker commit.")
+                  raise SystemExit(0)
+              Path("/tmp/prepush-eligible").write_text("yes", encoding="utf-8")
+              print("Final no-overlap and freshness recheck passed.")
+              PY
+              if [ ! -f /tmp/prepush-eligible ]; then
+                git reset --hard "${expected_head}"
+                echo "Final recovery conditions changed; local marker commit discarded."
+                exit 0
+              fi
               git push --force-with-lease="refs/heads/main:${expected_head}" origin HEAD:refs/heads/main
               echo "Committed one bounded recovery marker with expected-head protection; crawl.yml push path will start the bounded crawl."
               ;;
