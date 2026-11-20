@@ -94,44 +94,44 @@ jobs:
           PY
       - name: Record discovery in the project ledger
         run: python project/ledger.py --record-catalog-discovery
-      - name: Publish catalog manifest and project ledger on main
-        if: github.ref == 'refs/heads/main'
-        env:
-          ROWS: \${{ inputs.rows || '250' }}
-          MAX_PAGES: \${{ inputs.max_pages || '20' }}
+      - name: Publish catalog manifest and project ledger
         run: |
-          set -euo pipefail
+          git add -f data/catalogs.json.gz data/openlibrary-catalogs.json.gz data/project-ledger.json data/universal-catalog-records.json.gz
+          git rm -f --ignore-unmatch data/catalogs.json data/universal-catalog-records.json
+          if git diff --cached --quiet; then
+            echo "No catalog manifest or ledger changes."
+            exit 0
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Record catalog discovery and project history"
+          # Compressed manifests are binary: never rebase them across a concurrent
+          # catalog publication. If main advanced, restart the bounded discovery
+          # batch from the new main tip and regenerate a coherent snapshot.
           for attempt in 1 2 3; do
-            git add -f data/catalogs.json.gz data/openlibrary-catalogs.json.gz data/project-ledger.json data/universal-catalog-records.json.gz
-            git rm -f --ignore-unmatch data/catalogs.json data/universal-catalog-records.json
-            if git diff --cached --quiet; then
-              echo "No catalog manifest or ledger changes."
+            base_commit="$(git rev-parse HEAD^)"
+            if git push; then
               exit 0
             fi
-            git commit -m "Record catalog discovery and project history"
-            if git push origin HEAD:main; then
-              exit 0
-            fi
-            echo "Main advanced during publish; rebuilding generated artifacts on latest main (attempt $attempt)."
             git fetch origin main
+            remote_head="$(git rev-parse origin/main)"
+            if [ "$remote_head" = "$base_commit" ]; then
+              echo "Push failed without a main-branch race; check repository write permission."
+              exit 1
+            fi
+            echo "Main advanced during catalog publication; rebuilding snapshot from $remote_head (retry $attempt)."
             git reset --hard origin/main
-            python crawler/catalog_discovery.py --rows "$ROWS" --max-pages "$MAX_PAGES"
+            python crawler/catalog_discovery.py --rows "${{ inputs.rows || '250' }}" --max-pages "${{ inputs.max_pages || '20' }}"
             python crawler/catalog_openlibrary.py --pause 1
             python crawler/catalog_ingest.py
             python project/ledger.py --record-catalog-discovery
+            git add -f data/catalogs.json.gz data/openlibrary-catalogs.json.gz data/project-ledger.json data/universal-catalog-records.json.gz
+            git rm -f --ignore-unmatch data/catalogs.json data/universal-catalog-records.json
+            if git diff --cached --quiet; then
+              echo "Latest main already contains this catalog snapshot."
+              exit 0
+            fi
+            git commit -m "Record catalog discovery and project history"
           done
-          echo "Unable to publish catalog artifacts after three protected rebuild attempts."
+          echo "Unable to publish a coherent catalog snapshot after three safe rebuilds."
           exit 1
-      - name: Upload catalog staging artifacts from non-main branches
-        if: github.ref != 'refs/heads/main'
-        uses: actions/upload-artifact@v4
-        with:
-          name: universal-catalog-staging-preview
-          path: |
-            data/catalogs.json.gz
-            data/openlibrary-catalogs.json.gz
-            data/universal-catalog-records.json.gz
-            data/project-ledger.json
-          if-no-files-found: error
