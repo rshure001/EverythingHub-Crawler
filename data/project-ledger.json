@@ -159,6 +159,22 @@
         "workflow_run_id": "44759812295",
         "repository": "rshure001/EverythingHub-Crawler"
       }
+    },
+    {
+      "id": "catalog-discovery-44760723119",
+      "timestamp": "2026-11-20T15:12:17Z",
+      "type": "catalog_discovery",
+      "status": "success",
+      "summary": "Catalog-first public data discovery completed.",
+      "metrics": {
+        "catalogs": 4,
+        "datasets": 10000,
+        "resources": 52018
+      },
+      "source": {
+        "workflow_run_id": "44760723119",
+        "repository": "rshure001/EverythingHub-Crawler"
+      }
     }
   ]
 }
