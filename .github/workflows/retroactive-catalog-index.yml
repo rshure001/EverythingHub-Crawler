@@ -1,0 +1,45 @@
+name: Retroactive catalog inventory
+
+on:
+  push:
+    paths:
+      - "crawler/catalog_retro_discovery.py"
+      - "crawler/test_catalog_retro_discovery.py"
+      - ".github/workflows/retroactive-catalog-index.yml"
+  workflow_dispatch:
+  schedule:
+    - cron: "43 */6 * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: retroactive-catalog-inventory
+  cancel-in-progress: false
+
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Test retroactive discovery
+        working-directory: crawler
+        run: python -m unittest test_catalog_retro_discovery.py -v
+      - name: Inventory every existing indexed host
+        run: python crawler/catalog_retro_discovery.py
+      - name: Publish host catalog candidates
+        run: |
+          git add -f data/host-catalog-candidates.json
+          if git diff --cached --quiet; then
+            echo "No host inventory changes."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Inventory catalog candidates from existing search index"
+          git pull --rebase origin main
+          git push
