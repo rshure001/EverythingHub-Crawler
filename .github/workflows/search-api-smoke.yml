@@ -232,7 +232,7 @@ jobs:
           assert page2.get("indexSha256") == production.get("indexSha256"), page2
           assert page2.get("indexTransport") == production.get("indexTransport"), page2
           assert page2.get("indexShardCount") == production.get("indexShardCount"), page2
-          local_results =
+          local_results = [
               item for item in production.get("results", [])
               if item.get("source") == "Everything Hub Crawler"
               and item.get("provider") == "everythinghub-catalog"
