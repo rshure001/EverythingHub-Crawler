@@ -29,7 +29,7 @@
     },
     {
       "id": "publisher-limit-fix-968b8a499c61",
-      "timestamp": "2026-11-20T14:45:00Z",
+      "timestamp": "2026-11-20T14:49:47Z",
       "type": "publisher_fix",
       "status": "committed",
       "summary": "Raised publisher staging page ceiling to 125,000 and added a regression test for catalogs above 100,000 pages.",
@@ -39,7 +39,7 @@
     },
     {
       "id": "publisher-limit-fix-ece8842f335c",
-      "timestamp": "2026-11-20T14:46:00Z",
+      "timestamp": "2026-11-20T14:49:49Z",
       "type": "publisher_fix",
       "status": "committed",
       "summary": "Completed the publisher page-cap regression coverage.",
