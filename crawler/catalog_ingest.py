@@ -10,7 +10,9 @@ from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 from catalog_model import catalog_metrics, normalize_catalog, normalize_record
+from catalog_source_policy import policy_for_host
 
 ROOT = Path(__file__).resolve().parents[1]
 INPUT = ROOT / "data" / "catalogs.json.gz"
@@ -30,15 +32,17 @@ def adapt(manifest: dict[str, Any]) -> dict[str, Any]:
         datasets = [x for x in manifest.get("datasets", []) if x.get("catalog_id") == source_id]
         errors = source.get("errors") or []
         catalog_type = source.get("catalog_type") or "open_data"
-        source_terms_status = source.get("source_terms_status") or (
-            "restricted_pending_permission" if catalog_type == "library_archive" else "unreviewed"
-        )
-        source_terms_url = source.get("source_terms_url") or (
-            "https://openlibrary.org/developers/api" if catalog_type == "library_archive" else ""
-        )
+        source_host = urlsplit(base).hostname or ""
+        source_policy = policy_for_host(source_host) or {}
+        # The checked-in source policy is authoritative. Discovery manifests can
+        # be older than the policy registry, so never trust their terms flags.
+        source_terms_status = source_policy.get("terms_status", "unreviewed")
+        source_terms_url = source_policy.get("terms_url") or ""
+        source_terms_reviewed_at = source_policy.get("reviewed_at") or ""
         catalog_policy_approved = (
-            source_terms_status in ("reviewed", "reviewed_per_dataset")
-            and bool(source.get("source_terms_reviewed_at"))
+            source_policy.get("discovery_allowed") is True
+            and source_terms_status in ("reviewed", "reviewed_per_dataset")
+            and bool(source_terms_reviewed_at)
             and catalog_type != "library_archive"
         )
         catalog = normalize_catalog({
@@ -85,7 +89,7 @@ def adapt(manifest: dict[str, Any]) -> dict[str, Any]:
                 "license": license_info,
                 "source_terms_url": dataset.get("source_terms_url") or source_terms_url,
                 "source_terms_status": source_terms_status,
-                "source_terms_reviewed_at": dataset.get("source_terms_reviewed_at") or source.get("source_terms_reviewed_at") or "",
+                "source_terms_reviewed_at": source_terms_reviewed_at,
                 "attribution_required": dataset.get("attribution_required", catalog.get("attribution_required")),
                 "rights_status": "license_metadata_present" if license_present else "review_required",
                 "public_search_allowed": public_search_allowed,
