@@ -119,9 +119,12 @@ function buildResponse(options) {
   const offset = options.offset;
   const ranked = options.ranked || [];
   const bingResults = options.bingResults || [];
-  const externalSlots = Math.min(10, limit);
-  // Reserve up to ten Bing positions on page one. Later offsets are translated
-  // to the crawler-only sequence, preventing gaps and duplicates.
+  // Keep Bing supplemental rather than allowing it to crowd out the crawler.
+  // Reserve at most 20% of page one (up to ten slots); small searches retain
+  // most or all positions for Everything Hub's own indexed results.
+  const externalSlots = Math.min(10, Math.floor(limit * 0.2), bingResults.length);
+  // Later offsets are translated to the crawler-only sequence so pages do not
+  // repeat or skip crawler results when the first page includes Bing supplements.
   const external = offset === 0 ? bingResults.slice(0, externalSlots) : [];
   const catalogOffset = offset === 0 ? 0 : Math.max(0, offset - externalSlots);
   const catalogLimit = offset === 0 ? Math.max(0, limit - externalSlots) : limit;
