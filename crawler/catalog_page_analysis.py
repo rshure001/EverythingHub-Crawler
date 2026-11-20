@@ -22,7 +22,7 @@ from index_store import load_index
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_INDEX = ROOT / "data" / "index.json"
 DEFAULT_OUTPUT = ROOT / "data" / "page-derived-catalogs"
-ANALYZER_VERSION = 6
+ANALYZER_VERSION = 7
 TRACKING_KEYS = {"fbclid", "gclid", "dclid", "mc_cid", "mc_eid", "ref", "source"}
 STOP_TOKENS = {
     "the", "and", "for", "with", "from", "our", "your", "all", "new", "home", "page",
@@ -40,6 +40,25 @@ CATALOG_TITLE_RE = re.compile(
     r"\b(?:catalog(?:ue)?\s+(?:of|for)|(?:product|model|service|business|place|event|dataset|article|brand)\s+catalog(?:ue)?|all\s+(?:products|models|services|locations|places|events|datasets|articles|brands|offices)|browse\s+all|shop\s+all|store\s+locator|product\s+listing|model\s+listing|business\s+directory|places\s+directory|service\s+directory|office\s+directory)\b",
     re.I,
 )
+
+TITLE_KIND_PATTERNS = {
+    "product": re.compile(r"\b(?:products?|items?)\s+(?:catalog(?:ue)?|listing|directory)\b|\b(?:catalog(?:ue)?|listing|directory)\s+(?:of|for)\s+(?:products?|items?)\b|\b(?:all|browse(?:\s+all)?|shop(?:\s+all)?)\s+(?:products?|items?)\b", re.I),
+    "model": re.compile(r"\bmodels?\s+(?:catalog(?:ue)?|listing|directory)\b|\b(?:catalog(?:ue)?|listing|directory)\s+(?:of|for)\s+models?\b|\b(?:all|browse(?:\s+all)?)\s+models?\b|\bwatches?\s+(?:catalog(?:ue)?|models?)\b", re.I),
+    "brand": re.compile(r"\bbrands?\s+(?:catalog(?:ue)?|listing|directory)\b|\b(?:catalog(?:ue)?|listing|directory)\s+(?:of|for)\s+brands?\b|\b(?:all|browse(?:\s+all)?)\s+brands?\b", re.I),
+    "service": re.compile(r"\bservices?\s+(?:catalog(?:ue)?|listing|directory)\b|\b(?:catalog(?:ue)?|listing|directory)\s+(?:of|for)\s+services?\b|\bservice\s+directory\b", re.I),
+    "business": re.compile(r"\b(?:businesses|companies|stores|dealers|vendors)\s+(?:catalog(?:ue)?|listing|directory)\b|\b(?:catalog(?:ue)?|listing|directory)\s+(?:of|for)\s+(?:businesses|companies|stores|dealers|vendors)\b|\bstore\s+locator\b", re.I),
+    "place": re.compile(r"\b(?:places|locations|attractions|destinations|parks|museums)\s+(?:catalog(?:ue)?|listing|directory)\b|\b(?:catalog(?:ue)?|listing|directory)\s+(?:of|for)\s+(?:places|locations|attractions|destinations|parks|museums)\b", re.I),
+    "person": re.compile(r"\b(?:people|authors|speakers|artists)\s+(?:catalog(?:ue)?|listing|directory)\b|\b(?:people|staff|team)\s+directory\b", re.I),
+    "organization": re.compile(r"\b(?:organizations|agencies|institutions|offices)\s+(?:catalog(?:ue)?|listing|directory)\b|\b(?:organization|agency|office)\s+directory\b", re.I),
+    "event": re.compile(r"\b(?:events|conferences|exhibitions)\s+(?:catalog(?:ue)?|listing|directory|calendar)\b|\b(?:event|conference)\s+calendar\b", re.I),
+    "dataset": re.compile(r"\b(?:datasets?|data\s+sets?|registries)\s+(?:catalog(?:ue)?|listing|directory|registry)\b|\b(?:catalog(?:ue)?|listing|directory)\s+(?:of|for)\s+(?:datasets?|data\s+sets?|registries)\b", re.I),
+    "article": re.compile(r"\b(?:articles?|news|publications?|reports?|papers?)\s+(?:catalog(?:ue)?|listing|directory|archive|library)\b|\b(?:article|news|publication|research)\s+(?:archive|library|directory)\b", re.I),
+    "media": re.compile(r"\b(?:media|images?|videos?|audio)\s+(?:catalog(?:ue)?|gallery|listing|directory|library)\b|\b(?:image|video|media)\s+gallery\b", re.I),
+    "software": re.compile(r"\b(?:software|packages?|tools?|libraries)\s+(?:catalog(?:ue)?|listing|directory|registry)\b|\bsoftware\s+directory\b", re.I),
+    "resource": re.compile(r"\bresources?\s+(?:catalog(?:ue)?|listing|directory|library)\b|\bresource\s+library\b", re.I),
+}
+
+
 
 SEGMENT_TYPES = {
     "products": "product", "product": "product", "items": "product", "item": "product",
@@ -273,13 +292,13 @@ def _group_path(record_type: str, segments: list[str]) -> str:
 
 
 def _candidate_groups(page: dict, host: str, segments: list[str], body: str, title: str) -> list[tuple[str, str, str, list[str]]]:
-    title_norm = _norm(title)
-    listing = bool(LISTING_RE.search(body) or CATALOG_TITLE_RE.search(title))
+    title_is_catalog = bool(CATALOG_TITLE_RE.search(title))
+    listing = bool(LISTING_RE.search(body) or title_is_catalog)
     found = {}
     for i, segment in enumerate(segments):
         if segment not in CATALOG_SEGMENTS:
             continue
-        mentioned = segment.replace("-", " ") in title_norm or segment in body.casefold()
+        mentioned = segment.replace("-", " ") in _norm(title) or segment in body.casefold()
         if i != len(segments) - 1 and not (mentioned and listing):
             continue
         kind = SEGMENT_TYPES[segment]
@@ -294,8 +313,22 @@ def _candidate_groups(page: dict, host: str, segments: list[str], body: str, tit
         if listing:
             evidence.append("listing_language")
         found[key] = (key, kind, path, evidence)
-    return list(found.values())
 
+    # A catalog title can define a collection even when the URL is /catalog,
+    # /directory, or /about rather than a typed path such as /products.
+    if title_is_catalog:
+        for kind, pattern in TITLE_KIND_PATTERNS.items():
+            if not pattern.search(title):
+                continue
+            roots = ROOTS_BY_TYPE.get(kind, set())
+            path = (
+                _group_path(kind, segments)
+                if any(segment in roots for segment in segments)
+                else DEFAULT_CATALOG_PATHS[kind]
+            )
+            key = host + "|" + kind + "|" + path
+            found[key] = (key, kind, path, ["catalog_title", "listing_language", "title_kind:" + kind])
+    return list(found.values())
 
 def _record_entity_key(kind: str, host: str, title: str) -> str:
     normalized = _norm(title)
@@ -370,6 +403,7 @@ def analyze_pages(
     group_titles: dict[str, list[str]] = defaultdict(list)
     group_urls: dict[str, set[str]] = defaultdict(set)
     explicit_groups: dict[str, dict] = {}
+    content_list_groups: dict[str, dict] = {}
     page_rows = []
     media_urls = set()
     media_references = {}
@@ -395,10 +429,17 @@ def analyze_pages(
         is_eligible = page.get("robots_allowed") is not False and bool(title or description or text) and _valid_title(title)
         if is_eligible:
             eligible += 1
-        page_media = ({
-            normalized for raw_media in MEDIA_URL_RE.findall(text)
-            if (normalized := canonical_url(raw_media.rstrip(".,);]")))
-        } if is_eligible else set())
+        page_media = set()
+        if is_eligible:
+            page_media.update({
+                normalized for raw_media in MEDIA_URL_RE.findall(text)
+                if (normalized := canonical_url(raw_media.rstrip(".,);]")))
+            })
+            product_metadata = page.get("product")
+            if isinstance(product_metadata, dict):
+                product_image = canonical_url(product_metadata.get("image"))
+                if product_image:
+                    page_media.add(product_image)
         media_urls.update(page_media)
         for media_url in page_media:
             media_references[(page_id, media_url)] = {
@@ -409,7 +450,10 @@ def analyze_pages(
                 "discovered_at": page.get("fetched_at"),
             }
         explicit = _candidate_groups(page, host, segments, body, title) if is_eligible else []
-        is_catalog_definition = bool(explicit)
+        content_entities = _extract_list_entities(body) if is_eligible else []
+        content_entity_mentions += len(content_entities)
+        content_counts = Counter(entity_kind for entity_kind, _entity_title, _cue in content_entities)
+        is_catalog_definition = bool(explicit) or any(count >= 2 for count in content_counts.values())
         kind = _record_type(page, segments) if is_eligible else None
         group_key = host + "|" + kind + "|" + _group_path(kind, segments) if kind and not is_catalog_definition else None
         record_id = None
@@ -435,20 +479,21 @@ def analyze_pages(
             if title and title not in group_titles[group_key]:
                 group_titles[group_key].append(title)
 
-        content_entities = _extract_list_entities(body) if is_eligible else []
-        content_entity_mentions += len(content_entities)
         page_group_keys = []
+        explicit_keys_by_kind = defaultdict(list)
         for key, catalog_kind, path, evidence in explicit:
             explicit_groups.setdefault(key, {
                 "catalog_key": key, "catalog_type": CATALOG_TYPE[catalog_kind],
                 "record_type": catalog_kind, "path": path, "evidence": set(),
             })
             explicit_groups[key]["evidence"].update(evidence)
+            explicit_keys_by_kind[catalog_kind].append(key)
             group_pages[key].add(page_id)
             group_urls[key].add(url)
             if title and title not in group_titles[key]:
                 group_titles[key].append(title)
             page_group_keys.append(key)
+
         for entity_kind, entity_title, cue in content_entities:
             entity_key = _record_entity_key(entity_kind, host, entity_title)
             content_record_id = stable_id("record", entity_key)
@@ -467,14 +512,29 @@ def analyze_pages(
                 item["source_page_ids"].append(page_id)
             if page.get("fetched_at") and (not item.get("last_seen_at") or page["fetched_at"] > item["last_seen_at"]):
                 item["last_seen_at"] = page["fetched_at"]
-            content_path = _content_group_path(entity_kind, segments)
-            content_key = host + "|" + entity_kind + "|" + content_path
-            record_groups[content_key].add(content_record_id)
-            group_pages[content_key].add(page_id)
-            group_urls[content_key].add(url)
-            if title and title not in group_titles[content_key]:
-                group_titles[content_key].append(title)
-            page_group_keys.append(content_key)
+
+            target_keys = explicit_keys_by_kind.get(entity_kind)
+            if target_keys:
+                group_keys = target_keys
+            else:
+                content_path = _content_group_path(entity_kind, segments)
+                content_key = host + "|" + entity_kind + "|" + content_path
+                group_keys = [content_key]
+                if content_counts[entity_kind] >= 2:
+                    content_list_groups.setdefault(content_key, {
+                        "catalog_key": content_key, "catalog_type": CATALOG_TYPE[entity_kind],
+                        "record_type": entity_kind, "path": content_path, "evidence": set(),
+                    })
+                    content_list_groups[content_key]["evidence"].add("explicit_content_list:" + cue)
+
+            for group_key_for_record in group_keys:
+                record_groups[group_key_for_record].add(content_record_id)
+                group_pages[group_key_for_record].add(page_id)
+                group_urls[group_key_for_record].add(url)
+                if title and title not in group_titles[group_key_for_record]:
+                    group_titles[group_key_for_record].append(title)
+                page_group_keys.append(group_key_for_record)
+
         if group_key:
             page_group_keys.append(group_key)
         if kind or explicit or content_entities:
@@ -489,20 +549,25 @@ def analyze_pages(
             "fetched_at": page.get("fetched_at"),
         })
 
-    candidate_keys = set(explicit_groups)
+    candidate_keys = set(explicit_groups) | set(content_list_groups)
     for key, ids in record_groups.items():
-        # Repeated records from one ordinary article are entities, not a catalog.
-        # A derived collection needs corroboration from at least two distinct pages;
-        # one page may create multiple catalogs only when it explicitly defines them.
-        if len(ids) >= 2 and (len(group_pages.get(key, set())) >= 2 or key in explicit_groups):
+        # Ordinary article mentions do not become catalogs merely because a
+        # single page names multiple things. Repeated records need two pages;
+        # an explicit content list is handled separately above.
+        if len(ids) >= 2 and len(group_pages.get(key, set())) >= 2:
             candidate_keys.add(key)
 
     page_by_id = {item["page_id"]: item for item in page_rows if item.get("page_id")}
     catalogs = {}
     for key in sorted(candidate_keys):
         is_declared = key in explicit_groups
+        is_content_list = key in content_list_groups
         if is_declared:
             info = explicit_groups[key]
+            kind, path = info["record_type"], info["path"]
+            evidence = sorted(info["evidence"])
+        elif is_content_list:
+            info = content_list_groups[key]
             kind, path = info["record_type"], info["path"]
             evidence = sorted(info["evidence"])
         else:
@@ -514,16 +579,21 @@ def analyze_pages(
         source_timestamps = sorted(stamp for stamp in (_timestamp_iso(row.get("fetched_at")) for row in source_rows) if stamp)
         record_ids = sorted(record_groups.get(key, set()))
         title = _catalog_title(key.split("|", 1)[0], kind, path, group_titles.get(key, []))
-        if not is_declared:
+        if not is_declared and not is_content_list:
             title += " — referenced in indexed pages"
         evidence_strength = (
             "high" if is_declared and ("listing_language" in evidence or "catalog_title" in evidence)
-            else "medium" if is_declared else "derived"
+            else "medium" if is_declared or is_content_list else "derived"
         )
         catalog_status = (
-            "definition_only" if is_declared and not record_ids
-            else "candidate_needs_source_validation" if is_declared
+            "definition_only" if (is_declared or is_content_list) and not record_ids
+            else "candidate_needs_source_validation" if (is_declared or is_content_list)
             else "derived_candidate_needs_source_validation"
+        )
+        catalog_origin = (
+            "source_declared_collection" if is_declared
+            else "content_list_declared_collection" if is_content_list
+            else "derived_from_repeated_records"
         )
         catalogs[key] = {
             "catalog_id": catalog_id, "source_key": key, "title": title,
@@ -535,8 +605,9 @@ def analyze_pages(
             "last_seen_at": source_timestamps[-1] if source_timestamps else None,
             "record_ids": record_ids, "record_count": len(record_ids),
             "parent_catalog_id": None, "evidence": evidence,
-            "catalog_origin": "source_declared_collection" if is_declared else "derived_from_repeated_records",
-            "is_source_declared_catalog": is_declared, "catalog_definition": is_declared,
+            "catalog_origin": catalog_origin,
+            "is_source_declared_catalog": is_declared,
+            "catalog_definition": is_declared or is_content_list,
             "evidence_strength": evidence_strength, "catalog_status": catalog_status,
             "source_terms_status": "not_reviewed",
             "rights_status": "publicly_accessible_not_cleared_for_redistribution",
@@ -576,6 +647,7 @@ def analyze_pages(
     source_total = source_total if isinstance(source_total, int) and source_total >= 0 else source_page_rows
     unique_source_total = max(len(pages), source_total - duplicate_source_page_rows)
     coverage = (len(pages) / unique_source_total * 100.0) if unique_source_total else 0.0
+    page_refs = sum(len(x.get("source_page_ids", [])) for x in catalog_list)
     metrics = {
         "pages_analyzed": len(pages),
         "source_page_rows": source_page_rows,
@@ -585,6 +657,7 @@ def analyze_pages(
         "unique_catalogs_discovered": len(catalog_list),
         "source_declared_catalogs": sum(bool(x.get("is_source_declared_catalog")) for x in catalog_list),
         "derived_catalogs": sum(x.get("catalog_origin") == "derived_from_repeated_records" for x in catalog_list),
+        "content_list_catalogs": sum(x.get("catalog_origin") == "content_list_declared_collection" for x in catalog_list),
         "catalogs_with_records": sum(bool(x.get("record_ids")) for x in catalog_list),
         "catalogs_without_records": sum(not x.get("record_ids") for x in catalog_list),
         "catalogs_with_multiple_records": sum(len(x.get("record_ids", [])) >= 2 for x in catalog_list),
@@ -594,15 +667,10 @@ def analyze_pages(
         "records_with_timestamps": sum(x.get("last_seen_at") is not None for x in record_list),
         "source_terms_reviewed_records": sum(x.get("source_terms_status") != "not_reviewed" for x in record_list),
         "commercially_eligible_records": sum(bool(x.get("commercial_eligible")) for x in record_list),
-        "catalog_candidate_page_references": sum(len(x.get("source_page_ids", [])) for x in catalog_list),
-        "duplicate_catalog_candidates": max(
-            0,
-            sum(len(x.get("source_page_ids", [])) for x in catalog_list) - len(catalog_list),
-        ),
-        "duplicate_catalog_candidate_page_references": max(
-            0,
-            sum(len(x.get("source_page_ids", [])) for x in catalog_list) - len(catalog_list),
-        ),
+        "catalog_candidate_page_references": page_refs,
+        "catalog_candidate_occurrences": page_refs,
+        "duplicate_catalog_candidates": max(0, page_refs - len(catalog_list)),
+        "duplicate_catalog_candidate_page_references": max(0, page_refs - len(catalog_list)),
         "subcatalogs_discovered": sum(bool(x["parent_catalog_id"]) for x in catalog_list),
         "catalog_definition_pages": sum(bool(x.get("catalog_definition")) for x in page_rows),
         "unique_records": len(record_list),
@@ -612,6 +680,7 @@ def analyze_pages(
         "content_extracted_unique_records": sum(1 for item in record_list if item.get("content_extracted")),
         "media_references": len(media_references),
         "unique_media_urls": len(media_urls),
+        "records_staged": len(record_list),
         "records_published": 0,
         "catalogs_verified": 0,
         "pages_with_catalog_signals": pages_with_signals,
@@ -705,6 +774,7 @@ def analyze_pages_incremental(
         "unique_catalogs_discovered": len(all_catalogs),
         "source_declared_catalogs": sum(bool(x.get("is_source_declared_catalog")) for x in all_catalogs),
         "derived_catalogs": sum(x.get("catalog_origin") == "derived_from_repeated_records" for x in all_catalogs),
+        "content_list_catalogs": sum(x.get("catalog_origin") == "content_list_declared_collection" for x in all_catalogs),
         "catalogs_with_records": sum(bool(x.get("record_ids")) for x in all_catalogs),
         "catalogs_without_records": sum(not x.get("record_ids") for x in all_catalogs),
         "catalogs_with_multiple_records": sum(len(x.get("record_ids", [])) >= 2 for x in all_catalogs),
@@ -715,6 +785,7 @@ def analyze_pages_incremental(
         "source_terms_reviewed_records": sum(x.get("source_terms_status") != "not_reviewed" for x in all_records),
         "commercially_eligible_records": sum(bool(x.get("commercial_eligible")) for x in all_records),
         "catalog_candidate_page_references": page_refs,
+        "catalog_candidate_occurrences": page_refs,
         "duplicate_catalog_candidates": max(0, page_refs - len(all_catalogs)),
         "duplicate_catalog_candidate_page_references": max(0, page_refs - len(all_catalogs)),
         "subcatalogs_discovered": sum(bool(x["parent_catalog_id"]) for x in all_catalogs),
@@ -725,7 +796,8 @@ def analyze_pages_incremental(
         "content_entity_mentions": content_entity_mentions,
         "content_extracted_unique_records": sum(1 for item in all_records if item.get("content_extracted")),
         "media_references": len({(x["source_page_id"], x["media_url"]) for x in all_media_references}),
-        "unique_media_urls": len(all_media), "records_published": 0, "catalogs_verified": 0,
+        "unique_media_urls": len(all_media), "records_staged": len(all_records),
+        "records_published": 0, "catalogs_verified": 0,
         "pages_with_catalog_signals": signals,
         "coverage_percentage": round((len(pages) / unique_source_total * 100.0) if unique_source_total else 0.0, 4),
         "eligible_page_coverage_percentage": round((eligible / unique_source_total * 100.0) if unique_source_total else 0.0, 4),
@@ -760,7 +832,7 @@ def search_catalog_network(query: str, analysis: dict, limit: int = 10) -> list[
         catalog_tokens = set(catalog_text.split())
         catalog_match = token_set.issubset(catalog_tokens)
         record_type = str(catalog.get("record_type", ""))
-        if record_type in ("article", "resource", "media", "subject") and not CONTENT_INTENT_RE.search(query):
+        if record_type in ("article", "resource", "media", "subject") and not (token_set & CONTENT_INTENT_TOKENS):
             continue
         matched = []
         for record in related:
@@ -998,7 +1070,7 @@ def validate_outputs(output_dir: Path) -> dict:
     for catalog in catalogs:
         if stable_id("catalog", catalog.get("source_key", "")) != catalog.get("catalog_id"):
             raise ValueError("catalog ID does not match its canonical source key")
-        if catalog.get("catalog_origin") not in ("source_declared_collection", "derived_from_repeated_records"):
+        if catalog.get("catalog_origin") not in ("source_declared_collection", "content_list_declared_collection", "derived_from_repeated_records"):
             raise ValueError("catalog origin is missing or invalid")
         if catalog.get("commercial_eligible") is not False or catalog.get("source_terms_status") != "not_reviewed":
             raise ValueError("candidate catalogs cannot be marked commercially eligible or source-cleared")
