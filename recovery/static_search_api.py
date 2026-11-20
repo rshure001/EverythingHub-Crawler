@@ -17,13 +17,13 @@ HOST = os.environ.get("EH_HOST", "0.0.0.0")
 PORT = int(os.environ.get("PORT", "8080"))
 MAX_QUERY = 160
 MAX_LIMIT = 20
-MAX_PAGES = 100_000
+MAX_PAGES = 125_000
 MAX_SHARDS = 512
 MAX_MANIFEST_BYTES = 128_000
 MAX_SHARD_BYTES = 350_000
 MAX_SHARD_UNCOMPRESSED_BYTES = 500_000
 MAX_TOTAL_COMPRESSED_BYTES = 64_000_000
-MAX_TOTAL_UNCOMPRESSED_BYTES = 200_000_000
+MAX_TOTAL_UNCOMPRESSED_BYTES = 256_000_000
 VALID_LANES = {"general", "science", "news", "technology", "business",
                "government", "culture", "nature"}
 SHARD_NAME = re.compile(r"shard-\d{4}\.json(?:\.gz)?$")
