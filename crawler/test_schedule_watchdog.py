@@ -13,6 +13,11 @@ class ScheduleWatchdogTests(unittest.TestCase):
         self.assertIn('    - cron: "7,22,37,52 * * * *"', workflow)
         self.assertNotIn('    - cron: "*/15 * * * *"', workflow)
 
+    def test_crawler_push_watches_hourly_automation_fallback_marker(self):
+        workflow = (Path(__file__).resolve().parents[1] / ".github" / "workflows" / "crawl.yml").read_text(encoding="utf-8")
+        push = workflow.split("  push:\n", 1)[1].split("  schedule:", 1)[0]
+        self.assertIn('      - "crawler/automation-trigger.json"', push)
+
     def test_crawler_schedule_uses_staggered_ten_minute_cadence(self):
         workflow = (Path(__file__).resolve().parents[1] / ".github" / "workflows" / "crawl.yml").read_text(encoding="utf-8")
         self.assertIn('    - cron: "3,13,23,33,43,53 * * * *"', workflow)

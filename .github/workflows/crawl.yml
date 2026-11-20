@@ -24,6 +24,7 @@ on:
       - "crawler/test_crawl_revision_guard.py"
       - "crawler/media-source-terms.json"
       - "crawler/report.py"
+      - "crawler/automation-trigger.json"
       - "crawler/hourly_production.py"
       - "crawler/test_hourly_production.py"
   schedule:
