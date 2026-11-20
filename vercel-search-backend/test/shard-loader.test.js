@@ -7,7 +7,9 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
   MAX_INDEXED_PAGES,
+  MAX_SHARD_COUNT,
   MAX_TOTAL_SHARD_BYTES,
+  MAX_TOTAL_COMPRESSED_SHARD_BYTES,
   validateShardManifest,
   validateShardPayload,
   loadCatalogFromManifest,
@@ -58,7 +60,9 @@ test('current repository manifest fits the bounded shard reader without gzip met
   const result = validateShardManifest(manifest);
   assert.equal(result.totalPages, manifest.total_pages);
   assert.equal(result.shards.length, manifest.shard_count);
-  assert.ok(result.totalBytes <= MAX_TOTAL_SHARD_BYTES);
+  const compressed = result.shardFormat === 'gzip';
+  assert.ok(result.totalBytes <= (compressed ? MAX_TOTAL_COMPRESSED_SHARD_BYTES : MAX_TOTAL_SHARD_BYTES));
+  assert.ok(result.shards.length <= MAX_SHARD_COUNT);
   assert.ok(manifest.total_pages <= MAX_INDEXED_PAGES);
   assert.ok(manifest.total_pages >= 20000);
 });
@@ -90,7 +94,7 @@ test('unsafe shard paths are rejected', () => {
 });
 
 test('compressed shard aggregate size is bounded before network requests', () => {
-  const shards = Array.from({ length: 100 }, (_, index) => ({
+  const shards = Array.from({ length: 200 }, (_, index) => ({
     file: 'shard-' + String(index + 1).padStart(4, '0') + '.json.gz',
     pages: 1,
     bytes: 350_000,
@@ -101,7 +105,7 @@ test('compressed shard aggregate size is bounded before network requests', () =>
 });
 
 test('legacy raw shard aggregate size remains bounded during rollout', () => {
-  const shards = Array.from({ length: 256 }, (_, index) => ({
+  const shards = Array.from({ length: 300 }, (_, index) => ({
     file: 'shard-' + String(index + 1).padStart(4, '0') + '.json',
     pages: 1,
     bytes: 350_000,
