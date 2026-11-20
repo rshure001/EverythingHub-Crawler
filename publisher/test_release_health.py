@@ -106,7 +106,7 @@ class ReleaseHealthTests(unittest.TestCase):
 
     def test_health_accepts_the_current_observed_catalog(self):
         manifest = self.valid_manifest()
-        manifest["catalog_gzip"]["bytes"] = 10_113_629
+        manifest["catalog_gzip"]["bytes"] = 14_112_415
         health = build_health(manifest, media_catalog=self.valid_media_catalog())
         self.assertEqual(health["catalog_gzip"]["bytes"], 10_113_629)
 
@@ -119,7 +119,7 @@ class ReleaseHealthTests(unittest.TestCase):
     def test_health_rejects_catalog_over_independent_search_limit(self):
         manifest = self.valid_manifest()
         manifest["catalog_gzip"]["bytes"] = MAX_CATALOG_GZIP_BYTES + 1
-        with self.assertRaisesRegex(ValueError, "12 MB independent-search safety limit"):
+        with self.assertRaisesRegex(ValueError, "16 MB independent-search safety limit"):
             build_health(manifest)
 
     def test_health_rejects_shard_count_mismatch(self):
