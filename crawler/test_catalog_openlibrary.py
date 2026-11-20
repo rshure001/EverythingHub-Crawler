@@ -36,7 +36,7 @@ class OpenLibraryCatalogTests(unittest.TestCase):
         payload = {"work_count": 1, "works": [{"key": "/authors/OL9A", "title": "Not a work"}]}
         with patch.object(catalog_openlibrary, "request_subject", return_value=payload):
             with patch.object(catalog_openlibrary, "SUBJECTS", ("science",)):
-                result = catalog_openlibrary.discover(pause=0)
+                result = catalog_openlibrary.discover(pause=0, allow_api=True)
         self.assertEqual(result["datasets_discovered"], 0)
 
 
