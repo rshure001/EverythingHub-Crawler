@@ -1,3 +1,4 @@
+import re
 import unittest
 from pathlib import Path
 
@@ -14,6 +15,13 @@ class PostCrawlDispatchTests(unittest.TestCase):
         self.assertIn("GH_TOKEN: ${{ github.token }}", workflow)
         self.assertIn("gh workflow run publish-site.yml --ref main", workflow)
         self.assertIn("gh workflow run search-api-smoke.yml --ref main", workflow)
+
+
+    def test_crawler_job_has_time_for_commit_and_post_commit_dispatch(self):
+        workflow = (ROOT / ".github" / "workflows" / "crawl.yml").read_text(encoding="utf-8")
+        match = re.search(r"^    timeout-minutes:\s*(\d+)\s*$", workflow, re.MULTILINE)
+        self.assertIsNotNone(match, "crawler job timeout must be explicit")
+        self.assertGreaterEqual(int(match.group(1)), 15)
 
     def test_publisher_and_search_smoke_support_explicit_dispatch(self):
         for path in (".github/workflows/publish-site.yml", ".github/workflows/search-api-smoke.yml", ".github/workflows/recovery-search-check.yml"):
