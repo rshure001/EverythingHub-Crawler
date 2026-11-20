@@ -17,6 +17,7 @@ on:
   workflow_run:
     workflows:
       - "Everything Hub crawler"
+      - "Catalog-first discovery"
     types:
       - completed
 
