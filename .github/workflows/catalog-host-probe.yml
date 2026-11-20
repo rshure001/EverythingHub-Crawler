@@ -53,7 +53,7 @@ jobs:
           PROBE_OFFSET: ${{ steps.batch.outputs.offset }}
         run: |
           git config user.name "github-actions[bot]"
-          git config user.email "41898282+users.noreply.github.com"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           for attempt in 1 2 3; do
             git add -f data/host-catalog-probes.json
             if git diff --cached --quiet; then
@@ -61,17 +61,15 @@ jobs:
               exit 0
             fi
             git commit -m "Record public catalog interface probe evidence"
-            if git pull --rebase origin main; then
-              if git push; then exit 0; fi
-              git reset --hard HEAD
-            else
-              # The cumulative JSON changed on main during this batch. Rebuild
-              # from the latest committed inventory and reapply this batch.
-              git rebase --abort || true
-              git fetch origin main
-              git reset --hard origin/main
-              python crawler/catalog_host_probe.py --limit 30 --offset "$PROBE_OFFSET" --pause 0.2
+            if git pull --rebase origin main && git push; then
+              exit 0
             fi
+            # Rebase conflicts or a non-fast-forward push require rebuilding
+            # the cumulative manifest on top of the latest committed version.
+            git rebase --abort || true
+            git fetch origin main
+            git reset --hard origin/main
+            python crawler/catalog_host_probe.py --limit 30 --offset "$PROBE_OFFSET" --pause 0.2
             echo "Retrying probe evidence publish ($attempt/3)."
             sleep "$((attempt * 2))"
           done
