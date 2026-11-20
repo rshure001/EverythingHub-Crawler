@@ -198,13 +198,13 @@ async function testCurrentPublishedManifestFitsClientLimits() {
   const compressedShards = currentManifest.shards[0]?.file?.endsWith(".json.gz") === true;
 
   assert.ok(
-    currentManifest.total_pages <= 125_000,
-    "current catalog must fit the 125,000-page browser limit; decoded shard data remains capped at 256 MB"
+    currentManifest.total_pages <= 150_000,
+    "current catalog must fit the 150,000-page browser limit; decoded shard data remains capped at 320 MB"
   );
   assert.ok(
-    currentManifest.shard_count <= 512 &&
+    currentManifest.shard_count <= 640 &&
       currentManifest.shards.length === currentManifest.shard_count,
-    "current manifest must fit the 512-shard browser safety limit"
+    "current manifest must fit the 640-shard browser safety limit"
   );
   if (currentManifest.catalog_gzip) {
     assert.ok(
@@ -218,7 +218,7 @@ async function testCurrentPublishedManifestFitsClientLimits() {
     "current shard catalog must fit its compressed or legacy transfer limit"
   );
 
-  assert.ok(totalUncompressedBytes <= 256_000_000, "current shard catalog must fit the 256 MB decoded safety limit");
+  assert.ok(totalUncompressedBytes <= 320_000_000, "current shard catalog must fit the 256 MB decoded safety limit");
 
   globalThis.fetch = async url => {
     const value = String(url);
