@@ -24,6 +24,27 @@ class SearchCoreTests(unittest.TestCase):
         results = search(PAGES, "Rolex")
         self.assertEqual(results[0]["url"], "https://www.rolex.com/watches")
 
+    def test_structured_product_fields_are_searchable_and_returned(self):
+        page = {
+            "url": "https://jewel.example/ring-18k",
+            "title": "Jewelry collection",
+            "description": "Fine jewelry",
+            "text": "Shop our collection",
+            "product": {
+                "type": "product", "name": "18K Diamond Pinky Ring",
+                "brand": "Rolex Fine Jewelry", "sku": "RING-18K-442",
+                "price": "1299.00", "currency": "USD",
+                "availability": "InStock",
+                "image": "https://jewel.example/images/ring.jpg",
+                "url": "https://jewel.example/ring-18k",
+            },
+        }
+        for query in ("Rolex", "RING-18K-442", "1299.00", "InStock"):
+            results = search([page], query)
+            self.assertEqual(len(results), 1, query)
+            self.assertEqual(results[0]["product"]["name"], "18K Diamond Pinky Ring")
+            self.assertEqual(results[0]["product"]["image"], "https://jewel.example/images/ring.jpg")
+
     def test_lane_filter(self):
         results = search(PAGES, "watch", lane="culture")
         self.assertEqual([r["lane"] for r in results], ["culture"])
