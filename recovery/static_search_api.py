@@ -1,49 +1,202 @@
 #!/usr/bin/env python3
-"""Database-independent Everything Hub search API over the committed public index.
-
-Reads public-search/shard-*.json at startup. No Supabase, database, API key,
-third-party search provider, or external runtime dependency is required.
-"""
+"""Database-independent Everything Hub search over verified compressed shards."""
 from __future__ import annotations
 
-import glob
+import hashlib
 import json
 import os
 import re
+import zlib
 from collections import Counter
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
-ROOT = os.environ.get("EH_INDEX_DIR", "/app/public-search")
+ROOT = Path(os.environ.get("EH_INDEX_DIR", "/app/public-search"))
 HOST = os.environ.get("EH_HOST", "0.0.0.0")
 PORT = int(os.environ.get("PORT", "8080"))
 MAX_QUERY = 160
 MAX_LIMIT = 20
+MAX_PAGES = 65_000
+MAX_SHARDS = 512
+MAX_MANIFEST_BYTES = 128_000
+MAX_SHARD_BYTES = 350_000
+MAX_SHARD_UNCOMPRESSED_BYTES = 500_000
+MAX_TOTAL_COMPRESSED_BYTES = 64_000_000
+MAX_TOTAL_UNCOMPRESSED_BYTES = 128_000_000
 VALID_LANES = {"general", "science", "news", "technology", "business",
                "government", "culture", "nature"}
+SHARD_NAME = re.compile(r"shard-\d{4}\.json(?:\.gz)?$")
+SHA256 = re.compile(r"[a-f0-9]{64}$", re.I)
 TOKEN_RE = re.compile(r"[a-z0-9]{2,}", re.I)
 
 
-def load_index():
-    pages = []
-    for filename in sorted(glob.glob(os.path.join(ROOT, "shard-*.json"))):
-        with open(filename, "r", encoding="utf-8") as handle:
-            shard = json.load(handle)
-        for page in shard.get("pages", []):
-            url = page.get("url", "")
-            if not url.startswith(("https://", "http://")):
-                continue
-            pages.append({
-                "url": url,
-                "title": str(page.get("title") or ""),
-                "description": str(page.get("description") or ""),
-                "text": str(page.get("text") or "")[:12000],
-                "lane": str(page.get("lane") or "general"),
-            })
+def bounded_gunzip(data: bytes, max_output: int) -> bytes:
+    """Decompress one gzip member without ever accepting more than max_output."""
+    decoder = zlib.decompressobj(16 + zlib.MAX_WBITS)
+    output = bytearray()
+    pending = data
+    try:
+        while pending:
+            remaining = max_output - len(output) + 1
+            if remaining <= 0:
+                raise ValueError("shard exceeds decoded-byte safety limit")
+            chunk = decoder.decompress(pending, remaining)
+            output.extend(chunk)
+            if len(output) > max_output:
+                raise ValueError("shard exceeds decoded-byte safety limit")
+            next_pending = decoder.unconsumed_tail
+            if next_pending and not chunk:
+                raise ValueError("gzip decompression stalled")
+            pending = next_pending
+        output.extend(decoder.flush())
+    except zlib.error as exc:
+        raise ValueError("shard gzip stream is invalid") from exc
+
+    if len(output) > max_output:
+        raise ValueError("shard exceeds decoded-byte safety limit")
+    if not decoder.eof or decoder.unused_data:
+        raise ValueError("gzip stream is incomplete or has trailing data")
+    return bytes(output)
+
+
+def _manifest_int(value, name: str, minimum: int, maximum: int) -> int:
+    if type(value) is not int or value < minimum or value > maximum:
+        raise ValueError(f"manifest {name} is outside its safe bounds")
+    return value
+
+
+def _validate_page(page: dict, seen_urls: set[str]) -> dict:
+    if not isinstance(page, dict):
+        raise ValueError("catalog page must be an object")
+    raw_url = page.get("url")
+    if not isinstance(raw_url, str):
+        raise ValueError("catalog page URL is missing")
+    parsed = urlsplit(raw_url)
+    if (
+        parsed.scheme not in {"http", "https"}
+        or not parsed.hostname
+        or parsed.username
+        or parsed.password
+    ):
+        raise ValueError("catalog page URL is unsafe")
+    if page.get("robots_allowed") is False or page.get("robotsAllowed") is False:
+        raise ValueError("catalog contains a robots-denied page")
+    if raw_url in seen_urls:
+        raise ValueError("catalog contains a duplicate URL across shards")
+    seen_urls.add(raw_url)
+
+    lane = str(page.get("lane") or "general").lower()
+    if lane not in VALID_LANES:
+        lane = "general"
+    return {
+        "url": raw_url,
+        "title": str(page.get("title") or "")[:500],
+        "description": str(page.get("description") or "")[:500],
+        "text": str(page.get("text") or "")[:12_000],
+        "lane": lane,
+    }
+
+
+def load_index(root: Path | str = ROOT) -> list[dict]:
+    """Load and verify every manifest-listed shard within explicit byte/page bounds."""
+    root = Path(root)
+    manifest_path = root / "manifest.json"
+    manifest_raw = manifest_path.read_bytes()
+    if len(manifest_raw) > MAX_MANIFEST_BYTES:
+        raise ValueError("public catalog manifest exceeds its byte limit")
+    try:
+        manifest = json.loads(manifest_raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError("public catalog manifest is invalid JSON") from exc
+
+    if not isinstance(manifest, dict) or manifest.get("version") != 1 or manifest.get("integrity") != "sha256":
+        raise ValueError("public catalog manifest schema is unsupported")
+    _manifest_int(manifest.get("updated_at"), "updated_at", 1, 9_007_199_254_740_991)
+    total_pages_expected = _manifest_int(manifest.get("total_pages"), "total_pages", 1, MAX_PAGES)
+    shard_count = _manifest_int(manifest.get("shard_count"), "shard_count", 1, MAX_SHARDS)
+    shards = manifest.get("shards")
+    if not isinstance(shards, list) or len(shards) != shard_count:
+        raise ValueError("public catalog shard count does not match its manifest")
+
+    pages: list[dict] = []
+    seen_files: set[str] = set()
+    seen_urls: set[str] = set()
+    total_compressed = 0
+    total_uncompressed = 0
+
+    for meta in shards:
+        if not isinstance(meta, dict):
+            raise ValueError("shard metadata must be an object")
+        filename = meta.get("file")
+        if not isinstance(filename, str) or not SHARD_NAME.fullmatch(filename):
+            raise ValueError("manifest shard filename is unsafe")
+        if filename in seen_files:
+            raise ValueError("manifest contains a duplicate shard filename")
+        seen_files.add(filename)
+
+        compressed_bytes = _manifest_int(meta.get("bytes"), "shard bytes", 1, MAX_SHARD_BYTES)
+        page_count = _manifest_int(meta.get("pages"), "shard pages", 1, 1000)
+        digest = meta.get("sha256")
+        if not isinstance(digest, str) or not SHA256.fullmatch(digest):
+            raise ValueError("manifest shard SHA-256 is invalid")
+
+        is_gzip = filename.endswith(".json.gz")
+        if is_gzip:
+            uncompressed_bytes = _manifest_int(
+                meta.get("uncompressed_bytes"),
+                "shard uncompressed bytes",
+                1,
+                MAX_SHARD_UNCOMPRESSED_BYTES,
+            )
+        else:
+            uncompressed_bytes = _manifest_int(
+                meta.get("uncompressed_bytes", compressed_bytes),
+                "legacy shard uncompressed bytes",
+                1,
+                MAX_SHARD_UNCOMPRESSED_BYTES,
+            )
+            if uncompressed_bytes != compressed_bytes:
+                raise ValueError("legacy shard byte counts do not match")
+
+        total_compressed += compressed_bytes
+        total_uncompressed += uncompressed_bytes
+        if total_compressed > MAX_TOTAL_COMPRESSED_BYTES:
+            raise ValueError("public catalog exceeds its aggregate compressed-byte limit")
+        if total_uncompressed > MAX_TOTAL_UNCOMPRESSED_BYTES:
+            raise ValueError("public catalog exceeds its aggregate decoded-byte limit")
+
+        shard_path = root / filename
+        raw = shard_path.read_bytes()
+        if len(raw) != compressed_bytes:
+            raise ValueError(f"{filename} compressed byte count does not match its manifest")
+        if hashlib.sha256(raw).hexdigest().lower() != digest.lower():
+            raise ValueError(f"{filename} SHA-256 does not match its manifest")
+
+        decoded = bounded_gunzip(raw, MAX_SHARD_UNCOMPRESSED_BYTES) if is_gzip else raw
+        if len(decoded) != uncompressed_bytes:
+            raise ValueError(f"{filename} decoded byte count does not match its manifest")
+        try:
+            payload = json.loads(decoded.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise ValueError(f"{filename} is not valid UTF-8 JSON") from exc
+        if (
+            not isinstance(payload, dict)
+            or payload.get("version") != 1
+            or not isinstance(payload.get("pages"), list)
+            or len(payload["pages"]) != page_count
+        ):
+            raise ValueError(f"{filename} page count or schema is invalid")
+
+        for page in payload["pages"]:
+            pages.append(_validate_page(page, seen_urls))
+
+    if len(pages) != total_pages_expected:
+        raise ValueError("verified shard page total does not match the public manifest")
     return pages
 
 
-PAGES = load_index()
+PAGES = [] if os.environ.get("EH_SKIP_INDEX_LOAD") == "1" else load_index()
 DOCS = []
 for page in PAGES:
     title_tokens = Counter(TOKEN_RE.findall(page["title"].lower()))
@@ -70,7 +223,6 @@ def search(query, lane, limit, offset):
                 matched += 1
                 score += points
         if matched:
-            # Prefer documents matching more of the query, then title hits.
             score += matched * 5
             if matched == len(terms):
                 score += 15
