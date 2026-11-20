@@ -139,6 +139,39 @@ class CanonicalIndexStoreTests(unittest.TestCase):
                 )
         self.assertEqual(json.loads(self.path.read_text(encoding="utf-8")), original)
 
+    def test_failed_update_keeps_the_previous_manifest_and_shards_readable(self):
+        candidates = [
+            (index_store.bucket_for_url(f"https://example.test/{number}"), f"https://example.test/{number}")
+            for number in range(1000)
+        ]
+        ordered = sorted(candidates)
+        low_bucket, low_url = ordered[0]
+        high_bucket, high_url = ordered[-1]
+        self.assertLess(low_bucket, high_bucket)
+
+        old_page = {"url": low_url, "title": "old"}
+        index_store.save_index(
+            self.path,
+            {"version": 1, "updated_at": 1700000000, "pages": [old_page]},
+        )
+        old_manifest = json.loads(self.path.read_text(encoding="utf-8"))
+        old_file = self.root / "index-shards" / old_manifest["shards"][0]["file"]
+
+        new_pages = [
+            {"url": low_url, "title": "updated"},
+            {"url": high_url, "text": "x" * 500},
+        ]
+        with patch.object(index_store, "MAX_SHARD_UNCOMPRESSED_BYTES", 200):
+            with self.assertRaisesRegex(ValueError, "uncompressed shard limit"):
+                index_store.save_index(
+                    self.path,
+                    {"version": 1, "updated_at": 1700000001, "pages": new_pages},
+                )
+
+        restored = index_store.load_index(self.path)
+        self.assertEqual(restored["pages"], [old_page])
+        self.assertTrue(old_file.is_file())
+
     def test_shard_metadata_matches_compressed_and_uncompressed_bytes(self):
         index_store.save_index(
             self.path,
