@@ -178,8 +178,8 @@ async function testCurrentPublishedManifestFitsClientLimits() {
   const compressedShards = currentManifest.shards[0]?.file?.endsWith(".json.gz") === true;
 
   assert.ok(
-    currentManifest.total_pages <= 65_000,
-    "current catalog must fit the 65,000-page secondary limit; decoded bytes remain capped at 128 MB"
+    currentManifest.total_pages <= 100_000,
+    "current catalog must fit the 100,000-page browser limit; decoded shard data remains capped at 192 MB"
   );
   assert.ok(
     currentManifest.shard_count <= 512 &&
@@ -190,7 +190,7 @@ async function testCurrentPublishedManifestFitsClientLimits() {
     assert.ok(
       currentManifest.catalog_gzip.bytes <= 16_000_000 &&
         currentManifest.catalog_gzip.pages === currentManifest.total_pages,
-      "optional compressed catalog must fit the 12 MB browser transport limit"
+      "optional compressed catalog must fit the 16 MB browser transport limit"
     );
   }
   assert.ok(
@@ -198,7 +198,7 @@ async function testCurrentPublishedManifestFitsClientLimits() {
     "current shard catalog must fit its compressed or legacy transfer limit"
   );
 
-  assert.ok(totalUncompressedBytes <= 128_000_000, "current shard catalog must fit the 128 MB decoded safety limit");
+  assert.ok(totalUncompressedBytes <= 192_000_000, "current shard catalog must fit the 192 MB decoded safety limit");
 
   globalThis.fetch = async url => {
     const value = String(url);
@@ -233,10 +233,50 @@ async function testCurrentPublishedManifestFitsClientLimits() {
   }
 }
 
+
+async function testRejectsClientLimitOverruns() {
+  const previousFetch = globalThis.fetch;
+  const overPageManifest = {
+    ...manifest,
+    total_pages: 100_001,
+    shards: [
+      { ...manifest.shards[0], pages: 100_000 },
+      { ...manifest.shards[1], pages: 1 }
+    ]
+  };
+  const overDecodedManifest = {
+    ...manifest,
+    total_pages: 512,
+    shard_count: 512,
+    shards: Array.from({ length: 512 }, (_, index) => ({
+      file: "shard-" + String(index + 1).padStart(4, "0") + ".json.gz",
+      pages: 1,
+      bytes: 1,
+      uncompressed_bytes: 500_000,
+      sha256: "a".repeat(64)
+    }))
+  };
+  try {
+    globalThis.fetch = async () => new Response(JSON.stringify(overPageManifest), { status: 200 });
+    await assert.rejects(
+      engine.create({ manifestUrl: "https://example.test/over-pages/manifest.json" }),
+      /Unsupported or malformed Everything Hub search manifest/
+    );
+    globalThis.fetch = async () => new Response(JSON.stringify(overDecodedManifest), { status: 200 });
+    await assert.rejects(
+      engine.create({ manifestUrl: "https://example.test/over-decoded/manifest.json" }),
+      /192 MB decoded safety limit/
+    );
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+}
+
 testShardOnlyLoader()
   .then(testGzipLoader)
   .then(testCurrentPublishedManifestFitsClientLimits)
-  .then(() => console.log("Browser ranking, gzip, shard integrity, and current-manifest bounds tests passed"))
+  .then(testRejectsClientLimitOverruns)
+  .then(() => console.log("Browser ranking, gzip, shard integrity, current-manifest, and 100k/192 MB bound tests passed"))
   .catch(error => {
     console.error(error);
     process.exitCode = 1;

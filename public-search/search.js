@@ -21,12 +21,12 @@
   const TOKEN_RE = /[\p{L}\p{N}]+/gu;
   const WEIGHTS = { title: 4, url: 2.2, description: 1.7, text: 1 };
   const MAX_SHARDS = 512;
-  const MAX_PAGES = 65000;
+  const MAX_PAGES = 100000;
   const MAX_SHARD_BYTES = 350000;
   const MAX_TOTAL_BYTES = 100000000;
   const MAX_TOTAL_COMPRESSED_BYTES = 64000000;
   const MAX_SHARD_UNCOMPRESSED_BYTES = 500000;
-  const MAX_TOTAL_UNCOMPRESSED_BYTES = 128000000;
+  const MAX_TOTAL_UNCOMPRESSED_BYTES = 192000000;
   const MAX_GZIP_BYTES = 16000000;
   const MAX_DECOMPRESSED_BYTES = 64000000;
   const DEFAULT_PARALLEL = 4;
@@ -234,7 +234,7 @@
       throw new Error("Legacy search shards exceed the 100 MB transition safety limit.");
     }
     if (totalUncompressedBytes > MAX_TOTAL_UNCOMPRESSED_BYTES) {
-      throw new Error("Search shards exceed the 128 MB decompressed safety limit.");
+      throw new Error("Search shards exceed the 192 MB decoded safety limit.");
     }
     return { totalBytes, totalUncompressedBytes, shardFormat };
   }
