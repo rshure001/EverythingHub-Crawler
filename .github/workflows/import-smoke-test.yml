@@ -101,8 +101,14 @@ jobs:
           echo "Expected unique allowed records: $expected"
           echo "Imported records: $count"
           test "$count" = "$expected"
-          expected_catalogs=$(python -c "import json; print(len(json.load(open('data/universal-catalog-records.json'))['catalogs']))")
-          expected_catalog_records=$(python -c "import json; print(len(json.load(open('data/universal-catalog-records.json'))['records']))")
+          expected_catalog_counts=$(python - <<'PY'
+          import gzip, json
+          data = json.load(gzip.open("data/universal-catalog-records.json.gz", "rt", encoding="utf-8"))
+          print(len(data["catalogs"]), len(data["records"]))
+          PY
+          )
+          expected_catalogs=$(echo "$expected_catalog_counts" | awk '{print $1}')
+          expected_catalog_records=$(echo "$expected_catalog_counts" | awk '{print $2}')
           actual_catalogs=$(psql "$DATABASE_URL" -tA -c "SELECT count(*) FROM eh_quad.eh_catalogs;")
           actual_catalog_records=$(psql "$DATABASE_URL" -tA -c "SELECT count(*) FROM eh_quad.eh_catalog_records;")
           echo "Expected catalogs: $expected_catalogs; imported catalogs: $actual_catalogs"
@@ -207,7 +213,8 @@ jobs:
           encoded_catalog_query=$(python - <<'PY'
           import json
           from urllib.parse import quote
-          data = json.load(open("data/universal-catalog-records.json", encoding="utf-8"))
+          import gzip
+          data = json.load(gzip.open("data/universal-catalog-records.json.gz", "rt", encoding="utf-8"))
           print(quote(data["records"][0]["title"]))
           PY
           )
