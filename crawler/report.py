@@ -83,8 +83,25 @@ def main():
     indexed_this_run = int(index.get("pages_indexed_this_run", 0) or 0)
     indexed_rate = indexed_this_run / (duration / 60) if duration > 0 else 0
     indexed_hourly_equivalent = indexed_this_run / (duration / 3600) if duration > 0 else 0
+    manifest_unique_delta = None
+    unique_rate = None
+    before_pages = os.environ.get("EH_MANIFEST_BEFORE_PAGES")
+    manifest_path = ROOT / "public-search" / "manifest.json"
+    if before_pages is not None and duration > 0 and manifest_path.exists():
+        try:
+            after_manifest = load(manifest_path)
+            manifest_unique_delta = int(after_manifest["total_pages"]) - int(before_pages)
+            unique_rate = manifest_unique_delta / (duration / 60)
+        except (KeyError, TypeError, ValueError, OSError):
+            manifest_unique_delta = None
+            unique_rate = None
     hourly_target = 60000
-    hourly_target_status = "above target pace" if indexed_hourly_equivalent >= hourly_target else "below target pace"
+    unique_hourly_equivalent = unique_rate * 60 if unique_rate is not None else None
+    hourly_target_status = (
+        "above target pace" if unique_hourly_equivalent is not None
+        and unique_hourly_equivalent >= hourly_target else "below target pace"
+        if unique_hourly_equivalent is not None else "not measured"
+    )
     host_requests = index.get("host_requests_this_run", {}) or {}
     fetch_attempts = int(index.get("fetch_attempts_this_run", index.get("pages_crawled_this_run", 0)) or 0)
     successful_http = int(index.get("successful_http_responses_this_run", 0) or 0)
@@ -134,8 +151,15 @@ def main():
         f"- Sitemap files requested this run: **{int(index.get('sitemap_fetches_this_run', 0) or 0):,}**",
         f"- URLs added from sitemaps this run: **{int(index.get('sitemap_urls_added_this_run', 0) or 0):,}**",
         f"- Run duration: **{duration:.1f} seconds**",
-        f"- Measured indexed rate (this run): **{indexed_rate:,.1f} pages/minute**",
-        f"- Run-rate equivalent: **{indexed_hourly_equivalent:,.0f} indexed records/hour** (short-run projection, not proof of a sustained hour)",
+        f"- Processed/upserted record rate (not necessarily unique): **{indexed_rate:,.1f}/minute**",
+        f"- Processed/upserted hourly equivalent (not unique): **{indexed_hourly_equivalent:,.0f}/hour**",
+        (
+            f"- Net new unique pages this run: **{manifest_unique_delta:+,}**; "
+            f"active-run unique rate: **{unique_rate:,.1f}/minute** "
+            f"(**{unique_hourly_equivalent:,.0f}/hour equivalent**)"
+            if unique_rate is not None
+            else "- Net new unique pages this run: **not measured**"
+        ),
         f"- 1,000-new-unique-pages/minute target (60,000/hour): **{hourly_target_status}**",
         f"- Last index update (UTC): **{updated_text}**",
         "",
