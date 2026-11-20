@@ -104,6 +104,39 @@ def clean_url(value):
     return public_crawler.clean(value)
 
 
+def clean_media_url(value):
+    """Canonicalize a media reference without treating the asset as a crawl page."""
+    if not isinstance(value, str) or not value or value != value.strip():
+        return None
+    if any(ch.isspace() or ord(ch) < 0x20 for ch in value):
+        return None
+    try:
+        parsed = urllib.parse.urlsplit(value)
+        _ = parsed.port
+    except (TypeError, ValueError):
+        return None
+    if (
+        parsed.scheme.lower() not in ("http", "https")
+        or not parsed.hostname
+        or parsed.username is not None
+        or parsed.password is not None
+    ):
+        return None
+    query = urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)
+    query = [
+        (key, item) for key, item in query
+        if not key.lower().startswith("utm_")
+        and key.lower() not in ("fbclid", "gclid", "mc_cid", "mc_eid")
+    ]
+    return urllib.parse.urlunsplit((
+        parsed.scheme.lower(),
+        parsed.netloc.lower(),
+        parsed.path or "/",
+        urllib.parse.urlencode(query),
+        "",
+    ))
+
+
 def validate_schema(value=None):
     requested = value if value is not None else os.environ.get("EH_DB_SCHEMA", SCHEMA)
     if requested != SCHEMA:
@@ -322,7 +355,9 @@ def fetch_page(url, policy, last_request, minimum_delay, test_mode=False):
     ]
     media = []
     for raw, media_type, alt_text in parser.media:
-        candidate = clean_url(urllib.parse.urljoin(final_url, raw))
+        # Media URLs are catalog metadata, not crawl-page URLs. Preserve
+        # image/video/audio extensions while keeping the same URL safety rules.
+        candidate = clean_media_url(urllib.parse.urljoin(final_url, raw))
         if candidate:
             media.append((candidate, media_type, public_crawler.normalize_text(alt_text, 500)))
     return {
