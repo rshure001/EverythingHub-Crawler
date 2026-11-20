@@ -60,12 +60,15 @@ jobs:
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f database/002_eh_quad_schema.sql
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f database/003_eh_quad_intelligence.sql
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f database/004_eh_quad_feedback_cursor.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f database/005_eh_quad_catalogs.sql
       - name: Smoke-test append-only feedback learning in isolated eh_quad
         run: python database/intelligence_feedback_smoke.py
       - name: Run schema-isolation unit tests
         run: python -m unittest discover -s database -p 'test_*.py' -v
       - name: Import crawler snapshot into temporary database
         run: python database/import_repository_index.py
+      - name: Import staged universal catalogs and records
+        run: python database/import_universal_catalogs.py
       - name: Verify imported records and lane distribution
         run: |
           expected=$(python - <<'PY'
@@ -98,6 +101,14 @@ jobs:
           echo "Expected unique allowed records: $expected"
           echo "Imported records: $count"
           test "$count" = "$expected"
+          expected_catalogs=$(python -c "import json; print(len(json.load(open('data/universal-catalog-records.json'))['catalogs']))")
+          expected_catalog_records=$(python -c "import json; print(len(json.load(open('data/universal-catalog-records.json'))['records']))")
+          actual_catalogs=$(psql "$DATABASE_URL" -tA -c "SELECT count(*) FROM eh_quad.eh_catalogs;")
+          actual_catalog_records=$(psql "$DATABASE_URL" -tA -c "SELECT count(*) FROM eh_quad.eh_catalog_records;")
+          echo "Expected catalogs: $expected_catalogs; imported catalogs: $actual_catalogs"
+          echo "Expected catalog records: $expected_catalog_records; imported catalog records: $actual_catalog_records"
+          test "$actual_catalogs" = "$expected_catalogs"
+          test "$actual_catalog_records" = "$expected_catalog_records"
           robots_denied=$(psql "$DATABASE_URL" -tA -c "SELECT count(*) FROM eh_quad.eh_documents WHERE robots_allowed IS NOT TRUE;")
           echo "Unexpected robots-denied stored records: $robots_denied"
           test "$robots_denied" = "0"
