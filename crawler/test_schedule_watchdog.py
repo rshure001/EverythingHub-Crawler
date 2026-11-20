@@ -1,10 +1,26 @@
 import unittest
 from pathlib import Path
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from crawler.schedule_watchdog import evaluate
 
 NOW = datetime(2026, 11, 16, 16, 0, tzinfo=timezone.utc)
+
+
+def scheduled(created_at, conclusion="success", status="completed", crawl_execution_conclusion=None):
+    run = {
+        "status": status,
+        "conclusion": conclusion,
+        "event": "schedule",
+        "created_at": created_at,
+    }
+    if crawl_execution_conclusion is not None:
+        run["crawl_execution_conclusion"] = crawl_execution_conclusion
+    return run
+
+
+def manifest_minutes_ago(minutes):
+    return int((NOW - timedelta(minutes=minutes)).timestamp())
 
 
 class ScheduleWatchdogTests(unittest.TestCase):
@@ -15,7 +31,7 @@ class ScheduleWatchdogTests(unittest.TestCase):
 
     def test_crawler_push_watches_hourly_automation_fallback_marker(self):
         workflow = (Path(__file__).resolve().parents[1] / ".github" / "workflows" / "crawl.yml").read_text(encoding="utf-8")
-        push = workflow.split("  push:\n", 1)[1].split("  schedule:", 1)[0]
+        push = workflow.split("  push:\\n", 1)[1].split("  schedule:", 1)[0]
         self.assertIn('      - "crawler/automation-trigger.json"', push)
 
     def test_crawler_schedule_uses_staggered_ten_minute_cadence(self):
@@ -26,7 +42,7 @@ class ScheduleWatchdogTests(unittest.TestCase):
 
     def test_watchdog_runs_after_crawler_completion_without_redundant_workflow_fanout(self):
         workflow = (Path(__file__).resolve().parents[1] / ".github" / "workflows" / "crawl-watchdog.yml").read_text(encoding="utf-8")
-        workflow_run = workflow.split("  workflow_run:\n", 1)[1].split("  workflow_dispatch:", 1)[0]
+        workflow_run = workflow.split("  workflow_run:\\n", 1)[1].split("  workflow_dispatch:", 1)[0]
         self.assertEqual(workflow_run.count('- "'), 1)
         self.assertIn('- "Everything Hub crawler"', workflow_run)
         self.assertNotIn("EverythingHub isolated importer smoke test", workflow_run)
@@ -37,118 +53,156 @@ class ScheduleWatchdogTests(unittest.TestCase):
         self.assertIn("types:" + chr(10) + "      - completed", workflow_run)
         self.assertIn("branches: [main]", workflow_run)
 
-    def test_recent_success_is_healthy(self):
+    def test_recent_schedule_and_fresh_manifest_are_healthy(self):
         result = evaluate(
-            [{"status": "completed", "conclusion": "success", "created_at": "2026-11-16T15:55:00Z"}],
+            [scheduled("2026-11-16T15:55:00Z")],
             now=NOW,
+            manifest_updated_at=manifest_minutes_ago(5),
         )
         self.assertEqual(result["action"], "healthy")
-        self.assertEqual(result["age_seconds"], 300)
-
-    def test_stale_success_requests_one_recovery_dispatch(self):
-        result = evaluate(
-            [{"status": "completed", "conclusion": "success", "created_at": "2026-11-16T14:00:00Z"}],
-            now=NOW,
-        )
-        self.assertEqual(result["action"], "dispatch")
-        self.assertEqual(result["age_seconds"], 7200)
-
-    def test_success_older_than_ten_minutes_requests_recovery(self):
-        result = evaluate(
-            [{"status": "completed", "conclusion": "success", "created_at": "2026-11-16T15:49:00Z"}],
-            now=NOW,
-        )
-        self.assertEqual(result["action"], "dispatch")
-        self.assertEqual(result["age_seconds"], 660)
-
-    def test_recent_failure_waits_before_retry(self):
-        result = evaluate(
-            [{"status": "completed", "conclusion": "failure", "created_at": "2026-11-16T15:55:00Z"}],
-            now=NOW,
-        )
-        self.assertEqual(result["action"], "wait")
-        self.assertEqual(result["age_seconds"], 300)
-
-    def test_stale_failure_requests_one_recovery_dispatch(self):
-        result = evaluate(
-            [{"status": "completed", "conclusion": "failure", "created_at": "2026-11-16T14:00:00Z"}],
-            now=NOW,
-        )
-        self.assertEqual(result["action"], "dispatch")
-        self.assertEqual(result["age_seconds"], 7200)
-
-    def test_active_run_prevents_duplicate_dispatch(self):
-        result = evaluate(
-            [
-                {"status": "completed", "conclusion": "success", "created_at": "2026-11-16T12:00:00Z"},
-                {"status": "queued", "conclusion": None, "created_at": "2026-11-16T15:59:00Z"},
-            ],
-            now=NOW,
-        )
-        self.assertEqual(result["action"], "wait")
-        self.assertEqual(result["active_runs"], 1)
-
-    def test_no_crawl_history_requests_recovery(self):
-        result = evaluate([], now=NOW)
-        self.assertEqual(result["action"], "dispatch")
-        self.assertIsNone(result["age_seconds"])
-
-    def test_recent_failure_is_not_overridden_by_an_older_success(self):
-        result = evaluate(
-            [
-                {"status": "completed", "conclusion": "success", "created_at": "2026-11-16T15:50:00Z"},
-                {"status": "completed", "conclusion": "failure", "created_at": "2026-11-16T15:55:00Z"},
-            ],
-            now=NOW,
-        )
-        self.assertEqual(result["action"], "wait")
-        self.assertEqual(result["last_conclusion"], "failure")
-
-    def test_latest_success_is_selected_not_first_success(self):
-        result = evaluate(
-            [
-                {"status": "completed", "conclusion": "success", "created_at": "2026-11-16T14:00:00Z"},
-                {"status": "completed", "conclusion": "success", "created_at": "2026-11-16T15:50:00Z"},
-            ],
-            now=NOW,
-        )
-        self.assertEqual(result["action"], "healthy")
-        self.assertEqual(result["age_seconds"], 600)
-
-    def test_recent_success_with_fresh_manifest_is_healthy(self):
-        manifest_time = int(datetime(2026, 11, 16, 15, 55, tzinfo=timezone.utc).timestamp())
-        result = evaluate(
-            [{"status": "completed", "conclusion": "success", "created_at": "2026-11-16T15:55:00Z"}],
-            now=NOW,
-            manifest_updated_at=manifest_time,
-        )
-        self.assertEqual(result["action"], "healthy")
-        self.assertEqual(result["age_seconds"], 300)
+        self.assertEqual(result["schedule_status"], "recent")
         self.assertEqual(result["manifest_age_seconds"], 300)
 
-    def test_recent_success_with_stale_manifest_waits_before_retry(self):
-        manifest_time = int(datetime(2026, 11, 16, 14, 0, tzinfo=timezone.utc).timestamp())
+    def test_stale_schedule_and_stale_manifest_mark_once_even_after_a_recent_manual_attempt(self):
         result = evaluate(
-            [{"status": "completed", "conclusion": "success", "created_at": "2026-11-16T15:50:00Z"}],
+            [
+                scheduled("2026-11-16T14:00:00Z", conclusion="cancelled"),
+                {"status": "completed", "conclusion": "success", "event": "push", "created_at": "2026-11-16T15:59:00Z"},
+            ],
             now=NOW,
-            manifest_updated_at=manifest_time,
+            manifest_updated_at=manifest_minutes_ago(150),
+        )
+        self.assertEqual(result["action"], "mark")
+        self.assertEqual(result["schedule_status"], "stale")
+        self.assertEqual(result["schedule_age_seconds"], 7200)
+        self.assertEqual(result["manifest_age_seconds"], 9000)
+        self.assertEqual(result["age_seconds"], 60)
+
+    def test_active_queued_or_running_crawler_prevents_marker_update(self):
+        result = evaluate(
+            [
+                scheduled("2026-11-16T14:00:00Z"),
+                {"status": "queued", "event": "push", "created_at": "2026-11-16T15:59:00Z"},
+                {"status": "in_progress", "event": "push", "created_at": "2026-11-16T15:58:00Z"},
+            ],
+            now=NOW,
+            manifest_updated_at=manifest_minutes_ago(120),
         )
         self.assertEqual(result["action"], "wait")
-        self.assertEqual(result["manifest_age_seconds"], 7200)
+        self.assertEqual(result["active_runs"], 2)
 
-    def test_stale_success_with_stale_manifest_requests_recovery(self):
-        manifest_time = int(datetime(2026, 11, 16, 13, 30, tzinfo=timezone.utc).timestamp())
+    def test_stale_schedule_with_fresh_manifest_does_not_write_marker(self):
         result = evaluate(
-            [{"status": "completed", "conclusion": "success", "created_at": "2026-11-16T14:00:00Z"}],
+            [scheduled("2026-11-16T14:00:00Z")],
             now=NOW,
-            manifest_updated_at=manifest_time,
+            manifest_updated_at=manifest_minutes_ago(5),
         )
-        self.assertEqual(result["action"], "dispatch")
-        self.assertEqual(result["manifest_age_seconds"], 9000)
+        self.assertEqual(result["action"], "healthy")
+        self.assertEqual(result["schedule_status"], "stale")
+
+    def test_recent_schedule_with_stale_manifest_does_not_write_marker(self):
+        result = evaluate(
+            [scheduled("2026-11-16T15:55:00Z")],
+            now=NOW,
+            manifest_updated_at=manifest_minutes_ago(60),
+        )
+        self.assertEqual(result["action"], "wait")
+        self.assertEqual(result["schedule_status"], "recent")
+
+    def test_unobserved_schedule_with_stale_manifest_does_not_infer_schedule_failure(self):
+        result = evaluate(
+            [{"status": "completed", "conclusion": "success", "event": "workflow_dispatch", "created_at": "2026-11-16T15:59:00Z"}],
+            now=NOW,
+            manifest_updated_at=manifest_minutes_ago(60),
+        )
+        self.assertEqual(result["action"], "wait")
+        self.assertEqual(result["schedule_status"], "unobserved")
+
+    def test_missing_manifest_timestamp_does_not_write_marker(self):
+        result = evaluate([scheduled("2026-11-16T14:00:00Z")], now=NOW)
+        self.assertEqual(result["action"], "wait")
+        self.assertIsNone(result["manifest_age_seconds"])
+
+    def test_exact_25_minute_schedule_boundary_is_not_stale(self):
+        result = evaluate(
+            [scheduled("2026-11-16T15:35:00Z")],
+            now=NOW,
+            manifest_updated_at=manifest_minutes_ago(30),
+        )
+        self.assertEqual(result["action"], "wait")
+        self.assertEqual(result["schedule_age_seconds"], 1500)
+        self.assertEqual(result["schedule_status"], "recent")
+
+    def test_exact_10_minute_manifest_boundary_is_not_stale(self):
+        result = evaluate(
+            [scheduled("2026-11-16T14:00:00Z")],
+            now=NOW,
+            manifest_updated_at=manifest_minutes_ago(10),
+        )
+        self.assertEqual(result["action"], "healthy")
+        self.assertEqual(result["manifest_age_seconds"], 600)
+
+    def test_latest_scheduled_event_is_used_not_a_newer_manual_run(self):
+        result = evaluate(
+            [
+                scheduled("2026-11-16T15:55:00Z"),
+                scheduled("2026-11-16T14:00:00Z"),
+                {"status": "completed", "conclusion": "success", "event": "workflow_dispatch", "created_at": "2026-11-16T15:59:00Z"},
+            ],
+            now=NOW,
+            manifest_updated_at=manifest_minutes_ago(60),
+        )
+        self.assertEqual(result["action"], "wait")
+        self.assertEqual(result["last_scheduled_run"], "2026-11-16T15:55:00Z")
+
+    def test_recent_failed_scheduled_attempt_is_recent_delivery_not_a_marker(self):
+        result = evaluate(
+            [scheduled("2026-11-16T15:55:00Z", conclusion="failure")],
+            now=NOW,
+            manifest_updated_at=manifest_minutes_ago(60),
+        )
+        self.assertEqual(result["action"], "wait")
+        self.assertEqual(result["last_scheduled_conclusion"], "failure")
+
+    def test_skipped_crawl_step_is_not_reported_as_a_successful_scheduled_crawl(self):
+        result = evaluate(
+            [scheduled(
+                "2026-11-16T15:55:00Z",
+                conclusion="success",
+                crawl_execution_conclusion="skipped",
+            )],
+            now=NOW,
+            manifest_updated_at=manifest_minutes_ago(60),
+        )
+        self.assertEqual(result["action"], "wait")
+        self.assertEqual(result["last_scheduled_conclusion"], "skipped")
+        self.assertEqual(result["last_scheduled_workflow_conclusion"], "success")
+
+    def test_schedule_health_is_independent_of_recent_manual_crawl(self):
+        result = evaluate(
+            [
+                {"status": "completed", "conclusion": "success", "event": "workflow_dispatch", "created_at": "2026-11-16T15:59:00Z"},
+                scheduled("2026-11-16T15:00:00Z"),
+            ],
+            now=NOW,
+            manifest_updated_at=manifest_minutes_ago(120),
+        )
+        self.assertEqual(result["action"], "mark")
+        self.assertEqual(result["schedule_status"], "stale")
+        self.assertEqual(result["schedule_age_seconds"], 3600)
+
+    def test_timezone_offsets_are_normalized(self):
+        result = evaluate(
+            [scheduled("2026-11-16T09:00:00-06:00")],
+            now=NOW,
+            manifest_updated_at=manifest_minutes_ago(120),
+        )
+        self.assertEqual(result["action"], "mark")
+        self.assertEqual(result["age_seconds"], 3600)
 
     def test_iso_manifest_timestamp_is_supported(self):
         result = evaluate(
-            [{"status": "completed", "conclusion": "success", "created_at": "2026-11-16T15:55:00Z"}],
+            [scheduled("2026-11-16T15:55:00Z")],
             now=NOW,
             manifest_updated_at="2026-11-16T15:55:00Z",
         )
@@ -157,7 +211,7 @@ class ScheduleWatchdogTests(unittest.TestCase):
 
     def test_manifest_timestamp_within_clock_skew_tolerance_is_clamped_to_zero(self):
         result = evaluate(
-            [{"status": "completed", "conclusion": "success", "created_at": "2026-11-16T15:50:00Z"}],
+            [scheduled("2026-11-16T15:50:00Z")],
             now=NOW,
             manifest_updated_at="2026-11-16T16:00:30Z",
         )
@@ -167,105 +221,39 @@ class ScheduleWatchdogTests(unittest.TestCase):
     def test_future_manifest_timestamp_beyond_clock_skew_tolerance_is_rejected(self):
         with self.assertRaisesRegex(ValueError, "too far in the future"):
             evaluate(
-                [{"status": "completed", "conclusion": "success", "created_at": "2026-11-16T15:50:00Z"}],
+                [scheduled("2026-11-16T15:50:00Z")],
                 now=NOW,
                 manifest_updated_at="2026-11-16T16:05:00Z",
             )
 
     def test_invalid_manifest_timestamp_is_rejected(self):
         with self.assertRaises(ValueError):
-            evaluate([], now=NOW, manifest_updated_at="not-a-timestamp")
+            evaluate([scheduled("2026-11-16T14:00:00Z")], now=NOW, manifest_updated_at="not-a-timestamp")
 
-    def test_workflow_passes_the_public_manifest_to_the_watchdog(self):
+    def test_workflow_rechecks_runs_manifest_and_commits_marker_with_expected_head(self):
         workflow = (Path(__file__).resolve().parents[1] / ".github" / "workflows" / "crawl-watchdog.yml").read_text(encoding="utf-8")
         self.assertIn("public-search/manifest.json", workflow)
         self.assertIn("base64.b64decode", workflow)
         self.assertIn("schedule_watchdog.py /tmp/crawl-runs-combined.json /tmp/public-manifest.json", workflow)
         self.assertIn("actions/workflows/crawl.yml/runs?event=schedule&per_page=5", workflow)
         self.assertIn("actions/runs/${latest_scheduled_run_id}/jobs?per_page=100", workflow)
-        self.assertIn("Crawl configured sites", workflow)
-        self.assertIn("crawl_execution_conclusion", workflow)
-        self.assertIn("Schedule trigger status", workflow)
-        self.assertIn('if [ "$schedule_status" != "recent" ] || [ "$schedule_conclusion" != "success" ]; then', workflow)
-        self.assertIn("Scheduled crawler delivery warning", workflow)
-        self.assertIn("Crawl freshness is evaluated independently", workflow)
+        self.assertIn("crawler/automation-trigger.json", workflow)
+        self.assertIn("force-with-lease=refs/heads/main", workflow)
+        self.assertIn("status", workflow)
+        self.assertIn("actions: read", workflow)
+        self.assertIn("contents: write", workflow)
+        self.assertIn("group: everythinghub-crawler", workflow)
+        self.assertNotIn("gh workflow run crawl.yml", workflow)
 
-    def test_schedule_health_is_independent_of_recent_manual_crawl(self):
-        result = evaluate(
-            [
-                {"status": "completed", "conclusion": "success", "event": "workflow_dispatch", "created_at": "2026-11-16T15:59:00Z"},
-                {"status": "completed", "conclusion": "success", "event": "schedule", "created_at": "2026-11-16T15:00:00Z"},
-            ],
-            now=NOW,
-        )
-        self.assertEqual(result["action"], "healthy")
-        self.assertEqual(result["schedule_status"], "stale")
-        self.assertEqual(result["schedule_age_seconds"], 3600)
-        self.assertEqual(result["last_scheduled_conclusion"], "success")
-
-    def test_recent_schedule_delivery_is_reported_separately(self):
-        result = evaluate(
-            [{"status": "completed", "conclusion": "success", "event": "schedule", "created_at": "2026-11-16T15:52:00Z"}],
-            now=NOW,
-        )
-        self.assertEqual(result["schedule_status"], "recent")
-        self.assertEqual(result["schedule_age_seconds"], 480)
-        self.assertEqual(result["last_scheduled_conclusion"], "success")
-
-    def test_skipped_crawl_step_is_not_reported_as_a_successful_scheduled_crawl(self):
-        result = evaluate(
-            [{
-                "status": "completed",
-                "conclusion": "success",
-                "crawl_execution_conclusion": "skipped",
-                "event": "schedule",
-                "created_at": "2026-11-16T15:55:00Z",
-            }],
-            now=NOW,
-        )
-        self.assertEqual(result["schedule_status"], "recent")
-        self.assertEqual(result["last_scheduled_conclusion"], "skipped")
-        self.assertEqual(result["last_scheduled_workflow_conclusion"], "success")
-
-    def test_in_progress_crawl_step_is_not_reported_as_a_successful_scheduled_crawl(self):
-        result = evaluate(
-            [{
-                "status": "in_progress",
-                "conclusion": None,
-                "crawl_execution_conclusion": "in_progress",
-                "event": "schedule",
-                "created_at": "2026-11-16T15:59:00Z",
-            }],
-            now=NOW,
-        )
-        self.assertEqual(result["schedule_status"], "recent")
-        self.assertEqual(result["last_scheduled_conclusion"], "in_progress")
-
-    def test_failed_scheduled_attempt_shows_recent_delivery_but_waits(self):
-        result = evaluate(
-            [{"status": "completed", "conclusion": "failure", "event": "schedule", "created_at": "2026-11-16T15:55:00Z"}],
-            now=NOW,
-        )
-        self.assertEqual(result["action"], "wait")
-        self.assertEqual(result["schedule_status"], "recent")
-        self.assertEqual(result["last_scheduled_conclusion"], "failure")
-
-    def test_missing_schedule_history_is_unobserved_not_healthy(self):
+    def test_schedule_health_reports_unobserved_without_schedule_events(self):
         result = evaluate(
             [{"status": "completed", "conclusion": "success", "event": "workflow_dispatch", "created_at": "2026-11-16T15:59:00Z"}],
             now=NOW,
+            manifest_updated_at=manifest_minutes_ago(5),
         )
         self.assertEqual(result["action"], "healthy")
         self.assertEqual(result["schedule_status"], "unobserved")
         self.assertIsNone(result["schedule_age_seconds"])
-
-    def test_timezone_offsets_are_normalized(self):
-        result = evaluate(
-            [{"status": "completed", "conclusion": "success", "created_at": "2026-11-16T10:00:00-06:00"}],
-            now=NOW,
-        )
-        self.assertEqual(result["action"], "healthy")
-        self.assertEqual(result["age_seconds"], 0)
 
 
 if __name__ == "__main__":

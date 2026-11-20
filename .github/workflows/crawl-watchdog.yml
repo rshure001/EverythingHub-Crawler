@@ -9,7 +9,7 @@ on:
       - "crawler/pipeline_health.py"
       - "crawler/test_pipeline_health.py"
   schedule:
-    # Stagger lightweight 15-minute checks away from quarter-hour and top-of-hour Actions peaks. A documentation-only push here intentionally runs the same read-only freshness guard when scheduled delivery is stale.
+    # Stagger lightweight 15-minute checks away from Actions peaks. The watchdog shares the crawler concurrency group and only writes the marker when schedule and manifest staleness are both confirmed.
     - cron: "7,22,37,52 * * * *"
   workflow_run:
     workflows:
@@ -19,10 +19,10 @@ on:
     branches: [main]
   workflow_dispatch:
 permissions:
-  actions: write
-  contents: read
+  actions: read
+  contents: write
 concurrency:
-  group: eh-crawler-schedule-watchdog
+  group: everythinghub-crawler
   cancel-in-progress: false
 jobs:
   guard:
@@ -153,20 +153,111 @@ jobs:
 
           if [ "$schedule_status" != "recent" ] || [ "$schedule_conclusion" != "success" ]; then
             schedule_warning="status=${schedule_status}; latest conclusion=${schedule_conclusion:-unknown}; age=${schedule_age:-unknown}s; latest run=${last_schedule:-none observed}"
-            echo "> **Scheduled crawler delivery warning:** ${schedule_warning}. Crawl freshness is evaluated independently, so no duplicate recovery is dispatched solely for schedule lag." >> "$GITHUB_STEP_SUMMARY"
+            echo "> **Scheduled crawler delivery warning:** ${schedule_warning}. No recovery marker is written solely for schedule lag." >> "$GITHUB_STEP_SUMMARY"
             echo "::warning title=Scheduled crawler delivery::${schedule_warning}. Crawl freshness is evaluated independently."
           fi
 
           case "$action" in
-            dispatch)
-              gh workflow run crawl.yml --ref main
-              echo "Dispatched one recovery crawl through workflow_dispatch."
+            mark)
+              git fetch origin main
+              git checkout -B main origin/main
+              expected_head="$(git rev-parse origin/main)"
+              gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/crawl.yml/runs?per_page=100" > /tmp/crawl-runs-final.json
+              gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/crawl.yml/runs?event=schedule&per_page=5" > /tmp/crawl-scheduled-final.json
+              gh api "repos/${GITHUB_REPOSITORY}/contents/public-search/manifest.json" > /tmp/public-manifest-final-envelope.json
+              python - <<'PY'
+              import base64
+              import json
+              from datetime import datetime, timezone
+              from pathlib import Path
+
+              active_statuses = {"queued", "in_progress", "pending", "waiting", "requested"}
+              runs_payload = json.loads(Path("/tmp/crawl-runs-final.json").read_text(encoding="utf-8"))
+              runs = runs_payload.get("workflow_runs")
+              if not isinstance(runs, list):
+                  raise SystemExit("Final GitHub crawler run check returned no workflow_runs array")
+              active = [run for run in runs if isinstance(run, dict) and run.get("status") in active_statuses]
+              if active:
+                  print("Final check found an active crawler; no recovery marker will be written.")
+                  raise SystemExit(0)
+
+              scheduled_payload = json.loads(Path("/tmp/crawl-scheduled-final.json").read_text(encoding="utf-8"))
+              scheduled = scheduled_payload.get("workflow_runs")
+              if not isinstance(scheduled, list) or not scheduled:
+                  print("No scheduled crawl event is observable; no recovery marker will be written.")
+                  raise SystemExit(0)
+              latest = max(scheduled, key=lambda row: row.get("created_at") or "")
+              created_at = latest.get("created_at")
+              if not isinstance(created_at, str):
+                  raise SystemExit("Latest scheduled crawl event has no valid created_at timestamp")
+              schedule_time = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+              if schedule_time.tzinfo is None:
+                  schedule_time = schedule_time.replace(tzinfo=timezone.utc)
+              now = datetime.now(timezone.utc)
+              schedule_age = max(0, int((now - schedule_time.astimezone(timezone.utc)).total_seconds()))
+              if schedule_age <= 25 * 60:
+                  print(f"Scheduled delivery is only {schedule_age}s old; no recovery marker will be written.")
+                  raise SystemExit(0)
+
+              envelope = json.loads(Path("/tmp/public-manifest-final-envelope.json").read_text(encoding="utf-8"))
+              encoded = envelope.get("content")
+              if not isinstance(encoded, str):
+                  raise SystemExit("Final public manifest response has no content")
+              manifest = json.loads(base64.b64decode(encoded).decode("utf-8"))
+              updated_at = manifest.get("updated_at")
+              total_pages = manifest.get("total_pages")
+              if type(updated_at) is not int or updated_at <= 0 or type(total_pages) is not int or total_pages < 1:
+                  raise SystemExit("Final public manifest has invalid updated_at or total_pages")
+              manifest_time = datetime.fromtimestamp(updated_at, timezone.utc)
+              manifest_age = (now - manifest_time).total_seconds()
+              if manifest_age < -60:
+                  raise SystemExit("Final public manifest timestamp is too far in the future")
+              manifest_age = max(0, int(manifest_age))
+              if manifest_age <= 10 * 60:
+                  print(f"Public manifest is only {manifest_age}s old; no recovery marker will be written.")
+                  raise SystemExit(0)
+
+              marker = {
+                  "version": 1,
+                  "updated_at": now.isoformat(timespec="milliseconds").replace("+00:00", "Z"),
+                  "reason": (
+                      f"Push-triggered fallback after scheduled crawl delivery was {schedule_age}s old "
+                      f"(>25 minutes); no queued or running crawler; public manifest was {manifest_age}s old "
+                      f"(>10 minutes). One bounded recovery crawl; normal schedule unchanged."
+                  ),
+                  "manifest_before_pages": total_pages,
+                  "manifest_before_updated_at": manifest_time.isoformat(timespec="seconds").replace("+00:00", "Z"),
+              }
+              Path("/tmp/marker-ready.json").write_text(json.dumps(marker, indent=2) + "\n", encoding="utf-8")
+              print("Recovery marker recheck passed:", json.dumps({
+                  "scheduled_run": created_at,
+                  "schedule_age_seconds": schedule_age,
+                  "manifest_age_seconds": manifest_age,
+                  "manifest_before_pages": total_pages,
+                  "manifest_before_updated_at": marker["manifest_before_updated_at"],
+              }, sort_keys=True))
+              PY
+              if [ ! -f /tmp/marker-ready.json ]; then
+                echo "Final recovery conditions changed; no marker commit was made."
+                exit 0
+              fi
+              cp /tmp/marker-ready.json crawler/automation-trigger.json
+              git config user.name "github-actions[bot]"
+              git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+              git add crawler/automation-trigger.json
+              if git diff --cached --quiet; then
+                echo "Recovery marker is unchanged; no commit was made."
+                exit 0
+              fi
+              git commit -m "Trigger one bounded crawler recovery after stale schedule"
+              git push --force-with-lease="refs/heads/main:${expected_head}" origin HEAD:refs/heads/main
+              echo "Committed one bounded recovery marker with expected-head protection; crawl.yml push path will start the bounded crawl."
               ;;
             wait)
-              echo "An existing crawler run is queued or running; no duplicate dispatch."
+              echo "An existing crawler is queued or running, or one of the freshness gates is not satisfied; no marker update."
               ;;
             healthy)
-              echo "The most recent crawler attempt and public manifest are within the 10-minute freshness window."
+              echo "The public manifest is fresh; no recovery marker is needed."
               ;;
             *)
               echo "Unexpected watchdog decision: $action" >&2

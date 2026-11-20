@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Decide whether the autonomous crawler needs one safe recovery dispatch."""
+"""Decide whether to update the crawler recovery marker after a missed schedule."""
 from __future__ import annotations
 
 import json
@@ -8,8 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-MAX_ATTEMPT_AGE_SECONDS = 10 * 60
-MAX_MANIFEST_AGE_SECONDS = MAX_ATTEMPT_AGE_SECONDS
+MAX_MANIFEST_AGE_SECONDS = 10 * 60
 MAX_MANIFEST_FUTURE_SKEW_SECONDS = 60
 MAX_SCHEDULE_AGE_SECONDS = 25 * 60
 ACTIVE_STATUSES = {"queued", "in_progress", "pending", "waiting", "requested"}
@@ -36,9 +35,12 @@ def parse_manifest_time(value: Any) -> datetime | None:
     return None
 
 
-def schedule_health(runs: list[dict[str, Any]], now: datetime,
-                    max_schedule_age_seconds: int = MAX_SCHEDULE_AGE_SECONDS) -> dict[str, Any]:
-    """Measure schedule delivery separately from manual, push, and workflow-run crawls."""
+def schedule_health(
+    runs: list[dict[str, Any]],
+    now: datetime,
+    max_schedule_age_seconds: int = MAX_SCHEDULE_AGE_SECONDS,
+) -> dict[str, Any]:
+    """Measure scheduled delivery independently from push/manual crawler runs."""
     scheduled = []
     for run in runs:
         if not isinstance(run, dict) or run.get("event") != "schedule":
@@ -62,9 +64,6 @@ def schedule_health(runs: list[dict[str, Any]], now: datetime,
 
     created_at, latest = max(scheduled, key=lambda item: item[0])
     age = max(0, int((now - created_at).total_seconds()))
-    # Prefer the actual crawler step result when the watchdog enriched the
-    # scheduled run with job details. A workflow can conclude success even when
-    # its stale-revision guard intentionally skipped the crawl.
     crawl_conclusion = (
         latest.get("crawl_execution_conclusion")
         if "crawl_execution_conclusion" in latest
@@ -79,18 +78,22 @@ def schedule_health(runs: list[dict[str, Any]], now: datetime,
     }
 
 
-def evaluate(runs: list[dict[str, Any]], now: datetime | None = None,
-             max_age_seconds: int = MAX_ATTEMPT_AGE_SECONDS,
-             manifest_updated_at: Any | None = None,
-             max_manifest_age_seconds: int = MAX_MANIFEST_AGE_SECONDS,
-             max_schedule_age_seconds: int = MAX_SCHEDULE_AGE_SECONDS) -> dict[str, Any]:
-    """Return wait, healthy, or dispatch; report schedule delivery independently."""
+def evaluate(
+    runs: list[dict[str, Any]],
+    now: datetime | None = None,
+    manifest_updated_at: Any | None = None,
+    max_manifest_age_seconds: int = MAX_MANIFEST_AGE_SECONDS,
+    max_schedule_age_seconds: int = MAX_SCHEDULE_AGE_SECONDS,
+) -> dict[str, Any]:
+    """Return wait, healthy, or mark using the three explicit recovery gates."""
     now = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
     runs = runs if isinstance(runs, list) else []
     schedule = schedule_health(runs, now, max_schedule_age_seconds)
+
     manifest_time = parse_manifest_time(manifest_updated_at)
     if manifest_updated_at is not None and manifest_time is None:
         raise ValueError("public search manifest has an invalid updated_at timestamp")
+
     manifest_age = None
     if manifest_time is not None:
         raw_manifest_age = (now - manifest_time).total_seconds()
@@ -98,16 +101,10 @@ def evaluate(runs: list[dict[str, Any]], now: datetime | None = None,
             raise ValueError("public search manifest updated_at timestamp is too far in the future")
         manifest_age = max(0, int(raw_manifest_age))
 
-    active = [run for run in runs if isinstance(run, dict) and run.get("status") in ACTIVE_STATUSES]
-    if active:
-        return {
-            "action": "wait",
-            "reason": "a crawler run is already queued or running",
-            "active_runs": len(active),
-            "manifest_age_seconds": manifest_age,
-            **schedule,
-        }
-
+    active = [
+        run for run in runs
+        if isinstance(run, dict) and run.get("status") in ACTIVE_STATUSES
+    ]
     attempts = []
     for run in runs:
         if not isinstance(run, dict) or not isinstance(run.get("created_at"), str):
@@ -116,54 +113,53 @@ def evaluate(runs: list[dict[str, Any]], now: datetime | None = None,
             attempts.append((parse_time(run["created_at"]), run))
         except ValueError:
             continue
-    if not attempts:
-        return {
-            "action": "dispatch",
-            "reason": "no crawler attempt is present in the recent run history",
-            "age_seconds": None,
-            "manifest_age_seconds": manifest_age,
-            **schedule,
-        }
+    latest_attempt = max(attempts, key=lambda item: item[0]) if attempts else None
+    attempt_age = (
+        max(0, int((now - latest_attempt[0]).total_seconds()))
+        if latest_attempt else None
+    )
+    last_attempt = latest_attempt[1].get("created_at") if latest_attempt else None
 
-    created_at, latest = max(attempts, key=lambda item: item[0])
-    age = max(0, int((now - created_at).total_seconds()))
-    if age <= max_age_seconds:
-        if latest.get("conclusion") == "success":
-            if manifest_age is not None and manifest_age > max_manifest_age_seconds:
-                return {
-                    "action": "wait",
-                    "reason": "a recent crawl succeeded but the public manifest is stale; wait for the recovery window before dispatching again",
-                    "age_seconds": age,
-                    "last_attempt": latest["created_at"],
-                    "manifest_age_seconds": manifest_age,
-                    **schedule,
-                }
-            return {
-                "action": "healthy",
-                "reason": "the latest crawler attempt succeeded and the public manifest is fresh",
-                "age_seconds": age,
-                "last_attempt": latest["created_at"],
-                "manifest_age_seconds": manifest_age,
-                **schedule,
-            }
+    common = {
+        "age_seconds": attempt_age,
+        "last_attempt": last_attempt,
+        "manifest_age_seconds": manifest_age,
+        **schedule,
+    }
+
+    if active:
         return {
             "action": "wait",
-            "reason": "the latest crawler attempt did not succeed; wait for the retry window before dispatching again",
-            "age_seconds": age,
-            "last_attempt": latest["created_at"],
-            "last_conclusion": latest.get("conclusion"),
-            "manifest_age_seconds": manifest_age,
-            **schedule,
+            "reason": "a crawler run is already queued or running; do not update the recovery marker",
+            "active_runs": len(active),
+            **common,
+        }
+
+    if manifest_age is None:
+        return {
+            "action": "wait",
+            "reason": "the public manifest timestamp is unavailable; do not infer that it is stale",
+            **common,
+        }
+
+    if manifest_age <= max_manifest_age_seconds:
+        return {
+            "action": "healthy",
+            "reason": "the public manifest is within the 10-minute freshness window; no recovery marker is needed",
+            **common,
+        }
+
+    if schedule["schedule_status"] != "stale":
+        return {
+            "action": "wait",
+            "reason": "the latest scheduled crawl is not more than 25 minutes old; do not update the recovery marker",
+            **common,
         }
 
     return {
-        "action": "dispatch",
-        "reason": "the latest crawler attempt is older than the recovery window",
-        "age_seconds": age,
-        "last_attempt": latest["created_at"],
-        "last_conclusion": latest.get("conclusion"),
-        "manifest_age_seconds": manifest_age,
-        **schedule,
+        "action": "mark",
+        "reason": "scheduled crawl delivery is more than 25 minutes stale, the public manifest is more than 10 minutes stale, and no crawler is queued or running",
+        **common,
     }
 
 
