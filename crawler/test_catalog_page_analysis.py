@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from catalog_page_analysis import analyze_pages, search_catalog_network, write_outputs, validate_outputs
+from catalog_page_analysis import analyze_pages, analyze_pages_incremental, search_catalog_network, write_outputs, validate_outputs
 
 
 class PageDerivedCatalogAnalysisTests(unittest.TestCase):
@@ -258,6 +258,29 @@ class PageDerivedCatalogAnalysisTests(unittest.TestCase):
             self.assertEqual(manifest["source_index_sha256"], digest)
             self.assertEqual(validate_outputs(Path(tmp))["pages_analyzed"], 2)
 
+
+    def test_incremental_host_cache_reuses_unchanged_hosts_and_rebuilds_changed_host(self):
+        pages = [
+            {"url": "https://one.example/products/a", "title": "Product A", "text": "Details", "lane": "shopping"},
+            {"url": "https://one.example/products/b", "title": "Product B", "text": "Details", "lane": "shopping"},
+            {"url": "https://two.example/products/c", "title": "Product C", "text": "Details", "lane": "shopping"},
+            {"url": "https://two.example/products/d", "title": "Product D", "text": "Details", "lane": "shopping"},
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            cache = Path(tmp) / "cache"
+            first = analyze_pages_incremental(pages, source_total=4, cache_dir=cache)
+            self.assertEqual(first["metrics"]["host_partitions_rebuilt"], 2)
+            self.assertEqual(first["metrics"]["host_partitions_reused"], 0)
+            second = analyze_pages_incremental(pages, source_total=4, cache_dir=cache)
+            self.assertEqual(second["metrics"]["host_partitions_reused"], 2)
+            self.assertEqual(second["metrics"]["host_partitions_rebuilt"], 0)
+            changed = [dict(page) for page in pages]
+            changed[0]["title"] = "Product A Updated"
+            third = analyze_pages_incremental(changed, source_total=4, cache_dir=cache)
+            self.assertEqual(third["metrics"]["host_partitions_reused"], 1)
+            self.assertEqual(third["metrics"]["host_partitions_rebuilt"], 1)
+            self.assertEqual(third["metrics"]["pages_analyzed"], 4)
+            self.assertEqual(third["metrics"]["unique_catalogs_discovered"], 2)
 
 if __name__ == "__main__":
     unittest.main()
