@@ -4,7 +4,7 @@ on:
   push:
     paths:
       - "crawler/catalog_discovery.py"
-      - "crawler/test_catalog_discovery.py"
+      - "crawler/test_catalog_discovery.py"\n      - "crawler/catalog_model.py"\n      - "crawler/test_catalog_model.py"
       - "project/**"
       - "learning/**"
       - ".github/workflows/catalog-first-discovery.yml"
@@ -40,7 +40,7 @@ jobs:
       - name: Validate catalog discovery
         working-directory: crawler
         run: python -m unittest test_catalog_discovery.py -v
-      - name: Validate project ledger
+      - name: Validate universal catalog model\n        working-directory: crawler\n        run: python -m unittest test_catalog_model.py -v\n      - name: Validate project ledger
         run: python -m unittest discover -s project -p 'test_*.py' -v
       - name: Validate feedback learner
         run: python -m unittest discover -s learning -p 'test_*.py' -v
