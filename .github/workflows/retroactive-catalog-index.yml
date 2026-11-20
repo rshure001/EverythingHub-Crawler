@@ -9,6 +9,8 @@ on:
       - "crawler/test_catalog_retro_discovery.py"
       - "crawler/product_metadata.py"
       - "crawler/test_product_metadata.py"
+      - "project/ledger.py"
+      - "project/test_ledger.py"
       - ".github/workflows/retroactive-catalog-index.yml"
   workflow_dispatch:
   schedule:
@@ -117,6 +119,9 @@ jobs:
           PY
       - name: Validate registry and every per-catalog index before publishing
         run: python crawler/catalog_page_analysis.py --validate-only
+      - name: Record validated page-derived catalog analysis
+        if: github.ref == 'refs/heads/main'
+        run: python project/ledger.py --record-page-derived-catalog-analysis
       - name: Publish validated catalog analysis on main
         if: github.ref == 'refs/heads/main'
         run: |
@@ -124,7 +129,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           for attempt in 1 2 3; do
-            git add -f data/host-catalog-candidates.json data/page-catalog-seeds.json.gz data/page-derived-catalogs
+            git add -f data/host-catalog-candidates.json data/page-catalog-seeds.json.gz data/page-derived-catalogs data/project-ledger.json
             git rm -f --ignore-unmatch data/page-catalog-seeds.json
             if git diff --cached --quiet; then
               echo "No catalog analysis changes."
@@ -140,6 +145,7 @@ jobs:
             python crawler/catalog_retro_discovery.py
             python crawler/catalog_page_analysis.py --query Rolex --query "Las Vegas"
             python crawler/catalog_page_analysis.py --validate-only
+            python project/ledger.py --record-page-derived-catalog-analysis
           done
           echo "Unable to publish validated catalog analysis after three protected attempts."
           exit 1
