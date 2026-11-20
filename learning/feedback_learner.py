@@ -38,6 +38,8 @@ def load_feedback(path: Path) -> dict[str, list[int]]:
                 raise ValueError(f"invalid JSON on line {line_number}") from exc
             if not isinstance(item, dict):
                 raise ValueError(f"line {line_number} must be an object")
+            if set(item) != {"lane", "label"}:
+                raise ValueError(f"line {line_number} contains unsupported fields; only lane and label are allowed")
             lane = item.get("lane")
             label = item.get("label")
             if not isinstance(lane, str) or not lane.strip() or len(lane) > 40:
