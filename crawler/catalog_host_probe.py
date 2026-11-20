@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Probe known public host endpoints for machine-readable catalog interfaces.
 
-Only HTTPS URLs on each already-discovered host are requested. Redirects to
-other hosts or to HTTP are rejected. This records evidence; it does not ingest
-records or claim a catalog is verified merely because a URL responds.
+Only source-terms-approved HTTPS API paths are requested. Every request is
+robots.txt checked, rate limited, DNS pinned, and restricted to same-origin
+redirects. This records evidence; it does not ingest or verify a catalog.
 """
 from __future__ import annotations
 import argparse, json, time, urllib.error, urllib.parse, urllib.request
