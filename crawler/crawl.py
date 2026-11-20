@@ -27,10 +27,10 @@ SEEDS = ROOT / "crawler" / "seeds.txt"
 OUTPUT = ROOT / "data" / "index.json"
 FRONTIER = ROOT / "data" / "frontier.json"
 MEDIA_DISCOVERY = ROOT / "data" / "media-discovery.json"
-WORKERS = 150
+WORKERS = 250
 QUEUE_LIMIT = 100000
 MAX_DEPTH = 3
-MAX_FETCH_PER_RUN = 8000
+MAX_FETCH_PER_RUN = 12000
 MAX_SITEMAP_HOSTS_PER_RUN = 8
 MAX_SITEMAP_CHILD_SITEMAPS = 4
 MAX_SITEMAP_URLS_PER_HOST = 500
@@ -357,6 +357,18 @@ def clean(url):
         or p.username is not None
         or p.password is not None
     ):
+        return None
+    # These formats are not parsed as searchable HTML. Reject them before
+    # they consume a fetch slot; keep XML because robots-declared sitemaps use it.
+    non_html_extensions = {
+        ".7z", ".avi", ".bmp", ".css", ".csv", ".doc", ".docx", ".eot",
+        ".gif", ".gz", ".ico", ".jpeg", ".jpg", ".js", ".m4a", ".m4v",
+        ".mov", ".mp3", ".mp4", ".mpeg", ".mpg", ".odp", ".ods", ".odt",
+        ".otf", ".pdf", ".png", ".ppt", ".pptx", ".rar", ".rss", ".svg",
+        ".tar", ".tgz", ".tif", ".tiff", ".ttf", ".wav", ".webm", ".webp",
+        ".woff", ".woff2", ".xls", ".xlsx", ".zip",
+    }
+    if Path(urllib.parse.unquote(p.path or "/")).suffix.lower() in non_html_extensions:
         return None
     # Never retain userinfo in crawler URLs; public search links must not carry credentials.
     # Remove fragments and common tracking parameters; retain meaningful query parameters.
