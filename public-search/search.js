@@ -25,7 +25,7 @@
     productPrice: 1.5, productAvailability: 1.2
   };
   const MAX_SHARDS = 512;
-  const MAX_PAGES = 125000;
+  const MAX_PAGES = 130000;
   const MAX_SHARD_BYTES = 350000;
   const MAX_TOTAL_BYTES = 100000000;
   const MAX_TOTAL_COMPRESSED_BYTES = 64000000;
