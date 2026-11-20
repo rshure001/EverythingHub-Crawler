@@ -10,6 +10,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from lane_classifier import VALID_LANES
+from index_store import load_index
 
 ROOT = Path(__file__).resolve().parents[1]
 MAX_SHARD_BYTES = 350_000
@@ -90,7 +91,7 @@ def validate(root: Path = ROOT) -> list[str]:
         ]
 
     try:
-        source = json.loads(source_path.read_text(encoding="utf-8"))
+        source = load_index(source_path)
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     except Exception as exc:
         return [f"index or manifest is invalid JSON: {exc}"]
