@@ -1,0 +1,37 @@
+name: Everything Hub Las Vegas veteran contact pilot
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: everythinghub-contact-pilot
+  cancel-in-progress: false
+
+jobs:
+  bounded-pilot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate pilot and crawler transport
+        run: |
+          python -m py_compile crawler/contact_page_pilot.py crawler/safe_http.py
+          python -m unittest discover -s crawler -p 'test_contact_page_pilot.py' -v
+      - name: Fetch five explicitly allowlisted public pages
+        run: |
+          python crawler/contact_page_pilot.py \
+            --config crawler/contact_pilot_sources.json \
+            --output staging/contact-pilot/results.jsonl
+      - name: Upload staging-only results
+        uses: actions/upload-artifact@v4
+        with:
+          name: las-vegas-veteran-contact-pilot
+          path: staging/contact-pilot/results.jsonl
+          if-no-files-found: error
+          retention-days: 14
