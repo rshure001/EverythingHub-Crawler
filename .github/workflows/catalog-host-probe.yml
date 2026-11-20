@@ -1,0 +1,56 @@
+name: Probe public catalog interfaces
+
+on:
+  push:
+    paths:
+      - "crawler/catalog_host_probe.py"
+      - "data/host-catalog-candidates.json"
+      - ".github/workflows/catalog-host-probe.yml"
+  workflow_dispatch:
+    inputs:
+      offset:
+        description: "Starting host offset (0-based)"
+        required: false
+        default: "0"
+  schedule:
+    - cron: "11 */6 * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: public-catalog-host-probes
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Probe a bounded host batch
+        env:
+          INPUT_OFFSET: ${{ github.event.inputs.offset }}
+          RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          if [ -n "$INPUT_OFFSET" ]; then
+            OFFSET="$INPUT_OFFSET"
+          else
+            OFFSET="$(( ((RUN_NUMBER - 1) % 4) * 30 ))"
+          fi
+          python crawler/catalog_host_probe.py --limit 30 --offset "$OFFSET" --pause 0.2
+      - name: Publish probe evidence
+        run: |
+          git add -f data/host-catalog-probes.json
+          if git diff --cached --quiet; then
+            echo "No probe evidence changes."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Record public catalog interface probe evidence"
+          git pull --rebase origin main
+          git push
