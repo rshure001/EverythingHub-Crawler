@@ -96,7 +96,7 @@ jobs:
           python -m py_compile crawler/index_store.py crawler/crawl.py crawler/report.py crawler/hourly_production.py crawler/build_search_shards.py crawler/validate_public_index.py crawler/validate_media_catalog.py crawler/hurricane_strength.py crawler/media_discovery.py crawler/media_extraction_preflight.py crawler/crawl_revision_guard.py
           test "$(grep -c '^https://' crawler/seeds.txt)" -ge 71
           python -m unittest discover -s crawler -p 'test_*.py' -v
-      # Validate bounded sitemap discovery, Retry-After backoff, and the 12,000-attempt ceiling inside the 400-second run budget; each host remains single-flight and robots-paced.
+      # Validate bounded sitemap discovery, Retry-After backoff, and the 12,000-attempt ceiling inside the 420-second run budget; each host remains single-flight and robots-paced.
       - name: Crawl configured sites
         if: steps.freshness.outputs.current == 'true'
         run: python crawler/crawl.py
