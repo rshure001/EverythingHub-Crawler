@@ -6,6 +6,12 @@ on:
       - "recovery/**"
       - "public-search/**"
       - ".github/workflows/recovery-search-check.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "recovery/**"
+      - "public-search/**"
+      - ".github/workflows/recovery-search-check.yml"
   schedule:
     - cron: "13 4 * * *"
   workflow_dispatch:
@@ -32,10 +38,15 @@ jobs:
       - name: Start service without database credentials
         run: |
           docker run -d --name eh-recovery -p 127.0.0.1:18080:8080 everythinghub-static-search:ci
-          for i in $(seq 1 20); do
-            if curl --fail --silent http://127.0.0.1:18080/healthz > health.json; then break; fi
+          ready=false
+          for i in $(seq 1 120); do
+            if curl --fail --silent http://127.0.0.1:18080/healthz > health.json; then ready=true; break; fi
             sleep 1
           done
+          if [ "$ready" != true ]; then
+            docker logs eh-recovery
+            exit 1
+          fi
           cat health.json
           python -c 'import json; d=json.load(open("health.json")); assert d["status"]=="ok"; assert d["database"]=="not_required"; assert d["indexed_pages"] > 0'
       - name: Verify real index queries
@@ -44,6 +55,7 @@ jobs:
           curl --fail --silent 'http://127.0.0.1:18080/search?q=Rolex&limit=5' > rolex.json
           python -c 'import json; n=json.load(open("nasa.json")); r=json.load(open("rolex.json")); assert n["total"]>0 and n["results"]; assert "results" in r and isinstance(r["results"],list); print("NASA indexed matches:",n["total"],"Rolex indexed matches:",r["total"],"(zero is valid when absent from local snapshot)")'
       - name: Verify deployed Vercel preview search API
+        if: github.event_name != 'pull_request'
         env:
           PREVIEW_API: https://everythinghub-search-backend-gonwo4vlu-rshure001-8053.vercel.app
         run: |
@@ -67,6 +79,7 @@ jobs:
           console.log(JSON.stringify({health, nasa:{count:nasa.count,shown:nasa.results.length,indexed_pages:nasa.indexed_pages}, rolex:{count:rolex.count,shown:rolex.results.length}}, null, 2));
           NODE
       - name: Verify production Vercel catalog search API
+        if: github.event_name != 'pull_request'
         env:
           PRODUCTION_API: https://everythinghub-search-backend.vercel.app
         run: |
