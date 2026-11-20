@@ -2,6 +2,7 @@
 """Bounded, integrity-checked canonical crawler index stored in stable gzip shards."""
 from __future__ import annotations
 
+import gzip
 import hashlib
 import json
 import os
