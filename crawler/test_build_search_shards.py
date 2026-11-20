@@ -140,6 +140,18 @@ class SearchShardBatchBoundaryTests(unittest.TestCase):
         self.assertEqual(page["product"]["price"], "1299.00")
         self.assertEqual(page["product"]["image"], "https://shop.example/ring.jpg")
 
+    def test_compact_omits_unsafe_product_image_and_url(self):
+        page = compact({
+            "url": "https://shop.example/item-3",
+            "product": {
+                "type": "product", "name": "Ring",
+                "image": "javascript:alert(1)",
+                "url": "https://user:secret@shop.example/item-3",
+            },
+        })
+        self.assertNotIn("image", page["product"])
+        self.assertNotIn("url", page["product"])
+
     def test_compact_ignores_malformed_product_metadata(self):
         page = compact({
             "url": "https://shop.example/item-2",
