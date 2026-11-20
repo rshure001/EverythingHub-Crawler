@@ -60,9 +60,14 @@ def build_candidates(index: dict) -> dict:
             item["lanes"][lane] += 1
         text = " ".join(str(page.get(k) or "") for k in ("title", "description", "text"))[:2500]
         matched = [name for name, pattern in HINTS.items() if pattern.search(text) or pattern.search(url)]
+        page_digest = __import__("hashlib").sha256(url.encode("utf-8")).hexdigest()[:24]
         page_seeds.append({
-            "page_id": __import__("hashlib").sha256(url.encode("utf-8")).hexdigest()[:24],
-            "discovery_seed_id": "page-seed:" + __import__("hashlib").sha256(url.encode("utf-8")).hexdigest()[:24],
+            "page_id": page_digest,
+            "page_profile_id": "page-catalog-profile:" + page_digest,
+            "profile_type": "source_page_catalog_profile",
+            "profile_status": "pending_catalog_classification",
+            "related_catalog_ids": [],
+            "discovery_seed_id": "page-seed:" + page_digest,
             "analysis_status": "pending_page_content_analysis",
             "url": url[:2048],
             "host": host,
@@ -104,6 +109,8 @@ def build_candidates(index: dict) -> dict:
         "page_catalog_seeds": page_seeds,
         "metrics": {
             "pages_as_discovery_seeds": len(page_seeds),
+            "page_catalog_profiles_created": len(page_seeds),
+            "profiles_pending_catalog_classification": len(page_seeds),
             "unique_catalog_candidates": 0,
             "verified_page_catalogs": 0,
             "pages_with_catalog_signals": sum(bool(x["catalog_signals"]) for x in page_seeds),
@@ -130,7 +137,7 @@ def main() -> None:
     temp.replace(args.output)
     page_result = {
         "schema_version": 1,
-        "strategy": "one-source-page-discovery-seed-per-indexed-page",
+        "strategy": "one-persistent-page-catalog-profile-per-indexed-page",
         "source_index_pages": result["source_index_pages"],
         "metrics": {key: value for key, value in result["metrics"].items() if key.startswith("pages_") or key in ("page_catalog_signal_references", "unique_catalog_candidates", "verified_page_catalogs")},
         "pages": result["page_catalog_seeds"],
