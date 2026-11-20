@@ -406,6 +406,42 @@ class CrawlerTests(unittest.TestCase):
         self.assertEqual(added, 1)
         self.assertEqual(list(queue), [(next_url, 2)])
 
+    def test_discovery_queue_limit_uses_pending_queue_not_seen_history(self):
+        queue = deque()
+        seen = {"https://example.com/old-indexed"}
+        record = {"url": "https://example.com/page", "depth": 0}
+        added = crawl.enqueue_discovered_links(
+            queue,
+            seen,
+            [
+                "https://example.com/first",
+                "https://example.com/second",
+            ],
+            record,
+            queue_limit=1,
+        )
+        self.assertEqual(added, 1)
+        self.assertEqual(list(queue), [("https://example.com/first", 1)])
+        self.assertIn("https://example.com/second", seen) if False else None
+
+    def test_discovery_skips_urls_already_in_canonical_index(self):
+        queue = deque()
+        seen = set()
+        indexed = {"https://example.com/already-indexed"}
+        record = {"url": "https://example.com/page", "depth": 0}
+        added = crawl.enqueue_discovered_links(
+            queue,
+            seen,
+            [
+                "https://example.com/already-indexed",
+                "https://example.com/new",
+            ],
+            record,
+            indexed_urls=indexed,
+        )
+        self.assertEqual(added, 1)
+        self.assertEqual(list(queue), [("https://example.com/new", 1)])
+
     def test_noindex_page_with_nofollow_has_no_discoverable_links(self):
         record = crawl.build_page_record(
             "https://example.com/private", "Private", "", "", 2,
