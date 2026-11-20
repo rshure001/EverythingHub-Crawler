@@ -119,9 +119,13 @@ def catalog_metrics(catalogs: list[dict[str, Any]], records: list[dict[str, Any]
         "unique_entities": len({
             r.get("canonical_entity_key") or r["record_id"] for r in records
         }),
-        "source_pages": len({
+        "source_page_references": len({
             _text(p.get("canonical_url") or p.get("url")) for p in source_pages
             if p.get("canonical_url") or p.get("url")
+        }),
+        "source_pages_fetched": len({
+            _text(p.get("canonical_url") or p.get("url")) for p in source_pages
+            if (p.get("canonical_url") or p.get("url")) and p.get("fetched") is True
         }),
         "indexed_records": sum(1 for r in records if r.get("indexed") is True),
     }
