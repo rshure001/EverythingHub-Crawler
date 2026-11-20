@@ -138,7 +138,7 @@ def main():
 
     shards = []
     batch = []
-        batch_payload_size = 0
+    batch_payload_size = 0
     number = 0
 
     def write_batch(items):
