@@ -62,12 +62,11 @@ class StaticSearchTests(unittest.TestCase):
         return manifest
 
     def test_capacity_bounds_cover_current_public_catalog(self):
-        # Verified production snapshot at 2026-11-20T12:21:30Z:
-        # 84,885 pages, 319 shards, 40,097,435 compressed bytes,
-        # and 158,864,711 decoded bytes.
+        # Verified production snapshot at 2026-11-20T14:43:28Z: 101,179 pages.
+        # The recovery service must accept the same 125k ceiling as the publisher.
         self.assertEqual(
-            api._manifest_int(84_885, "total_pages", 1, api.MAX_PAGES),
-            84_885,
+            api._manifest_int(101_179, "total_pages", 1, api.MAX_PAGES),
+            101_179,
         )
         self.assertEqual(
             api._manifest_int(
