@@ -32,6 +32,7 @@ QUEUE_LIMIT = 100000
 MAX_DEPTH = 3
 MAX_FETCH_PER_RUN = 12000
 MAX_SITEMAP_HOSTS_PER_RUN = 174
+SITEMAP_DISCOVERY_VERSION = 2
 MAX_SITEMAP_CHILD_SITEMAPS = 4
 MAX_SITEMAP_URLS_PER_HOST = 500
 MAX_SITEMAP_BYTES = 2_000_000
@@ -446,6 +447,16 @@ def load_robots_policy(site):
             "too_large" if "safe size limit" in str(error) else "unavailable"
         )
     return parser
+
+
+def restore_sitemap_checked(frontier):
+    """Reset stale sitemap history when discovery semantics have changed."""
+    if not isinstance(frontier, dict):
+        return {}
+    if frontier.get("sitemap_discovery_version") != SITEMAP_DISCOVERY_VERSION:
+        return {}
+    checked = frontier.get("sitemap_checked", {})
+    return checked if isinstance(checked, dict) else {}
 
 
 def preload_robots_policies(sites, loader=load_robots_policy, workers=WORKERS):
@@ -871,9 +882,10 @@ def main():
     saved_host_schedule = frontier.get("host_next_allowed", {})
     if not isinstance(saved_host_schedule, dict):
         saved_host_schedule = {}
-    sitemap_checked = frontier.get("sitemap_checked", {})
-    if not isinstance(sitemap_checked, dict):
-        sitemap_checked = {}
+    # Recheck all seed-host sitemaps once after fixing the lifetime-seen
+    # ceiling; the previous run marked many sitemaps checked without enqueueing
+    # their URLs because the old seen set was full.
+    sitemap_checked = restore_sitemap_checked(frontier)
     host_next_allowed = {}
     for saved_host, timestamp in saved_host_schedule.items():
         if not isinstance(timestamp, (int, float)):
@@ -1324,6 +1336,7 @@ def main():
         "seen": sorted(seen),
         "host_next_allowed": host_next_allowed,
         "sitemap_checked": sitemap_checked,
+        "sitemap_discovery_version": SITEMAP_DISCOVERY_VERSION,
         "seed_retry_after": seed_retry_after
     })
     print(f"Fetched {fetched}; indexed {len(records)}; not indexed {fetched - len(records)}; "
