@@ -72,7 +72,7 @@ def validate_manifest(manifest: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(updated_at, int) or updated_at <= 0:
         raise ValueError("manifest updated_at must be a positive integer")
     if not isinstance(total_pages, int) or not 1 <= total_pages <= MAX_INDEXED_PAGES:
-        raise ValueError("manifest total_pages exceeds the 125,000-page safety limit")
+        raise ValueError("manifest total_pages exceeds the 130,000-page safety limit")
     if not isinstance(shard_count, int) or not 1 <= shard_count <= MAX_SHARD_COUNT:
         raise ValueError("manifest shard_count exceeds the 512-shard safety limit")
     if not isinstance(shards, list) or len(shards) != shard_count:
