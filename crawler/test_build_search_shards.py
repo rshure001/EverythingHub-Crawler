@@ -13,6 +13,8 @@ from build_search_shards import (
     MAX_CATALOG_GZIP_BYTES,
     MAX_CATALOG_UNCOMPRESSED_BYTES,
     batch_fits,
+    batch_size_from_item_sizes,
+    encoded_page_size,
     catalog_metadata,
     compact,
     encode_batch,
@@ -26,6 +28,27 @@ class SearchShardBatchBoundaryTests(unittest.TestCase):
         self.assertEqual(MAX_COMPRESSED_BYTES, 350_000)
         self.assertLess(MAX_COMPRESSED_BYTES, 1_000_000)
         self.assertEqual(SHARD_GZIP_LEVEL, 6)
+
+    def test_incremental_size_accounting_matches_exact_utf8_batch_bytes(self):
+        pages = [
+            compact({
+                "url": "https://example.com/one",
+                "title": "Café",
+                "description": "first",
+            }),
+            compact({
+                "url": "https://example.com/two",
+                "title": "Second",
+                "text": "🛰️",
+            }),
+        ]
+        sizes = [encoded_page_size(page) for page in pages]
+        self.assertEqual(batch_size_from_item_sizes(sizes), len(encode_batch(pages)))
+        self.assertEqual(
+            batch_size_from_item_sizes([sizes[0]]),
+            len(encode_batch([pages[0]])),
+        )
+        self.assertEqual(batch_size_from_item_sizes([]), len(encode_batch([])))
 
     def test_size_limit_counts_the_exact_trailing_newline(self):
         page = compact({
