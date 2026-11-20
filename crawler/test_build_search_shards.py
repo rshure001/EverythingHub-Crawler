@@ -5,6 +5,7 @@ from validate_public_index import (
     MAX_CATALOG_GZIP_BYTES as VALIDATOR_MAX_CATALOG_GZIP_BYTES,
     MAX_CATALOG_UNCOMPRESSED_BYTES as VALIDATOR_MAX_CATALOG_UNCOMPRESSED_BYTES,
     MAX_SHARD_COUNT as VALIDATOR_MAX_SHARD_COUNT,
+    MAX_SHARD_UNCOMPRESSED_BYTES as VALIDATOR_MAX_SHARD_UNCOMPRESSED_BYTES,
     MAX_TOTAL_COMPRESSED_SHARD_BYTES,
     MAX_TOTAL_SHARD_UNCOMPRESSED_BYTES,
 )
@@ -28,7 +29,9 @@ from build_search_shards import (
 
 class SearchShardBatchBoundaryTests(unittest.TestCase):
     def test_builder_target_keeps_headroom_under_public_hard_cap(self):
-        self.assertEqual(MAX_BYTES, 500_000)
+        self.assertEqual(MAX_BYTES, 450_000)
+        self.assertEqual(VALIDATOR_MAX_SHARD_UNCOMPRESSED_BYTES, 500_000)
+        self.assertEqual(VALIDATOR_MAX_SHARD_UNCOMPRESSED_BYTES - MAX_BYTES, 50_000)
         self.assertEqual(MAX_COMPRESSED_BYTES, 350_000)
         self.assertLess(MAX_COMPRESSED_BYTES, 1_000_000)
         self.assertEqual(SHARD_GZIP_LEVEL, 6)
