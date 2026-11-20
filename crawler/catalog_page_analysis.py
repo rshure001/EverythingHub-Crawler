@@ -379,6 +379,7 @@ def analyze_pages(pages: list[dict], source_total: int | None = None, source_upd
         "catalogs_verified": 0,
         "pages_with_catalog_signals": pages_with_signals,
         "coverage_percentage": round(coverage, 4),
+        "eligible_page_coverage_percentage": round((eligible / source_total * 100.0) if source_total else 0.0, 4),
     }
     return {
         "schema_version": 1,
@@ -395,33 +396,65 @@ def analyze_pages(pages: list[dict], source_total: int | None = None, source_upd
 
 
 def search_catalog_network(query: str, analysis: dict, limit: int = 10) -> list[dict]:
-    tokens = [x for x in _norm(query).split() if x]
-    if not tokens:
+    tokens = list(dict.fromkeys(_norm(query).split()))
+    if not tokens or limit <= 0:
         return []
+    token_set = set(tokens)
+    query_phrase = " ".join(tokens)
     records = {x["record_id"]: x for x in analysis.get("records", [])}
     results = []
     for catalog in analysis.get("catalogs", []):
         related = [records[x] for x in catalog.get("record_ids", []) if x in records]
-        scored = []
+        catalog_text = _norm(" ".join((
+            catalog.get("title", ""), catalog.get("subject", ""),
+        )))
+        catalog_tokens = set(catalog_text.split())
+        catalog_match = token_set.issubset(catalog_tokens)
+        matched = []
         for record in related:
-            haystack = _norm(" ".join((record.get("title", ""), record.get("description", ""), record.get("record_type", ""))))
-            score = sum(3 if token in _norm(record.get("title", "")) else 1 for token in tokens if token in haystack)
-            if score:
-                scored.append((score, record))
-        catalog_text = _norm(" ".join((catalog.get("title", ""), catalog.get("subject", ""), catalog.get("catalog_type", ""))))
-        catalog_score = sum(2 for token in tokens if token in catalog_text)
-        if catalog_score and not scored:
-            scored = [(1, record) for record in related]
-        if scored or catalog_score:
-            ranked = sorted(scored, key=lambda x: (-x[0], x[1]["title"].casefold()))[:5]
-            results.append({
-                "catalog_id": catalog["catalog_id"], "title": catalog["title"],
-                "catalog_type": catalog["catalog_type"], "status": catalog["status"],
-                "score": catalog_score + sum(x[0] for x in ranked),
-                "record_count": len(related),
-                "matched_records": [{"record_id": x["record_id"], "title": x["title"], "record_type": x["record_type"], "source_url": x["source_url"]} for _, x in ranked],
-            })
-    return sorted(results, key=lambda x: (-x["score"], -x["record_count"], x["title"].casefold()))[:limit]
+            title_norm = _norm(record.get("title", ""))
+            title_tokens = set(title_norm.split())
+            combined_tokens = catalog_tokens | title_tokens
+            if not token_set.issubset(combined_tokens):
+                continue
+            description_tokens = set(_norm(record.get("description", "")).split())
+            score = 20
+            if token_set.issubset(title_tokens):
+                score += 40
+            if query_phrase and query_phrase in title_norm:
+                score += 10
+            score += len(token_set & description_tokens)
+            matched.append((score, record))
+        if not catalog_match:
+            if not matched:
+                continue
+            # A single incidental article/resource mention must not masquerade
+            # as a geographic, brand, or subject catalog.
+            if catalog.get("record_type") in ("article", "resource", "media") and len(matched) < 2:
+                continue
+        elif not matched:
+            matched = [(0, record) for record in related]
+        catalog_score = 100 + (10 * len(tokens)) if catalog_match else 0
+        ranked = sorted(matched, key=lambda x: (-x[0], x[1]["title"].casefold()))[:5]
+        results.append({
+            "catalog_id": catalog["catalog_id"],
+            "title": catalog["title"],
+            "catalog_type": catalog["catalog_type"],
+            "status": catalog["status"],
+            "match_scope": "catalog" if catalog_match else "records",
+            "score": catalog_score + sum(x[0] for x in ranked),
+            "record_count": len(related),
+            "matched_records": [{
+                "record_id": x["record_id"],
+                "title": x["title"],
+                "record_type": x["record_type"],
+                "source_url": x["source_url"],
+            } for _, x in ranked],
+        })
+    return sorted(
+        results,
+        key=lambda x: (-x["score"], -len(x["matched_records"]), x["title"].casefold()),
+    )[:limit]
 
 
 def _write_gzip(path: Path, payload: dict) -> tuple[int, str]:
@@ -501,19 +534,46 @@ def validate_outputs(output_dir: Path) -> dict:
     pages = json.loads(gzip.decompress(pages_raw).decode("utf-8"))["pages"]
     records_raw = (output_dir / "records.json.gz").read_bytes()
     records = json.loads(gzip.decompress(records_raw).decode("utf-8"))["records"]
+    page_ids = {
+        item["page_id"] for item in pages
+        if isinstance(item, dict) and item.get("page_id")
+    }
     record_ids = [x["record_id"] for x in records]
+    records_by_id = {x["record_id"]: x for x in records}
     if len(record_ids) != len(set(record_ids)) or len(records) != manifest["record_count"]:
         raise ValueError("global record registry contains duplicates or a count mismatch")
-    if len(registry["catalogs"]) != manifest["catalog_count"]:
+    for record in records:
+        if stable_id("record", record.get("canonical_entity_key", "")) != record.get("record_id"):
+            raise ValueError("record ID does not match its canonical entity key")
+        if not set(record.get("source_page_ids", [])).issubset(page_ids):
+            raise ValueError("record provenance references an unknown source page")
+        source_urls = record.get("source_urls", [])
+        if not source_urls or any(canonical_url(url) != url for url in source_urls):
+            raise ValueError("record source URL is missing or not canonical")
+    catalogs = registry["catalogs"]
+    if len(catalogs) != manifest["catalog_count"]:
         raise ValueError("registry catalog count does not match manifest")
-    if len(pages) != manifest["source_index_pages"]:
-        raise ValueError("page-analysis coverage does not match source index page count")
-    catalog_ids = [x["catalog_id"] for x in registry["catalogs"]]
-    listed_index_files = {x["file"] for x in manifest["files"]}
-    if any(x.get("index_file") not in listed_index_files for x in registry["catalogs"]):
-        raise ValueError("registry references a missing per-catalog index")
+    catalog_ids = [x["catalog_id"] for x in catalogs]
+    catalogs_by_id = {x["catalog_id"]: x for x in catalogs}
     if len(catalog_ids) != len(set(catalog_ids)):
         raise ValueError("duplicate catalog IDs remain after deduplication")
+    for catalog in catalogs:
+        if stable_id("catalog", catalog.get("source_key", "")) != catalog.get("catalog_id"):
+            raise ValueError("catalog ID does not match its canonical source key")
+        if not set(catalog.get("source_page_ids", [])).issubset(page_ids):
+            raise ValueError("catalog provenance references an unknown source page")
+        related_ids = catalog.get("record_ids", [])
+        if len(related_ids) != len(set(related_ids)) or any(x not in records_by_id for x in related_ids):
+            raise ValueError("catalog references duplicate or unknown record IDs")
+        parent_id = catalog.get("parent_catalog_id")
+        if parent_id is not None and parent_id not in catalogs_by_id:
+            raise ValueError("catalog references an unknown parent catalog")
+    listed_index_files = [x["file"] for x in manifest["files"]]
+    if len(listed_index_files) != len(set(listed_index_files)):
+        raise ValueError("catalog manifest contains duplicate file paths")
+    if any(x.get("index_file") not in set(listed_index_files) for x in catalogs):
+        raise ValueError("registry references a missing per-catalog index")
+    index_catalog_ids = set()
     for entry in manifest["files"]:
         path = output_dir / entry["file"]
         raw = path.read_bytes()
@@ -521,14 +581,27 @@ def validate_outputs(output_dir: Path) -> dict:
             raise ValueError("catalog analysis artifact integrity mismatch: " + entry["file"])
         payload = json.loads(gzip.decompress(raw).decode("utf-8"))
         if entry["file"].startswith("indexes/"):
-            if payload.get("catalog_id") not in set(catalog_ids):
-                raise ValueError("orphan per-catalog index detected")
+            catalog_id = payload.get("catalog_id")
+            if catalog_id not in catalogs_by_id or catalog_id in index_catalog_ids:
+                raise ValueError("orphan or duplicate per-catalog index detected")
+            index_catalog_ids.add(catalog_id)
             indexed_ids = [x["record_id"] for x in payload.get("records", [])]
-            if len(indexed_ids) != len(set(indexed_ids)) or any(x not in set(record_ids) for x in indexed_ids):
-                raise ValueError("per-catalog index contains duplicate or unknown record IDs")
+            expected_ids = set(catalogs_by_id[catalog_id].get("record_ids", []))
+            if len(indexed_ids) != len(set(indexed_ids)) or set(indexed_ids) != expected_ids:
+                raise ValueError("per-catalog index does not exactly match registry record membership")
+            if any(catalog_id not in records_by_id[x].get("catalog_ids", []) for x in indexed_ids):
+                raise ValueError("per-catalog index record is missing its catalog relationship")
+    if index_catalog_ids != set(catalog_ids):
+        raise ValueError("one or more catalogs are missing a per-catalog index")
     if registry["status"] != "candidate_staging_not_production":
         raise ValueError("candidate registry must not be advertised as production")
-    return {"catalogs": len(catalog_ids), "pages_analyzed": len(pages), "files_validated": len(manifest["files"])}
+    return {
+        "catalogs": len(catalog_ids),
+        "pages_analyzed": len(pages),
+        "records_validated": len(records),
+        "files_validated": len(manifest["files"]),
+        "per_catalog_indexes_validated": len(index_catalog_ids),
+    }
 
 
 def main() -> None:
