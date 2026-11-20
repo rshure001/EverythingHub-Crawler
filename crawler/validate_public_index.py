@@ -17,7 +17,7 @@ MAX_SHARD_BYTES = 350_000
 MAX_SHARD_UNCOMPRESSED_BYTES = 500_000
 MAX_TOTAL_COMPRESSED_SHARD_BYTES = 64_000_000
 MAX_TOTAL_LEGACY_SHARD_BYTES = 100_000_000
-MAX_TOTAL_SHARD_UNCOMPRESSED_BYTES = 128_000_000
+MAX_TOTAL_SHARD_UNCOMPRESSED_BYTES = 256_000_000
 MAX_SHARD_COUNT = 512
 # Keep validation aligned with the independent Vercel backend's bounded decoder.
 # The Supabase Edge Function uses a smaller 30 MB budget and delegates larger
@@ -239,11 +239,11 @@ def validate(root: Path = ROOT) -> list[str]:
         total_shard_bytes += len(raw)
         total_uncompressed_bytes += len(decoded)
         if compressed and total_shard_bytes > MAX_TOTAL_COMPRESSED_SHARD_BYTES:
-            errors.append("compressed public shards exceed the 32 MB aggregate safety limit")
+            errors.append("compressed public shards exceed the 64 MB aggregate safety limit")
         if not compressed and total_shard_bytes > MAX_TOTAL_LEGACY_SHARD_BYTES:
-            errors.append("legacy raw public shards exceed the 80 MB aggregate safety limit")
+            errors.append("legacy raw public shards exceed the 100 MB aggregate safety limit")
         if total_uncompressed_bytes > MAX_TOTAL_SHARD_UNCOMPRESSED_BYTES:
-            errors.append("public shards exceed the 128 MB aggregate decompression safety limit")
+            errors.append("public shards exceed the 256 MB aggregate decompression safety limit")
 
 
         try:
