@@ -234,7 +234,7 @@
       throw new Error("Legacy search shards exceed the 100 MB transition safety limit.");
     }
     if (totalUncompressedBytes > MAX_TOTAL_UNCOMPRESSED_BYTES) {
-      throw new Error("Search shards exceed the 192 MB decoded safety limit.");
+      throw new Error("Search shards exceed the 256 MB decoded safety limit.");
     }
     return { totalBytes, totalUncompressedBytes, shardFormat };
   }

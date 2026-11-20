@@ -244,7 +244,7 @@ async function testRejectsClientLimitOverruns() {
       { ...manifest.shards[1], pages: 1 }
     ]
   };
-  const overDecodedManifest = {
+  const maxDecodedBoundaryManifest = {
     ...manifest,
     total_pages: 512,
     shard_count: 512,
@@ -262,10 +262,18 @@ async function testRejectsClientLimitOverruns() {
       engine.create({ manifestUrl: "https://example.test/over-pages/manifest.json" }),
       /Unsupported or malformed Everything Hub search manifest/
     );
-    globalThis.fetch = async () => new Response(JSON.stringify(overDecodedManifest), { status: 200 });
+    const decodedBoundaryUrl = "https://example.test/decoded-boundary/manifest.json";
+    globalThis.fetch = async url => {
+      if (String(url) === decodedBoundaryUrl) {
+        return new Response(JSON.stringify(maxDecodedBoundaryManifest), { status: 200 });
+      }
+      return new Response(new Uint8Array([0]), { status: 200 });
+    };
+    // The 256 MB aggregate boundary is exactly the maximum allowed by
+    // 512 shards × 500,000 decoded bytes; validation must reach shard integrity.
     await assert.rejects(
-      engine.create({ manifestUrl: "https://example.test/over-decoded/manifest.json" }),
-      /256 MB decoded safety limit/
+      engine.create({ manifestUrl: decodedBoundaryUrl }),
+      /SHA-256 mismatch/
     );
   } finally {
     globalThis.fetch = previousFetch;
