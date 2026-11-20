@@ -4,7 +4,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from catalog_page_analysis import analyze_pages, analyze_pages_incremental, search_catalog_network, write_outputs, validate_outputs
+from catalog_page_analysis import (
+    ANALYZER_VERSION, analyze_pages, analyze_pages_incremental,
+    search_catalog_network, search_source_page_evidence, write_outputs, validate_outputs,
+)
 
 
 class PageDerivedCatalogAnalysisTests(unittest.TestCase):
@@ -281,6 +284,96 @@ class PageDerivedCatalogAnalysisTests(unittest.TestCase):
             self.assertEqual(third["metrics"]["host_partitions_rebuilt"], 1)
             self.assertEqual(third["metrics"]["pages_analyzed"], 4)
             self.assertEqual(third["metrics"]["unique_catalogs_discovered"], 2)
+
+    def test_explicit_content_lists_expand_multiple_records_and_a_catalog(self):
+        result = analyze_pages([{
+            "url": "https://shop.example/catalog",
+            "title": "Product catalog",
+            "description": "Products include Rolex Submariner, Omega Seamaster, and Tudor Black Bay.",
+            "text": "",
+            "lane": "general", "robots_allowed": True,
+        }], source_total=1)
+        self.assertEqual(result["metrics"]["unique_catalogs_discovered"], 1)
+        self.assertEqual(result["metrics"]["unique_records_by_type"], {"product": 3})
+        self.assertEqual(result["metrics"]["content_entity_mentions"], 3)
+        hits = search_catalog_network("Rolex", result)
+        self.assertEqual(len(hits), 1)
+        self.assertEqual([x["title"] for x in hits[0]["matched_records"]], ["Rolex Submariner"])
+
+    def test_one_page_can_create_multiple_content_backed_catalogs(self):
+        result = analyze_pages([{
+            "url": "https://example.org/about",
+            "title": "Our offerings",
+            "description": (
+                "Products include Rolex Submariner and Omega Seamaster. "
+                "Services include Watch Repair and Custom Engraving."
+            ),
+            "text": "",
+            "lane": "general", "robots_allowed": True,
+        }], source_total=1)
+        self.assertEqual(result["metrics"]["unique_catalogs_discovered"], 2)
+        self.assertEqual(result["metrics"]["unique_records_by_type"], {"product": 2, "service": 2})
+
+    def test_single_list_item_does_not_force_a_catalog(self):
+        result = analyze_pages([{
+            "url": "https://example.org/about",
+            "title": "About our products",
+            "description": "Products include Rolex Submariner.",
+            "text": "",
+            "lane": "general", "robots_allowed": True,
+        }], source_total=1)
+        self.assertEqual(result["metrics"]["unique_records"], 1)
+        self.assertEqual(result["metrics"]["unique_catalogs_discovered"], 0)
+
+    def test_media_references_keep_source_page_provenance(self):
+        result = analyze_pages([{
+            "url": "https://example.org/gallery",
+            "title": "Gallery",
+            "description": "Watch gallery",
+            "text": "https://cdn.example.org/watch.jpg",
+            "lane": "general", "robots_allowed": True, "fetched_at": 123,
+        }], source_total=1)
+        self.assertEqual(result["metrics"]["media_references"], 1)
+        self.assertEqual(result["metrics"]["unique_media_urls"], 1)
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp)
+            write_outputs(result, output)
+            validated = validate_outputs(output)
+            self.assertEqual(validated["media_references_validated"], 1)
+            payload = json.loads(gzip.decompress((output / "media-references.json.gz").read_bytes()))
+            self.assertEqual(payload["references"][0]["source_url"], "https://example.org/gallery")
+            self.assertEqual(payload["references"][0]["discovered_at"], 123)
+
+    def test_incremental_cache_invalidates_old_analyzer_version(self):
+        pages = [{
+            "url": "https://cache.example/products/a", "title": "Product A",
+            "text": "Product details.", "lane": "shopping",
+        }]
+        with tempfile.TemporaryDirectory() as tmp:
+            cache = Path(tmp) / "cache"
+            first = analyze_pages_incremental(pages, source_total=1, cache_dir=cache)
+            self.assertEqual(first["metrics"]["host_partitions_rebuilt"], 1)
+            cache_file = next(cache.glob("*.json.gz"))
+            cached = json.loads(gzip.decompress(cache_file.read_bytes()).decode("utf-8"))
+            cached["analyzer_version"] = ANALYZER_VERSION - 1
+            cache_file.write_bytes(gzip.compress(json.dumps(cached).encode("utf-8"), mtime=0))
+            second = analyze_pages_incremental(pages, source_total=1, cache_dir=cache)
+            self.assertEqual(second["metrics"]["host_partitions_rebuilt"], 1)
+            self.assertEqual(second["metrics"]["host_partitions_reused"], 0)
+
+    def test_source_page_evidence_is_reported_separately_from_catalogs(self):
+        pages = [{
+            "url": "https://example.org/las-vegas-story",
+            "title": "Las Vegas Story",
+            "description": "A report about Las Vegas.",
+            "text": "Coverage from Las Vegas.",
+        }]
+        result = analyze_pages(pages, source_total=1)
+        self.assertEqual(search_catalog_network("Las Vegas", result), [])
+        evidence = search_source_page_evidence("Las Vegas", pages)
+        self.assertEqual(len(evidence), 1)
+        self.assertEqual(evidence[0]["url"], "https://example.org/las-vegas-story")
+
 
 if __name__ == "__main__":
     unittest.main()
