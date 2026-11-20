@@ -1,5 +1,13 @@
 # Everything Hub Crawler
 
+## Page-derived catalog analysis
+
+- `crawler/catalog_page_analysis.py` analyzes the canonical public index incrementally by host and produces stable catalog, entity, record, source-page, and media-reference IDs.
+- `data/page-derived-catalogs/` contains the candidate registry, global record set, source-page relationships, media references, and one integrity-checked compressed index per catalog. The manifest records SHA-256 digests and exact membership checks.
+- The report keeps source pages, eligible pages, unique catalogs, repeated candidate occurrences, subcatalogs, unique records by type, media references, records staged, records published, and coverage as separate counters.
+- Persisted throughput is calculated from successive report snapshots over elapsed wall-clock time; pages, catalogs, and records per minute are never combined.
+- After registry and per-catalog index validation, the retroactive inventory workflow records the report in the append-only project ledger. A `validated_staging` event does not imply source-terms clearance or production publication.
+
 ## Live operations checkpoint — 2026-11-19 21:04 UTC
 
 - The independent public crawler completed run **#201** successfully at 2026-11-19 20:59 UTC. Configuration/tests, crawl, shard build, canonical index validation, media catalog validation, and commit all passed. Latest catalog publication is SHA-256 verified.
