@@ -17,7 +17,9 @@ from media_discovery import MAX_STORED_CANDIDATES, MAX_SOURCE_PAGES, MEDIA_TYPES
 
 ROOT = Path(__file__).resolve().parents[1]
 CATALOG = ROOT / "data" / "media-discovery.json"
-MAX_CATALOG_BYTES = 20_000_000
+# Keep this single JSON file below GitHub's recommended 50 MB per-file size.
+# If it approaches 40 MB, move to compressed/sharded storage instead of raising this cap.
+MAX_CATALOG_BYTES = 40_000_000
 MAX_TITLE_LENGTH = 300
 MAX_ALT_LENGTH = 500
 MAX_SEEN_COUNT = 1_000_000
@@ -192,8 +194,9 @@ def validate_document(document: Any) -> tuple[list[str], dict[str, Any]]:
 def validate(path: Path = CATALOG) -> tuple[list[str], dict[str, Any]]:
     if not path.is_file():
         return ["data/media-discovery.json is missing"], {}
-    if path.stat().st_size > MAX_CATALOG_BYTES:
-        return ["media catalog exceeds the 20 MB safety limit"], {}
+    size_bytes = path.stat().st_size
+    if size_bytes > MAX_CATALOG_BYTES:
+        return [f"media catalog is {size_bytes:,} bytes, above the {MAX_CATALOG_BYTES:,}-byte safety limit"], {}
     try:
         document = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as error:
