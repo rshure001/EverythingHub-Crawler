@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "updated_at": "2026-11-20T11:15:47.282Z",
-  "reason": "Push-triggered fallback after stale scheduled delivery; one bounded recovery crawl, with a small runtime-window increase that preserves per-host pacing and the 10-minute job budget.",
-  "manifest_before_pages": 74174,
-  "manifest_before_updated_at": "2026-11-20T11:04:09Z"
+  "updated_at": "2026-11-20T12:03:25.228Z",
+  "reason": "Push-triggered fallback after scheduled crawl delivery exceeded 25 minutes; no queued or running crawler and public manifest exceeded 10 minutes. One bounded recovery crawl; existing per-host robots pacing and 10-minute job budget remain unchanged.",
+  "manifest_before_pages": 78011,
+  "manifest_before_updated_at": "2026-11-20T11:22:48.000Z"
 }
