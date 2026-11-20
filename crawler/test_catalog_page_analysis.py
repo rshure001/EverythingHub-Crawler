@@ -47,6 +47,7 @@ class PageDerivedCatalogAnalysisTests(unittest.TestCase):
         hits = search_catalog_network("Rolex", result)
         self.assertEqual(len(hits), 1)
         self.assertEqual(hits[0]["record_count"], 2)
+        self.assertEqual(len(hits[0]["matched_records"]), 2)
 
     def test_las_vegas_place_pages_form_a_catalog(self):
         pages = [

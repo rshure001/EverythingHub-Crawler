@@ -409,6 +409,8 @@ def search_catalog_network(query: str, analysis: dict, limit: int = 10) -> list[
                 scored.append((score, record))
         catalog_text = _norm(" ".join((catalog.get("title", ""), catalog.get("subject", ""), catalog.get("catalog_type", ""))))
         catalog_score = sum(2 for token in tokens if token in catalog_text)
+        if catalog_score and not scored:
+            scored = [(1, record) for record in related]
         if scored or catalog_score:
             ranked = sorted(scored, key=lambda x: (-x[0], x[1]["title"].casefold()))[:5]
             results.append({
@@ -453,6 +455,14 @@ def write_outputs(analysis: dict, output_dir: Path) -> dict:
             "title": catalog["title"], "status": catalog["status"], "records": related,
         })
         files.append({"file": "indexes/" + filename, "bytes": size, "sha256": digest, "items": len(related)})
+    size, digest = _write_gzip(output_dir / "records.json.gz", {
+        "version": 1, "records": analysis["records"],
+    })
+    files.append({"file": "records.json.gz", "bytes": size, "sha256": digest, "items": len(analysis["records"])})
+    size, digest = _write_gzip(output_dir / "media-references.json.gz", {
+        "version": 1, "media_urls": analysis["media_urls"],
+    })
+    files.append({"file": "media-references.json.gz", "bytes": size, "sha256": digest, "items": len(analysis["media_urls"])})
     report = {
         "schema_version": 1, "generated_at": analysis["generated_at"],
         "source_index_pages": analysis["source_index_pages"],
@@ -479,6 +489,11 @@ def validate_outputs(output_dir: Path) -> dict:
     registry = json.loads(gzip.decompress(registry_raw).decode("utf-8"))
     pages_raw = (output_dir / "pages.json.gz").read_bytes()
     pages = json.loads(gzip.decompress(pages_raw).decode("utf-8"))["pages"]
+    records_raw = (output_dir / "records.json.gz").read_bytes()
+    records = json.loads(gzip.decompress(records_raw).decode("utf-8"))["records"]
+    record_ids = [x["record_id"] for x in records]
+    if len(record_ids) != len(set(record_ids)) or len(records) != manifest["record_count"]:
+        raise ValueError("global record registry contains duplicates or a count mismatch")
     if len(registry["catalogs"]) != manifest["catalog_count"]:
         raise ValueError("registry catalog count does not match manifest")
     if len(pages) != manifest["source_index_pages"]:
@@ -492,8 +507,12 @@ def validate_outputs(output_dir: Path) -> dict:
         if len(raw) != entry["bytes"] or hashlib.sha256(raw).hexdigest() != entry["sha256"]:
             raise ValueError("catalog analysis artifact integrity mismatch: " + entry["file"])
         payload = json.loads(gzip.decompress(raw).decode("utf-8"))
-        if entry["file"].startswith("indexes/") and payload.get("catalog_id") not in set(catalog_ids):
-            raise ValueError("orphan per-catalog index detected")
+        if entry["file"].startswith("indexes/"):
+            if payload.get("catalog_id") not in set(catalog_ids):
+                raise ValueError("orphan per-catalog index detected")
+            indexed_ids = [x["record_id"] for x in payload.get("records", [])]
+            if len(indexed_ids) != len(set(indexed_ids)) or any(x not in set(record_ids) for x in indexed_ids):
+                raise ValueError("per-catalog index contains duplicate or unknown record IDs")
     if registry["status"] != "candidate_staging_not_production":
         raise ValueError("candidate registry must not be advertised as production")
     return {"catalogs": len(catalog_ids), "pages_analyzed": len(pages), "files_validated": len(manifest["files"])}
