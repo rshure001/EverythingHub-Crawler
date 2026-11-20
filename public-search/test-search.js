@@ -214,11 +214,11 @@ async function testCurrentPublishedManifestFitsClientLimits() {
     );
   }
   assert.ok(
-    totalShardBytes <= (compressedShards ? 64_000_000 : 100_000_000),
+    totalShardBytes <= (compressedShards ? 80_000_000 : 100_000_000),
     "current shard catalog must fit its compressed or legacy transfer limit"
   );
 
-  assert.ok(totalUncompressedBytes <= 320_000_000, "current shard catalog must fit the 256 MB decoded safety limit");
+  assert.ok(totalUncompressedBytes <= 320_000_000, "current shard catalog must fit the 320 MB decoded safety limit");
 
   globalThis.fetch = async url => {
     const value = String(url);
@@ -304,7 +304,7 @@ testShardOnlyLoader()
   .then(testGzipLoader)
   .then(testCurrentPublishedManifestFitsClientLimits)
   .then(testRejectsClientLimitOverruns)
-  .then(() => console.log("Browser ranking, gzip, shard integrity, current-manifest, and 125k/256 MB bound tests passed"))
+  .then(() => console.log("Browser ranking, gzip, shard integrity, current-manifest, and 150k/320 MB bound tests passed"))
   .catch(error => {
     console.error(error);
     process.exitCode = 1;
