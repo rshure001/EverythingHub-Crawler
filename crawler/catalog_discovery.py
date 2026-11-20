@@ -26,7 +26,7 @@ USER_AGENT = "EverythingHubCatalogDiscovery/1.0 (+https://github.com/rshure001/E
 SOURCES = (
     {"id": "us-data-gov", "name": "Data.gov", "base": "https://catalog.data.gov", "category": "government"},
     {"id": "canada-open-data", "name": "Open Government Canada", "base": "https://open.canada.ca/data", "category": "government"},
-    {"id": "australia-data-gov", "name": "Data.gov.au", "base": "https://data.gov.au", "category": "government"},
+    {"id": "australia-data-gov", "name": "Data.gov.au", "base": "https://data.gov.au", "api_path": "/data/api/3/action/package_search", "category": "government"},
     {"id": "swiss-open-data", "name": "opendata.swiss", "base": "https://opendata.swiss", "category": "government"},
 )
 
@@ -96,7 +96,7 @@ def discover_source(source: dict[str, str], rows: int, max_pages: int, pause: fl
             "start": page * rows,
             "sort": "metadata_modified desc",
         })
-        url = source["base"].rstrip("/") + "/api/3/action/package_search?" + params
+        url = source["base"].rstrip("/") + source.get("api_path", "/api/3/action/package_search") + "?" + params
         try:
             payload = _request_json(url)
             result = payload.get("result")
