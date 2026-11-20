@@ -1,6 +1,11 @@
 name: Catalog-first discovery
 
 on:
+  push:
+    paths:
+      - "crawler/catalog_discovery.py"
+      - "crawler/test_catalog_discovery.py"
+      - ".github/workflows/catalog-first-discovery.yml"
   workflow_dispatch:
     inputs:
       rows:
