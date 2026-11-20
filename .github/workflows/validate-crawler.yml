@@ -60,7 +60,7 @@ jobs:
           ruby -e 'require "yaml"; ARGV.each { |path| YAML.load_file(path, aliases: true); puts "YAML-valid #{path}" }' .github/workflows/crawl.yml .github/workflows/crawl-watchdog.yml .github/workflows/publish-site.yml .github/workflows/search-api-smoke.yml .github/workflows/everything-hub-live-diagnostics.yml .github/workflows/recovery-search-check.yml .github/workflows/validate-vercel-search.yml
       - name: Compile crawler and database tools
         run: |
-          python -m py_compile crawler/index_store.py crawler/validate_index_migration.py crawler/crawl.py crawler/report.py crawler/build_search_shards.py crawler/validate_public_index.py crawler/validate_media_catalog.py crawler/schedule_watchdog.py crawler/pipeline_health.py database/import_repository_index.py database/crawl_worker.py database/crawl_worker_smoke.py publisher/release_health.py
+          python -m py_compile crawler/index_store.py crawler/validate_index_migration.py crawler/crawl.py crawler/report.py crawler/build_search_shards.py crawler/validate_public_index.py crawler/validate_media_catalog.py crawler/schedule_watchdog.py crawler/pipeline_health.py database/import_repository_index.py database/crawl_worker.py database/crawl_worker_smoke.py publisher/release_health.py publisher/stage_search_catalog.py
       - name: Run crawler, schema-isolation, and edge-search tests
         run: |
           python -m unittest discover -s crawler -p 'test_*.py' -v
