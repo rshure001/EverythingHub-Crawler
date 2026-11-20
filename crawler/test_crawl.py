@@ -253,6 +253,34 @@ class CrawlerTests(unittest.TestCase):
         self.assertTrue(noindex["_eh_noindex"])
         self.assertNotIn("published_at", noindex)
 
+    def test_build_page_record_preserves_structured_product_metadata(self):
+        record = crawl.build_page_record(
+            "https://shop.example/item", "Diamond ring", "", "18K ring", 1, set(),
+            product_metadata={
+                "type": "product",
+                "name": "18K Diamond Pinky Ring",
+                "brand": "Example Jewelers",
+                "sku": "RING-18K",
+                "price": "1299.00",
+                "currency": "USD",
+                "availability": "InStock",
+                "image": "https://shop.example/ring.jpg",
+                "url": "https://shop.example/item",
+            },
+        )
+        self.assertEqual(record["product"]["name"], "18K Diamond Pinky Ring")
+        self.assertEqual(record["product"]["brand"], "Example Jewelers")
+        self.assertEqual(record["product"]["price"], "1299.00")
+        self.assertEqual(record["product"]["image"], "https://shop.example/ring.jpg")
+
+    def test_build_page_record_does_not_publish_product_metadata_on_noindex(self):
+        record = crawl.build_page_record(
+            "https://shop.example/private", "Private product", "", "", 1, {"noindex"},
+            product_metadata={"type": "product", "name": "Private item"},
+        )
+        self.assertTrue(record["_eh_noindex"])
+        self.assertNotIn("product", record)
+
     def test_build_page_record_uses_readable_url_title_when_source_title_is_blank(self):
         record = crawl.build_page_record(
             "https://example.com/resources/veteran-resources.html",
