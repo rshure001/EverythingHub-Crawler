@@ -5,6 +5,8 @@ on:
     paths:
       - ".github/workflows/crawl.yml"
       - "crawler/crawl.py"
+      - "crawler/index_store.py"
+      - "crawler/test_index_store.py"
       - "crawler/test_crawl.py"
       - "crawler/test_discovery_sitemap.py"
       - "vercel-homepage/sitemap.xml"
@@ -70,7 +72,7 @@ jobs:
           fi
       - name: Validate crawler configuration and tests
         run: |
-          python -m py_compile crawler/crawl.py crawler/report.py crawler/hourly_production.py crawler/build_search_shards.py crawler/validate_public_index.py crawler/validate_media_catalog.py crawler/hurricane_strength.py crawler/media_discovery.py crawler/media_extraction_preflight.py crawler/crawl_revision_guard.py
+          python -m py_compile crawler/index_store.py crawler/crawl.py crawler/report.py crawler/hourly_production.py crawler/build_search_shards.py crawler/validate_public_index.py crawler/validate_media_catalog.py crawler/hurricane_strength.py crawler/media_discovery.py crawler/media_extraction_preflight.py crawler/crawl_revision_guard.py
           test "$(grep -c '^https://' crawler/seeds.txt)" -ge 71
           python -m unittest discover -s crawler -p 'test_*.py' -v
       # Validate bounded sitemap discovery, Retry-After backoff, and the strict 6,000-page fetch cap (up to 1,000 fetch attempts per minute during an active six-minute run).
@@ -106,7 +108,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add data/index.json data/frontier.json data/media-discovery.json data/hourly-production.json public-search/
+          git add data/index.json data/index-shards/ data/frontier.json data/media-discovery.json data/hourly-production.json public-search/
           if git diff --cached --quiet; then
             echo "Crawler output already matches the current repository."
             exit 0
