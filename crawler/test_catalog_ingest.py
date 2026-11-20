@@ -5,7 +5,7 @@ class UniversalCatalogIngestTests(unittest.TestCase):
     def test_ckan_datasets_become_catalog_records_not_pages(self):
         result = adapt({
             "updated_at": "2026-11-20T00:00:00Z",
-            "catalogs": [{"id":"test","name":"Test Data","base_url":"https://data.example.org","errors":[]}],
+            "catalogs": [{"id":"test","name":"Test Data","base_url":"https://data.example.org","source_terms_url":"https://data.gov/contact/","source_terms_status":"reviewed_per_dataset","attribution_required":"per_dataset","errors":[]}],
             "datasets": [{
                 "catalog_id":"test","id":"test:roads","dataset_id":"roads","title":"Road Network",
                 "description":"Roads and routes","landing_url":"https://data.example.org/dataset/roads",
