@@ -5,6 +5,9 @@ on:
     paths:
       - ".github/workflows/crawl.yml"
       - "crawler/crawl.py"
+      - "crawler/catalog_frontier.py"
+      - "crawler/test_catalog_frontier.py"
+      - "data/universal-catalog-records.json.gz"
       - "crawler/index_store.py"
       - "crawler/test_index_store.py"
       - "crawler/test_crawl.py"
