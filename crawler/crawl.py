@@ -31,7 +31,7 @@ WORKERS = 250
 QUEUE_LIMIT = 100000
 MAX_DEPTH = 3
 MAX_FETCH_PER_RUN = 12000
-MAX_SITEMAP_HOSTS_PER_RUN = 8
+MAX_SITEMAP_HOSTS_PER_RUN = 174
 MAX_SITEMAP_CHILD_SITEMAPS = 4
 MAX_SITEMAP_URLS_PER_HOST = 500
 MAX_SITEMAP_BYTES = 2_000_000
@@ -932,47 +932,47 @@ def main():
             if len(candidate_hosts) >= MAX_SITEMAP_HOSTS_PER_RUN:
                 break
 
-    for host, site in candidate_hosts:
-        parser = policy(site)
+    def discover_sitemaps_for_host(item):
+        host, site = item
         checked_now = int(time.time())
-        sitemap_hosts_checked += 1
+        parser = policy(site)
         if getattr(parser, "disallow_all", False):
             # Retry a robots.txt read failure after one hour, not every run.
-            sitemap_checked[host] = checked_now - SITEMAP_RECHECK_SECONDS + 3600
-            continue
-        sitemap_checked[host] = checked_now
+            retry_at = checked_now - SITEMAP_RECHECK_SECONDS + 3600
+            return host, [], 1, 0, 0, retry_at, None
 
         declared = parser.site_maps() or []
         sitemap_url = None
+        site_netloc = urllib.parse.urlsplit(site).netloc.lower()
         for raw_url in declared:
             candidate = clean(raw_url)
-            if candidate and urllib.parse.urlsplit(candidate).netloc.lower() == urllib.parse.urlsplit(site).netloc.lower():
+            if candidate and urllib.parse.urlsplit(candidate).netloc.lower() == site_netloc:
                 sitemap_url = candidate
                 break
         if not sitemap_url:
-            continue
+            return host, [], 1, 0, 0, checked_now, None
 
         pending_sitemaps = [sitemap_url]
         discovered_pages = []
         sitemap_index = 0
-
-        def wait_for_sitemap_host():
-            wait = max(0.0, float(host_next_allowed.get(host, 0) or 0) - time.time())
-            remaining = MAX_RUN_SECONDS - (time.monotonic() - run_started)
-            if wait > remaining:
-                return False
-            if wait > 0:
-                time.sleep(wait)
-            return True
+        fetches = 0
+        rate_limited = 0
+        checked_at = checked_now
+        next_allowed = float(host_next_allowed.get(host, 0) or 0)
 
         while sitemap_index < len(pending_sitemaps) and sitemap_index <= MAX_SITEMAP_CHILD_SITEMAPS:
             current_sitemap = pending_sitemaps[sitemap_index]
             sitemap_index += 1
-            if not wait_for_sitemap_host():
+            wait = max(0.0, next_allowed - time.time())
+            remaining = MAX_RUN_SECONDS - (time.monotonic() - run_started)
+            if wait > remaining:
                 break
+            if wait > 0:
+                time.sleep(wait)
             if not allowed(current_sitemap):
                 continue
-            sitemap_fetches += 1
+
+            fetches += 1
             try:
                 final_sitemap, _content_type, _x_robots_tags, body = request(
                     current_sitemap, allowed, max_bytes=MAX_SITEMAP_BYTES + 1
@@ -980,7 +980,7 @@ def main():
             except Exception as error:
                 status = getattr(error, "code", None)
                 if status in (429, 503):
-                    rate_limited_count[0] += 1
+                    rate_limited += 1
                 if status == 429:
                     backoff = max(DEFAULT_429_BACKOFF_SECONDS, retry_after_seconds(error, DEFAULT_429_BACKOFF_SECONDS))
                 elif status in (500, 502, 503, 504):
@@ -989,12 +989,12 @@ def main():
                     backoff = max(DEFAULT_NETWORK_BACKOFF_SECONDS, retry_after_seconds(error, DEFAULT_NETWORK_BACKOFF_SECONDS))
                 else:
                     backoff = host_delay(origin(current_sitemap))
-                host_next_allowed[host] = time.time() + max(host_delay(origin(current_sitemap)), backoff)
+                next_allowed = time.time() + max(host_delay(origin(current_sitemap)), backoff)
                 if status == 403:
                     cooldown = SITEMAP_RECHECK_SECONDS
                 else:
                     cooldown = max(DEFAULT_NETWORK_BACKOFF_SECONDS, backoff)
-                sitemap_checked[host] = int(
+                checked_at = int(
                     time.time() - SITEMAP_RECHECK_SECONDS + min(cooldown, MAX_RETRY_AFTER_SECONDS)
                 )
                 print(f"skip sitemap {current_sitemap}: {error}; host cooldown {backoff:.0f}s")
@@ -1003,7 +1003,11 @@ def main():
                 ):
                     break
                 continue
-            host_next_allowed[host] = time.time() + max(host_delay(origin(current_sitemap)), host_delay(origin(final_sitemap)))
+
+            next_allowed = time.time() + max(
+                host_delay(origin(current_sitemap)),
+                host_delay(origin(final_sitemap)),
+            )
             if len(body) > MAX_SITEMAP_BYTES:
                 print(f"skip sitemap {current_sitemap}: exceeds {MAX_SITEMAP_BYTES} bytes")
                 continue
@@ -1017,7 +1021,37 @@ def main():
             if len(discovered_pages) >= MAX_SITEMAP_URLS_PER_HOST:
                 break
 
-        for candidate in list(dict.fromkeys(discovered_pages))[:MAX_SITEMAP_URLS_PER_HOST]:
+        return (
+            host,
+            list(dict.fromkeys(discovered_pages))[:MAX_SITEMAP_URLS_PER_HOST],
+            1,
+            fetches,
+            rate_limited,
+            checked_at,
+            next_allowed if next_allowed > 0 else None,
+        )
+
+    # Discover across the whole configured seed network concurrently. Each
+    # host gets its own robots policy and its own politeness clock; no host is
+    # allowed to exceed the robots-derived request rate.
+    if candidate_hosts:
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=min(WORKERS, len(candidate_hosts))
+        ) as sitemap_pool:
+            sitemap_results = list(sitemap_pool.map(
+                discover_sitemaps_for_host, candidate_hosts
+            ))
+    else:
+        sitemap_results = []
+
+    for host, discovered_pages, checked_count, fetch_count, rate_count, checked_at, next_allowed in sitemap_results:
+        sitemap_hosts_checked += checked_count
+        sitemap_fetches += fetch_count
+        rate_limited_count[0] += rate_count
+        sitemap_checked[host] = checked_at
+        if next_allowed is not None:
+            host_next_allowed[host] = next_allowed
+        for candidate in discovered_pages:
             if candidate not in seen and len(seen) < QUEUE_LIMIT:
                 seen.add(candidate)
                 queue.append((candidate, 1))
