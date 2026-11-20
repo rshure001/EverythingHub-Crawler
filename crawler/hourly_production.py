@@ -15,7 +15,7 @@ MANIFEST_PATH = ROOT / "public-search" / "manifest.json"
 HISTORY_PATH = ROOT / "data" / "hourly-production.json"
 RETENTION = timedelta(hours=24)
 WINDOW = timedelta(hours=1)
-TARGET_RECORDS_PER_HOUR = 1000
+TARGET_RECORDS_PER_HOUR = 60000
 
 
 def parse_time(value: str) -> datetime:
