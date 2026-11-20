@@ -29,6 +29,13 @@ class FeedbackLearnerTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 load_feedback(path)
 
+    def test_rejects_identifying_fields(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "feedback.jsonl"
+            path.write_text('{"lane":"web","label":1,"user_id":"private"}\\n', encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "unsupported fields"):
+                load_feedback(path)
+
     def test_reads_minimal_anonymous_events(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "feedback.jsonl"
