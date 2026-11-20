@@ -15,6 +15,7 @@ OUT = ROOT / "public-search"
 MAX_BYTES = 500_000  # Decoded shard target; gzip transport remains below 350 KB.
 MAX_COMPRESSED_BYTES = 350_000
 MAX_SHARD_COUNT = 512
+SHARD_GZIP_LEVEL = 6
 # The independent Vercel backend safely decompresses up to 64 MB. The
 # Supabase Edge Function has a smaller 30 MB/6 MB budget and delegates larger
 # catalogs to Vercel rather than scanning all shards in its CPU-limited isolate.
@@ -88,7 +89,7 @@ def encode_shard(items):
     uncompressed = encode_batch(items)
     if len(uncompressed) > MAX_BYTES:
         raise ValueError("uncompressed public shard exceeds its size limit")
-    compressed = gzip.compress(uncompressed, compresslevel=9, mtime=0)
+    compressed = gzip.compress(uncompressed, compresslevel=SHARD_GZIP_LEVEL, mtime=0)
     if len(compressed) > MAX_COMPRESSED_BYTES:
         raise ValueError("compressed public shard exceeds its size limit")
     return compressed, len(uncompressed)
