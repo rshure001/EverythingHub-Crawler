@@ -4,6 +4,9 @@ on:
   push:
     paths:
       - "crawler/catalog_host_probe.py"
+      - "crawler/catalog_source_policy.py"
+      - "crawler/catalog-source-terms.json"
+      - "crawler/test_catalog_source_policy.py"
       - "crawler/test_catalog_host_probe.py"
       - "data/host-catalog-candidates.json"
       - ".github/workflows/catalog-host-probe.yml"
@@ -32,6 +35,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Test catalog source policy and robots gate
+        working-directory: crawler
+        run: python -m unittest test_catalog_source_policy.py -v
       - name: Test cumulative host probe inventory
         working-directory: crawler
         run: python -m unittest test_catalog_host_probe.py -v
