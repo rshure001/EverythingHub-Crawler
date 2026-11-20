@@ -1,81 +1,52 @@
 #!/usr/bin/env python3
 """Probe known public host endpoints for machine-readable catalog interfaces.
 
-Only HTTPS URLs on each already-discovered host are requested. Redirects to
-other hosts or to HTTP are rejected. This records evidence; it does not ingest
-records or claim a catalog is verified merely because a URL responds.
+Only source-terms-approved HTTPS API paths are requested. Every request is
+robots.txt checked, rate limited, DNS pinned, and restricted to same-origin
+redirects. This records evidence; it does not ingest or verify a catalog.
 """
 from __future__ import annotations
 import argparse, json, time, urllib.error, urllib.parse, urllib.request
 from pathlib import Path
-from xml.etree import ElementTree
+from catalog_source_policy import SourcePolicyError, policy_for_host, request_source_bytes
 
 ROOT = Path(__file__).resolve().parents[1]
 INPUT = ROOT / "data" / "host-catalog-candidates.json"
 OUTPUT = ROOT / "data" / "host-catalog-probes.json"
-UA = "EverythingHubCatalogProbe/1.0 (+https://github.com/rshure001/EverythingHub-Crawler)"
 MAX_BYTES = 1_500_000
 TIMEOUT = 8
-PROBES = (
-    ("sitemap", "/sitemap.xml"),
-    ("openapi", "/openapi.json"),
-    ("swagger", "/swagger.json"),
-    ("wordpress_api", "/wp-json/"),
-    ("ckan_api", "/api/3/action/package_search?q=%2A%3A%2A&rows=1"),
-)
-
-class SameHostHTTPSRedirect(urllib.request.HTTPRedirectHandler):
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
-        old, new = urllib.parse.urlsplit(req.full_url), urllib.parse.urlsplit(newurl)
-        if new.scheme != "https" or (new.hostname or "").lower() != (old.hostname or "").lower():
-            return None
-        return super().redirect_request(req, fp, code, msg, headers, newurl)
-
-OPENER = urllib.request.build_opener(SameHostHTTPSRedirect())
-
 def probe_one(host: str, kind: str, path: str) -> dict:
     url = "https://" + host + path
-    req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "application/json, application/xml, text/xml, */*"})
+    policy = policy_for_host(host)
+    if not policy or policy.get("discovery_allowed") is not True:
+        return {"kind": kind, "url": url, "status": "source_terms_unreviewed"}
     try:
-        with OPENER.open(req, timeout=TIMEOUT) as response:
-            final = urllib.parse.urlsplit(response.geturl())
-            if final.scheme != "https" or (final.hostname or "").lower() != host.lower():
-                return {"kind": kind, "url": url, "status": "rejected_cross_host_redirect"}
-            raw = response.read(MAX_BYTES + 1)
-            if len(raw) > MAX_BYTES:
-                return {"kind": kind, "url": url, "status": "oversize", "http_status": response.status}
-            ctype = response.headers.get("Content-Type", "").split(";")[0].lower()
-            result = {"kind": kind, "url": response.geturl(), "status": "responded", "http_status": response.status, "content_type": ctype, "bytes": len(raw)}
-            if kind == "sitemap" and raw:
-                try:
-                    root = ElementTree.fromstring(raw)
-                    result["xml_root"] = root.tag.rsplit("}", 1)[-1]
-                    result["url_entries"] = sum(1 for node in root.iter() if node.tag.rsplit("}", 1)[-1] == "loc")
-                    if result["xml_root"] in ("urlset", "sitemapindex"):
-                        result["evidence"] = "sitemap_xml"
-                except ElementTree.ParseError:
-                    result["status"] = "invalid_xml"
-            elif kind in ("openapi", "swagger", "wordpress_api", "ckan_api"):
-                try:
-                    payload = json.loads(raw.decode("utf-8"))
-                    if isinstance(payload, dict):
-                        if kind in ("openapi", "swagger") and (payload.get("openapi") or payload.get("swagger")):
-                            result["evidence"] = "api_schema"
-                            result["api_paths"] = len(payload.get("paths") or {})
-                        elif kind == "wordpress_api" and isinstance(payload.get("routes"), dict):
-                            result["evidence"] = "wordpress_rest_api"
-                            result["route_count"] = len(payload["routes"])
-                        elif kind == "ckan_api" and payload.get("success") is True:
-                            result["evidence"] = "ckan_package_search"
-                            data = payload.get("result") or {}
-                            result["dataset_total"] = data.get("count") if isinstance(data, dict) else None
-                except (UnicodeDecodeError, json.JSONDecodeError):
-                    result["status"] = "invalid_json"
-            return result
+        raw, status, headers, _policy = request_source_bytes(
+            url, purpose="probe", max_bytes=MAX_BYTES, timeout=TIMEOUT,
+            accept="application/json",
+        )
+        if status != 200:
+            return {"kind": kind, "url": url, "status": "http_error", "http_status": status}
+        ctype = headers.get("Content-Type", "").split(";")[0].lower()
+        result = {"kind": kind, "url": url, "status": "responded", "http_status": status,
+                  "content_type": ctype, "bytes": len(raw)}
+        if kind == "ckan_api":
+            try:
+                payload = json.loads(raw.decode("utf-8"))
+                if isinstance(payload, dict) and payload.get("success") is True:
+                    result["evidence"] = "ckan_package_search"
+                    data = payload.get("result") or {}
+                    result["dataset_total"] = data.get("count") if isinstance(data, dict) else None
+            except (UnicodeDecodeError, json.JSONDecodeError):
+                result["status"] = "invalid_json"
+        return result
+    except SourcePolicyError as exc:
+        return {"kind": kind, "url": url, "status": "source_policy_blocked", "reason": str(exc)[:240]}
     except urllib.error.HTTPError as exc:
         return {"kind": kind, "url": url, "status": "http_error", "http_status": exc.code}
     except (urllib.error.URLError, TimeoutError, OSError, ValueError) as exc:
         return {"kind": kind, "url": url, "status": type(exc).__name__}
+
 
 def run(input_path: Path, output_path: Path, limit: int, offset: int, pause: float) -> dict:
     inventory = json.loads(input_path.read_text(encoding="utf-8"))
@@ -87,7 +58,16 @@ def run(input_path: Path, output_path: Path, limit: int, offset: int, pause: flo
         host = item.get("host")
         if not isinstance(host, str) or not host or "/" in host:
             continue
-        evidence = [probe_one(host, kind, path) for kind, path in PROBES]
+        policy = policy_for_host(host)
+        if not policy or policy.get("discovery_allowed") is not True:
+            evidence = [{"kind": "source_policy", "url": "https://" + host, "status": "source_terms_unreviewed"}]
+        else:
+            evidence = [
+                probe_one(host, "ckan_api", path + "?q=%2A%3A%2A&rows=1")
+                for path in policy.get("allowed_probe_paths", [])
+            ]
+            if not evidence:
+                evidence = [{"kind": "source_policy", "url": "https://" + host, "status": "no_probe_path_approved"}]
         verified = [x for x in evidence if x.get("evidence")]
         results.append({"host": host, "source_pages": item.get("source_pages", 0), "probes": evidence, "verified_interfaces": verified, "status": "interface_evidence_found" if verified else "no_interface_verified"})
         time.sleep(pause)

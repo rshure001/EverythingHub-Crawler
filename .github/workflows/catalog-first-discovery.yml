@@ -4,7 +4,12 @@ on:
   push:
     paths:
       - "crawler/catalog_discovery.py"
+      - "crawler/catalog_source_policy.py"
+      - "crawler/catalog-source-terms.json"
+      - "crawler/test_catalog_source_policy.py"
       - "crawler/test_catalog_discovery.py"
+      - "crawler/catalog_host_probe.py"
+      - "crawler/test_catalog_host_probe.py"
       - "crawler/catalog_retro_discovery.py"
       - "crawler/test_catalog_retro_discovery.py"
       - "crawler/catalog_model.py"
@@ -12,6 +17,8 @@ on:
       - "crawler/catalog_openlibrary.py"
       - "crawler/test_catalog_openlibrary.py"
       - "crawler/test_catalog_ingest.py"
+      - "database/import_universal_catalogs.py"
+      - "database/test_import_universal_catalogs.py"
       - "crawler/test_catalog_model.py"
       - "project/**"
       - "learning/**"
@@ -48,9 +55,15 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Validate catalog source policy
+        working-directory: crawler
+        run: python -m unittest test_catalog_source_policy.py -v
       - name: Validate catalog discovery
         working-directory: crawler
         run: python -m unittest test_catalog_discovery.py -v
+      - name: Validate catalog host probe policy
+        working-directory: crawler
+        run: python -m unittest test_catalog_host_probe.py -v
       - name: Validate universal catalog model
         working-directory: crawler
         run: python -m unittest test_catalog_model.py -v
@@ -63,6 +76,8 @@ jobs:
       - name: Validate universal catalog ingestion
         working-directory: crawler
         run: python -m unittest test_catalog_ingest.py -v
+      - name: Validate eh_quad rights-aware importer
+        run: python -m unittest discover -s database -p "test_import_universal_catalogs.py" -v
       - name: Validate project ledger
         run: python -m unittest discover -s project -p 'test_*.py' -v
       - name: Validate feedback learner
@@ -84,6 +99,8 @@ jobs:
           records = json.load(gzip.open("data/universal-catalog-records.json.gz", "rt", encoding="utf-8"))
           openlibrary = json.load(gzip.open("data/openlibrary-catalogs.json.gz", "rt", encoding="utf-8"))
           assert records["production_indexed"] is False
+          assert records["metrics"]["production_eligible_records"] + records["metrics"]["restricted_records"] == len(records["records"])
+          assert all(not row.get("policy_allowed") or row.get("source_terms_status") in ("reviewed", "reviewed_per_dataset") for row in records["source_pages"])
           assert len(records["catalogs"]) == records["metrics"]["catalogs_discovered"]
           assert len(records["records"]) == records["metrics"]["catalog_records"]
           assert len(records["records"]) == catalogs["datasets_discovered"] + openlibrary["datasets_discovered"]
@@ -93,11 +110,24 @@ jobs:
               "resource_links": catalogs["resources_discovered"],
               "openlibrary_records": openlibrary["datasets_discovered"],
               "indexed_records": records["metrics"]["indexed_records"],
+              "production_eligible_records": records["metrics"]["production_eligible_records"],
+              "restricted_records": records["metrics"]["restricted_records"],
           })
           PY
+      - name: Upload catalog staging preview from non-main branches
+        if: github.ref != 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: catalog-staging-preview-${{ github.run_number }}
+          path: |
+            data/catalogs.json.gz
+            data/openlibrary-catalogs.json.gz
+            data/universal-catalog-records.json.gz
       - name: Record discovery in the project ledger
+        if: github.ref == 'refs/heads/main'
         run: python project/ledger.py --record-catalog-discovery
       - name: Publish catalog manifest and project ledger
+        if: github.ref == 'refs/heads/main'
         run: |
           git add -f data/catalogs.json.gz data/openlibrary-catalogs.json.gz data/project-ledger.json data/universal-catalog-records.json.gz
           git rm -f --ignore-unmatch data/catalogs.json data/universal-catalog-records.json
