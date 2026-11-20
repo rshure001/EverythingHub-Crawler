@@ -870,6 +870,10 @@ class CrawlerTests(unittest.TestCase):
         self.assertEqual(len(queue), 1)
         self.assertIn(("http://host-0.example/second", 0), list(queue))
 
+    def test_crawl_runtime_budget_preserves_postprocessing_headroom(self):
+        self.assertEqual(crawl.MAX_RUN_SECONDS, 380)
+        self.assertLessEqual(crawl.MAX_RUN_SECONDS + 120, 600)
+
     def test_save_json_writes_compact_semantically_identical_json(self):
         payload = {
             "updated_at": 123,

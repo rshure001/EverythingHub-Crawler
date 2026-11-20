@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "updated_at": "2026-11-20T10:57:30.884Z",
-  "reason": "Push-triggered fallback for stale GitHub scheduled crawler delivery; update only when no crawler run is active and the public manifest is stale.",
-  "manifest_before_pages": 70652,
-  "manifest_before_updated_at": "2026-11-20T10:05:05Z"
+  "updated_at": "2026-11-20T11:15:47.282Z",
+  "reason": "Push-triggered fallback after stale scheduled delivery; one bounded recovery crawl, with a small runtime-window increase that preserves per-host pacing and the 10-minute job budget.",
+  "manifest_before_pages": 74174,
+  "manifest_before_updated_at": "2026-11-20T11:04:09Z"
 }
