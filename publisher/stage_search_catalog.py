@@ -14,7 +14,7 @@ import zlib
 from urllib.parse import urlsplit
 from typing import Any
 
-MAX_INDEXED_PAGES = 125_000
+MAX_INDEXED_PAGES = 130_000
 MAX_SHARD_COUNT = 512
 MAX_SHARD_BYTES = 350_000
 MAX_SHARD_UNCOMPRESSED_BYTES = 500_000
