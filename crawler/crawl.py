@@ -378,6 +378,24 @@ def clean(url):
     return urllib.parse.urlunsplit((p.scheme.lower(), p.netloc.lower(), p.path or "/",
                                     urllib.parse.urlencode(query), ""))
 
+def restore_frontier_queue(items):
+    """Restore only canonical searchable-HTML URLs from the persisted frontier."""
+    queue = deque()
+    for item in items or []:
+        if not isinstance(item, dict) or not item.get("url"):
+            continue
+        candidate = clean(item["url"])
+        if not candidate:
+            continue
+        try:
+            depth = int(item.get("depth", 0))
+        except (TypeError, ValueError):
+            continue
+        if 0 <= depth <= MAX_DEPTH:
+            queue.append((candidate, depth))
+    return queue
+
+
 def request(url, is_allowed, max_bytes=2_000_000):
     req = urllib.request.Request(url, headers={
         "User-Agent": UA, "Accept": "text/html,application/xml,*/*"
@@ -842,10 +860,10 @@ def main():
             parsed = urllib.parse.urlsplit(key)
             key = (parsed.hostname or parsed.netloc).lower()
         host_next_allowed[key] = max(host_next_allowed.get(key, 0), float(timestamp))
-    queue = deque()
-    for item in frontier.get("queue", []):
-        if isinstance(item, dict) and item.get("url"):
-            queue.append((item["url"], int(item.get("depth", 0))))
+    # The saved frontier predates current URL filters. Re-clean it on
+    # resume so old PDFs, images, scripts, and malformed URLs never consume
+    # another network request.
+    queue = restore_frontier_queue(frontier.get("queue", []))
     for seed in seeds:
         if seed not in seen and len(seen) < QUEUE_LIMIT:
             seen.add(seed)
