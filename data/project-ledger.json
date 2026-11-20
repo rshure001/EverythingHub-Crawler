@@ -28,6 +28,20 @@
       }
     },
     {
+      "id": "supabase-recovery-2026-11-20",
+      "timestamp": "2026-11-20T14:47:53Z",
+      "type": "database_incident",
+      "status": "investigating_read_only",
+      "summary": "Supabase control plane showed healthy while PostgreSQL connections returned SQLSTATE 57P03 during WAL recovery. Destructive recovery actions were intentionally withheld.",
+      "metrics": {
+        "sqlstate": "57P03"
+      },
+      "source": {
+        "project": "everything-hub-control",
+        "region": "us-west-1"
+      }
+    },
+    {
       "id": "publisher-limit-fix-968b8a499c61",
       "timestamp": "2026-11-20T14:49:47Z",
       "type": "publisher_fix",
@@ -45,20 +59,6 @@
       "summary": "Completed the publisher page-cap regression coverage.",
       "source": {
         "commit": "ece8842f335ca4640d6b965ca9087ffddf0a09e1"
-      }
-    },
-    {
-      "id": "supabase-recovery-2026-11-20",
-      "timestamp": "2026-11-20T14:47:53Z",
-      "type": "database_incident",
-      "status": "investigating_read_only",
-      "summary": "Supabase control plane showed healthy while PostgreSQL connections returned SQLSTATE 57P03 during WAL recovery. Destructive recovery actions were intentionally withheld.",
-      "metrics": {
-        "sqlstate": "57P03"
-      },
-      "source": {
-        "project": "everything-hub-control",
-        "region": "us-west-1"
       }
     },
     {
@@ -87,6 +87,61 @@
       "summary": "Discovery generated the catalog manifest, but the workflow git diff check did not detect an untracked file; persistence fix required staging before diff comparison.",
       "source": {
         "workflow_run_id": 44758051537
+      }
+    },
+    {
+      "id": "production-catalog-unavailable-2026-11-20-1503",
+      "timestamp": "2026-11-20T15:03:36Z",
+      "type": "production_search_incident",
+      "status": "investigating",
+      "summary": "Live production API returned HTTP 200 with catalog-unavailable, indexedPages 0 and upstream_http_403; fallback web results still returned. Production crawler catalog not confirmed active.",
+      "metrics": {
+        "indexed_pages": 0,
+        "catalog_error": "upstream_http_403",
+        "fallback_active": true
+      },
+      "source": {
+        "url": "https://everythinghub-search-backend.vercel.app/api/search?q=NASA&limit=5"
+      }
+    },
+    {
+      "id": "self-learning-feedback-2026-11-20",
+      "timestamp": "2026-11-20T15:04:30Z",
+      "type": "self_learning_component",
+      "status": "committed",
+      "summary": "Added dependency-free, privacy-minimized feedback learner with bounded lane-weight candidates; production changes require review.",
+      "metrics": {
+        "minimum_labels_per_lane": 20,
+        "minimum_lanes": 2,
+        "maximum_weight_adjustment_percent": 10,
+        "automatic_production_changes": false
+      },
+      "source": {
+        "commits": [
+          "cc5f0755e813200660de852f273b8467ecd1412e",
+          "c6ab6e6b54a0243755dc5e472e4d321eb2097736",
+          "548ade85bb2118f5e5812de55666200f864a4fea",
+          "f29e06e6722dba58ee8d683cf7603104fd9ba50f",
+          "6634d3186803813acf30e697dafa0989fa3402f0"
+        ]
+      }
+    },
+    {
+      "id": "catalog-capacity-consumer-fixes-2026-11-20",
+      "timestamp": "2026-11-20T15:04:35Z",
+      "type": "search_capacity_fix",
+      "status": "committed_and_testing",
+      "summary": "Raised independent recovery search capacity to 125,000 pages and 256 MB decoded shards; aligned browser catalog regression tests to the same limits.",
+      "metrics": {
+        "page_limit": 125000,
+        "decoded_shard_limit_bytes": 256000000
+      },
+      "source": {
+        "commits": [
+          "7a11aa5354c94b306182e70b1d62d87e024ec78b",
+          "3d430655c678d8dca93b274afa4e0ee6790918af",
+          "481e90d40bd7a2a81810539bd1becaef603eee9b"
+        ]
       }
     }
   ]
