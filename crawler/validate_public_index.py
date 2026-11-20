@@ -14,6 +14,11 @@ from index_store import load_index
 
 ROOT = Path(__file__).resolve().parents[1]
 MAX_SHARD_BYTES = 350_000
+MAX_SHARD_UNCOMPRESSED_BYTES = 500_000
+MAX_TOTAL_COMPRESSED_SHARD_BYTES = 32_000_000
+MAX_TOTAL_LEGACY_SHARD_BYTES = 80_000_000
+MAX_TOTAL_SHARD_UNCOMPRESSED_BYTES = 128_000_000
+MAX_SHARD_COUNT = 256
 # Keep validation aligned with the independent Vercel backend's bounded decoder.
 # The Supabase Edge Function uses a smaller 30 MB budget and delegates larger
 # catalogs to Vercel rather than scanning all shards in its CPU-limited isolate.
@@ -134,6 +139,8 @@ def validate(root: Path = ROOT) -> list[str]:
         return errors + ["manifest shards must be an array"]
     if manifest.get("shard_count") != len(shards):
         errors.append("manifest shard_count does not match shards array")
+    if len(shards) > MAX_SHARD_COUNT:
+        errors.append("manifest exceeds the fixed 256-shard safety limit")
 
     expected_urls = {
         page.get("url")
@@ -147,6 +154,9 @@ def validate(root: Path = ROOT) -> list[str]:
     declared_files: set[str] = set()
     shard_records: list[dict] = []
     total_pages = 0
+    total_shard_bytes = 0
+    total_uncompressed_bytes = 0
+    shard_format = None
 
     for entry in shards:
         if not isinstance(entry, dict):
@@ -157,9 +167,16 @@ def validate(root: Path = ROOT) -> list[str]:
             not isinstance(name, str)
             or Path(name).name != name
             or not name.startswith("shard-")
-            or not name.endswith(".json")
+            or not (name.endswith(".json") or name.endswith(".json.gz"))
         ):
             errors.append(f"unsafe shard filename: {name!r}")
+            continue
+        compressed = name.endswith(".json.gz")
+        current_format = "gzip" if compressed else "legacy"
+        if shard_format is None:
+            shard_format = current_format
+        elif shard_format != current_format:
+            errors.append("public search manifest mixes compressed and legacy raw shards")
             continue
         if name in declared_files:
             errors.append(f"duplicate shard filename: {name}")
@@ -176,6 +193,37 @@ def validate(root: Path = ROOT) -> list[str]:
         if entry.get("bytes") != len(raw):
             errors.append(f"byte-size mismatch: {name}")
 
+        if compressed:
+            declared_uncompressed = entry.get("uncompressed_bytes")
+            if (
+                not isinstance(declared_uncompressed, int)
+                or isinstance(declared_uncompressed, bool)
+                or not 2 <= declared_uncompressed <= MAX_SHARD_UNCOMPRESSED_BYTES
+            ):
+                errors.append(f"invalid uncompressed shard byte count: {name}")
+                continue
+            try:
+                decoded = bounded_gzip_decompress(raw, MAX_SHARD_UNCOMPRESSED_BYTES)
+            except Exception as exc:
+                errors.append(f"compressed shard is invalid: {name}: {exc}")
+                continue
+            if len(decoded) != declared_uncompressed:
+                errors.append(f"uncompressed byte-size mismatch: {name}")
+        else:
+            declared_uncompressed = entry.get("uncompressed_bytes")
+            if declared_uncompressed is not None and declared_uncompressed != len(raw):
+                errors.append(f"uncompressed byte-size mismatch: {name}")
+            decoded = raw
+
+        total_shard_bytes += len(raw)
+        total_uncompressed_bytes += len(decoded)
+        if compressed and total_shard_bytes > MAX_TOTAL_COMPRESSED_SHARD_BYTES:
+            errors.append("compressed public shards exceed the 32 MB aggregate safety limit")
+        if not compressed and total_shard_bytes > MAX_TOTAL_LEGACY_SHARD_BYTES:
+            errors.append("legacy raw public shards exceed the 80 MB aggregate safety limit")
+        if total_uncompressed_bytes > MAX_TOTAL_SHARD_UNCOMPRESSED_BYTES:
+            errors.append("public shards exceed the 128 MB aggregate decompression safety limit")
+
         digest = entry.get("sha256")
         if digest is None and integrity == "sha256":
             errors.append(f"missing SHA-256 digest: {name}")
@@ -190,7 +238,7 @@ def validate(root: Path = ROOT) -> list[str]:
                 errors.append(f"SHA-256 mismatch: {name}")
 
         try:
-            payload = json.loads(raw.decode("utf-8"))
+            payload = json.loads(decoded.decode("utf-8"))
         except Exception as exc:
             errors.append(f"invalid JSON in {name}: {exc}")
             continue
@@ -234,7 +282,7 @@ def validate(root: Path = ROOT) -> list[str]:
             f"missing={len(expected_urls - seen_urls)}, extra={len(seen_urls - expected_urls)}"
         )
 
-    actual_files = {path.name for path in search_dir.glob("shard-*.json")}
+    actual_files = {path.name for path in search_dir.glob("shard-*.json*")}
     if actual_files != declared_files:
         errors.append(
             f"shard file set mismatch; unlisted={sorted(actual_files - declared_files)}, "

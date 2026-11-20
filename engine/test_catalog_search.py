@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from catalog_search import (MAX_CATALOG_GZIP_BYTES, MAX_INDEXED_PAGES, MAX_SHARD_BYTES, MAX_SHARD_COUNT, MAX_TOTAL_SHARD_BYTES, _bounded_gzip, load_catalog)
+from catalog_search import (MAX_CATALOG_GZIP_BYTES, MAX_INDEXED_PAGES, MAX_SHARD_BYTES, MAX_SHARD_COUNT, MAX_SHARD_UNCOMPRESSED_BYTES, MAX_TOTAL_SHARD_BYTES, MAX_TOTAL_COMPRESSED_SHARD_BYTES, MAX_TOTAL_SHARD_UNCOMPRESSED_BYTES, _bounded_gzip, load_catalog)
 
 
 class CatalogLoaderTests(unittest.TestCase):
@@ -14,9 +14,13 @@ class CatalogLoaderTests(unittest.TestCase):
         search_dir = root / "public-search"
         manifest = json.loads((search_dir / "manifest.json").read_text(encoding="utf-8"))
         self.assertEqual(MAX_CATALOG_GZIP_BYTES, 16_000_000)
-        self.assertEqual(MAX_INDEXED_PAGES, 40_000)
+        self.assertEqual(MAX_INDEXED_PAGES, 60_000)
         self.assertEqual(MAX_SHARD_COUNT, 256)
+        self.assertEqual(MAX_SHARD_BYTES, 350_000)
+        self.assertEqual(MAX_SHARD_UNCOMPRESSED_BYTES, 500_000)
         self.assertEqual(MAX_TOTAL_SHARD_BYTES, 80_000_000)
+        self.assertEqual(MAX_TOTAL_COMPRESSED_SHARD_BYTES, 32_000_000)
+        self.assertEqual(MAX_TOTAL_SHARD_UNCOMPRESSED_BYTES, 128_000_000)
         self.assertGreaterEqual(manifest["total_pages"], 21_000)
         self.assertLessEqual(manifest["total_pages"], MAX_INDEXED_PAGES)
         self.assertEqual(
@@ -63,22 +67,26 @@ class CatalogLoaderTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 load_catalog(path)
 
-    def write_shard_manifest(self, directory, shards):
+    def write_shard_manifest(self, directory, shards, compressed=True):
         directory = Path(directory)
         entries = []
         for index, pages in enumerate(shards, start=1):
-            raw = (json.dumps(
+            uncompressed = (json.dumps(
                 {"version": 1, "pages": pages},
                 separators=(",", ":"),
             ) + "\n").encode("utf-8")
-            name = f"shard-{index:04d}.json"
+            raw = gzip.compress(uncompressed, compresslevel=9, mtime=0) if compressed else uncompressed
+            name = f"shard-{index:04d}.json.gz" if compressed else f"shard-{index:04d}.json"
             (directory / name).write_bytes(raw)
-            entries.append({
+            entry = {
                 "file": name,
                 "pages": len(pages),
                 "bytes": len(raw),
                 "sha256": hashlib.sha256(raw).hexdigest(),
-            })
+            }
+            if compressed:
+                entry["uncompressed_bytes"] = len(uncompressed)
+            entries.append(entry)
         manifest = {
             "version": 1,
             "integrity": "sha256",
@@ -89,6 +97,12 @@ class CatalogLoaderTests(unittest.TestCase):
         }
         (directory / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
         return manifest
+
+    def test_legacy_raw_shards_remain_readable_during_rollout(self):
+        with tempfile.TemporaryDirectory() as directory:
+            expected = [{"url": "https://example.com/legacy", "title": "Legacy"}]
+            self.write_shard_manifest(directory, [expected], compressed=False)
+            self.assertEqual(load_catalog(search_dir=directory), expected)
 
     def test_loads_and_verifies_shard_only_manifest(self):
         with tempfile.TemporaryDirectory() as directory:

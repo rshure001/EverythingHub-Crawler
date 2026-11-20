@@ -21,9 +21,12 @@
   const TOKEN_RE = /[\p{L}\p{N}]+/gu;
   const WEIGHTS = { title: 4, url: 2.2, description: 1.7, text: 1 };
   const MAX_SHARDS = 256;
-  const MAX_PAGES = 40000;
+  const MAX_PAGES = 60000;
   const MAX_SHARD_BYTES = 350000;
   const MAX_TOTAL_BYTES = 80000000;
+  const MAX_TOTAL_COMPRESSED_BYTES = 32000000;
+  const MAX_SHARD_UNCOMPRESSED_BYTES = 500000;
+  const MAX_TOTAL_UNCOMPRESSED_BYTES = 128000000;
   const MAX_GZIP_BYTES = 16000000;
   const MAX_DECOMPRESSED_BYTES = 64000000;
   const DEFAULT_PARALLEL = 4;
@@ -177,15 +180,18 @@
     ) {
       throw new Error("Unsupported or malformed Everything Hub search manifest.");
     }
-
     const names = new Set();
     let totalPages = 0;
     let totalBytes = 0;
+    let totalUncompressedBytes = 0;
+    let shardFormat = null;
     for (const shard of manifest.shards) {
+      const compressed = shard && typeof shard.file === "string" && shard.file.endsWith(".json.gz");
+      const legacy = shard && typeof shard.file === "string" && /^shard-\d{4}\.json$/.test(shard.file);
+      const format = compressed ? "gzip" : "legacy";
       if (
         !shard ||
-        typeof shard.file !== "string" ||
-        !/^shard-\d{4}\.json$/.test(shard.file) ||
+        (!compressed && !legacy) ||
         names.has(shard.file) ||
         !Number.isSafeInteger(shard.pages) ||
         shard.pages < 1 ||
@@ -197,20 +203,43 @@
       ) {
         throw new Error("Search manifest contains an invalid shard descriptor.");
       }
+      if (shardFormat && shardFormat !== format) {
+        throw new Error("Search manifest mixes compressed and legacy raw shards.");
+      }
+      shardFormat = format;
+      let uncompressedBytes = shard.uncompressed_bytes;
+      if (compressed) {
+        if (!Number.isSafeInteger(uncompressedBytes) || uncompressedBytes < 1 ||
+            uncompressedBytes > MAX_SHARD_UNCOMPRESSED_BYTES) {
+          throw new Error("Search manifest contains an invalid uncompressed shard size.");
+        }
+      } else {
+        if (uncompressedBytes != null && uncompressedBytes !== shard.bytes) {
+          throw new Error("Legacy shard uncompressed size does not match its byte count.");
+        }
+        uncompressedBytes = shard.bytes;
+      }
       names.add(shard.file);
       totalPages += shard.pages;
       totalBytes += shard.bytes;
+      totalUncompressedBytes += uncompressedBytes;
     }
     if (totalPages !== manifest.total_pages) {
       throw new Error("Search manifest page totals do not match its shard descriptors.");
     }
-    if (totalBytes > MAX_TOTAL_BYTES) {
-      throw new Error("Search shard catalog exceeds the 80 MB browser safety limit.");
+    if (shardFormat === "gzip" && totalBytes > MAX_TOTAL_COMPRESSED_BYTES) {
+      throw new Error("Compressed search shards exceed the 32 MB transfer safety limit.");
     }
-    return { totalBytes };
+    if (shardFormat === "legacy" && totalBytes > MAX_TOTAL_BYTES) {
+      throw new Error("Legacy search shards exceed the 80 MB transition safety limit.");
+    }
+    if (totalUncompressedBytes > MAX_TOTAL_UNCOMPRESSED_BYTES) {
+      throw new Error("Search shards exceed the 128 MB decompressed safety limit.");
+    }
+    return { totalBytes, totalUncompressedBytes, shardFormat };
   }
 
-  async function decodeGzip(buffer) {
+  async function decodeGzip(buffer, maxBytes = MAX_DECOMPRESSED_BYTES) {
     if (typeof DecompressionStream === "undefined") {
       throw new Error("This browser does not support gzip decompression.");
     }
@@ -222,9 +251,9 @@
       const part = await reader.read();
       if (part.done) break;
       total += part.value.byteLength;
-      if (total > MAX_DECOMPRESSED_BYTES) {
+      if (total > maxBytes) {
         await reader.cancel();
-        throw new Error("Compressed catalog exceeds the 64 MB decompressed safety limit.");
+        throw new Error("Gzip payload exceeds its decompressed safety limit.");
       }
       chunks.push(part.value);
     }
@@ -234,7 +263,7 @@
       bytes.set(chunk, offset);
       offset += chunk.byteLength;
     }
-    return new TextDecoder().decode(bytes);
+    return bytes;
   }
 
   async function loadGzipCatalog(descriptor, manifestUrl, fetcher, expectedPages) {
@@ -258,7 +287,7 @@
     if ((await sha256Hex(bytes)).toLowerCase() !== descriptor.sha256.toLowerCase()) {
       throw new Error("Compressed catalog SHA-256 mismatch.");
     }
-    const payload = JSON.parse(await decodeGzip(bytes));
+    const payload = JSON.parse(new TextDecoder().decode(await decodeGzip(bytes)));
     if (
       !payload ||
       payload.version !== 1 ||
@@ -321,7 +350,13 @@
         if ((await sha256Hex(bytes)).toLowerCase() !== descriptor.sha256.toLowerCase()) {
           throw new Error(descriptor.file + ": SHA-256 mismatch.");
         }
-        const payload = JSON.parse(new TextDecoder().decode(bytes));
+        const decoded = descriptor.file.endsWith(".json.gz")
+          ? await decodeGzip(bytes, MAX_SHARD_UNCOMPRESSED_BYTES)
+          : bytes;
+        if (decoded.byteLength !== (descriptor.uncompressed_bytes ?? descriptor.bytes)) {
+          throw new Error(descriptor.file + ": uncompressed byte length mismatch.");
+        }
+        const payload = JSON.parse(new TextDecoder().decode(decoded));
         if (
           !payload ||
           payload.version !== 1 ||
@@ -363,7 +398,7 @@
     if (bytes.byteLength > MAX_GZIP_BYTES) {
       throw new Error("Compressed catalog exceeds the 12 MB browser safety limit.");
     }
-    const payload = JSON.parse(await decodeGzip(bytes));
+    const payload = JSON.parse(new TextDecoder().decode(await decodeGzip(bytes)));
     if (!payload || payload.version !== 1 || !Array.isArray(payload.pages)) {
       throw new Error("Unsupported or malformed Everything Hub catalog.");
     }

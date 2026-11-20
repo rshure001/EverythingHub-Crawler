@@ -10,10 +10,13 @@ const STALE_TTL_MS = 3600000;
 const MAX_MANIFEST_BYTES = 128000;
 const MAX_CATALOG_GZIP_BYTES = 16000000;
 const MAX_CATALOG_JSON_BYTES = 64000000;
-const MAX_INDEXED_PAGES = 40000;
+const MAX_INDEXED_PAGES = 60000;
 const MAX_SHARD_COUNT = 256;
-const MAX_SHARD_BYTES = 1000000;
+const MAX_SHARD_BYTES = 350000;
+const MAX_SHARD_UNCOMPRESSED_BYTES = 500000;
 const MAX_TOTAL_SHARD_BYTES = 80000000;
+const MAX_TOTAL_COMPRESSED_SHARD_BYTES = 32000000;
+const MAX_TOTAL_SHARD_UNCOMPRESSED_BYTES = 128000000;
 const MAX_SHARD_CONCURRENCY = 32;
 const SHARD_FETCH_TIMEOUT_MS = 7000;
 const agent = new https.Agent({ keepAlive: true, maxSockets: MAX_SHARD_CONCURRENCY });
@@ -157,12 +160,19 @@ function validateManifestAndCatalog(manifest, compressed) {
 function validateShardManifest(manifest) {
   validateManifestEnvelope(manifest);
   let totalBytes = 0;
+  let totalUncompressedBytes = 0;
   let totalPages = 0;
+  let shardFormat = null;
   const seen = new Set();
   for (const shard of manifest.shards) {
-    if (!shard || typeof shard.file !== 'string' || !/^shard-\d{4}\.json$/.test(shard.file)) {
+    if (!shard || typeof shard.file !== 'string' ||
+        !/^shard-\d{4}\.json(?:\.gz)?$/.test(shard.file)) {
       throw new Error('manifest_shard_file_invalid');
     }
+    const compressed = shard.file.endsWith('.json.gz');
+    const format = compressed ? 'gzip' : 'legacy';
+    if (shardFormat && shardFormat !== format) throw new Error('manifest_mixed_shard_formats');
+    shardFormat = format;
     if (seen.has(shard.file)) throw new Error('manifest_duplicate_shard_file');
     seen.add(shard.file);
     if (!Number.isSafeInteger(shard.pages) || shard.pages < 1 || shard.pages > 1000) {
@@ -171,21 +181,43 @@ function validateShardManifest(manifest) {
     if (!Number.isSafeInteger(shard.bytes) || shard.bytes < 1 || shard.bytes > MAX_SHARD_BYTES) {
       throw new Error('manifest_shard_size_invalid');
     }
+    let uncompressedBytes = shard.uncompressed_bytes;
+    if (compressed) {
+      if (!Number.isSafeInteger(uncompressedBytes) || uncompressedBytes < 1 ||
+          uncompressedBytes > MAX_SHARD_UNCOMPRESSED_BYTES) {
+        throw new Error('manifest_shard_uncompressed_size_invalid');
+      }
+    } else {
+      if (uncompressedBytes != null && uncompressedBytes !== shard.bytes) {
+        throw new Error('manifest_legacy_shard_uncompressed_size_invalid');
+      }
+      uncompressedBytes = shard.bytes;
+    }
     if (typeof shard.sha256 !== 'string' || !/^[a-f0-9]{64}$/i.test(shard.sha256)) {
       throw new Error('manifest_shard_hash_invalid');
     }
     totalBytes += shard.bytes;
+    totalUncompressedBytes += uncompressedBytes;
     totalPages += shard.pages;
-    if (totalBytes > MAX_TOTAL_SHARD_BYTES) throw new Error('manifest_total_shard_bytes_exceeded');
+    if (compressed && totalBytes > MAX_TOTAL_COMPRESSED_SHARD_BYTES) {
+      throw new Error('manifest_total_compressed_shard_bytes_exceeded');
+    }
+    if (!compressed && totalBytes > MAX_TOTAL_SHARD_BYTES) {
+      throw new Error('manifest_total_shard_bytes_exceeded');
+    }
+    if (totalUncompressedBytes > MAX_TOTAL_SHARD_UNCOMPRESSED_BYTES) {
+      throw new Error('manifest_total_shard_uncompressed_bytes_exceeded');
+    }
   }
   if (totalPages !== manifest.total_pages) throw new Error('manifest_shard_page_total_mismatch');
-  return { shards: manifest.shards, totalBytes, totalPages };
+  return { shards: manifest.shards, totalBytes, totalUncompressedBytes, totalPages, shardFormat };
 }
 
 function validateShardPayload(meta, buffer) {
-  if (!meta || typeof meta.file !== 'string' || !/^shard-\d{4}\.json$/.test(meta.file)) {
-    throw new Error('shard_file_invalid');
-  }
+  const compressed = meta && typeof meta.file === 'string' && meta.file.endsWith('.json.gz');
+  const validName = meta && typeof meta.file === 'string' &&
+    /^shard-\d{4}\.json(?:\.gz)?$/.test(meta.file);
+  if (!validName) throw new Error('shard_file_invalid');
   if (!Buffer.isBuffer(buffer) || buffer.length !== meta.bytes) {
     throw new Error('shard_size_mismatch');
   }
@@ -193,8 +225,21 @@ function validateShardPayload(meta, buffer) {
   if (digest.toLowerCase() !== String(meta.sha256 || '').toLowerCase()) {
     throw new Error('shard_integrity_mismatch');
   }
+  let decoded = buffer;
+  if (compressed) {
+    try {
+      decoded = zlib.gunzipSync(buffer, { maxOutputLength: MAX_SHARD_UNCOMPRESSED_BYTES });
+    } catch {
+      throw new Error('shard_gzip_invalid');
+    }
+    if (decoded.length !== meta.uncompressed_bytes) {
+      throw new Error('shard_uncompressed_size_mismatch');
+    }
+  } else if (meta.uncompressed_bytes != null && meta.uncompressed_bytes !== buffer.length) {
+    throw new Error('shard_uncompressed_size_mismatch');
+  }
   let payload;
-  try { payload = JSON.parse(buffer.toString('utf8')); } catch {
+  try { payload = JSON.parse(decoded.toString('utf8')); } catch {
     throw new Error('shard_json_invalid');
   }
   if (!payload || payload.version !== 1 || !Array.isArray(payload.pages) ||
@@ -330,7 +375,10 @@ module.exports = {
   MAX_INDEXED_PAGES,
   MAX_SHARD_COUNT,
   MAX_SHARD_BYTES,
+  MAX_SHARD_UNCOMPRESSED_BYTES,
   MAX_TOTAL_SHARD_BYTES,
+  MAX_TOTAL_COMPRESSED_SHARD_BYTES,
+  MAX_TOTAL_SHARD_UNCOMPRESSED_BYTES,
   MAX_SHARD_CONCURRENCY,
   validateManifestAndCatalog,
   validateShardManifest,

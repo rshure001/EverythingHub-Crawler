@@ -12,7 +12,9 @@ from index_store import load_index
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "data" / "index.json"
 OUT = ROOT / "public-search"
-MAX_BYTES = 340_000  # Keep 10 KB headroom below the 350 KB serving/validation ceiling.
+MAX_BYTES = 500_000  # Decoded shard target; gzip transport remains below 350 KB.
+MAX_COMPRESSED_BYTES = 350_000
+MAX_SHARD_COUNT = 256
 # The independent Vercel backend safely decompresses up to 64 MB. The
 # Supabase Edge Function has a smaller 30 MB/6 MB budget and delegates larger
 # catalogs to Vercel rather than scanning all shards in its CPU-limited isolate.
@@ -77,8 +79,19 @@ def encode_batch(items):
 
 
 def batch_fits(items, max_bytes=MAX_BYTES):
-    """Measure exact on-disk bytes while keeping below the public hard ceiling."""
+    """Measure exact uncompressed JSON bytes before deterministic gzip encoding."""
     return len(encode_batch(items)) <= max_bytes
+
+
+def encode_shard(items):
+    """Return deterministic gzip bytes and the exact decoded JSON length."""
+    uncompressed = encode_batch(items)
+    if len(uncompressed) > MAX_BYTES:
+        raise ValueError("uncompressed public shard exceeds its size limit")
+    compressed = gzip.compress(uncompressed, compresslevel=9, mtime=0)
+    if len(compressed) > MAX_COMPRESSED_BYTES:
+        raise ValueError("compressed public shard exceeds its size limit")
+    return compressed, len(uncompressed)
 
 
 def catalog_metadata(raw, page_count, uncompressed_bytes=None):
@@ -100,7 +113,7 @@ def main():
     pages = [compact(p) for p in source.get("pages", []) if is_publishable(p)]
     pages.sort(key=lambda p: (p["title"].casefold(), p["url"]))
     OUT.mkdir(parents=True, exist_ok=True)
-    for old in OUT.glob("shard-*.json"):
+    for old in OUT.glob("shard-*.json*"):
         old.unlink()
 
     shards = []
@@ -112,13 +125,16 @@ def main():
         if not items:
             return
         number += 1
-        name = f"shard-{number:04d}.json"
-        raw = encode_batch(items)
+        if number > MAX_SHARD_COUNT:
+            raise ValueError("public search catalog exceeds the fixed 256-shard limit")
+        name = f"shard-{number:04d}.json.gz"
+        raw, uncompressed_bytes = encode_shard(items)
         (OUT / name).write_bytes(raw)
         shards.append({
             "file": name,
             "pages": len(items),
             "bytes": len(raw),
+            "uncompressed_bytes": uncompressed_bytes,
             "sha256": hashlib.sha256(raw).hexdigest(),
         })
 

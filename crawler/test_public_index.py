@@ -26,14 +26,13 @@ class PublicIndexValidationTests(unittest.TestCase):
     def tearDown(self):
         self.temp.cleanup()
 
-    def write_fixture(self, source_pages, shard_pages):
+    def write_fixture(self, source_pages, shard_pages, compressed=True):
         import hashlib
 
         (self.root / "data" / "index.json").write_text(
             json.dumps({"version": 1, "updated_at": 1700000000, "pages": source_pages}),
             encoding="utf-8",
         )
-        # Public search shards now require one of the eight supported lanes.
         shard_pages = [
             {
                 **page,
@@ -44,7 +43,7 @@ class PublicIndexValidationTests(unittest.TestCase):
             }
             for page in shard_pages
         ]
-        raw = (
+        uncompressed = (
             json.dumps(
                 {"version": 1, "pages": shard_pages},
                 ensure_ascii=False,
@@ -52,19 +51,24 @@ class PublicIndexValidationTests(unittest.TestCase):
             )
             + "\n"
         ).encode("utf-8")
-        (self.root / "public-search" / "shard-0001.json").write_bytes(raw)
+        raw = gzip.compress(uncompressed, compresslevel=9, mtime=0) if compressed else uncompressed
+        name = "shard-0001.json.gz" if compressed else "shard-0001.json"
+        (self.root / "public-search" / name).write_bytes(raw)
+        entry = {
+            "file": name,
+            "pages": len(shard_pages),
+            "bytes": len(raw),
+            "sha256": hashlib.sha256(raw).hexdigest(),
+        }
+        if compressed:
+            entry["uncompressed_bytes"] = len(uncompressed)
         manifest = {
             "version": 1,
             "integrity": "sha256",
             "updated_at": 1700000000,
             "total_pages": len(shard_pages),
             "shard_count": 1,
-            "shards": [{
-                "file": "shard-0001.json",
-                "pages": len(shard_pages),
-                "bytes": len(raw),
-                "sha256": hashlib.sha256(raw).hexdigest(),
-            }],
+            "shards": [entry],
         }
         (self.root / "public-search" / "manifest.json").write_text(
             json.dumps(manifest),
@@ -150,6 +154,11 @@ class PublicIndexValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "trailing data"):
             bounded_gzip_decompress(raw + b"extra", 100)
 
+    def test_legacy_raw_shards_remain_valid_during_rollout(self):
+        pages = [{"url": "https://example.com/legacy", "title": "Legacy"}]
+        self.write_fixture(pages, pages, compressed=False)
+        self.assertEqual(validate(self.root), [])
+
     def test_valid_shards_match_canonical_index(self):
         pages = [
             {"url": "https://example.com/a", "title": "A"},
@@ -233,9 +242,10 @@ class PublicIndexValidationTests(unittest.TestCase):
     def test_sha256_detects_same_size_shard_tampering(self):
         pages = [{"url": "https://example.com/a", "title": "A"}]
         self.write_fixture(pages, pages)
-        shard_path = self.root / "public-search" / "shard-0001.json"
+        shard_path = self.root / "public-search" / "shard-0001.json.gz"
         original = shard_path.read_bytes()
-        tampered = original.replace(b'"title":"A"', b'"title":"B"')
+        tampered = bytearray(original)
+        tampered[-1] ^= 1
         self.assertEqual(len(original), len(tampered))
         shard_path.write_bytes(tampered)
         errors = validate(self.root)

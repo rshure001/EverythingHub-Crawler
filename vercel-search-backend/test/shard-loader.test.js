@@ -2,6 +2,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const { gzipSync } = require('node:zlib');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
@@ -13,13 +14,16 @@ const {
   mapLimit
 } = require('../src/lib/catalog');
 
-function makeShard(file, pages) {
-  const buffer = Buffer.from(JSON.stringify({ version: 1, pages }));
+function makeShard(file, pages, compressed = true) {
+  const uncompressed = Buffer.from(JSON.stringify({ version: 1, pages }));
+  const buffer = compressed ? gzipSync(uncompressed, { level: 9, mtime: 0 }) : uncompressed;
+  const name = compressed ? file.replace(/\.json$/, '.json.gz') : file;
   return {
     meta: {
-      file,
+      file: name,
       pages: pages.length,
       bytes: buffer.length,
+      ...(compressed ? { uncompressed_bytes: uncompressed.length } : {}),
       sha256: crypto.createHash('sha256').update(buffer).digest('hex')
     },
     buffer
@@ -59,7 +63,12 @@ test('current repository manifest fits the bounded shard reader without gzip met
   assert.ok(manifest.total_pages >= 20000);
 });
 
-test('valid shard metadata and SHA-256 payload are accepted', () => {
+test('legacy raw shards remain readable during rollout', () => {
+  const shard = makeShard('shard-0001.json', [page('https://example.com/legacy')], false);
+  assert.equal(validateShardPayload(shard.meta, shard.buffer).length, 1);
+});
+
+test('valid compressed shard metadata and SHA-256 payload are accepted', () => {
   const shard = makeShard('shard-0001.json', [page('https://example.com/one')]);
   const manifest = makeManifest([shard.meta]);
   const checked = validateShardManifest(manifest);
@@ -80,11 +89,22 @@ test('unsafe shard paths are rejected', () => {
   assert.throws(() => validateShardManifest(makeManifest([shard.meta])), /manifest_shard_file_invalid/);
 });
 
-test('aggregate shard size is bounded before network requests', () => {
-  const shards = Array.from({ length: 81 }, (_, index) => ({
+test('compressed shard aggregate size is bounded before network requests', () => {
+  const shards = Array.from({ length: 100 }, (_, index) => ({
+    file: 'shard-' + String(index + 1).padStart(4, '0') + '.json.gz',
+    pages: 1,
+    bytes: 350_000,
+    uncompressed_bytes: 500_000,
+    sha256: 'b'.repeat(64)
+  }));
+  assert.throws(() => validateShardManifest(makeManifest(shards)), /manifest_total_compressed_shard_bytes_exceeded/);
+});
+
+test('legacy raw shard aggregate size remains bounded during rollout', () => {
+  const shards = Array.from({ length: 256 }, (_, index) => ({
     file: 'shard-' + String(index + 1).padStart(4, '0') + '.json',
     pages: 1,
-    bytes: 1_000_000,
+    bytes: 350_000,
     sha256: 'b'.repeat(64)
   }));
   assert.throws(() => validateShardManifest(makeManifest(shards)), /manifest_total_shard_bytes_exceeded/);
@@ -130,7 +150,7 @@ test('shard-only catalog loader fetches from the immutable commit SHA and pins t
   assert.equal(loaded.indexedPages, 1);
   assert.deepEqual(calls.map(call => call.url), [
     'https://raw.githubusercontent.com/rshure001/EverythingHub-Crawler/' +
-    commitSha + '/public-search/shard-0001.json'
+    commitSha + '/public-search/shard-0001.json.gz'
   ]);
 });
 

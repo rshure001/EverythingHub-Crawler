@@ -27,8 +27,10 @@ assert.ok(engine.search(pages, "watch", { limit: 1000 }).length <= 50);
 
 const bytesFor = payload => Buffer.from(JSON.stringify(payload) + "\n");
 const sha256 = bytes => createHash("sha256").update(bytes).digest("hex");
-const shardOne = bytesFor({ version: 1, pages: [pages[0]] });
-const shardTwo = bytesFor({ version: 1, pages: [pages[2]] });
+const shardOneRaw = bytesFor({ version: 1, pages: [pages[0]] });
+const shardTwoRaw = bytesFor({ version: 1, pages: [pages[2]] });
+const shardOne = gzipSync(shardOneRaw, { level: 9, mtime: 0 });
+const shardTwo = gzipSync(shardTwoRaw, { level: 9, mtime: 0 });
 const manifestUrl = "https://example.test/search/manifest.json";
 const manifest = {
   version: 1,
@@ -37,8 +39,8 @@ const manifest = {
   total_pages: 2,
   shard_count: 2,
   shards: [
-    { file: "shard-0001.json", pages: 1, bytes: shardOne.length, sha256: sha256(shardOne) },
-    { file: "shard-0002.json", pages: 1, bytes: shardTwo.length, sha256: sha256(shardTwo) }
+    { file: "shard-0001.json.gz", pages: 1, bytes: shardOne.length, uncompressed_bytes: shardOneRaw.length, sha256: sha256(shardOne) },
+    { file: "shard-0002.json.gz", pages: 1, bytes: shardTwo.length, uncompressed_bytes: shardTwoRaw.length, sha256: sha256(shardTwo) }
   ]
 };
 const badManifestUrl = "https://example.test/bad/manifest.json";
@@ -129,12 +131,12 @@ async function testShardOnlyLoader() {
       return new Response(JSON.stringify(badManifest), { status: 200 });
     }
 
-    const isShard = value.endsWith("shard-0001.json") || value.endsWith("shard-0002.json");
+    const isShard = value.endsWith("shard-0001.json.gz") || value.endsWith("shard-0002.json.gz");
     if (!isShard) return new Response("not found", { status: 404 });
     activeShardRequests++;
     maxActiveShardRequests = Math.max(maxActiveShardRequests, activeShardRequests);
     await new Promise(resolve => setTimeout(resolve, 5));
-    const bytes = value.endsWith("shard-0001.json") ? shardOne : shardTwo;
+    const bytes = value.endsWith("shard-0001.json.gz") ? shardOne : shardTwo;
     activeShardRequests--;
     return new Response(bytes, { status: 200 });
   };
@@ -172,10 +174,12 @@ async function testCurrentPublishedManifestFitsClientLimits() {
   const previousFetch = globalThis.fetch;
   const requested = [];
   const totalShardBytes = currentManifest.shards.reduce((sum, shard) => sum + shard.bytes, 0);
+  const totalUncompressedBytes = currentManifest.shards.reduce((sum, shard) => sum + (shard.uncompressed_bytes ?? shard.bytes), 0);
+  const compressedShards = currentManifest.shards[0]?.file?.endsWith(".json.gz") === true;
 
   assert.ok(
-    currentManifest.total_pages <= 40_000,
-    "current catalog must fit the 30,000-page browser safety limit"
+    currentManifest.total_pages <= 60_000,
+    "current catalog must fit the 60,000-page browser safety limit"
   );
   assert.ok(
     currentManifest.shard_count <= 256 &&
@@ -190,9 +194,11 @@ async function testCurrentPublishedManifestFitsClientLimits() {
     );
   }
   assert.ok(
-    totalShardBytes <= 80_000_000,
-    "current shard catalog must fit the 80 MB browser fallback limit"
+    totalShardBytes <= (compressedShards ? 32_000_000 : 80_000_000),
+    "current shard catalog must fit its compressed or legacy transfer limit"
   );
+
+  assert.ok(totalUncompressedBytes <= 128_000_000, "current shard catalog must fit the 128 MB decoded safety limit");
 
   globalThis.fetch = async url => {
     const value = String(url);
@@ -219,7 +225,7 @@ async function testCurrentPublishedManifestFitsClientLimits() {
       );
     }
     assert.ok(
-      requested.some(value => value.endsWith("/shard-0001.json")),
+      requested.some(value => /\/shard-0001\.json(?:\.gz)?$/.test(value)),
       "current manifest must pass browser bounds and reach integrity-checked shard loading"
     );
   } finally {

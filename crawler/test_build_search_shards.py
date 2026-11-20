@@ -1,3 +1,4 @@
+import gzip
 import unittest
 
 from validate_public_index import (
@@ -7,19 +8,22 @@ from validate_public_index import (
 
 from build_search_shards import (
     MAX_BYTES,
+    MAX_COMPRESSED_BYTES,
     MAX_CATALOG_GZIP_BYTES,
     MAX_CATALOG_UNCOMPRESSED_BYTES,
     batch_fits,
     catalog_metadata,
     compact,
     encode_batch,
+    encode_shard,
 )
 
 
 class SearchShardBatchBoundaryTests(unittest.TestCase):
     def test_builder_target_keeps_headroom_under_public_hard_cap(self):
-        self.assertEqual(MAX_BYTES, 340_000)
-        self.assertLess(MAX_BYTES, 350_000)
+        self.assertEqual(MAX_BYTES, 500_000)
+        self.assertEqual(MAX_COMPRESSED_BYTES, 350_000)
+        self.assertLess(MAX_COMPRESSED_BYTES, 1_000_000)
 
     def test_size_limit_counts_the_exact_trailing_newline(self):
         page = compact({
@@ -33,6 +37,15 @@ class SearchShardBatchBoundaryTests(unittest.TestCase):
         self.assertTrue(raw.endswith(b"\n"))
         self.assertTrue(batch_fits([page], len(raw)))
         self.assertFalse(batch_fits([page], len(raw) - 1))
+
+    def test_public_shards_are_deterministic_gzip_with_exact_uncompressed_size(self):
+        page = compact({"url": "https://example.com/compressed", "title": "Compressed"})
+        compressed, uncompressed_size = encode_shard([page])
+        expected = encode_batch([page])
+        self.assertEqual(gzip.decompress(compressed), expected)
+        self.assertEqual(uncompressed_size, len(expected))
+        self.assertEqual(compressed, encode_shard([page])[0])
+        self.assertLessEqual(len(compressed), MAX_COMPRESSED_BYTES)
 
     def test_compressed_catalog_cap_supports_the_independent_search_backend(self):
         self.assertEqual(MAX_CATALOG_GZIP_BYTES, 16_000_000)
