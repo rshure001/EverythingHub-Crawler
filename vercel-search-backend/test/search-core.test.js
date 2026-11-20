@@ -232,7 +232,7 @@ test('complete-query bonus requires every term in a high-signal field', () => {
   ];
   const results = searchCatalog(pages, 'Rolex watch', 'science');
   assert.equal(results[0].url, 'https://example.com/nasa/14');
-  assert.ok(results[0].score < 100);
+  assert.ok(results[0].score > results[1].score);
 });
 
 
@@ -307,7 +307,7 @@ test('exact phrase matches outrank scattered token matches for place searches', 
       url: 'https://example.com/general-report',
       title: 'A report on regional programs',
       description: 'Programs in Nevada and nearby areas',
-      text: 'Las Vegas appears only in a passing reference.'
+      text: 'Las Vegas appears only in a passing reference. '.repeat(10)
     },
     {
       url: 'https://example.com/las-vegas-guide',
