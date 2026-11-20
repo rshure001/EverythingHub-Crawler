@@ -9,7 +9,7 @@ on:
       - "crawler/pipeline_health.py"
       - "crawler/test_pipeline_health.py"
   schedule:
-    # Stagger lightweight 15-minute checks away from quarter-hour and top-of-hour Actions peaks. A push to this workflow is also a safe manual watchdog nudge when scheduled delivery is stale.
+    # Stagger lightweight 15-minute checks away from quarter-hour and top-of-hour Actions peaks. A documentation-only push here intentionally runs the same read-only freshness guard when scheduled delivery is stale.
     - cron: "7,22,37,52 * * * *"
   workflow_run:
     workflows:
