@@ -37,7 +37,7 @@ function makeManifest(pages) {
 }
 
 
-test('accepts a large 54k-page, 206-shard catalog within bounded limits', () => {
+test('accepts a large catalog within the 150k-page and 640-shard capacity envelope', () => {
   const pages = Array.from({ length: 54284 }, (_, index) => makePage(index, 'science'));
   const { manifest, compressed } = makeManifest(pages);
   manifest.shard_count = 206;
@@ -46,8 +46,8 @@ test('accepts a large 54k-page, 206-shard catalog within bounded limits', () => 
   }));
   const result = validateManifestAndCatalog(manifest, compressed);
   assert.equal(result.indexedPages, 54284);
-  assert.equal(MAX_INDEXED_PAGES, 125000);
-  assert.equal(MAX_SHARD_COUNT, 512);
+  assert.equal(MAX_INDEXED_PAGES, 150000);
+  assert.equal(MAX_SHARD_COUNT, 640);
   assert.equal(MAX_CATALOG_GZIP_BYTES, 16000000);
 });
 

@@ -4,11 +4,15 @@ import unittest
 from validate_public_index import (
     MAX_CATALOG_GZIP_BYTES as VALIDATOR_MAX_CATALOG_GZIP_BYTES,
     MAX_CATALOG_UNCOMPRESSED_BYTES as VALIDATOR_MAX_CATALOG_UNCOMPRESSED_BYTES,
+    MAX_SHARD_COUNT as VALIDATOR_MAX_SHARD_COUNT,
+    MAX_TOTAL_COMPRESSED_SHARD_BYTES,
+    MAX_TOTAL_SHARD_UNCOMPRESSED_BYTES,
 )
 
 from build_search_shards import (
     MAX_BYTES,
     MAX_COMPRESSED_BYTES,
+    MAX_SHARD_COUNT,
     SHARD_GZIP_LEVEL,
     MAX_CATALOG_GZIP_BYTES,
     MAX_CATALOG_UNCOMPRESSED_BYTES,
@@ -28,6 +32,12 @@ class SearchShardBatchBoundaryTests(unittest.TestCase):
         self.assertEqual(MAX_COMPRESSED_BYTES, 350_000)
         self.assertLess(MAX_COMPRESSED_BYTES, 1_000_000)
         self.assertEqual(SHARD_GZIP_LEVEL, 6)
+
+    def test_shard_capacity_is_aligned_across_builder_and_validator(self):
+        self.assertEqual(MAX_SHARD_COUNT, 640)
+        self.assertEqual(MAX_SHARD_COUNT, VALIDATOR_MAX_SHARD_COUNT)
+        self.assertEqual(MAX_TOTAL_COMPRESSED_SHARD_BYTES, 80_000_000)
+        self.assertEqual(MAX_TOTAL_SHARD_UNCOMPRESSED_BYTES, 320_000_000)
 
     def test_incremental_size_accounting_matches_exact_utf8_batch_bytes(self):
         pages = [
