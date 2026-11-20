@@ -224,7 +224,7 @@ class StageSearchCatalogTests(unittest.TestCase):
             "shard_count": len(shards),
             "shards": shards,
         }
-        with self.assertRaisesRegex(ValueError, "160,000-page safety limit"):
+        with self.assertRaisesRegex(ValueError, "150,000-page safety limit"):
             validate_manifest(manifest)
 
 if __name__ == "__main__":
