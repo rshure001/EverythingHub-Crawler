@@ -138,8 +138,7 @@ def main():
 
     shards = []
     batch = []
-    batch_item_sizes = []
-    batch_payload_size = 0
+        batch_payload_size = 0
     number = 0
 
     def write_batch(items):
@@ -171,13 +170,11 @@ def main():
         if batch and candidate_size > MAX_BYTES:
             write_batch(batch)
             batch = []
-            batch_item_sizes = []
-            batch_payload_size = 0
+                        batch_payload_size = 0
             candidate_size = prefix_bytes + page_size + suffix_bytes
         if candidate_size > MAX_BYTES:
             raise ValueError("single compacted page exceeds the public shard size limit")
         batch.append(page)
-        batch_item_sizes.append(page_size)
         batch_payload_size += page_size + (1 if len(batch) > 1 else 0)
     write_batch(batch)
 
