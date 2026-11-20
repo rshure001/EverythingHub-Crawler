@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-11-20T09:13:15.236566+00:00",
+  "updated_at": "2026-11-20T09:22:51.180523+00:00",
   "target_new_records_per_hour": 60000,
   "runs": [
     {
@@ -241,23 +241,50 @@
         "records_per_minute": 6.16,
         "records_per_hour": 369.8
       }
+    },
+    {
+      "run_id": "44708955218",
+      "run_number": "262",
+      "timestamp": "2026-11-20T09:20:26Z",
+      "indexed_records_processed": 415,
+      "fetch_attempts": 425,
+      "duration_seconds": 359.74,
+      "commit_sha": "805bbf5ca251",
+      "manifest_interval": {
+        "valid": true,
+        "reason": null,
+        "before_pages": 63440,
+        "after_pages": 63829,
+        "before_updated_at": "2026-11-20T09:11:01Z",
+        "after_updated_at": "2026-11-20T09:20:26Z",
+        "elapsed_seconds": 565.0,
+        "run_duration_seconds": 359.74,
+        "new_unique_records": 389,
+        "records_per_minute": 64.88,
+        "records_per_hour": 3892.8,
+        "wall_clock_records_per_minute": 41.31,
+        "wall_clock_records_per_hour": 2478.6
+      }
     }
   ],
   "latest_manifest_interval": {
     "valid": true,
     "reason": null,
-    "before_pages": 63048,
-    "after_pages": 63440,
-    "before_updated_at": "2026-11-20T08:07:25Z",
-    "after_updated_at": "2026-11-20T09:11:01Z",
-    "elapsed_seconds": 3816.0,
-    "new_unique_records": 392,
-    "records_per_minute": 6.16,
-    "records_per_hour": 369.8
+    "before_pages": 63440,
+    "after_pages": 63829,
+    "before_updated_at": "2026-11-20T09:11:01Z",
+    "after_updated_at": "2026-11-20T09:20:26Z",
+    "elapsed_seconds": 565.0,
+    "run_duration_seconds": 359.74,
+    "new_unique_records": 389,
+    "records_per_minute": 64.88,
+    "records_per_hour": 3892.8,
+    "wall_clock_records_per_minute": 41.31,
+    "wall_clock_records_per_hour": 2478.6
   },
   "recent_run_activity": {
-    "records_processed": 417,
-    "fetch_attempts": 675,
-    "run_count": 1
+    "records_processed": 832,
+    "fetch_attempts": 1100,
+    "run_count": 2
   }
 }
