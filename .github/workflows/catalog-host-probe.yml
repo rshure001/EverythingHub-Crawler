@@ -36,6 +36,7 @@ jobs:
         working-directory: crawler
         run: python -m unittest test_catalog_host_probe.py -v
       - name: Probe a bounded host batch
+        id: batch
         env:
           INPUT_OFFSET: ${{ github.event.inputs.offset }}
           RUN_NUMBER: ${{ github.run_number }}
@@ -45,16 +46,34 @@ jobs:
           else
             OFFSET="$(( ((RUN_NUMBER - 1) % 4) * 30 ))"
           fi
+          echo "offset=$OFFSET" >> "$GITHUB_OUTPUT"
           python crawler/catalog_host_probe.py --limit 30 --offset "$OFFSET" --pause 0.2
       - name: Publish probe evidence
+        env:
+          PROBE_OFFSET: ${{ steps.batch.outputs.offset }}
         run: |
-          git add -f data/host-catalog-probes.json
-          if git diff --cached --quiet; then
-            echo "No probe evidence changes."
-            exit 0
-          fi
           git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "Record public catalog interface probe evidence"
-          git pull --rebase origin main
-          git push
+          git config user.email "41898282+users.noreply.github.com"
+          for attempt in 1 2 3; do
+            git add -f data/host-catalog-probes.json
+            if git diff --cached --quiet; then
+              echo "No probe evidence changes."
+              exit 0
+            fi
+            git commit -m "Record public catalog interface probe evidence"
+            if git pull --rebase origin main; then
+              if git push; then exit 0; fi
+              git reset --hard HEAD
+            else
+              # The cumulative JSON changed on main during this batch. Rebuild
+              # from the latest committed inventory and reapply this batch.
+              git rebase --abort || true
+              git fetch origin main
+              git reset --hard origin/main
+              python crawler/catalog_host_probe.py --limit 30 --offset "$PROBE_OFFSET" --pause 0.2
+            fi
+            echo "Retrying probe evidence publish ($attempt/3)."
+            sleep "$((attempt * 2))"
+          done
+          echo "Unable to publish probe evidence after three safe retries."
+          exit 1
