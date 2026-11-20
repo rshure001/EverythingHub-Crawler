@@ -46,7 +46,9 @@ class PageDerivedCatalogAnalysisTests(unittest.TestCase):
         result = analyze_pages(pages, source_total=2)
         self.assertEqual(result["metrics"]["unique_catalogs_discovered"], 1)
         self.assertEqual(result["metrics"]["unique_records_by_type"], {"model": 2})
-        self.assertEqual(result["catalogs"][0]["title"], "Rolex Models")
+        self.assertEqual(result["catalogs"][0]["title"], "Rolex Models — referenced in indexed pages")
+        self.assertEqual(result["metrics"]["catalog_candidate_occurrences"], 2)
+        self.assertEqual(result["metrics"]["duplicate_catalog_candidates"], 1)
         hits = search_catalog_network("Rolex", result)
         self.assertEqual(len(hits), 1)
         self.assertEqual(hits[0]["record_count"], 2)
@@ -296,6 +298,10 @@ class PageDerivedCatalogAnalysisTests(unittest.TestCase):
         self.assertEqual(result["metrics"]["unique_catalogs_discovered"], 1)
         self.assertEqual(result["metrics"]["unique_records_by_type"], {"product": 3})
         self.assertEqual(result["metrics"]["content_entity_mentions"], 3)
+        self.assertEqual(result["metrics"]["source_declared_catalogs"], 1)
+        self.assertEqual(result["metrics"]["content_list_catalogs"], 0)
+        self.assertEqual(result["catalogs"][0]["catalog_origin"], "source_declared_collection")
+        self.assertEqual(result["catalogs"][0]["record_count"], 3)
         hits = search_catalog_network("Rolex", result)
         self.assertEqual(len(hits), 1)
         self.assertEqual([x["title"] for x in hits[0]["matched_records"]], ["Rolex Submariner"])
@@ -313,6 +319,14 @@ class PageDerivedCatalogAnalysisTests(unittest.TestCase):
         }], source_total=1)
         self.assertEqual(result["metrics"]["unique_catalogs_discovered"], 2)
         self.assertEqual(result["metrics"]["unique_records_by_type"], {"product": 2, "service": 2})
+        self.assertEqual(result["metrics"]["content_list_catalogs"], 2)
+        self.assertEqual(result["metrics"]["source_declared_catalogs"], 0)
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp)
+            write_outputs(result, output)
+            validated = validate_outputs(output)
+            self.assertEqual(validated["catalogs"], 2)
+            self.assertEqual(validated["records_validated"], 4)
 
     def test_single_list_item_does_not_force_a_catalog(self):
         result = analyze_pages([{
@@ -331,18 +345,20 @@ class PageDerivedCatalogAnalysisTests(unittest.TestCase):
             "title": "Gallery",
             "description": "Watch gallery",
             "text": "https://cdn.example.org/watch.jpg",
+            "product": {"type": "product", "name": "Watch", "image": "https://cdn.example.org/watch-image.webp"},
             "lane": "general", "robots_allowed": True, "fetched_at": 123,
         }], source_total=1)
-        self.assertEqual(result["metrics"]["media_references"], 1)
-        self.assertEqual(result["metrics"]["unique_media_urls"], 1)
+        self.assertEqual(result["metrics"]["media_references"], 2)
+        self.assertEqual(result["metrics"]["unique_media_urls"], 2)
         with tempfile.TemporaryDirectory() as tmp:
             output = Path(tmp)
             write_outputs(result, output)
             validated = validate_outputs(output)
-            self.assertEqual(validated["media_references_validated"], 1)
+            self.assertEqual(validated["media_references_validated"], 2)
             payload = json.loads(gzip.decompress((output / "media-references.json.gz").read_bytes()))
-            self.assertEqual(payload["references"][0]["source_url"], "https://example.org/gallery")
-            self.assertEqual(payload["references"][0]["discovered_at"], 123)
+            self.assertTrue(all(x["source_url"] == "https://example.org/gallery" for x in payload["references"]))
+            self.assertTrue(all(x["discovered_at"] == 123 for x in payload["references"]))
+            self.assertIn("https://cdn.example.org/watch-image.webp", {x["media_url"] for x in payload["references"]})
 
     def test_incremental_cache_invalidates_old_analyzer_version(self):
         pages = [{
