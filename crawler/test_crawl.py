@@ -139,6 +139,21 @@ class CrawlerTests(unittest.TestCase):
             "https://example.com/sitemap.xml",
         )
 
+    def test_frontier_restore_discards_legacy_non_html_and_bad_urls(self):
+        restored = crawl.restore_frontier_queue([
+            {"url": "https://example.com/article", "depth": 1},
+            {"url": "https://example.com/old.pdf", "depth": 2},
+            {"url": "https://example.com/image.png", "depth": 1},
+            {"url": "ftp://example.com/file", "depth": 1},
+            {"url": "https://example.com/too-deep", "depth": 4},
+            {"url": "https://example.com/bad-depth", "depth": "bad"},
+            {"url": "https://example.com/second", "depth": 0},
+        ])
+        self.assertEqual(list(restored), [
+            ("https://example.com/article", 1),
+            ("https://example.com/second", 0),
+        ])
+
     def test_clean_rejects_non_web_and_credential_bearing_urls(self):
         self.assertIsNone(crawl.clean("javascript:alert(1)"))
         self.assertIsNone(crawl.clean("mailto:test@example.com"))
