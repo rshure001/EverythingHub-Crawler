@@ -202,7 +202,6 @@ jobs:
             const mergedCatalog = body.catalogResults?.find(candidate => candidate.catalog_id === item.id);
             const matched = (catalog?.matched_records || []).map(record => record.title).join(' ');
             if (
-              body.status !== 'ok' ||
               body.indexStatus !== 'crawler-catalog-active' ||
               !Array.isArray(body.results) || body.results.length < 1 ||
               !Array.isArray(body.catalogResults) || !mergedCatalog ||
