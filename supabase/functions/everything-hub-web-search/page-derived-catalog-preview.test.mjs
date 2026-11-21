@@ -346,6 +346,9 @@ async function makeFixture() {
   responses.set(rawBase + "data/page-derived-catalogs/" + rolexPath, new Response(rolexIndexBytes));
   responses.set(rawBase + "data/page-derived-catalogs/" + vegasPath, new Response(vegasIndexBytes));
   responses.set(rawBase + "data/page-derived-catalogs/" + vegasProductPath, new Response(vegasProductIndexBytes));
+  responses.set(rawBase + "data/page-derived-catalogs/" + genericSubjectPath, new Response(genericSubjectIndexBytes));
+  responses.set(rawBase + "data/page-derived-catalogs/" + nasaSubjectPath, new Response(nasaSubjectIndexBytes));
+  responses.set(rawBase + "data/page-derived-catalogs/" + vegasSubjectPath, new Response(vegasSubjectIndexBytes));
   for (const [prefix, bytes] of searchBytes) {
     responses.set(rawBase + "data/page-derived-catalogs/search-index/" + prefix + ".json.gz", new Response(bytes));
   }
