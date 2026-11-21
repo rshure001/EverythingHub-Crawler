@@ -16,7 +16,7 @@ class PostCrawlDispatchTests(unittest.TestCase):
         self.assertNotIn("gh workflow run publish-site.yml --ref main", crawler)
         self.assertNotIn("  workflow_run:", search)
         self.assertIn("  workflow_dispatch:", search)
-        self.assertIn("Dispatch live search verification", catalog)
+        self.assertIn("dispatch_search_smoke()", catalog)
         self.assertIn("gh workflow run search-api-smoke.yml --ref main", catalog)
 
 
@@ -32,26 +32,30 @@ class PostCrawlDispatchTests(unittest.TestCase):
             self.assertIn("  workflow_dispatch:", workflow)
 
         search = (ROOT / ".github" / "workflows" / "search-api-smoke.yml").read_text(encoding="utf-8")
-        self.assertIn("  workflow_run:", search)
-        self.assertIn('workflows: ["Retroactive catalog inventory"]', search)
+        self.assertNotIn("  workflow_run:", search)
         self.assertIn("  workflow_dispatch:", search)
+        catalog = (ROOT / ".github" / "workflows" / "retroactive-catalog-index.yml").read_text(encoding="utf-8")
+        self.assertIn("gh workflow run search-api-smoke.yml --ref main", catalog)
         self.assertNotIn("EverythingHub Publisher", search)
 
-    def test_search_smoke_waits_for_catalog_workflow_completion(self):
+    def test_search_smoke_runs_after_validated_catalog_publication(self):
         publisher = (ROOT / ".github" / "workflows" / "publish-site.yml").read_text(encoding="utf-8")
         search = (ROOT / ".github" / "workflows" / "search-api-smoke.yml").read_text(encoding="utf-8")
+        catalog = (ROOT / ".github" / "workflows" / "retroactive-catalog-index.yml").read_text(encoding="utf-8")
         publisher_triggers = publisher.split("permissions:", 1)[0]
         self.assertIn("  workflow_dispatch:", publisher_triggers)
         self.assertNotIn("  push:", publisher_triggers)
         self.assertNotIn('      - "public-search/**"', publisher_triggers)
         self.assertNotIn('      - "publisher/**"', publisher_triggers)
         search_triggers = search.split("permissions:", 1)[0]
-        self.assertIn("  workflow_run:", search_triggers)
-        self.assertIn('workflows: ["Retroactive catalog inventory"]', search_triggers)
-        self.assertIn("types: [completed]", search_triggers)
-        self.assertIn("branches: [main]", search_triggers)
+        self.assertNotIn("  workflow_run:", search_triggers)
         self.assertIn("  workflow_dispatch:", search_triggers)
         self.assertNotIn("  push:", search_triggers)
+        self.assertIn("gh workflow run search-api-smoke.yml --ref main", catalog)
+        publish_block = catalog.split("- name: Publish validated catalog analysis on main", 1)[1]
+        push_position = publish_block.index("if git push origin HEAD:main; then")
+        dispatch_position = publish_block.index("dispatch_search_smoke\\n", push_position)
+        self.assertLess(push_position, dispatch_position)
         self.assertNotIn('      - "public-search/**"', search_triggers)
         self.assertNotIn(".github/workflows/publish-site.yml", publisher)
 
