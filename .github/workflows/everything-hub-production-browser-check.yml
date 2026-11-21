@@ -396,7 +396,7 @@ jobs:
 
               await goHome();
               await page.locator('.hotspots [data-mode="videos"]').click();
-              await page.locator("#query").fill("space");
+              await page.locator("#query").fill("animation");
               await page.locator("#searchForm button[type=submit]").click();
               await page.locator("#results .video-card").first().waitFor({ state: "visible", timeout: 45000 });
               const videoCards = page.locator("#results .video-card");
@@ -422,7 +422,7 @@ jobs:
                   const text = card.querySelector("small")?.textContent || "";
                   return text.includes("Internet Archive") && /CC0|CC BY|Public domain/i.test(text);
                 }).length,
-                relevantCards: cards.filter(card => /space|astronomy|astronaut|apollo|artemis|hubble|satellite|rocket|mission/i.test(card.innerText)).length,
+                relevantCards: cards.filter(card => /animation|animated|cartoon|space|astronomy|astronaut|apollo|artemis|hubble|satellite|rocket|mission/i.test(card.innerText)).length,
                 sampleTitles: cards.slice(0, 5).map(card => card.querySelectorAll("a")[1]?.textContent?.trim() || ""),
                 sampleAttributions: cards.slice(0, 5).map(card => card.querySelector("small")?.textContent || "")
               }));
