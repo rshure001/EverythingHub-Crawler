@@ -34,7 +34,9 @@ function fixture() {
       catalog("catalog:nasa-humanity", "Humanity Subject Catalog", "knowledge_base", "subject", "Humanity"),
       catalog("catalog:nasa-org", "NASA Organizations", "organization_directory", "organization", "NASA"),
       catalog("catalog:vegas-articles", "National Geographic Articles", "knowledge_base", "article", "Travel"),
-      catalog("catalog:vegas-places", "Las Vegas Places", "geographic", "place", "Las Vegas")
+      catalog("catalog:vegas-places", "Las Vegas Places", "geographic", "place", "Las Vegas"),
+      catalog("catalog:vegas-events", "Homeland Security Events", "events", "event", ""),
+      
     ],
     records: [
       record("r-rolex-article", "National Geographic and Rolex Committed to a Perpetual Planet", "article", ["catalog:rolex-articles"]),
@@ -43,6 +45,7 @@ function fixture() {
       record("r-nasa-org", "NASA", "organization", ["catalog:nasa-org"]),
       record("r-vegas-article", "Chandelier bars and old-school kitsch: the best places to stay in Las Vegas", "article", ["catalog:vegas-articles"]),
       record("r-vegas-place", "Las Vegas Strip", "place", ["catalog:vegas-places"]),
+      record("r-vegas-event", "Las Vegas Event Schedule", "event", ["catalog:vegas-events"]),
       record("r-nasa-news", "NASA Announces New Mission", "article", ["catalog:vegas-articles"], "Latest NASA news and mission updates")
     ]
   };
@@ -60,10 +63,16 @@ test("NASA does not return unrelated subject catalogs based on nasa.gov source h
   assert.equal(results[0].relevance_class, "typed_organization_match");
 });
 
-test("Las Vegas prefers a typed geographic catalog and excludes unrelated article catalogs", () => {
+test("Las Vegas prefers a typed geographic catalog and excludes unrelated article and event catalogs", () => {
   const results = searchPageDerivedCatalogs("Las Vegas", fixture(), 8);
   assert.deepEqual(results.map(x => x.catalog_id), ["catalog:vegas-places"]);
   assert.equal(results[0].relevance_class, "typed_location_match");
+});
+
+test("explicit Las Vegas events intent still returns the matching event catalog", () => {
+  const results = searchPageDerivedCatalogs("Las Vegas events", fixture(), 8);
+  assert.deepEqual(results.map(x => x.catalog_id), ["catalog:vegas-events"]);
+  assert.equal(results[0].relevance_class, "typed_event_match");
 });
 
 test("explicit content intent still permits relevant article catalogs", () => {
