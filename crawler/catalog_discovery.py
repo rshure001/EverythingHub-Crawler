@@ -29,11 +29,6 @@ USER_AGENT = "EverythingHubCatalogDiscovery/1.0 (+https://github.com/rshure001/E
 # Explicit public CKAN API hosts with reviewed, per-dataset rights handling.
 SOURCES = (
     {
-        "id": "us-data-gov", "name": "Data.gov",
-        "base": "https://catalog.data.gov", "landing_base": "https://catalog.data.gov",
-        "api_path": "/api/3/action/package_search", "category": "government",
-    },
-    {
         "id": "canada-open-data", "name": "Open Government Canada",
         "base": "https://open.canada.ca", "landing_base": "https://open.canada.ca/data/en",
         "api_path": "/data/en/api/3/action/package_search", "category": "government",
@@ -47,6 +42,8 @@ SOURCES = (
 EXCLUDED_SOURCES = (
     {"id": "australia-data-gov", "name": "Data.gov.au",
      "reason": "Source terms and dataset-level reuse conditions have not been reviewed."},
+    {"id": "us-data-gov", "name": "Data.gov",
+     "reason": "The legacy CKAN endpoint now returns HTTP 404. The replacement v4 API requires a free personal API key; DEMO_KEY is explicitly unsuitable for automated queries. Keep excluded until a dedicated v4 adapter and configured key are available."},
 )
 
 def _request_json(url: str) -> dict[str, Any]:
