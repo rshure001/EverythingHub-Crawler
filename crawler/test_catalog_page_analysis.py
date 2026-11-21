@@ -7,6 +7,7 @@ from pathlib import Path
 from catalog_page_analysis import (
     ANALYZER_VERSION, analyze_pages, analyze_pages_incremental,
     search_catalog_network, search_source_page_evidence, write_outputs, validate_outputs, stable_id,
+    apply_source_policy_reviews,
 )
 
 
@@ -867,6 +868,113 @@ class PageDerivedCatalogAnalysisTests(unittest.TestCase):
         self.assertEqual(rolex_hits[0]["catalog_id"], "rolex-models")
         vegas_hits = search_catalog_network("Las Vegas", analysis)
         self.assertEqual(vegas_hits[0]["catalog_id"], "vegas-places")
+
+
+    def test_source_policy_reviews_are_conditional_and_never_clear_record_level_rights(self):
+        register = {
+            "schema_version": 1,
+            "reviewed_at": "2026-11-21T00:22:00Z",
+            "policy": {
+                "default_status": "candidate_only",
+                "record_level_clearance": "not_reviewed",
+                "commercial_eligibility": False,
+                "republication": "not_cleared",
+            },
+            "reviews": [
+                {
+                    "host": "nist.gov",
+                    "status": "source_policy_reviewed_conditional",
+                    "record_level_clearance": "not_reviewed",
+                    "commercial_eligibility": False,
+                    "evidence_urls": ["https://www.nist.gov/copyrights-disclaimers"],
+                },
+                {
+                    "host": "nps.gov",
+                    "api_host": "developer.nps.gov",
+                    "status": "source_policy_reviewed_conditional",
+                    "record_level_clearance": "not_reviewed",
+                    "commercial_eligibility": False,
+                    "evidence_urls": ["https://www.nps.gov/aboutus/disclaimer.htm"],
+                },
+                {
+                    "host": "census.gov",
+                    "api_host": "api.census.gov",
+                    "status": "api_terms_reviewed_conditional",
+                    "record_level_clearance": "not_reviewed",
+                    "commercial_eligibility": False,
+                    "evidence_urls": ["https://www.census.gov/data/developers/about/terms-of-service.html"],
+                },
+            ],
+        }
+        analysis = {
+            "records": [
+                {"record_id": "nist", "source_urls": ["https://www.nist.gov/data/example"]},
+                {"record_id": "mixed", "source_urls": [
+                    "https://api.census.gov/data/2020/acs", "https://example.com/reference"
+                ]},
+                {"record_id": "spoof", "source_urls": ["https://nist.gov.example.com/data"]},
+            ],
+            "catalogs": [
+                {"catalog_id": "nps", "source_host": "developer.nps.gov",
+                 "source_url": "https://developer.nps.gov/api"}
+            ],
+            "metrics": {},
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            policy_path = Path(tmp) / "source-policy-reviews.json"
+            policy_path.write_text(json.dumps(register), encoding="utf-8")
+            apply_source_policy_reviews(analysis, policy_path)
+
+        records = {item["record_id"]: item for item in analysis["records"]}
+        self.assertEqual(records["nist"]["source_policy_review_status"], "conditional_source_review")
+        self.assertEqual(records["nist"]["source_policy_review_hosts"], ["nist.gov"])
+        self.assertEqual(records["mixed"]["source_policy_review_status"], "partial_source_review")
+        self.assertEqual(records["mixed"]["source_policy_review_hosts"], ["census.gov"])
+        self.assertEqual(records["mixed"]["source_policy_review_unmatched_hosts"], ["example.com"])
+        self.assertEqual(records["spoof"]["source_policy_review_status"], "not_reviewed")
+        self.assertEqual(
+            analysis["catalogs"][0]["source_policy_review_status"], "conditional_source_review"
+        )
+        self.assertEqual(
+            analysis["metrics"]["records_with_conditional_source_policy_review"], 1
+        )
+        self.assertEqual(
+            analysis["metrics"]["records_with_partial_source_policy_review"], 1
+        )
+        self.assertEqual(
+            analysis["metrics"]["catalogs_with_conditional_source_policy_review"], 1
+        )
+        self.assertEqual(
+            analysis["metrics"]["source_terms_reviewed_records"], 0
+        )
+        self.assertEqual(
+            analysis["metrics"]["commercially_eligible_records"], 0
+        )
+        for item in analysis["records"] + analysis["catalogs"]:
+            self.assertEqual(item["record_level_clearance"], "not_reviewed")
+            self.assertEqual(item["source_terms_status"], "not_reviewed")
+            self.assertFalse(item["commercial_eligible"])
+            if item["source_policy_review_status"] != "not_reviewed":
+                self.assertTrue(item["source_policy_review_evidence_urls"])
+                self.assertEqual(item["source_policy_review_scope"], "source-level-only")
+
+    def test_source_policy_register_rejects_any_default_clearance(self):
+        register = {
+            "schema_version": 1,
+            "reviewed_at": "2026-11-21T00:22:00Z",
+            "policy": {
+                "default_status": "approved",
+                "record_level_clearance": "reviewed",
+                "commercial_eligibility": True,
+                "republication": "cleared",
+            },
+            "reviews": [],
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            policy_path = Path(tmp) / "source-policy-reviews.json"
+            policy_path.write_text(json.dumps(register), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "deny-by-default"):
+                apply_source_policy_reviews({"records": [], "catalogs": [], "metrics": {}}, policy_path)
 
 if __name__ == "__main__":
     unittest.main()
