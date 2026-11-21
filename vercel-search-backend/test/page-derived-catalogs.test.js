@@ -83,10 +83,21 @@ test('Las Vegas prioritizes typed place and local directory catalogs over unrela
    source_urls:['https://example.gov/las-vegas-grand-prix'],catalog_ids:['events'],attributes:{}}
  ];
  const results=searchPageDerivedCatalogs('Las Vegas',{catalogs,records},5);
- assert.deepEqual(results.map(x=>x.catalog_id),['places','organizations','events']);
+ assert.deepEqual(results.map(x=>x.catalog_id),['places','organizations']);
  assert.equal(results[0].relevance_class,'typed_location_match');
  assert.equal(results[1].relevance_class,'typed_location_match');
- assert.equal(results[2].relevance_class,'related_event_match');
+});
+test('explicit Las Vegas events intent still returns the matching event catalog',()=>{
+ const catalogs=[
+  {catalog_id:'events',title:'DOE Events',catalog_type:'events',record_type:'event',source_url:'https://example.gov/events',record_count:3,source_page_count:2}
+ ];
+ const records=[
+  {record_id:'event',record_type:'event',title:'Las Vegas Events Calendar',description:'A major Las Vegas event.',
+   source_urls:['https://example.gov/las-vegas-grand-prix'],catalog_ids:['events'],attributes:{}}
+ ];
+ const results=searchPageDerivedCatalogs('Las Vegas events',{catalogs,records},5);
+ assert.deepEqual(results.map(x=>x.catalog_id),['events']);
+ assert.equal(results[0].relevance_class,'typed_event_match');
 });
 test('Rolex article or subject mentions are excluded from catalog previews when no product record exists',()=>{
  const results=searchPageDerivedCatalogs('Rolex',{
