@@ -166,10 +166,15 @@ class CatalogHostReviewQueueTests(unittest.TestCase):
                     "metadata_only": True,
                     "per_dataset_rights_required": True,
                     "attribution_required": "per_article",
+                    "rights_scope": "per_article_license",
                     "allowed_api_paths": [],
                     "allowed_catalog_paths": ["/journals", "/articles"],
+                    "allowed_metadata_fields": ["title", "authors", "doi", "license"],
+                    "prohibited_content": ["full_text", "images", "supplementary_files", "bulk_assets"],
+                    "max_response_bytes": 1500000,
                     "min_interval_seconds": 3,
                     "max_requests_per_run": 40,
+                    "policy_note": "Metadata-only fixture policy.",
                 },
             },
         }
@@ -222,7 +227,9 @@ class CatalogHostReviewQueueTests(unittest.TestCase):
             url = next(x for x in payload["candidate_urls"] if x["source_host"] == "frontiersin.org")
             self.assertEqual(item["source_access_mode"], "catalog_landing_page")
             self.assertTrue(item["metadata_only"])
-            self.assertEqual(item["allowed_metadata_fields"], [])
+            self.assertEqual(item["allowed_metadata_fields"], ["title", "authors", "doi", "license"])
+            self.assertEqual(item["prohibited_content"], ["full_text", "images", "supplementary_files", "bulk_assets"])
+            self.assertEqual(item["max_response_bytes"], 1500000)
             self.assertFalse(item["fetch_authorized"])
             self.assertTrue(item["robots_recheck_required"])
             self.assertEqual(url["source_access_mode"], "catalog_landing_page")
