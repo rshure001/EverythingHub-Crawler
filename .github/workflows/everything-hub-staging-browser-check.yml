@@ -1,9 +1,11 @@
-name: Everything Hub staging catalog browser verification
+name: Everything Hub local staging browser verification
 on:
   push:
     branches: [main]
     paths:
       - ".github/workflows/everything-hub-staging-browser-check.yml"
+      - "site/index.html"
+      - "assets/everythinghub-approved.png"
   workflow_dispatch:
 permissions:
   contents: read
@@ -12,9 +14,22 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     env:
-      TARGET_URL: https://everythinghub-homepage-fixed-pwrt56syb-rshure001-8053.vercel.app/
+      TARGET_URL: http://127.0.0.1:8080/
     steps:
       - uses: actions/checkout@v4
+      - name: Serve the approved homepage locally
+        run: |
+          python3 -m http.server 8080 --directory site >/tmp/everythinghub-http.log 2>&1 &
+          echo $! >/tmp/everythinghub-http.pid
+          for attempt in $(seq 1 20); do
+            if curl --silent --fail "$TARGET_URL" >/dev/null; then
+              echo "Local static publisher is serving site/index.html."
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/everythinghub-http.log
+          exit 1
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -23,7 +38,7 @@ jobs:
           npm init -y
           npm install --no-save playwright
           npx playwright install --with-deps chromium
-      - name: Verify staging homepage, approved art, complete crawler catalog, and search
+      - name: Verify approved art, eight categories, web search, media modes, and mobile layout
         run: |
           cat > staging-check.cjs <<'JS'
           const { chromium } = require("playwright");
@@ -35,59 +50,67 @@ jobs:
             page.on("pageerror", e => errors.push(e.message));
             const report = { url: process.env.TARGET_URL, startedAt: new Date().toISOString() };
             try {
-              const response = await page.goto(report.url, { waitUntil: "domcontentloaded", timeout: 45000 });
+              const response = await page.goto(report.url, { waitUntil: "domcontentloaded", timeout: 30000 });
               report.httpStatus = response?.status();
+              report.contentType = response?.headers()["content-type"] || "";
               report.title = await page.title();
-              report.searchInput = await page.locator("#q").count() === 1;
-              report.categoryCount = await page.locator(".tile").count();
-              await page.locator("img.approved-master-art").waitFor({ state: "attached", timeout: 15000 });
+              report.searchFormCount = await page.locator("form#searchForm").count();
+              report.searchInputCount = await page.locator("#q").count();
+              report.categoryCount = await page.locator(".hotspot[data-mode]").count();
+              report.categoryModes = await page.locator(".hotspot[data-mode]").evaluateAll(nodes =>
+                nodes.map(node => node.dataset.mode).sort()
+              );
+              const expected = ["business","images","news","places","research","shopping","videos","web"];
+              const artwork = page.locator(".art > img").first();
+              await artwork.waitFor({ state: "visible", timeout: 15000 });
               await page.waitForFunction(() => {
-                const img = document.querySelector("img.approved-master-art");
+                const img = document.querySelector(".art > img");
                 return !!img && img.complete && img.naturalWidth >= 100;
-              }, { timeout: 25000 });
-              report.approvedArtwork = await page.locator("img.approved-master-art").evaluate(img => ({
-                complete: img.complete, naturalWidth: img.naturalWidth, alt: img.alt
+              }, null, { timeout: 25000 });
+              report.approvedArtwork = await artwork.evaluate(img => ({
+                src: img.currentSrc, naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight
               }));
-              const manifestResponse = await page.request.get(new URL("search-index/manifest.json", report.url).href);
-              if (!manifestResponse.ok()) throw new Error("Manifest HTTP " + manifestResponse.status());
-              const manifest = await manifestResponse.json();
-              report.catalog = { totalPages: manifest.total_pages, shardCount: manifest.shard_count, shards: [] };
-              if (!Array.isArray(manifest.shards) || manifest.shards.length !== manifest.shard_count) {
-                throw new Error("Invalid manifest shard metadata");
-              }
-              for (const shard of manifest.shards) {
-                const shardResponse = await page.request.get(new URL("search-index/" + shard.file, report.url).href);
-                if (!shardResponse.ok()) throw new Error(shard.file + " HTTP " + shardResponse.status());
-                const payload = await shardResponse.json();
-                const count = Array.isArray(payload.pages) ? payload.pages.length : 0;
-                if (count !== shard.pages) throw new Error(shard.file + " page count mismatch");
-                report.catalog.shards.push({ file: shard.file, pages: count });
-              }
-              const total = report.catalog.shards.reduce((n, shard) => n + shard.pages, 0);
-              if (total !== manifest.total_pages || total < 1) {
-                throw new Error("Catalog total mismatch: " + total);
-              }
-              if (!response?.ok() || !report.title.includes("Everything Hub") || !report.searchInput ||
-                  report.categoryCount !== 8 || report.approvedArtwork.naturalWidth < 100) {
+              if (!response?.ok() || !report.contentType.toLowerCase().startsWith("text/html") ||
+                  !report.title.includes("Everything Hub") || report.searchFormCount !== 1 ||
+                  report.searchInputCount !== 1 || report.categoryCount !== 8 ||
+                  JSON.stringify(report.categoryModes) !== JSON.stringify(expected) ||
+                  report.approvedArtwork.naturalWidth < 100) {
                 throw new Error("Homepage structure check failed: " + JSON.stringify(report));
               }
               await page.screenshot({ path: "everything-hub-staging-homepage.png", fullPage: true });
-              await page.locator("#q").fill("Rolex");
-              await page.locator("#q").press("Enter");
-              await page.locator("#results .result a").first().waitFor({ state: "visible", timeout: 30000 });
-              report.rolexResultCount = await page.locator("#results .result").count();
-              if (!report.rolexResultCount) throw new Error("Rolex search returned no visible results");
-              await page.screenshot({ path: "everything-hub-staging-rolex.png", fullPage: true });
+              for (const query of ["Rolex","NASA"]) {
+                await page.goto(report.url, { waitUntil: "domcontentloaded", timeout: 30000 });
+                await page.locator("#q").fill(query);
+                await page.locator("#searchForm button[type=submit]").click();
+                await page.locator("#results .result").first().waitFor({ state: "visible", timeout: 45000 });
+                const count = await page.locator("#results .result").count();
+                const titles = await page.locator("#results .result .copy a").allTextContents();
+                report[query.toLowerCase()] = { count, sampleTitles: titles.slice(0,5) };
+                if (!count) throw new Error(query + " returned no visible web results");
+                await page.screenshot({ path: "everything-hub-staging-" + query.toLowerCase() + ".png", fullPage: true });
+              }
+              for (const [mode,query] of [["images","octopus"],["videos","Apollo 11 NASA"]]) {
+                await page.goto(report.url, { waitUntil: "domcontentloaded", timeout: 30000 });
+                await page.locator('.hotspot[data-mode="' + mode + '"]').click();
+                await page.locator("#q").fill(query);
+                await page.locator("#searchForm button[type=submit]").click();
+                await page.locator("#results .result").first().waitFor({ state: "visible", timeout: 45000 });
+                const count = await page.locator("#results .result").count();
+                const previews = await page.locator("#results .result img.thumb").count();
+                report[mode] = { count, previews };
+                if (!count || !previews) throw new Error(mode + " mode returned no visible results or image previews");
+              }
               await page.setViewportSize({ width: 390, height: 844 });
-              await page.reload({ waitUntil: "domcontentloaded" });
+              await page.goto(report.url, { waitUntil: "domcontentloaded", timeout: 30000 });
               report.mobile = await page.evaluate(() => ({
                 viewportWidth: document.documentElement.clientWidth,
                 documentWidth: document.documentElement.scrollWidth,
                 searchVisible: !!document.querySelector("#q")?.getClientRects().length,
-                categoryCount: document.querySelectorAll(".tile").length
+                artworkVisible: !!document.querySelector(".art > img")?.getClientRects().length,
+                categoryCount: document.querySelectorAll(".hotspot[data-mode]").length
               }));
               if (report.mobile.documentWidth > report.mobile.viewportWidth + 2 ||
-                  !report.mobile.searchVisible || report.mobile.categoryCount !== 8) {
+                  !report.mobile.searchVisible || !report.mobile.artworkVisible || report.mobile.categoryCount !== 8) {
                 throw new Error("Mobile layout check failed: " + JSON.stringify(report.mobile));
               }
               report.pageErrors = errors;
@@ -112,10 +135,11 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: everything-hub-staging-browser-check
+          name: everything-hub-local-staging-browser-check
           path: |
             everything-hub-staging-homepage.png
             everything-hub-staging-rolex.png
+            everything-hub-staging-nasa.png
             everything-hub-staging-failure.png
             everything-hub-staging-report.json
           if-no-files-found: warn
