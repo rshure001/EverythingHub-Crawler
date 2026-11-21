@@ -9,7 +9,8 @@ class PostCrawlDispatchTests(unittest.TestCase):
     def test_first_party_search_smoke_waits_for_catalog_analysis(self):
         crawler = (ROOT / ".github" / "workflows" / "crawl.yml").read_text(encoding="utf-8")
         search = (ROOT / ".github" / "workflows" / "search-api-smoke.yml").read_text(encoding="utf-8")
-        self.assertNotIn("  actions: write", crawler)
+        self.assertIn("  actions: write", crawler)
+        self.assertIn("gh workflow run crawl.yml --ref main", crawler)
         self.assertNotIn("gh workflow run search-api-smoke.yml --ref main", crawler)
         self.assertNotIn("gh workflow run publish-site.yml --ref main", crawler)
         self.assertIn("  workflow_run:", search)
