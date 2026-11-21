@@ -1405,7 +1405,7 @@ def main():
 
             for future in completed:
                 url, depth = in_flight.pop(future)
-                started_at = fetch_started_at.pop(future, completed_at if "completed_at" in locals() else time.monotonic())
+                started_at = fetch_started_at.pop(future, time.monotonic())
                 fetch_durations.append(max(0.0, time.monotonic() - started_at))
                 result = future.result()
                 completed_at = time.time()
