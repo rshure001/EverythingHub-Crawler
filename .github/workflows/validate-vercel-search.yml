@@ -9,9 +9,10 @@ on:
     paths:
       - 'vercel-search-backend/**'
       - '.github/workflows/validate-vercel-search.yml'
-  schedule:
-    # Stagger lightweight production checks away from GitHub's quarter-hour peaks; completion also wakes the crawler watchdog.
-    - cron: '5,20,35,50 * * * *'
+  workflow_run:
+    workflows: ["Retroactive catalog inventory"]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read
@@ -26,8 +27,8 @@ jobs:
       - name: Run search integrity and pagination tests
         run: node --test vercel-search-backend/test/*.test.js
   live-smoke:
-    # Production freshness is monitored on main and by the schedule; do not fail code PRs because the independent live catalog is stale.
-    if: github.event_name != 'pull_request'
+    # Run production catalog checks only after a successful catalog publication or an explicit manual dispatch.
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
