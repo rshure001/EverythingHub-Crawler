@@ -461,6 +461,23 @@ def clean(url):
     }
     if Path(urllib.parse.unquote(p.path or "/")).suffix.lower() in non_html_extensions:
         return None
+    # Open Library's interactive borrow routes are action endpoints, not useful
+    # searchable catalog pages. They can create hundreds of near-duplicate URLs
+    # (including _autoReadAloud and action=locate variants) and monopolize a
+    # host's single-flight crawl lane. Drop these during both discovery and
+    # frontier restoration; retain ordinary /books/{id}/{title} landing pages.
+    if (hostname or "").lower().rstrip(".") == "openlibrary.org":
+        path_lower = (p.path or "/").lower()
+        if path_lower.startswith("/borrow/") or re.search(r"/books/[^/]+/-/borrow/?$", path_lower):
+            return None
+        if any(key.lower() in {"_autoreadAloud".lower()} for key, _value in urllib.parse.parse_qsl(p.query, keep_blank_values=True)):
+            return None
+        if path_lower.startswith("/books/") and any(
+            key.lower() == "action" and value.lower() == "locate"
+            for key, value in urllib.parse.parse_qsl(p.query, keep_blank_values=True)
+        ):
+            return None
+
     # Never retain userinfo in crawler URLs; public search links must not carry credentials.
     # Remove fragments and common tracking parameters; retain meaningful query parameters.
     query = urllib.parse.parse_qsl(p.query, keep_blank_values=True)
