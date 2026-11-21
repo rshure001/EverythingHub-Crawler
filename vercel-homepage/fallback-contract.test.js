@@ -61,3 +61,7 @@ test("keeps the standalone script identical to the embedded deployment script", 
   assert.ok(embedded);
   assert.equal(standalone, embedded[1].trim());
 });
+
+test("uses a catalog-aware primary search timeout", () => {
+  assert.match(html, /signal:AbortSignal\.timeout\(15000\)/);
+});
