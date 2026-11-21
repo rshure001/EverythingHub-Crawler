@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_INDEX = ROOT / "data" / "index.json"
 DEFAULT_OUTPUT = ROOT / "data" / "page-derived-catalogs"
 DEFAULT_SOURCE_POLICY_REVIEWS = ROOT / "data" / "source-policy-reviews.json"
-ANALYZER_VERSION = 12
+ANALYZER_VERSION = 13
 TRACKING_KEYS = {"fbclid", "gclid", "dclid", "mc_cid", "mc_eid", "ref", "source"}
 STOP_TOKENS = {
     "the", "and", "for", "with", "from", "our", "your", "all", "new", "home", "page",
@@ -332,10 +332,47 @@ def _candidate_groups(page: dict, host: str, segments: list[str], body: str, tit
             found[key] = (key, kind, path, ["catalog_title", "listing_language", "title_kind:" + kind])
     return list(found.values())
 
-def _record_entity_key(kind: str, host: str, title: str) -> str:
+def _external_identity(attributes: dict | None, key: str = "same_as_ids") -> str:
+    """Return a vetted global identifier; unknown sameAs URLs never merge records."""
+    if not isinstance(attributes, dict):
+        return ""
+    values = attributes.get(key)
+    if isinstance(values, str):
+        values = [values]
+    if not isinstance(values, list):
+        return ""
+    patterns = (
+        (re.compile(r"wikidata:(Q[1-9]\d*)", re.I), "wikidata"),
+        (re.compile(r"orcid:(\d{4}-\d{4}-\d{4}-\d{3}[\dX])", re.I), "orcid"),
+        (re.compile(r"viaf:(\d+)", re.I), "viaf"),
+        (re.compile(r"isni:(\d{15}[\dX])", re.I), "isni"),
+        (re.compile(r"geonames:(\d+)", re.I), "geonames"),
+        (re.compile(r"osm:(node|way|relation):(\d+)", re.I), "osm"),
+    )
+    for value in values[:10]:
+        if not isinstance(value, str):
+            continue
+        candidate = value.strip()
+        for pattern, namespace in patterns:
+            match = pattern.fullmatch(candidate)
+            if not match:
+                continue
+            if namespace == "wikidata":
+                return namespace + ":" + match.group(1).upper()
+            if namespace in {"orcid", "isni"}:
+                return namespace + ":" + match.group(1).upper()
+            if namespace == "osm":
+                return namespace + ":" + match.group(1).lower() + ":" + match.group(2)
+            return namespace + ":" + match.group(1)
+    return ""
+
+
+def _record_entity_key(kind: str, host: str, title: str, attributes: dict | None = None) -> str:
+    external_id = _external_identity(attributes)
+    if external_id:
+        return kind + "|external|" + external_id
     normalized = _norm(title)
-    # Without a verified global identifier, host scope prevents false merges
-    # such as unrelated products or businesses sharing a generic display title.
+    # Without a vetted global identifier, host scope prevents false merges.
     return kind + "|" + host + "|" + normalized
 
 
@@ -354,14 +391,20 @@ def _product_entity_key(record_type: str, host: str, title: str, attributes: dic
     brand = _norm(attributes.get("brand", ""))
     if gtin:
         return record_type + "|gtin|" + gtin
+    external_id = _external_identity(attributes)
+    if external_id:
+        return record_type + "|external|" + external_id
     if sku and brand:
         return record_type + "|brand|" + brand + "|sku|" + sku
     if sku:
         return record_type + "|host|" + host + "|sku|" + sku
-    return _record_entity_key(record_type, host, title)
+    return _record_entity_key(record_type, host, title, attributes)
 
 
-def _brand_entity_key(name: str) -> str:
+def _brand_entity_key(name: str, attributes: dict | None = None) -> str:
+    external_id = _external_identity(attributes, "brand_same_as_ids") or _external_identity(attributes)
+    if external_id:
+        return "brand|external|" + external_id
     return "brand|name|" + _norm(name)
 
 
@@ -517,6 +560,16 @@ def analyze_pages(
                         value = raw_item.get(key)
                         if isinstance(value, (str, int, float)) and str(value).strip():
                             attributes[key] = str(value).strip()[:limit]
+                    for key in ("same_as_ids", "brand_same_as_ids"):
+                        values = raw_item.get(key)
+                        if isinstance(values, list):
+                            cleaned = []
+                            for value in values[:10]:
+                                canonical = _external_identity({key: [value]}, key)
+                                if canonical and canonical not in cleaned:
+                                    cleaned.append(canonical)
+                            if cleaned:
+                                attributes[key] = cleaned
                     position = raw_item.get("position")
                     if isinstance(position, int) and not isinstance(position, bool) and position > 0:
                         attributes["position"] = position
@@ -656,7 +709,7 @@ def analyze_pages(
 
             brand_name = _title(product_attributes.get("brand", ""))
             if brand_name and _valid_title(brand_name) and _norm(brand_name) != _norm(product_name):
-                brand_entity_key = _brand_entity_key(brand_name)
+                brand_entity_key = _brand_entity_key(brand_name, product_attributes)
                 brand_record_id = stable_id("record", brand_entity_key)
                 brand_item = records.setdefault(brand_record_id, {
                     "record_id": brand_record_id,
@@ -671,6 +724,8 @@ def analyze_pages(
                     "structured_brand": True,
                 })
                 brand_item.setdefault("attributes", {}).setdefault("metadata_source", "structured_product_metadata")
+                if product_attributes.get("brand_same_as_ids"):
+                    brand_item["attributes"]["same_as_ids"] = list(product_attributes["brand_same_as_ids"])
                 brand_item["structured_brand"] = True
                 if url not in brand_item["source_urls"]:
                     brand_item["source_urls"].append(url)
@@ -787,9 +842,9 @@ def analyze_pages(
                 if list_kind in ("product", "model"):
                     entity_key = _product_entity_key(list_kind, host, record_title, attributes)
                 elif list_kind == "brand":
-                    entity_key = _brand_entity_key(record_title)
+                    entity_key = _brand_entity_key(record_title, attributes)
                 else:
-                    entity_key = _record_entity_key(list_kind, host, record_title)
+                    entity_key = _record_entity_key(list_kind, host, record_title, attributes)
                 structured_record_id = stable_id("record", entity_key)
                 structured_item = records.setdefault(structured_record_id, {
                     "record_id": structured_record_id,
@@ -1102,7 +1157,8 @@ def analyze_pages_incremental(
 ) -> dict:
     """Reuse per-host analysis shards when that host's indexed pages are unchanged.
 
-    Catalog and entity IDs are host-scoped, so host shards can be safely merged.
+    Catalog IDs remain host-scoped; records with vetted external identifiers can
+    merge across host partitions without merging generic same-title entities.
     """
     source_page_rows = len(pages)
     pages, duplicate_source_page_rows = _dedupe_source_pages(pages)
