@@ -70,6 +70,21 @@ def _path_allowed(path: str, prefixes: object) -> bool:
     )
 
 
+def _path_pattern_allowed(path: str, patterns: object) -> bool:
+    if not isinstance(patterns, list):
+        return False
+    path_segments = [segment for segment in path.split("/") if segment]
+    for pattern in patterns:
+        if not isinstance(pattern, str) or not pattern.startswith("/"):
+            continue
+        pattern_segments = [segment for segment in pattern.split("/") if segment]
+        if len(pattern_segments) != len(path_segments):
+            continue
+        if all(expected == "*" or expected == actual for expected, actual in zip(pattern_segments, path_segments)):
+            return True
+    return False
+
+
 def _policy_status(host: str, path: str, sources: dict) -> tuple[str, dict, str | None]:
     policy = sources.get(host)
     if not isinstance(policy, dict):
@@ -84,7 +99,10 @@ def _policy_status(host: str, path: str, sources: dict) -> tuple[str, dict, str 
         return "terms_unreviewed", policy, None
     if _path_allowed(path, policy.get("allowed_api_paths")):
         return "policy_preapproved_robots_recheck_required", policy, "api"
-    if _path_allowed(path, policy.get("allowed_catalog_paths")):
+    if (
+        _path_allowed(path, policy.get("allowed_catalog_paths"))
+        or _path_pattern_allowed(path, policy.get("allowed_catalog_path_patterns"))
+    ):
         return "policy_preapproved_robots_recheck_required", policy, "catalog_landing_page"
     return "path_not_allowlisted", policy, None
 
@@ -182,6 +200,7 @@ def build_review_queue(manifest: dict, registry: dict, policy_registry: dict) ->
             "attribution_required": policy.get("attribution_required"),
             "rights_scope": policy.get("rights_scope"),
             "allowed_metadata_fields": policy.get("allowed_metadata_fields", []),
+            "allowed_catalog_path_patterns": policy.get("allowed_catalog_path_patterns", []),
             "prohibited_content": policy.get("prohibited_content", []),
             "max_response_bytes": int(policy.get("max_response_bytes") or 0),
             "min_interval_seconds": float(policy.get("min_interval_seconds", 1.0)),
@@ -219,6 +238,7 @@ def build_review_queue(manifest: dict, registry: dict, policy_registry: dict) ->
             "attribution_required": sample.get("attribution_required"),
             "rights_scope": sample.get("rights_scope"),
             "allowed_metadata_fields": sample.get("allowed_metadata_fields", []),
+            "allowed_catalog_path_patterns": sample.get("allowed_catalog_path_patterns", []),
             "prohibited_content": sample.get("prohibited_content", []),
             "max_response_bytes": min(int(row.get("max_response_bytes") or 0) for row in rows),
             "min_interval_seconds": max(float(row.get("min_interval_seconds", 1.0)) for row in rows),
@@ -241,6 +261,7 @@ def build_review_queue(manifest: dict, registry: dict, policy_registry: dict) ->
             "reviewed_at": sample.get("reviewed_at"),
             "source_access_modes": sorted({row["source_access_mode"] for row in rows if row.get("source_access_mode")}),
             "metadata_only": all(row.get("metadata_only") is True for row in rows),
+            "allowed_catalog_path_patterns": sample.get("allowed_catalog_path_patterns", []),
             "max_response_bytes": min(int(row.get("max_response_bytes") or 0) for row in rows),
             "per_dataset_rights_required": any(row["per_dataset_rights_required"] for row in rows),
             "min_interval_seconds": max(float(row.get("min_interval_seconds", 1.0)) for row in rows),
@@ -344,6 +365,8 @@ def validate_review_queue(payload: dict, manifest: dict) -> dict:
         and (
             row.get("metadata_only") is not True
             or not row.get("allowed_metadata_fields")
+            or not row.get("allowed_catalog_path_patterns")
+            or row.get("allowed_catalog_paths")
             or not row.get("prohibited_content")
             or not isinstance(row.get("max_response_bytes"), int)
             or row.get("max_response_bytes") < 1
