@@ -1110,7 +1110,7 @@ def search_catalog_network(query: str, analysis: dict, limit: int = 10) -> list[
         and query_matches_record(record)
         for record in records.values()
     )
-    product_intent = not content_intent and (product_term_intent or global_product_match)
+    product_intent = not content_intent and not business_intent and (product_term_intent or global_product_match)
     geo_intent = (
         len(tokens) >= 2 and global_place_match
         and not content_intent and not event_intent and not business_intent
