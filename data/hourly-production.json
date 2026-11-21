@@ -1,31 +1,7 @@
 {
-  "updated_at": "2026-11-21T14:42:38.102949+00:00",
+  "updated_at": "2026-11-21T14:53:29.952343+00:00",
   "target_new_records_per_hour": 60000,
   "runs": [
-    {
-      "run_id": "44754984882",
-      "run_number": "288",
-      "timestamp": "2026-11-20T14:43:28Z",
-      "indexed_records_processed": 3052,
-      "fetch_attempts": 3775,
-      "duration_seconds": 421.53,
-      "commit_sha": "e3aa2f1cb1aa",
-      "manifest_interval": {
-        "valid": true,
-        "reason": null,
-        "before_pages": 98192,
-        "after_pages": 101179,
-        "before_updated_at": "2026-11-20T14:23:25Z",
-        "after_updated_at": "2026-11-20T14:43:28Z",
-        "elapsed_seconds": 1203.0,
-        "run_duration_seconds": 421.53,
-        "new_unique_records": 2987,
-        "records_per_minute": 425.17,
-        "records_per_hour": 25509.9,
-        "wall_clock_records_per_minute": 148.98,
-        "wall_clock_records_per_hour": 8938.7
-      }
-    },
     {
       "run_id": "44761005159",
       "run_number": "290",
@@ -985,26 +961,50 @@
         "wall_clock_records_per_minute": 10.54,
         "wall_clock_records_per_hour": 632.3
       }
+    },
+    {
+      "run_id": "44915436438",
+      "run_number": "338",
+      "timestamp": "2026-11-21T14:51:52Z",
+      "indexed_records_processed": 520,
+      "fetch_attempts": 600,
+      "duration_seconds": 420.8,
+      "commit_sha": "82bcf16ebf2a",
+      "manifest_interval": {
+        "valid": true,
+        "reason": null,
+        "before_pages": 153620,
+        "after_pages": 154125,
+        "before_updated_at": "2026-11-21T14:41:25Z",
+        "after_updated_at": "2026-11-21T14:51:52Z",
+        "elapsed_seconds": 627.0,
+        "run_duration_seconds": 420.8,
+        "new_unique_records": 505,
+        "records_per_minute": 72.01,
+        "records_per_hour": 4320.3,
+        "wall_clock_records_per_minute": 48.33,
+        "wall_clock_records_per_hour": 2899.5
+      }
     }
   ],
   "latest_manifest_interval": {
     "valid": true,
     "reason": null,
-    "before_pages": 153081,
-    "after_pages": 153620,
-    "before_updated_at": "2026-11-21T13:50:16Z",
-    "after_updated_at": "2026-11-21T14:41:25Z",
-    "elapsed_seconds": 3069.0,
-    "run_duration_seconds": 420.28,
-    "new_unique_records": 539,
-    "records_per_minute": 76.95,
-    "records_per_hour": 4616.9,
-    "wall_clock_records_per_minute": 10.54,
-    "wall_clock_records_per_hour": 632.3
+    "before_pages": 153620,
+    "after_pages": 154125,
+    "before_updated_at": "2026-11-21T14:41:25Z",
+    "after_updated_at": "2026-11-21T14:51:52Z",
+    "elapsed_seconds": 627.0,
+    "run_duration_seconds": 420.8,
+    "new_unique_records": 505,
+    "records_per_minute": 72.01,
+    "records_per_hour": 4320.3,
+    "wall_clock_records_per_minute": 48.33,
+    "wall_clock_records_per_hour": 2899.5
   },
   "recent_run_activity": {
-    "records_processed": 993,
-    "fetch_attempts": 1133,
+    "records_processed": 1060,
+    "fetch_attempts": 1221,
     "run_count": 2
   }
 }
