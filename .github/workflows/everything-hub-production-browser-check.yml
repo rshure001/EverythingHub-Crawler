@@ -236,6 +236,7 @@ jobs:
                 const result = await readResultCards();
                 const pattern = query === "Rolex" ? /rolex/i : query === "Las Vegas" ? /las vegas|vegas/i : /nasa/i;
                 if (!result.count || !result.titles.some(title => pattern.test(title))) throw new Error(query + " did not return relevant visible web results: " + JSON.stringify(result));
+                await page.locator("#results .eh-catalog-result").first().waitFor({ state: "visible", timeout: 25000 });
                 const catalogCards = page.locator("#results .eh-catalog-result");
                 const catalogCount = await catalogCards.count();
                 const catalogTitles = await catalogCards.locator("a").allTextContents();
@@ -255,7 +256,7 @@ jobs:
                     !catalogRights.every(text => /Candidate preview only/.test(text) && /Record rights not cleared/.test(text) && /Commercial use not cleared/.test(text))) {
                   throw new Error(query + " catalog preview rights or identity labels failed: " + JSON.stringify({catalogFlags,catalogRelevance,catalogRights}));
                 }
-                report.searches[query] = {...result,catalogPreview:{count:catalogCount,titles:catalogTitles,matched:catalogMatched,relevance:catalogRelevance,rights:catalogRights}};
+                report.searches[query] = {...result,status:await page.locator("#status").textContent(),catalogPreview:{count:catalogCount,titles:catalogTitles,matched:catalogMatched,relevance:catalogRelevance,rights:catalogRights}};
 
                 await page.screenshot({ path: "everythinghub-fallback-" + query.toLowerCase().replace(/\s+/g, "-") + ".png", fullPage: true });
               }
