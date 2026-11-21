@@ -488,6 +488,9 @@ class PageDerivedCatalogAnalysisTests(unittest.TestCase):
         }
         results = search_catalog_network("Las Vegas", analysis)
         self.assertEqual(results[0]["catalog_id"], "places")
+        self.assertEqual(results[1]["catalog_id"], "events")
+        self.assertEqual(results[1]["relevance_class"], "related_event_match")
+        self.assertEqual(results[1]["relevance_label"], "Related event mention for this location")
 
     def test_location_query_prefers_place_and_directory_over_large_article_collection(self):
         article_ids = [f"article-{index}" for index in range(5)]
@@ -502,6 +505,8 @@ class PageDerivedCatalogAnalysisTests(unittest.TestCase):
                 {"catalog_id": "organizations", "catalog_type": "organization_directory",
                  "record_type": "organization", "title": "BLM Organizations",
                  "subject": "offices", "record_ids": ["organization"]},
+                {"catalog_id": "events", "catalog_type": "events", "record_type": "event",
+                 "title": "DOE Events", "subject": "events", "record_ids": ["event"]},
             ],
             "records": [
                 *[
@@ -517,15 +522,18 @@ class PageDerivedCatalogAnalysisTests(unittest.TestCase):
                 {"record_id": "organization", "record_type": "organization",
                  "title": "Las Vegas Field Office", "description": "Local public office.",
                  "attributes": {}},
+                {"record_id": "event", "record_type": "event", "title": "Las Vegas Grand Prix",
+                 "description": "A major Las Vegas event.", "attributes": {}},
             ],
         }
         hits = search_catalog_network("Las Vegas", analysis)
         self.assertEqual([item["catalog_id"] for item in hits[:3]], [
-            "places", "organizations", "articles"
+            "places", "organizations", "events", "articles"
         ])
         self.assertEqual(hits[0]["relevance_class"], "typed_location_match")
         self.assertEqual(hits[1]["relevance_class"], "typed_location_match")
-        self.assertEqual(hits[2]["relevance_class"], "related_mention")
+        self.assertEqual(hits[2]["relevance_class"], "related_event_match")
+        self.assertEqual(hits[3]["relevance_class"], "related_mention")
         self.assertEqual(hits[0]["relevance_label"], "Place or local directory match")
 
     def test_duplicate_canonical_source_pages_are_counted_once_and_robots_denial_wins(self):
