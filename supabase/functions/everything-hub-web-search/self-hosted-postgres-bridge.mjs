@@ -28,17 +28,29 @@ function safeResultUrl(raw) {
  * Optional bridge to the independent, self-hosted PostgreSQL search API.
  * It is dormant unless both environment values are configured. A failed
  * bridge returns null so the existing Supabase/static/Bing search paths run.
+ *
+ * @param {{
+ *   endpoint?: string,
+ *   token?: string,
+ *   query?: string,
+ *   lane?: string | null,
+ *   limit?: number,
+ *   offset?: number,
+ *   fetchImpl?: typeof fetch,
+ *   timeoutMs?: number
+ * }} [options]
  */
-export async function fetchSelfHostedPostgresSearch({
-  endpoint,
-  token,
-  query,
-  lane = null,
-  limit = 10,
-  offset = 0,
-  fetchImpl = fetch,
-  timeoutMs = 3500,
-} = {}) {
+export async function fetchSelfHostedPostgresSearch(options = {}) {
+  const {
+    endpoint,
+    token,
+    query,
+    lane = null,
+    limit = 10,
+    offset = 0,
+    fetchImpl = fetch,
+    timeoutMs = 3500,
+  } = options;
   const target = safeSearchEndpoint(endpoint);
   if (!target || typeof token !== "string" || !token.trim()) return null;
   const normalizedQuery = String(query ?? "").trim().slice(0, 160);
