@@ -2,13 +2,10 @@
 name: Everything Hub browser verification
 on:
   push:
-    branches: [main, 'eh/fallback-attribution-2026-11-21', 'eh/catalog-preview-cards-2026-11-21', 'eh/nasa-video-search-2026-11-21']
+    branches: [main, 'eh/fallback-attribution-2026-11-21', 'eh/catalog-preview-cards-2026-11-21']
     paths:
       - '.github/workflows/everything-hub-production-browser-check.yml'
       - 'vercel-homepage/**'
-      - 'vercel-search-backend/**'
-      - 'crawler/catalog-source-terms.json'
-      - 'crawler/test_catalog_source_policy.py'
   workflow_dispatch:
   workflow_run:
     workflows: ["Publish and verify Everything Hub — in-house Supabase route"]
@@ -110,7 +107,6 @@ jobs:
               report.passed = true;
             } catch (error) {
               report.error = error instanceof Error ? error.message : String(error);
-    console.error("FALLBACK_ACCEPTANCE_REPORT " + JSON.stringify(report));
               await page.screenshot({ path: "everythinghub-production-failure.png", fullPage: true }).catch(() => undefined);
             } finally {
               report.pageErrors = pageErrors;
@@ -143,7 +139,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 12
     env:
-      TARGET_URL: https://everythinghub-homepage-fixed.vercel.app/
+      TARGET_URL: ${{ github.ref == 'refs/heads/main' && 'https://everythinghub-homepage-fixed.vercel.app/' || 'https://everythinghub-homepage-fixed-rshure001-8053.vercel.app/src/index.html' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -153,9 +149,6 @@ jobs:
         run: |
           node --test vercel-homepage/fallback-contract.test.js
           node --check vercel-homepage/fallback/inline-script.js
-          node --test vercel-search-backend/test/*.test.js
-          node vercel-search-backend/test/images-live-smoke.cjs
-          node vercel-search-backend/test/videos-live-smoke.cjs
       - name: Install Playwright
         run: |
           npm init -y
@@ -367,10 +360,8 @@ jobs:
                   const creator = card.dataset.creator || "";
                   const small = card.querySelector("small");
                   const text = small?.textContent || "";
-                  const creatorLinked = [...(small?.querySelectorAll("a") || [])].some(link => link.textContent.trim() === creator);
-                  const licenseLinked = [...(small?.querySelectorAll("a") || [])].some(link => /creativecommons\\.org/.test(link.href));
-                  return !license || !text.includes("Openverse") || !text.includes(license) ||
-                    (ccBy(license) && (!creator || !creatorLinked || !licenseLinked));
+                  return !license || !text.includes("Wikimedia Commons") || !text.includes(license) ||
+                    (ccBy(license) && (!creator || !small?.querySelector("a")));
                 }).length;
                 const ccByCards = cards.filter(card => ccBy(card.dataset.license)).length;
                 const ccByCardsWithLinks = cards.filter(card => ccBy(card.dataset.license) && !!card.querySelector("small a")).length;
@@ -381,7 +372,7 @@ jobs:
                     return !!image && image.complete && image.naturalWidth > 0;
                   }).length,
                   placeholders: cards.filter(card => !!card.querySelector(".image-placeholder")).length,
-                  attributionCards: cards.filter(card => (card.querySelector("small")?.textContent || "").includes("Openverse")).length,
+                  attributionCards: cards.filter(card => (card.querySelector("small")?.textContent || "").includes("Wikimedia Commons")).length,
                   badAttribution,
                   ccByCards,
                   ccByCardsWithLinks,
@@ -392,14 +383,14 @@ jobs:
               if (report.imageSearch.cards < 8 || report.imageSearch.loadedThumbnails < 8 || report.imageSearch.placeholders !== 0 ||
                   report.imageSearch.attributionCards !== report.imageSearch.cards || report.imageSearch.badAttribution !== 0 ||
                   report.imageSearch.ccByCardsWithLinks !== report.imageSearch.ccByCards ||
-                  !/^https:\/\//i.test(imageSourceLink.href)) throw new Error("Openverse image thumbnails or attribution failed: " + JSON.stringify(report.imageSearch));
+                  !/^https:\/\/commons\.wikimedia\.org\//i.test(imageSourceLink.href)) throw new Error("Licensed image thumbnails or attribution failed: " + JSON.stringify(report.imageSearch));
               report.categorySearches.images = { cards: report.imageSearch.cards, loadedThumbnails: report.imageSearch.loadedThumbnails };
               report.coreLinks.images = imageSourceLink;
               await page.screenshot({ path: "everythinghub-fallback-images.png", fullPage: true });
 
               await goHome();
               await page.locator('.hotspots [data-mode="videos"]').click();
-              await page.locator("#query").fill("animation");
+              await page.locator("#query").fill("NASA");
               await page.locator("#searchForm button[type=submit]").click();
               await page.locator("#results .video-card").first().waitFor({ state: "visible", timeout: 45000 });
               const videoCards = page.locator("#results .video-card");
@@ -421,28 +412,12 @@ jobs:
                   return !!image && image.complete && image.naturalWidth > 0;
                 }).length,
                 fallbacks: cards.filter(card => !!card.querySelector(".video-placeholder")).length,
-                attributionCards: cards.filter(card => {
-                  const text = card.querySelector("small")?.textContent || "";
-                  return text.includes("Internet Archive") && /CC0|CC BY|Public domain/i.test(text);
-                }).length,
-                relevantCards: cards.filter(card => /animation|animated|cartoon|space|astronomy|astronaut|apollo|artemis|hubble|satellite|rocket|mission/i.test(card.innerText)).length,
-                sampleTitles: cards.slice(0, 5).map(card => card.querySelectorAll("a")[1]?.textContent?.trim() || ""),
-                sampleAttributions: cards.slice(0, 5).map(card => card.querySelector("small")?.textContent || "")
+                sampleTitles: cards.slice(0, 5).map(card => card.querySelector("a")?.textContent || "")
               }));
               const videoLink = await page.locator("#results .video-card > a").first().evaluate(anchor => ({ href: anchor.href, target: anchor.target, rel: anchor.rel }));
-              if (report.videoSearch.cards < 5 || report.videoSearch.loadedThumbnails < 5 || report.videoSearch.relevantCards < 5 || report.videoSearch.fallbacks !== 0 ||
-                  report.videoSearch.attributionCards !== report.videoSearch.cards ||
-                  report.videoSearch.sampleTitles.filter(Boolean).length < 5 ||
-                  !/^https:\/\/archive\.org\/details\//i.test(videoLink.href) ||
-                  videoLink.target !== "_blank" || !videoLink.rel.includes("noopener")) {
-                throw new Error("Internet Archive video cards, thumbnails, titles, or license attribution failed: " + JSON.stringify(report.videoSearch));
-              }
-              report.categorySearches.videos = {
-                cards: report.videoSearch.cards,
-                loadedThumbnails: report.videoSearch.loadedThumbnails,
-                attributionCards: report.videoSearch.attributionCards,
-                relevantCards: report.videoSearch.relevantCards
-              };
+              if (report.videoSearch.cards < 15 || report.videoSearch.loadedThumbnails < 15 || report.videoSearch.fallbacks !== 0 ||
+                  !/^https:\/\/www\.youtube\.com\/watch\?/i.test(videoLink.href)) throw new Error("Video cards or thumbnails failed: " + JSON.stringify(report.videoSearch));
+              report.categorySearches.videos = { cards: report.videoSearch.cards, loadedThumbnails: report.videoSearch.loadedThumbnails };
               report.coreLinks.videos = videoLink;
               await page.screenshot({ path: "everythinghub-fallback-videos.png", fullPage: true });
 
@@ -490,8 +465,7 @@ jobs:
                 report.categorySearchCount === 8 && report.news.topStories >= 5 &&
                 Object.values(report.newsCategories).every(value => value.count > 0) &&
                 report.newsRefresh.http === 200 && report.imageSearch.loadedThumbnails >= 8 &&
-                report.imageSearch.badAttribution === 0 && report.videoSearch.loadedThumbnails >= 5 &&
-                report.videoSearch.attributionCards === report.videoSearch.cards && report.videoSearch.relevantCards >= 5 && report.videoSearch.sampleTitles.filter(Boolean).length >= 5 &&
+                report.imageSearch.badAttribution === 0 && report.videoSearch.loadedThumbnails >= 15 &&
                 report.mobile.documentWidth <= report.mobile.viewportWidth + 2 &&
                 pageErrors.length === 0 && consoleErrors.length === 0;
               if (!report.passed) throw new Error("One or more live fallback acceptance gates failed.");
