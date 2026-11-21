@@ -241,9 +241,10 @@ function renderVideos(data,q){
     }
     const title=document.createElement('a');title.href=safeUrl(item.url);title.target='_blank';title.rel='noopener noreferrer';title.textContent=item.title||'Video';
     const small=document.createElement('small');
-    small.append(document.createTextNode((item.source||'Video source')+' · Credit: '+(item.credit||'NASA')+' · '));
-    const policyLink=document.createElement('a');policyLink.href=safeUrl(item.attributionUrl||'https://www.nasa.gov/nasa-brand-center/images-and-media/');
-    policyLink.target='_blank';policyLink.rel='noopener noreferrer';policyLink.textContent='NASA media guidelines';
+    const credit=item.creator||item.credit||(item.attributionRequired===false?'Attribution not required':'Creator credit unavailable');
+    small.append(document.createTextNode((item.source||'Video source')+' · '+(item.license||'License unavailable')+' · '+credit+' · '));
+    const policyLink=document.createElement('a');policyLink.href=safeUrl(item.licenseUrl||item.attributionUrl||'https://commons.wikimedia.org/wiki/Commons:Reusing_content_outside_Wikimedia');
+    policyLink.target='_blank';policyLink.rel='noopener noreferrer';policyLink.textContent='license and reuse terms';
     small.append(policyLink);
     card.append(link,title,small);grid.append(card);
   }
