@@ -7,7 +7,7 @@
   "source_index_sha256": "f2970955232939b2f22a9358c909e4a5036007aa1bd78d263473e7d60aa2852b",
   "catalog_count": 2448,
   "record_count": 51172,
-  "generated_at": "2026-11-21T02:05:05Z",
+  "generated_at": "2026-11-21T03:17:40Z",
   "metrics": {
     "pages_analyzed": 139147,
     "source_page_rows": 139623,
@@ -83,8 +83,8 @@
     "unique_source_coverage_percentage": 100.0,
     "eligible_page_coverage_percentage": 99.4356,
     "eligible_unique_source_page_coverage_percentage": 99.7758,
-    "host_partitions_reused": 101,
-    "host_partitions_rebuilt": 14,
+    "host_partitions_reused": 115,
+    "host_partitions_rebuilt": 0,
     "records_with_conditional_source_policy_review": 5249,
     "records_with_partial_source_policy_review": 0,
     "catalogs_with_conditional_source_policy_review": 129,
@@ -112,33 +112,33 @@
     "commercial_eligibility": false,
     "republication": "not_cleared"
   },
-  "analysis_started_at": "2026-11-21T02:03:51Z",
-  "analysis_finished_at": "2026-11-21T02:05:05Z",
-  "persisted_snapshot_at": "2026-11-21T02:05:05Z",
-  "analysis_elapsed_seconds": 74.34,
-  "elapsed_wall_clock_seconds": 2712.87,
+  "analysis_started_at": "2026-11-21T03:17:26Z",
+  "analysis_finished_at": "2026-11-21T03:17:40Z",
+  "persisted_snapshot_at": "2026-11-21T03:17:40Z",
+  "analysis_elapsed_seconds": 14.232,
+  "elapsed_wall_clock_seconds": 4355.482,
   "previous_counts": {
-    "pages_analyzed": 137719,
-    "eligible_pages": 137418,
-    "unique_catalogs_discovered": 2431,
+    "pages_analyzed": 139147,
+    "eligible_pages": 138835,
+    "unique_catalogs_discovered": 2448,
     "subcatalogs_discovered": 75,
-    "unique_records": 50508,
-    "media_references": 8532
+    "unique_records": 51172,
+    "media_references": 8531
   },
   "count_deltas": {
-    "pages_analyzed": 1428,
-    "eligible_pages": 1417,
-    "unique_catalogs_discovered": 17,
+    "pages_analyzed": 0,
+    "eligible_pages": 0,
+    "unique_catalogs_discovered": 0,
     "subcatalogs_discovered": 0,
-    "unique_records": 664,
-    "media_references": -1
+    "unique_records": 0,
+    "media_references": 0
   },
   "throughput": {
-    "pages_per_minute": 31.5828,
-    "catalogs_per_minute": 0.376,
-    "records_per_minute": 14.6856,
+    "pages_per_minute": 0.0,
+    "catalogs_per_minute": 0.0,
+    "records_per_minute": 0.0,
     "subcatalogs_per_minute": 0.0,
-    "media_references_per_minute": -0.0221,
+    "media_references_per_minute": 0.0,
     "measurement": "persisted_count_delta_over_wall_clock_interval"
   },
   "files": [
@@ -14850,8 +14850,8 @@
     },
     {
       "file": "registry.json.gz",
-      "bytes": 1920104,
-      "sha256": "7ba5d2960b1238739d069e938aaaa39c90cde72d541bcf8ed9b12196c7462bec",
+      "bytes": 1920100,
+      "sha256": "de16d60ebdf5bdbafb9f3d2505e24de1f97acaccee201eb0ee11560971fce9b2",
       "items": 2448
     }
   ]
