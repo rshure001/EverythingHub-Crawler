@@ -57,3 +57,11 @@ test('Las Vegas ranks the geographic place catalog',()=>{
  const f=fixture(),network=validatePageDerivedCatalogs(f.manifest,f.registry,f.recordsFile),results=searchPageDerivedCatalogs('Las Vegas',network,5);
  assert.equal(results.length,1);assert.equal(results[0].catalog_id,'catalog-vegas');assert.equal(results[0].matched_records[0].title,'Las Vegas Strip');assert.match(results[0].title,/Place catalog/);
 });
+
+test('freshness requires matching source-page count and update timestamp',()=>{
+ const {matchesPageIndexSnapshot}=require('../src/lib/page-derived-catalogs');
+ const updatedAt=Date.parse('2026-11-20T22:00:00Z')/1000;
+ assert.equal(matchesPageIndexSnapshot({sourceIndexPages:10,sourceIndexUpdatedAt:'2026-11-20T22:00:00Z'},{indexedPages:10,updatedAt}),true);
+ assert.equal(matchesPageIndexSnapshot({sourceIndexPages:9,sourceIndexUpdatedAt:'2026-11-20T22:00:00Z'},{indexedPages:10,updatedAt}),false);
+ assert.equal(matchesPageIndexSnapshot({sourceIndexPages:10,sourceIndexUpdatedAt:'2026-11-20T21:50:00Z'},{indexedPages:10,updatedAt}),false);
+});
