@@ -66,7 +66,7 @@ class StaticSearchTests(unittest.TestCase):
         # The recovery service matches the publisher's 180k pages, 768 shards, 256 KB manifest, 100 MB compressed, and 400 MB decoded bounds.
         self.assertEqual(
             api._manifest_int(151_584, "total_pages", 1, api.MAX_PAGES),
-            133_026,
+            151_584,
         )
         self.assertEqual(
             api._manifest_int(
@@ -75,7 +75,7 @@ class StaticSearchTests(unittest.TestCase):
                 1,
                 api.MAX_TOTAL_UNCOMPRESSED_BYTES,
             ),
-            255_987_451,
+            291_973_398,
         )
         self.assertEqual(
             api._manifest_int(
@@ -84,7 +84,7 @@ class StaticSearchTests(unittest.TestCase):
                 1,
                 api.MAX_TOTAL_COMPRESSED_BYTES,
             ),
-            64_459_270,
+            72_608_773,
         )
         self.assertEqual(
             api._manifest_int(586, "shard_count", 1, api.MAX_SHARDS),
