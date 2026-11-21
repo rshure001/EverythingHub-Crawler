@@ -1183,11 +1183,11 @@ class CatalogInventoryTriggerTests(unittest.TestCase):
     def test_vetted_same_as_ids_merge_records_across_hosts(self):
         def page(host, first, second, fetched_at):
             return {
-                "url": f"https://{host}/watches",
-                "title": "Rolex Watches",
+                "url": f"https://{host}/catalog",
+                "title": "Watch model collection",
                 "description": "A structured list of watch models.",
                 "text": "Browse the watch models.",
-                "lane": "shopping",
+                "lane": "general",
                 "robots_allowed": True,
                 "fetched_at": fetched_at,
                 "structured_catalog": {
