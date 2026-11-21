@@ -268,6 +268,14 @@ jobs:
                 providers: cards.map(card => card.querySelector("small")?.textContent || ""),
                 licenses: cards.map(card => card.dataset.license || ""),
                 creators: cards.map(card => card.dataset.creator || ""),
+                creatorValid: cards.map(card => {
+                  const license = String(card.dataset.license || "").toLowerCase();
+                  const creator = String(card.dataset.creator || "").trim();
+                  const requiresCreator = license.startsWith("cc by");
+                  const genericCreator = ["internet archive", "unknown", "anonymous", "not specified", "n/a"].includes(creator.toLowerCase());
+                  return !requiresCreator || (!!creator && !genericCreator);
+                }),
+                licenseUrls: cards.map(card => Array.from(card.querySelectorAll("small a")).find(anchor => anchor.href.startsWith("https://creativecommons.org/"))?.href || ""),
                 attributions: cards.map(card => card.querySelector("small")?.textContent || ""),
                 itemLinks: cards.map(card => card.querySelector("a")?.href || ""),
                 thumbnailUrls: cards.map(card => card.querySelector("img")?.src || "")
@@ -289,8 +297,9 @@ jobs:
               }))), alternateUrls);
               report.checks.images = { ...imageStats, mediaResponses, mediaFailures, alternateReferrer };
               if (imageStats.loaded < 8 || imageStats.providers.some(x => !x.includes("Internet Archive")) ||
-                  imageStats.licenses.some(x => !x) || imageStats.creators.some(x => !x) ||
-                  imageStats.attributions.some(x => !/Source:\s*Internet Archive/i.test(x))) {
+                  imageStats.licenses.some(x => !x) || imageStats.licenseUrls.some(x => !x.startsWith("https://creativecommons.org/")) ||
+                  imageStats.creatorValid.some(valid => !valid) ||
+                  imageStats.attributions.some((text, index) => !/Source:\s*Internet Archive/i.test(text) || !text.includes(imageStats.licenses[index]))) {
                 throw new Error("Image thumbnails or attribution failed: " + JSON.stringify({ ...imageStats, mediaResponses }));
               }
               const imageLink = await page.locator("#results .media-card > a").first().evaluate(anchor => ({ href: anchor.href, target: anchor.target, rel: anchor.rel }));
