@@ -63,7 +63,7 @@ test('Las Vegas ranks the geographic place catalog',()=>{
  assert.equal(results.length,1);assert.equal(results[0].catalog_id,'catalog-vegas');assert.equal(results[0].matched_records[0].title,'Las Vegas Strip');assert.match(results[0].title,/Place catalog/);
 });
 
-test('Las Vegas prioritizes place and local directory catalogs over a large article collection',()=>{
+test('Las Vegas prioritizes typed place and local directory catalogs over unrelated article collections',()=>{
  const catalogs=[
   {catalog_id:'articles',title:'National Geographic Articles',catalog_type:'knowledge_base',record_type:'article',source_url:'https://example.org/articles',record_count:1000,source_page_count:1000},
   {catalog_id:'places',title:'BLM Places',catalog_type:'geographic',record_type:'place',source_url:'https://example.gov/places',record_count:26,source_page_count:8},
@@ -83,13 +83,12 @@ test('Las Vegas prioritizes place and local directory catalogs over a large arti
    source_urls:['https://example.gov/las-vegas-grand-prix'],catalog_ids:['events'],attributes:{}}
  ];
  const results=searchPageDerivedCatalogs('Las Vegas',{catalogs,records},5);
- assert.deepEqual(results.slice(0,4).map(x=>x.catalog_id),['places','organizations','events','articles']);
+ assert.deepEqual(results.map(x=>x.catalog_id),['places','organizations','events']);
  assert.equal(results[0].relevance_class,'typed_location_match');
  assert.equal(results[1].relevance_class,'typed_location_match');
  assert.equal(results[2].relevance_class,'related_event_match');
- assert.equal(results[3].relevance_class,'related_mention');
 });
-test('Rolex article or subject hits are labeled as related mentions when no product record exists',()=>{
+test('Rolex article or subject mentions are excluded from catalog previews when no product record exists',()=>{
  const results=searchPageDerivedCatalogs('Rolex',{
   catalogs:[{catalog_id:'mentions',title:'National Geographic Subjects',catalog_type:'knowledge_base',
    record_type:'subject',source_url:'https://example.org/subjects',record_count:7,source_page_count:7}],
@@ -98,19 +97,14 @@ test('Rolex article or subject hits are labeled as related mentions when no prod
    description:'A conservation partnership mention.',source_urls:['https://example.org/rolex-mention'],
    catalog_ids:['mentions'],attributes:{}}]
  },5);
- assert.equal(results.length,1);
- assert.equal(results[0].relevance_class,'related_mention');
- assert.match(results[0].relevance_label,/not a dedicated catalog match/);
- assert.equal(results[0].query_intent,'general');
+ assert.equal(results.length,0);
 });
-
-
-test('catalog preview links to the matching record instead of an unrelated first catalog source',()=>{
+test('catalog preview links to the matching typed record instead of an unrelated first catalog source',()=>{
  const results=searchPageDerivedCatalogs('Las Vegas',{
-  catalogs:[{catalog_id:'mixed',title:'Geographic Subject Catalog',catalog_type:'knowledge_base',record_type:'subject',source_url:'https://example.org/unrelated-first-record',record_count:100,source_page_count:100}],
+  catalogs:[{catalog_id:'mixed',title:'Las Vegas Places',subject:'Las Vegas',catalog_type:'geographic',record_type:'place',source_url:'https://example.org/unrelated-first-record',record_count:100,source_page_count:100}],
   records:[
    {record_id:'other',record_type:'subject',title:'Unrelated catalog starter',description:'General knowledge record',source_urls:['https://example.org/unrelated-first-record'],catalog_ids:['mixed'],attributes:{}},
-   {record_id:'match',record_type:'subject',title:'Las Vegas public resource',description:'A matching Las Vegas resource',source_urls:['https://example.org/las-vegas-match'],catalog_ids:['mixed'],attributes:{}}
+   {record_id:'match',record_type:'place',title:'Las Vegas Strip',description:'A matching Las Vegas destination',source_urls:['https://example.org/las-vegas-match'],catalog_ids:['mixed'],attributes:{}}
   ]
  },5);
  assert.equal(results.length,1);
