@@ -1,7 +1,7 @@
 name: Validate Everything Hub Vercel search backend
 on:
   push:
-    branches: [main]
+    branches: [main, eh/nasa-video-search-2026-11-21]
     paths:
       - 'vercel-search-backend/**'
       - '.github/workflows/validate-vercel-search.yml'
@@ -27,7 +27,7 @@ jobs:
         run: node --test vercel-search-backend/test/*.test.js
   live-smoke:
     # Production freshness is monitored on main and by the schedule; do not fail code PRs because the independent live catalog is stale.
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
