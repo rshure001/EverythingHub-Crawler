@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_INDEX = ROOT / "data" / "index.json"
 DEFAULT_OUTPUT = ROOT / "data" / "page-derived-catalogs"
 DEFAULT_SOURCE_POLICY_REVIEWS = ROOT / "data" / "source-policy-reviews.json"
-ANALYZER_VERSION = 10
+ANALYZER_VERSION = 11
 TRACKING_KEYS = {"fbclid", "gclid", "dclid", "mc_cid", "mc_eid", "ref", "source"}
 STOP_TOKENS = {
     "the", "and", "for", "with", "from", "our", "your", "all", "new", "home", "page",
@@ -797,10 +797,15 @@ def analyze_pages(
     type_counts = dict(sorted(Counter(x["record_type"] for x in record_list).items()))
     source_total = max(source_total if isinstance(source_total, int) and source_total >= 0 else source_page_rows, source_page_rows)
     unique_source_total = max(len(pages), source_total - duplicate_source_page_rows)
-    coverage = (len(pages) / source_total * 100.0) if source_total else 0.0
+    source_set_complete = len(pages) == unique_source_total
+    source_row_coverage = (len(pages) / source_total * 100.0) if source_total else 0.0
     unique_coverage = (len(pages) / unique_source_total * 100.0) if unique_source_total else 0.0
-    eligible_coverage = (eligible / source_total * 100.0) if source_total else 0.0
-    eligible_unique_coverage = (eligible / unique_source_total * 100.0) if unique_source_total else 0.0
+    eligible_pages_analyzed = sum(1 for item in page_rows if item.get("eligible") is True)
+    if eligible_pages_analyzed != eligible:
+        raise ValueError("eligible page metrics do not match the analyzed page rows")
+    eligible_coverage = 100.0 if source_set_complete else None
+    eligibility_rate = (eligible / len(pages) * 100.0) if pages else 0.0
+    source_row_deduplication = (duplicate_source_page_rows / source_page_rows * 100.0) if source_page_rows else 0.0
     page_refs = sum(len(x.get("source_page_ids", [])) for x in catalog_list)
     metrics = {
         "pages_analyzed": len(pages),
@@ -808,6 +813,12 @@ def analyze_pages(
         "unique_source_pages": len(pages),
         "duplicate_source_page_rows": duplicate_source_page_rows,
         "eligible_pages": eligible,
+        "eligible_pages_analyzed": eligible_pages_analyzed,
+        "source_index_unique_pages": unique_source_total,
+        "eligibility_rate_percentage": round(eligibility_rate, 4),
+        "source_row_coverage_percentage": round(source_row_coverage, 4),
+        "source_row_deduplication_percentage": round(source_row_deduplication, 4),
+        "eligible_page_coverage_status": "complete" if source_set_complete else "unknown_incomplete_source_set",
         "unique_catalogs_discovered": len(catalog_list),
         "unique_catalogs_by_type": dict(sorted(Counter(x["catalog_type"] for x in catalog_list).items())),
         "source_declared_catalogs": sum(bool(x.get("is_source_declared_catalog")) for x in catalog_list),
@@ -845,10 +856,10 @@ def analyze_pages(
         "records_published": 0,
         "catalogs_verified": 0,
         "pages_with_catalog_signals": pages_with_signals,
-        "coverage_percentage": round(coverage, 4),
+        "coverage_percentage": round(unique_coverage, 4),
         "unique_source_coverage_percentage": round(unique_coverage, 4),
-        "eligible_page_coverage_percentage": round(eligible_coverage, 4),
-        "eligible_unique_source_page_coverage_percentage": round(eligible_unique_coverage, 4),
+        "eligible_page_coverage_percentage": round(eligible_coverage, 4) if eligible_coverage is not None else None,
+        "eligible_unique_source_page_coverage_percentage": round(eligible_coverage, 4) if eligible_coverage is not None else None,
     }
     return {
         "schema_version": 1,
@@ -988,10 +999,15 @@ def analyze_pages_incremental(
     all_page_rows.sort(key=lambda x: (x.get("url") or "", x.get("page_id") or ""))
     source_total = max(source_total if isinstance(source_total, int) and source_total >= 0 else source_page_rows, source_page_rows)
     unique_source_total = max(len(pages), source_total - duplicate_source_page_rows)
-    coverage = (len(pages) / source_total * 100.0) if source_total else 0.0
+    source_set_complete = len(pages) == unique_source_total
+    source_row_coverage = (len(pages) / source_total * 100.0) if source_total else 0.0
     unique_coverage = (len(pages) / unique_source_total * 100.0) if unique_source_total else 0.0
-    eligible_coverage = (eligible / source_total * 100.0) if source_total else 0.0
-    eligible_unique_coverage = (eligible / unique_source_total * 100.0) if unique_source_total else 0.0
+    eligible_pages_analyzed = sum(1 for item in all_page_rows if item.get("eligible") is True)
+    if eligible_pages_analyzed != eligible:
+        raise ValueError("eligible page metrics do not match the analyzed page rows")
+    eligible_coverage = 100.0 if source_set_complete else None
+    eligibility_rate = (eligible / len(pages) * 100.0) if pages else 0.0
+    source_row_deduplication = (duplicate_source_page_rows / source_page_rows * 100.0) if source_page_rows else 0.0
     page_refs = sum(len(x.get("source_page_ids", [])) for x in all_catalogs)
     type_counts = dict(sorted(Counter(x["record_type"] for x in all_records).items()))
     metrics = {
@@ -1000,6 +1016,12 @@ def analyze_pages_incremental(
         "unique_source_pages": len(pages),
         "duplicate_source_page_rows": duplicate_source_page_rows,
         "eligible_pages": eligible,
+        "eligible_pages_analyzed": eligible_pages_analyzed,
+        "source_index_unique_pages": unique_source_total,
+        "eligibility_rate_percentage": round(eligibility_rate, 4),
+        "source_row_coverage_percentage": round(source_row_coverage, 4),
+        "source_row_deduplication_percentage": round(source_row_deduplication, 4),
+        "eligible_page_coverage_status": "complete" if source_set_complete else "unknown_incomplete_source_set",
         "unique_catalogs_discovered": len(all_catalogs),
         "unique_catalogs_by_type": dict(sorted(Counter(x["catalog_type"] for x in all_catalogs).items())),
         "source_declared_catalogs": sum(bool(x.get("is_source_declared_catalog")) for x in all_catalogs),
@@ -1035,10 +1057,10 @@ def analyze_pages_incremental(
         "unique_media_urls": len(all_media), "records_staged": len(all_records),
         "records_published": 0, "catalogs_verified": 0,
         "pages_with_catalog_signals": signals,
-        "coverage_percentage": round(coverage, 4),
+        "coverage_percentage": round(unique_coverage, 4),
         "unique_source_coverage_percentage": round(unique_coverage, 4),
-        "eligible_page_coverage_percentage": round(eligible_coverage, 4),
-        "eligible_unique_source_page_coverage_percentage": round(eligible_unique_coverage, 4),
+        "eligible_page_coverage_percentage": round(eligible_coverage, 4) if eligible_coverage is not None else None,
+        "eligible_unique_source_page_coverage_percentage": round(eligible_coverage, 4) if eligible_coverage is not None else None,
         "host_partitions_reused": reused, "host_partitions_rebuilt": rebuilt,
     }
     return {

@@ -572,10 +572,14 @@ class PageDerivedCatalogAnalysisTests(unittest.TestCase):
         self.assertEqual(metrics["unique_source_pages"], 1)
         self.assertEqual(metrics["duplicate_source_page_rows"], 1)
         self.assertEqual(metrics["eligible_pages"], 0)
-        self.assertEqual(metrics["coverage_percentage"], 50.0)
-        self.assertEqual(metrics["eligible_page_coverage_percentage"], 0.0)
+        self.assertEqual(metrics["coverage_percentage"], 100.0)
+        self.assertEqual(metrics["eligible_page_coverage_percentage"], 100.0)
         self.assertEqual(metrics["unique_source_coverage_percentage"], 100.0)
-        self.assertEqual(metrics["eligible_unique_source_page_coverage_percentage"], 0.0)
+        self.assertEqual(metrics["eligible_unique_source_page_coverage_percentage"], 100.0)
+        self.assertEqual(metrics["eligible_pages_analyzed"], 0)
+        self.assertEqual(metrics["eligibility_rate_percentage"], 0.0)
+        self.assertEqual(metrics["source_row_coverage_percentage"], 50.0)
+        self.assertEqual(metrics["source_row_deduplication_percentage"], 50.0)
         self.assertFalse(result["pages"][0]["eligible"])
 
     def test_incremental_analysis_deduplicates_canonical_source_pages(self):
@@ -602,10 +606,44 @@ class PageDerivedCatalogAnalysisTests(unittest.TestCase):
         self.assertEqual(metrics["source_page_rows"], 2)
         self.assertEqual(metrics["duplicate_source_page_rows"], 1)
         self.assertEqual(metrics["eligible_pages"], 1)
-        self.assertEqual(metrics["coverage_percentage"], 50.0)
+        self.assertEqual(metrics["coverage_percentage"], 100.0)
         self.assertEqual(metrics["unique_source_coverage_percentage"], 100.0)
-        self.assertEqual(metrics["eligible_page_coverage_percentage"], 50.0)
+        self.assertEqual(metrics["eligible_page_coverage_percentage"], 100.0)
         self.assertEqual(metrics["eligible_unique_source_page_coverage_percentage"], 100.0)
+        self.assertEqual(metrics["eligible_pages_analyzed"], 1)
+        self.assertEqual(metrics["eligibility_rate_percentage"], 100.0)
+        self.assertEqual(metrics["source_row_coverage_percentage"], 50.0)
+        self.assertEqual(metrics["source_row_deduplication_percentage"], 50.0)
+
+
+    def test_partial_source_index_reports_unknown_eligible_page_coverage(self):
+        pages = [
+            {
+                "url": "https://example.org/eligible",
+                "title": "Eligible page",
+                "description": "A valid source page.",
+                "text": "This source page can be analyzed.",
+                "robots_allowed": True,
+            },
+            {
+                "url": "https://example.org/denied",
+                "title": "Robots denied page",
+                "description": "A source page excluded by robots.",
+                "text": "This page is not an eligible catalog source.",
+                "robots_allowed": False,
+            },
+        ]
+        result = analyze_pages(pages, source_total=3)
+        metrics = result["metrics"]
+        self.assertEqual(metrics["pages_analyzed"], 2)
+        self.assertEqual(metrics["source_index_unique_pages"], 3)
+        self.assertEqual(metrics["eligible_pages"], 1)
+        self.assertEqual(metrics["eligible_pages_analyzed"], 1)
+        self.assertEqual(metrics["coverage_percentage"], 66.6667)
+        self.assertIsNone(metrics["eligible_page_coverage_percentage"])
+        self.assertIsNone(metrics["eligible_unique_source_page_coverage_percentage"])
+        self.assertEqual(metrics["eligible_page_coverage_status"], "unknown_incomplete_source_set")
+        self.assertEqual(metrics["eligibility_rate_percentage"], 50.0)
 
 
     def test_catalog_definition_page_is_not_counted_as_an_individual_record(self):
