@@ -7,7 +7,7 @@ redirects. This records evidence; it does not ingest or verify a catalog.
 """
 from __future__ import annotations
 import argparse, hashlib, json, time, urllib.error, urllib.parse, urllib.request
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from pathlib import Path
 from catalog_source_policy import SourcePolicyError, authorize_source_url, policy_for_host, request_source_bytes
 from catalog_host_review_queue import validate_review_queue
@@ -346,6 +346,7 @@ def run(input_path: Path, output_path: Path, limit: int, offset: int, pause: flo
             landing_output_path,
             limit=landing_limit,
             recheck_seconds=robots_recheck_seconds,
+            manifest_path=landing_manifest_path,
         )
     print(json.dumps(summary, indent=2))
     return output
