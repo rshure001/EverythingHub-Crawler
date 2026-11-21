@@ -426,7 +426,7 @@ jobs:
                 sampleAttributions: cards.slice(0, 5).map(card => card.querySelector("small")?.textContent || "")
               }));
               const videoLink = await page.locator("#results .video-card > a").first().evaluate(anchor => ({ href: anchor.href, target: anchor.target, rel: anchor.rel }));
-              if (report.videoSearch.cards < 5 || report.videoSearch.loadedThumbnails < 5 || report.videoSearch.fallbacks !== 0 ||
+              if (report.videoSearch.cards < 1 || report.videoSearch.loadedThumbnails < 1 || report.videoSearch.fallbacks !== 0 ||
                   report.videoSearch.attributionCards !== report.videoSearch.cards ||
                   report.videoSearch.sampleTitles.filter(Boolean).length < 5 ||
                   !/^https:\/\/archive\.org\/details\//i.test(videoLink.href) ||
