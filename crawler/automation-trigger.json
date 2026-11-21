@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "updated_at": "2026-11-21T06:04:26.182Z",
-  "reason": "One bounded recovery crawl after scheduled crawl delivery exceeded 25 minutes and the public search manifest exceeded 10 minutes; no queued or running crawler was observed. Latest scheduled crawl was 2026-11-21T04:19:41Z; latest public manifest was 144241 pages updated 2026-11-21T05:40:41Z. No overlapping crawl was present.",
-  "manifest_before_pages": 144241,
-  "manifest_before_updated_at": "2026-11-21T05:40:41Z"
+  "updated_at": "2026-11-21T06:27:13Z",
+  "reason": "One bounded recovery crawl after scheduled crawl delivery exceeded 25 minutes and the public search manifest exceeded 10 minutes; no queued or running crawler was observed. Latest scheduled crawl was 2026-11-21T04:19:41Z; latest public manifest was 145086 pages updated 2026-11-21T06:12:20Z. No overlapping crawler was present at the pre-commit check.",
+  "manifest_before_pages": 145086,
+  "manifest_before_updated_at": "2026-11-21T06:12:20Z"
 }
