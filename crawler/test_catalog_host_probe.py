@@ -132,6 +132,11 @@ class CumulativeProbeTests(unittest.TestCase):
             self.assertEqual(second["fetch_authorized_urls"], 0)
             self.assertEqual(second["page_requests"], 0)
             self.assertEqual(authorize.call_count, 35)
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["source_index_sha256"] = "stale-index-sha"
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "stale or mismatched"):
+                catalog_host_probe.run_landing_page_robots(queue_path, output_path, limit=30, recheck_seconds=86_400, manifest_path=manifest_path)
 
     def test_missing_review_queue_writes_safe_empty_ledger(self):
         with tempfile.TemporaryDirectory() as tmp:
