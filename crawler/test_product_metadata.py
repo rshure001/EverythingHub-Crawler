@@ -98,5 +98,28 @@ class ProductMetadataTests(unittest.TestCase):
         self.assertTrue(result["lists"])
         self.assertLessEqual(len(json.dumps(result, separators=(",", ":")).encode("utf-8")), 1024)
 
+    def test_extracts_only_stable_same_as_identifiers(self):
+        html = """<script type="application/ld+json">{
+          "@context":"https://schema.org","@type":"Product",
+          "name":"Submariner","sku":"124060",
+          "sameAs":["https://www.wikidata.org/entity/Q12345","https://untrusted.example/id/1"],
+          "brand":{"@type":"Brand","name":"Rolex","sameAs":"https://www.wikidata.org/wiki/Q456"}
+        }</script>"""
+        result = extract_product_metadata(html, "https://shop.example/watches/submariner")
+        self.assertEqual(result["same_as_ids"], ["wikidata:Q12345"])
+        self.assertEqual(result["brand_same_as_ids"], ["wikidata:Q456"])
+
+    def test_structured_item_lists_preserve_stable_same_as_identifiers(self):
+        html = """<script type="application/ld+json">{
+          "@context":"https://schema.org","@type":"ItemList","name":"Watch models",
+          "itemListElement":[
+            {"@type":"ListItem","item":{"@type":"Product","name":"Submariner","url":"/submariner","sameAs":"https://www.wikidata.org/entity/Q12345"}},
+            {"@type":"ListItem","item":{"@type":"Product","name":"Datejust","url":"/datejust","sameAs":"https://www.wikidata.org/entity/Q23456"}}
+          ]
+        }</script>"""
+        result = extract_structured_catalog_metadata(html, "https://shop.example/watches")
+        self.assertEqual(result["lists"][0]["items"][0]["same_as_ids"], ["wikidata:Q12345"])
+        self.assertEqual(result["lists"][0]["items"][1]["same_as_ids"], ["wikidata:Q23456"])
+
 if __name__ == "__main__":
     unittest.main()
