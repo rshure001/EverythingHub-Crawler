@@ -33,9 +33,24 @@ jobs:
             const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
             const pageErrors = [];
             const consoleErrors = [];
+            const mediaResponses = [];
+            const mediaFailures = [];
             page.on("pageerror", error => pageErrors.push(error.message));
             page.on("console", message => { if (message.type() === "error") consoleErrors.push(message.text()); });
-            const report = { url: process.env.TARGET_URL, checks: {}, pageErrors, consoleErrors };
+            page.on("response", response => {
+              try {
+                const url = new URL(response.url());
+                if (url.hostname === "archive.org" && url.pathname.startsWith("/services/img/")) {
+                  mediaResponses.push({ url: response.url(), status: response.status() });
+                }
+              } catch {}
+            });
+            page.on("requestfailed", request => {
+              if (request.url().includes("archive.org/services/img/")) {
+                mediaFailures.push({ url: request.url(), error: request.failure()?.errorText || "request failed" });
+              }
+            });
+            const report = { url: process.env.TARGET_URL, checks: {}, pageErrors, consoleErrors, mediaNetwork: { responses: mediaResponses, failures: mediaFailures } };
             const shot = async name => page.screenshot({ path: name, fullPage: true });
             const goHome = async () => {
               await page.goto(process.env.TARGET_URL, { waitUntil: "domcontentloaded", timeout: 45000 });
@@ -54,6 +69,10 @@ jobs:
               const response = await page.goto(report.url, { waitUntil: "domcontentloaded", timeout: 45000 });
               if (!response || response.status() !== 200) throw new Error("Homepage did not return HTTP 200");
               await page.locator(".art img").waitFor({ state: "visible", timeout: 20000 });
+              await page.waitForFunction(() => {
+                const img = document.querySelector(".art img");
+                return !!img && img.complete && img.naturalWidth >= 800 && img.naturalHeight >= 800;
+              }, null, { timeout: 30000 });
               const art = await page.locator(".art img").first().evaluate(img => ({ src: img.currentSrc || img.src, width: img.naturalWidth, height: img.naturalHeight, complete: img.complete }));
               if (!art.src.includes("everythinghub-approved-octopus.png") || art.width < 800 || art.height < 800) throw new Error("Approved octopus artwork check failed: " + JSON.stringify(art));
               const modes = await page.locator(".hotspots [data-mode]").evaluateAll(nodes => nodes.map(node => node.dataset.mode));
@@ -91,26 +110,54 @@ jobs:
               await shot("everythinghub-news.png");
               await goHome();
               await search("images", "NASA", "#results .media-card", 8);
-              const imageStats = await page.locator("#results .media-card").evaluateAll(cards => ({
+              const imageCards = page.locator("#results .media-card");
+              const imageCardCount = await imageCards.count();
+              for (let i = 0; i < Math.min(8, imageCardCount); i++) await imageCards.nth(i).scrollIntoViewIfNeeded();
+              await page.waitForFunction(() => {
+                const cards = [...document.querySelectorAll("#results .media-card")].slice(0, 8);
+                return cards.length >= 8 && cards.every(card => {
+                  const img = card.querySelector("img");
+                  return !!(img && img.complete && img.naturalWidth > 0) || !!card.querySelector(".image-placeholder");
+                });
+              }, null, { timeout: 30000 });
+              const imageStats = await imageCards.evaluateAll(cards => ({
                 cards: cards.length,
                 loaded: cards.filter(card => { const img=card.querySelector("img"); return img && img.complete && img.naturalWidth > 0; }).length,
+                failed: cards.filter(card => !!card.querySelector(".image-placeholder")).length,
+                thumbnailUrls: cards.slice(0, 8).map(card => card.querySelector("img")?.currentSrc || card.querySelector("img")?.src || ""),
                 providers: cards.map(card => card.querySelector("small")?.textContent || ""),
                 licenses: cards.map(card => card.dataset.license || ""),
                 creators: cards.map(card => card.dataset.creator || "")
               }));
-              if (imageStats.loaded < 8 || imageStats.providers.some(x => !x.includes("Internet Archive")) || imageStats.licenses.some(x => !x)) throw new Error("Openverse image checks failed: " + JSON.stringify(imageStats));
+              imageStats.thumbnailResponses = mediaResponses.slice();
+              imageStats.thumbnailFailures = mediaFailures.slice();
               report.checks.images = imageStats;
+              if (imageStats.loaded < 8 || imageStats.providers.some(x => !x.includes("Internet Archive")) || imageStats.licenses.some(x => !x)) throw new Error("Internet Archive image checks failed: " + JSON.stringify(imageStats));
               await shot("everythinghub-images.png");
               await goHome();
               await search("videos", "animation", "#results .video-card", 5);
-              const videoStats = await page.locator("#results .video-card").evaluateAll(cards => ({
+              const videoCards = page.locator("#results .video-card");
+              const videoCardCount = await videoCards.count();
+              for (let i = 0; i < Math.min(5, videoCardCount); i++) await videoCards.nth(i).scrollIntoViewIfNeeded();
+              await page.waitForFunction(() => {
+                const cards = [...document.querySelectorAll("#results .video-card")].slice(0, 5);
+                return cards.length >= 5 && cards.every(card => {
+                  const img = card.querySelector("img");
+                  return !!(img && img.complete && img.naturalWidth > 0) || !!card.querySelector(".video-placeholder");
+                });
+              }, null, { timeout: 30000 });
+              const videoStats = await videoCards.evaluateAll(cards => ({
                 cards: cards.length,
                 loaded: cards.filter(card => { const img=card.querySelector("img"); return img && img.complete && img.naturalWidth > 0; }).length,
+                failed: cards.filter(card => !!card.querySelector(".video-placeholder")).length,
+                thumbnailUrls: cards.slice(0, 5).map(card => card.querySelector("img")?.currentSrc || card.querySelector("img")?.src || ""),
                 providers: cards.map(card => card.querySelector("small")?.textContent || ""),
                 links: cards.map(card => card.querySelector("a")?.href || "")
               }));
-              if (videoStats.loaded < 5 || videoStats.providers.some(x => !x.includes("Internet Archive")) || videoStats.links.some(x => !x.startsWith("https://archive.org/details/"))) throw new Error("Internet Archive video checks failed: " + JSON.stringify(videoStats));
+              videoStats.thumbnailResponses = mediaResponses.slice();
+              videoStats.thumbnailFailures = mediaFailures.slice();
               report.checks.videos = videoStats;
+              if (videoStats.loaded < 5 || videoStats.providers.some(x => !x.includes("Internet Archive")) || videoStats.links.some(x => !x.startsWith("https://archive.org/details/"))) throw new Error("Internet Archive video checks failed: " + JSON.stringify(videoStats));
               await shot("everythinghub-videos.png");
               await page.setViewportSize({ width: 390, height: 844 });
               await goHome();
@@ -132,6 +179,7 @@ jobs:
               console.error("ACCEPTANCE_REPORT " + JSON.stringify(report));
               await shot("everythinghub-failure.png").catch(() => {});
             } finally {
+              report.mediaNetwork = { responses: mediaResponses, failures: mediaFailures };
               report.finishedAt = new Date().toISOString();
               fs.writeFileSync("everythinghub-acceptance-report.json", JSON.stringify(report, null, 2));
               await browser.close();
