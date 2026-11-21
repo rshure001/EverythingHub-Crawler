@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/everything-hub-production-browser-check.yml'
+      - 'vercel-homepage/**'
   workflow_dispatch:
   workflow_run:
     workflows: ["Publish and verify Everything Hub — in-house Supabase route"]
