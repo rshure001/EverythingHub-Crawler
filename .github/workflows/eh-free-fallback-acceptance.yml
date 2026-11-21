@@ -310,7 +310,7 @@ jobs:
               report.checks.coreLinks.images = imageLink;
               await shot("everythinghub-images.png");
               await goHome();
-              await search("videos", "animation", "#results .video-card", 4);
+              await search("videos", "NASA", "#results .video-card", 4);
               await page.waitForTimeout(3000);
               const videoStats = await page.locator("#results .video-card").evaluateAll(cards => ({
                 cards: cards.length,
