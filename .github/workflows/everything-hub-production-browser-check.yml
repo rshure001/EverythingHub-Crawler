@@ -366,7 +366,7 @@ jobs:
                   const creator = card.dataset.creator || "";
                   const small = card.querySelector("small");
                   const text = small?.textContent || "";
-                  return !license || !text.includes("Openverse") || !text.includes(license) ||
+                  return !license || !text.includes("Internet Archive") || !text.includes(license) ||
                     (ccBy(license) && (!creator || !small?.querySelector("a")));
                 }).length;
                 const ccByCards = cards.filter(card => ccBy(card.dataset.license)).length;
@@ -378,7 +378,7 @@ jobs:
                     return !!image && image.complete && image.naturalWidth > 0;
                   }).length,
                   placeholders: cards.filter(card => !!card.querySelector(".image-placeholder")).length,
-                  attributionCards: cards.filter(card => (card.querySelector("small")?.textContent || "").includes("Openverse")).length,
+                  attributionCards: cards.filter(card => (card.querySelector("small")?.textContent || "").includes("Internet Archive")).length,
                   badAttribution,
                   ccByCards,
                   ccByCardsWithLinks,
@@ -389,7 +389,7 @@ jobs:
               if (report.imageSearch.cards < 8 || report.imageSearch.loadedThumbnails < 8 || report.imageSearch.placeholders !== 0 ||
                   report.imageSearch.attributionCards !== report.imageSearch.cards || report.imageSearch.badAttribution !== 0 ||
                   report.imageSearch.ccByCardsWithLinks !== report.imageSearch.ccByCards ||
-                  !/^https:\/\/[^/]/i.test(imageSourceLink.href)) throw new Error("Licensed image thumbnails or attribution failed: " + JSON.stringify(report.imageSearch));
+                  !/^https:\/\/archive\.org\/details\//i.test(imageSourceLink.href)) throw new Error("Internet Archive image thumbnails or attribution failed: " + JSON.stringify(report.imageSearch));
               report.categorySearches.images = { cards: report.imageSearch.cards, loadedThumbnails: report.imageSearch.loadedThumbnails };
               report.coreLinks.images = imageSourceLink;
               await page.screenshot({ path: "everythinghub-fallback-images.png", fullPage: true });
