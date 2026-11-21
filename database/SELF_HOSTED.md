@@ -47,6 +47,37 @@ Docker only runs these initialization scripts when the data volume is empty.
 Never delete the volume to force reinitialization. For an existing database,
 back it up and apply reviewed migrations manually.
 
+## Optional secure bridge to the public search function
+
+The web-search bridge accepts only a trusted HTTPS API URL and bearer token.
+The PostgreSQL port stays on loopback; do not open 5432 or 55432 to the internet.
+A Cloudflare Tunnel can provide the HTTPS route without inbound firewall ports.
+
+1. In Cloudflare Zero Trust, create a Cloudflare Tunnel for this always-on host.
+2. Add a published application/public hostname such as
+   `search-api.everythinghub.org` and set its service to
+   `http://everythinghub-search:8080`. The hostname must be routed through
+   that tunnel. Do not point it at PostgreSQL.
+3. Copy the tunnel token into the private `.env` file as
+   `EH_CLOUDFLARE_TUNNEL_TOKEN=...`.
+4. Start only the optional tunnel profile:
+
+```powershell
+docker compose --env-file .env -f docker-compose.yml --profile tunnel up -d cloudflared
+```
+
+5. Test the HTTPS health URL `https://search-api.everythinghub.org/healthz`.
+   It should report database connected. The search endpoint still requires the
+   separate `EH_SEARCH_API_TOKEN` bearer token.
+
+The tunnel token and search API token are separate secrets. Keep both private.
+Do not put either in browser code or GitHub. The bridge code in the web-search
+function remains disabled until its two Edge Function secrets are configured:
+`EH_SELF_HOSTED_SEARCH_URL` (the HTTPS hostname root) and
+`EH_SELF_HOSTED_SEARCH_TOKEN` (the search API token). When enabled, failed
+requests and empty matches fall back to the existing search paths. No
+production cutover occurs automatically.
+
 ## Verify and search
 
 - PostgreSQL: `127.0.0.1:55432` (loopback only)
@@ -93,7 +124,9 @@ Do not run either importer automatically during database startup.
 - PostgreSQL binds only to `127.0.0.1:55432`; never expose port 5432 publicly.
 - The search API binds only to `127.0.0.1:58080` on the host and requires a
   bearer token for search.
-- Keep `.env` private and out of Git. Never put the token in browser code.
+- The Cloudflare Tunnel is optional and uses outbound connectivity; no inbound
+  database port is opened.
+- Keep `.env` private and out of Git. Never put tokens in browser code.
 - This local stack is independent and is not yet a production cutover.
 - Do not start crawl/sitemap workers or switch production functions without
   explicit approval.
