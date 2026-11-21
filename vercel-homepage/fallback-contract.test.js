@@ -24,6 +24,7 @@ test("filters embedded Commons images through verified license and attribution r
   assert.match(html, /preview.creator/);
   assert.match(html, /preview.licenseUrl/);
   assert.match(html, /licensed public images from Wikimedia Commons/);
+  assert.doesNotMatch(html, /\\\\(?:d|s|\\.|\\\/)/);
 });
 
 test("keeps live public news tabs and Refresh", () => {
