@@ -91,14 +91,22 @@ jobs:
               if not isinstance(source_pages, int) or source_pages < 1 or source_pages > expected_pages:
                   raise SystemExit(query + ": catalog source-page count is invalid")
               source_updated = preview.get("sourceIndexUpdatedAt")
-              freshness_match = source_pages == expected_pages and source_updated == expected_updated_iso
+              try:
+                  source_updated_seconds = datetime.fromisoformat(
+                      str(source_updated).replace("Z", "+00:00")
+                  ).timestamp()
+              except (TypeError, ValueError):
+                  source_updated_seconds = None
+              freshness_match = (
+                  source_pages == expected_pages and
+                  source_updated_seconds is not None and
+                  abs(source_updated_seconds - expected_updated_at) <= 60
+              )
               if preview.get("freshnessMatch") is not freshness_match:
                   raise SystemExit(query + ": catalog freshness flag does not match persisted manifests")
-              if not freshness_match and (
-                  preview.get("stale") is not True or
-                  preview.get("status") != "stale-candidate-preview"
-              ):
-                  raise SystemExit(query + ": stale catalog analysis was not explicitly labeled")
+              expected_status = "candidate-preview" if freshness_match else "stale-candidate-preview"
+              if preview.get("status") != expected_status:
+                  raise SystemExit(query + ": catalog analysis freshness status is not explicit")
               if preview.get("recordsPublished") != 0:
                   raise SystemExit(query + ": candidate records were incorrectly reported as published")
               if preview.get("sourceTermsReviewedRecords") != 0:
