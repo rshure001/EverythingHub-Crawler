@@ -43,7 +43,7 @@ jobs:
             const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
             const pageErrors = [];
             const consoleErrors = [];
-            page.on("pageerror", error => pageErrors.push(error.message));
+            page.on("pageerror", error => pageErrors.push(error.message + "\n" + (error.stack || "")));
             page.on("console", message => { if (message.type() === "error") consoleErrors.push(message.text()); });
             const report = { url: process.env.TARGET_URL, startedAt: new Date().toISOString(), artwork: null, divisions: [], searches: {}, publicFeeds: {}, mobile: null, pageErrors, consoleErrors, passed: false };
             try {
@@ -146,7 +146,9 @@ jobs:
         with:
           node-version: "22"
       - name: Verify fallback source contract
-        run: node --test vercel-homepage/fallback-contract.test.js
+        run: |
+          node --test vercel-homepage/fallback-contract.test.js
+          node --check vercel-homepage/fallback/inline-script.js
       - name: Install Playwright
         run: |
           npm init -y
