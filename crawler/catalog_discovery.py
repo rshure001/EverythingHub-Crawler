@@ -66,6 +66,12 @@ def normalize_dataset(dataset: dict[str, Any], source: dict[str, Any]) -> dict[s
     title = _clean_text(dataset.get("title") or name, 500)
     if not name or not title:
         return None
+    # Never stage private or inactive records from a public catalog adapter.
+    if dataset.get("private") is True:
+        return None
+    state = _clean_text(dataset.get("state"), 40).casefold()
+    if state and state != "active":
+        return None
     resources = []
     for resource in dataset.get("resources") or []:
         if not isinstance(resource, dict):
