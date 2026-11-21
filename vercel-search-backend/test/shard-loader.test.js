@@ -94,7 +94,7 @@ test('unsafe shard paths are rejected', () => {
 });
 
 test('compressed shard aggregate size is bounded before network requests', () => {
-  const shards = Array.from({ length: 240 }, (_, index) => ({
+  const shards = Array.from({ length: 288 }, (_, index) => ({
     file: 'shard-' + String(index + 1).padStart(4, '0') + '.json.gz',
     pages: 1,
     bytes: 350_000,
