@@ -73,7 +73,12 @@ def _path_allowed(path: str, prefixes: object) -> bool:
 def _path_pattern_allowed(path: str, patterns: object) -> bool:
     if not isinstance(patterns, list):
         return False
+    decoded_path = unquote(path)
+    if decoded_path.count("/") != path.count("/") or "\\" in decoded_path:
+        return False
     path_segments = [segment for segment in path.split("/") if segment]
+    if any(segment in {".", ".."} for segment in path_segments):
+        return False
     for pattern in patterns:
         if not isinstance(pattern, str) or not pattern.startswith("/"):
             continue
