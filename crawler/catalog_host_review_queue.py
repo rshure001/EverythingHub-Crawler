@@ -308,6 +308,14 @@ def validate_review_queue(payload: dict, manifest: dict) -> dict:
     }
 
 
+def validate_queue_matches_expected(payload: dict, expected: dict, manifest: dict) -> dict:
+    summary = validate_review_queue(payload, manifest)
+    for key in ("metrics", "catalogs", "candidate_urls", "hosts"):
+        if payload.get(key) != expected.get(key):
+            raise ValueError(f"published source review backlog {key} does not match the current registry and policy")
+    return summary
+
+
 def build_from_files(manifest_path: Path, registry_path: Path, policy_path: Path) -> tuple[dict, dict]:
     manifest, registry = load_verified_registry(manifest_path, registry_path)
     policy = _read_json(policy_path)
@@ -326,9 +334,7 @@ def main() -> None:
     manifest, expected = build_from_files(args.manifest, args.registry, args.policy)
     if args.validate_only:
         actual = _read_json(args.output)
-        summary = validate_review_queue(actual, manifest)
-        if actual.get("metrics") != expected.get("metrics") or actual.get("candidate_urls") != expected.get("candidate_urls"):
-            raise ValueError("published source review backlog does not match the current registry and policy")
+        summary = validate_queue_matches_expected(actual, expected, manifest)
     else:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(json.dumps(expected, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
