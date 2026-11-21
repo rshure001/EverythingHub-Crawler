@@ -611,6 +611,12 @@ def _add_global_subject_catalogs(pages: list[dict], page_rows: list[dict], recor
                     existing_record["catalog_ids"] = [value for value in existing_catalog_ids if value != catalog_id]
             existing_catalog.update({
                 "source_key": source_key,
+                "title": token.capitalize() + " Subject Catalog",
+                "catalog_type": "knowledge_base",
+                "record_type": "subject",
+                "subject": token,
+                "source_host": "__global__",
+                "catalog_origin": "derived_from_repeated_records",
                 "source_page_ids": source_page_ids,
                 "source_page_count": len(source_page_ids),
                 "source_url": source_urls[0] if source_urls else existing_catalog.get("source_url"),
