@@ -25,6 +25,45 @@ jobs:
           node-version: '26'
       - name: Run search integrity and pagination tests
         run: node --test vercel-search-backend/test/*.test.js
+  staging-smoke:
+    if: github.event_name == 'pull_request' && github.head_ref == 'fix/bounded-catalog-search-20261121'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      BASE: https://everythinghub-search-backend-inuiaz584-rshure001-8053.vercel.app
+    steps:
+      - name: Verify staging backend health and representative catalog searches
+        run: |
+          set -euo pipefail
+          curl --silent --show-error --fail --max-time 15 "$BASE/api/health" -o /tmp/health.json
+          node -e "const h=require('/tmp/health.json'); if(h.status!=='ok'||h.database_required!==false) throw new Error('staging health failed: '+JSON.stringify(h)); console.log(JSON.stringify({health:h.status,service:h.service,storage:h.storage,databaseRequired:h.database_required}));"
+          for q in "Rolex" "Las Vegas" "NASA"; do
+            out="/tmp/search-$(printf '%s' "$q" | tr '[:upper:] ' '[:lower:]-').json"
+            curl --silent --show-error --fail --max-time 20 -G "$BASE/api/search" --data-urlencode "q=$q" --data-urlencode "limit=10" -o "$out"
+            node - "$out" "$q" <<'NODE'
+          const fs=require('node:fs');
+          const data=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+          const query=process.argv[3];
+          if(!Array.isArray(data.results)||!Array.isArray(data.catalogResults)||!data.catalogPreview) {
+            throw new Error(query+' response schema incomplete: '+JSON.stringify({keys:Object.keys(data)}));
+          }
+          const derived=data.catalogResults.filter(x=>x.catalog_id&&!String(x.catalog_id).startsWith('external:'));
+          const summary={
+            query,
+            visibleWebResults:data.results.length,
+            catalogCards:data.catalogResults.length,
+            pageDerivedCatalogs:derived.map(x=>({id:x.catalog_id,title:x.catalog_title||x.title,origin:x.catalog_origin,matchedRecords:(x.matched_records||[]).map(r=>r.title)})),
+            externalCatalogs:data.catalogResults.filter(x=>String(x.catalog_id||'').startsWith('external:')).map(x=>x.title),
+            previewStatus:data.catalogPreview.status,
+            previewCount:data.catalogPreview.resultCount,
+            analysisVersion:data.catalogPreview.analysisVersion,
+            sourceIndexPages:data.catalogPreview.sourceIndexPages
+          };
+          console.log(JSON.stringify(summary,null,2));
+          if(data.results.length===0) throw new Error(query+' returned no visible search results');
+          if(query!=='Rolex'&&derived.length===0) throw new Error(query+' returned no page-derived catalog result');
+          NODE
+          done
   live-smoke:
     # Production freshness is monitored on main and by the schedule; do not fail code PRs because the independent live catalog is stale.
     if: github.event_name != 'pull_request'
