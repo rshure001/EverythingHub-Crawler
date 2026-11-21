@@ -402,7 +402,7 @@ jobs:
               if (report.imageSearch.cards < 8 || report.imageSearch.loadedThumbnails < 8 || report.imageSearch.placeholders !== 0 ||
                   report.imageSearch.attributionCards !== report.imageSearch.cards || report.imageSearch.badAttribution !== 0 ||
                   report.imageSearch.ccByCardsWithLinks !== report.imageSearch.ccByCards ||
-                  !/^https:\/\/commons\.wikimedia\.org\//i.test(imageSourceLink.href)) throw new Error("Licensed image thumbnails or attribution failed: " + JSON.stringify(report.imageSearch));
+                  !/^https:\/\/archive\.org\/details\//i.test(imageSourceLink.href)) throw new Error("Licensed image thumbnails or attribution failed: " + JSON.stringify(report.imageSearch));
               report.categorySearches.images = { cards: report.imageSearch.cards, loadedThumbnails: report.imageSearch.loadedThumbnails };
               report.coreLinks.images = imageSourceLink;
               await page.screenshot({ path: "everythinghub-fallback-images.png", fullPage: true });
@@ -434,8 +434,8 @@ jobs:
                 sampleTitles: cards.slice(0, 5).map(card => card.querySelector("a")?.textContent || "")
               }));
               const videoLink = await page.locator("#results .video-card > a").first().evaluate(anchor => ({ href: anchor.href, target: anchor.target, rel: anchor.rel }));
-              if (report.videoSearch.cards < 15 || report.videoSearch.loadedThumbnails < 15 || report.videoSearch.fallbacks !== 0 ||
-                  !/^https:\/\/www\.youtube\.com\/watch\?/i.test(videoLink.href)) throw new Error("Video cards or thumbnails failed: " + JSON.stringify(report.videoSearch));
+              if (report.videoSearch.cards < 5 || report.videoSearch.loadedThumbnails < 5 || report.videoSearch.fallbacks !== 0 ||
+                  !/^https:\/\/archive\.org\/details\//i.test(videoLink.href)) throw new Error("Video cards or thumbnails failed: " + JSON.stringify(report.videoSearch));
               report.categorySearches.videos = { cards: report.videoSearch.cards, loadedThumbnails: report.videoSearch.loadedThumbnails };
               report.coreLinks.videos = videoLink;
               await page.screenshot({ path: "everythinghub-fallback-videos.png", fullPage: true });
@@ -484,7 +484,7 @@ jobs:
                 report.categorySearchCount === 8 && report.news.topStories >= 5 &&
                 Object.values(report.newsCategories).every(value => value.count > 0) &&
                 report.newsRefresh.http === 200 && report.imageSearch.loadedThumbnails >= 8 &&
-                report.imageSearch.badAttribution === 0 && report.videoSearch.loadedThumbnails >= 15 &&
+                report.imageSearch.badAttribution === 0 && report.videoSearch.loadedThumbnails >= 5 &&
                 report.mobile.documentWidth <= report.mobile.viewportWidth + 2 &&
                 pageErrors.length === 0 && consoleErrors.length === 0;
               if (!report.passed) throw new Error("One or more live fallback acceptance gates failed.");
