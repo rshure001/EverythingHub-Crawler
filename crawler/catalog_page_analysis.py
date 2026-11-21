@@ -12,6 +12,7 @@ import hashlib
 import json
 import re
 import time
+import unicodedata
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -23,7 +24,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_INDEX = ROOT / "data" / "index.json"
 DEFAULT_OUTPUT = ROOT / "data" / "page-derived-catalogs"
 DEFAULT_SOURCE_POLICY_REVIEWS = ROOT / "data" / "source-policy-reviews.json"
-ANALYZER_VERSION = 9
+ANALYZER_VERSION = 10
 TRACKING_KEYS = {"fbclid", "gclid", "dclid", "mc_cid", "mc_eid", "ref", "source"}
 STOP_TOKENS = {
     "the", "and", "for", "with", "from", "our", "your", "all", "new", "home", "page",
@@ -1494,6 +1495,68 @@ def _write_gzip(path: Path, payload: dict) -> tuple[int, str]:
     return len(compressed), hashlib.sha256(compressed).hexdigest()
 
 
+def _search_tokens(value: object) -> set[str]:
+    text = unicodedata.normalize("NFKC", str(value or "")).casefold()
+    return {
+        token for token in re.findall(r"[^\\W_]+", text, flags=re.UNICODE)
+        if len(token) >= 2 and token not in STOP_TOKENS
+    }
+
+
+def build_search_index(analysis: dict) -> dict[str, dict]:
+    """Build deterministic token-to-catalog postings for bounded Edge search."""
+    catalog_ids = {
+        item.get("catalog_id")
+        for item in analysis.get("catalogs", [])
+        if isinstance(item, dict) and isinstance(item.get("catalog_id"), str)
+    }
+    token_catalogs: dict[str, set[str]] = defaultdict(set)
+
+    for catalog in analysis.get("catalogs", []):
+        if not isinstance(catalog, dict):
+            continue
+        catalog_id = catalog.get("catalog_id")
+        if catalog_id not in catalog_ids:
+            continue
+        for value in (catalog.get("title"), catalog.get("subject"), catalog.get("source_host")):
+            for token in _search_tokens(value):
+                token_catalogs[token].add(catalog_id)
+
+    searchable_attributes = {"brand", "model", "sku", "mpn", "gtin", "manufacturer", "category"}
+    for record in analysis.get("records", []):
+        if not isinstance(record, dict):
+            continue
+        related_catalogs = [
+            catalog_id for catalog_id in record.get("catalog_ids", [])
+            if catalog_id in catalog_ids
+        ]
+        if not related_catalogs:
+            continue
+        tokens = set()
+        tokens.update(_search_tokens(record.get("title")))
+        tokens.update(_search_tokens(str(record.get("description") or "")[:2000]))
+        attributes = record.get("attributes")
+        if isinstance(attributes, dict):
+            for key, value in attributes.items():
+                if str(key).lower() in searchable_attributes and isinstance(value, (str, int, float)):
+                    tokens.update(_search_tokens(value))
+        for token in tokens:
+            token_catalogs[token].update(related_catalogs)
+
+    shards: dict[str, dict] = {}
+    for token, related_catalogs in sorted(token_catalogs.items()):
+        prefix = hashlib.sha256(token.encode("utf-8")).hexdigest()[:2]
+        shard = shards.setdefault(prefix, {"version": 1, "prefix": prefix, "tokens": {}})
+        shard["tokens"][token] = sorted(related_catalogs)
+    return {
+        prefix: {
+            **payload,
+            "tokens": dict(sorted(payload["tokens"].items())),
+        }
+        for prefix, payload in sorted(shards.items())
+    }
+
+
 def write_outputs(analysis: dict, output_dir: Path) -> dict:
     apply_source_policy_reviews(analysis)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -1509,6 +1572,16 @@ def write_outputs(analysis: dict, output_dir: Path) -> dict:
         "pages": analysis["pages"],
     })
     files.append({"file": "pages.json.gz", "bytes": size, "sha256": digest, "items": len(analysis["pages"])})
+    search_shards = build_search_index(analysis)
+    if not search_shards:
+        search_shards = {"00": {"version": 1, "prefix": "00", "tokens": {}}}
+    analysis["metrics"]["search_index_tokens"] = sum(len(item["tokens"]) for item in search_shards.values())
+    analysis["metrics"]["search_index_shards"] = len(search_shards)
+    analysis["metrics"]["search_index_catalog_postings"] = sum(
+        len(catalog_ids)
+        for item in search_shards.values()
+        for catalog_ids in item["tokens"].values()
+    )
     size, digest = _write_gzip(output_dir / "registry.json.gz", {
         "version": 1, "analysis_version": analysis.get("analysis_version", ANALYZER_VERSION),
         "status": "candidate_staging_not_production",
@@ -1526,6 +1599,19 @@ def write_outputs(analysis: dict, output_dir: Path) -> dict:
             "title": catalog["title"], "status": catalog["status"], "records": related,
         })
         files.append({"file": catalog["index_file"], "bytes": size, "sha256": digest, "items": len(related)})
+    search_index_dir = output_dir / "search-index"
+    search_index_dir.mkdir(parents=True, exist_ok=True)
+    expected_search_files = set()
+    for prefix, payload in search_shards.items():
+        relative_path = "search-index/" + prefix + ".json.gz"
+        expected_search_files.add(relative_path)
+        size, digest = _write_gzip(output_dir / relative_path, payload)
+        files.append({"file": relative_path, "bytes": size, "sha256": digest, "items": len(payload["tokens"])})
+    for stale_path in search_index_dir.glob("*.json.gz"):
+        relative_path = stale_path.relative_to(output_dir).as_posix()
+        if relative_path not in expected_search_files:
+            stale_path.unlink()
+
     size, digest = _write_gzip(output_dir / "records.json.gz", {
         "version": 1, "records": analysis["records"],
     })
@@ -1707,6 +1793,9 @@ def validate_outputs(output_dir: Path) -> dict:
     if any(x.get("index_file") not in set(listed_index_files) for x in catalogs):
         raise ValueError("registry references a missing per-catalog index")
     index_catalog_ids = set()
+    search_index_prefixes = set()
+    search_index_tokens = set()
+    search_index_postings = 0
     for entry in manifest["files"]:
         path = output_dir / entry["file"]
         raw = path.read_bytes()
@@ -1732,8 +1821,51 @@ def validate_outputs(output_dir: Path) -> dict:
                 raise ValueError("per-catalog index does not exactly match registry record membership")
             if any(catalog_id not in records_by_id[x].get("catalog_ids", []) for x in indexed_ids):
                 raise ValueError("per-catalog index record is missing its catalog relationship")
+        elif entry["file"].startswith("search-index/"):
+            search_parts = Path(entry["file"]).parts
+            if (
+                len(search_parts) != 2
+                or not re.fullmatch(r"[0-9a-f]{2}\\.json\\.gz", search_parts[1])
+            ):
+                raise ValueError("search index shard path is invalid")
+            prefix = search_parts[1][:2]
+            payload_tokens = payload.get("tokens")
+            if (
+                payload.get("version") != 1
+                or payload.get("prefix") != prefix
+                or not isinstance(payload_tokens, dict)
+                or len(payload_tokens) != entry["items"]
+                or prefix in search_index_prefixes
+            ):
+                raise ValueError("search index shard schema or item count is invalid")
+            for token, related_catalog_ids in payload_tokens.items():
+                if (
+                    not isinstance(token, str)
+                    or len(token) < 2
+                    or token != unicodedata.normalize("NFKC", token).casefold()
+                    or token in STOP_TOKENS
+                    or hashlib.sha256(token.encode("utf-8")).hexdigest()[:2] != prefix
+                    or token in search_index_tokens
+                    or not isinstance(related_catalog_ids, list)
+                    or not related_catalog_ids
+                    or len(related_catalog_ids) != len(set(related_catalog_ids))
+                    or related_catalog_ids != sorted(related_catalog_ids)
+                    or any(catalog_id not in catalogs_by_id for catalog_id in related_catalog_ids)
+                ):
+                    raise ValueError("search index token postings are invalid")
+                search_index_tokens.add(token)
+                search_index_postings += len(related_catalog_ids)
+            search_index_prefixes.add(prefix)
     if index_catalog_ids != set(catalog_ids):
         raise ValueError("one or more catalogs are missing a per-catalog index")
+    metrics = manifest.get("metrics", {})
+    if (
+        not search_index_prefixes
+        or metrics.get("search_index_tokens") != len(search_index_tokens)
+        or metrics.get("search_index_shards") != len(search_index_prefixes)
+        or metrics.get("search_index_catalog_postings") != search_index_postings
+    ):
+        raise ValueError("search index metrics do not match validated token postings")
     if registry["status"] != "candidate_staging_not_production":
         raise ValueError("candidate registry must not be advertised as production")
     return {
@@ -1744,6 +1876,9 @@ def validate_outputs(output_dir: Path) -> dict:
         "unique_media_urls": len(unique_media_urls),
         "files_validated": len(manifest["files"]),
         "per_catalog_indexes_validated": len(index_catalog_ids),
+        "search_index_shards_validated": len(search_index_prefixes),
+        "search_index_tokens_validated": len(search_index_tokens),
+        "search_index_catalog_postings_validated": search_index_postings,
     }
 
 
