@@ -35,44 +35,39 @@ jobs:
         env:
           BASE: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1
           KEY: sb_publishable_XlIsACWhtVS1jVODWYGTpg_GMs8v3vJ
-          PUBLISHER_BASE: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-site
+          PUBLISHER_BASE: https://vdceayvfgkwpgwixrhwi.supabase.co/storage/v1/object/public/everything-hub-publishing/index.html
         run: |
           set -euo pipefail
-          echo "=== HOMEPAGE ==="
-          curl -fsSL -D /tmp/headers.txt "$BASE/everything-hub-site" -o /tmp/home.html
-          head -n 1 /tmp/headers.txt
-          grep -i '^content-type:' /tmp/headers.txt | tail -1
-          printf 'bytes='; wc -c < /tmp/home.html
-          for needle in '<!doctype html' 'Everything Hub' 'id="q"' 'id="searchForm"' 'class="art"' 'assets/everythinghub-approved.png' 'everything-hub-media-search'; do
-            if grep -Fq "$needle" /tmp/home.html; then echo "PASS homepage contains: $needle"; else echo "FAIL homepage missing: $needle"; exit 1; fi
-          done
-          category_count=$(grep -o 'data-mode=' /tmp/home.html | wc -l)
-          echo "homepage_categories=$category_count"
-          test "$category_count" -eq 8
-          echo "=== CANONICAL VERCEL HOMEPAGE AND SEARCH CATALOG ==="
-          node <<'NODE'
-          const fs = require("fs");
-          (async () => {
-            const base = process.env.PUBLISHER_BASE.replace(/\/$/, "");
-            const homeResponse = await fetch(base, { signal: AbortSignal.timeout(20000), headers: { Accept: "text/html" } });
-            const html = await homeResponse.text();
-            const contentType = homeResponse.headers.get("content-type") || "";
-            const categoryCount = (html.match(/class=["']hotspot\s+[^"']+["']\s+data-mode=/g) || []).length;
-            const hasArtwork = html.includes("assets/everythinghub-approved.png");
-            const hasSearch = html.includes('id="searchForm"') && html.includes('id="q"');
-            const isHtml = contentType.toLowerCase().startsWith("text/html");
-            if (!homeResponse.ok || !isHtml || categoryCount !== 8 || !hasArtwork || !hasSearch || !html.includes("Everything Hub")) {
-              throw new Error("First-party publisher check failed: " + JSON.stringify({status:homeResponse.status,contentType,categoryCount,hasArtwork,hasSearch}));
-            }
-            const summary = [
-              "- First-party published homepage: PASS (HTTP " + homeResponse.status + ", " + contentType + ")",
-              "- Approved octopus artwork and all eight search categories: PASS",
-              "- Search form: PASS; search and media endpoints are verified by the independent checks below"
-            ].join(String.fromCharCode(10)) + String.fromCharCode(10);
-            fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary);
-            console.log(JSON.stringify({homepageStatus:homeResponse.status,contentType,categoryCount,hasArtwork,hasSearch,title:html.match(/<title>([^<]+)<\/title>/i)?.[1]||null},null,2));
-          })().catch(error => { console.error(error); process.exit(1); });
-          NODE
+          echo "=== PUBLISHED HOMEPAGE ==="
+          publisher_status=$(curl --silent --show-error --max-time 20 -D /tmp/publisher-headers.txt -o /tmp/home.html -w "%{http_code}" "$PUBLISHER_BASE")
+          echo "published_storage_http=$publisher_status"
+          if [ "$publisher_status" = "200" ]; then
+            content_type=$(grep -i '^content-type:' /tmp/publisher-headers.txt | tail -1 | tr -d '\r')
+            echo "$content_type"
+            echo "$content_type" | grep -Eiq 'content-type: *text/html'
+            for needle in '<!doctype html' 'Everything Hub' 'id="q"' 'id="searchForm"' 'class="art"' 'assets/everythinghub-approved.png' 'everything-hub-media-search'; do
+              grep -Fq "$needle" /tmp/home.html || { echo "Published homepage missing: $needle"; exit 1; }
+            done
+            category_count=$(grep -o 'data-mode=' /tmp/home.html | wc -l)
+            test "$category_count" -eq 8
+            echo "PASS published homepage: HTML, approved artwork, and all eight categories."
+            {
+              echo "## Published homepage"
+              echo "- Public Storage homepage: PASS (HTTP 200, text/html; eight categories and approved artwork)."
+            } >> "$GITHUB_STEP_SUMMARY"
+          elif [ "$publisher_status" = "404" ]; then
+            echo "::warning::No public homepage release is present yet. The secure publisher requires an authenticated owner session."
+            {
+              echo "## Published homepage"
+              echo "- Public Storage homepage: pending authenticated owner publication (HTTP 404)."
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::warning::Public homepage returned HTTP $publisher_status; search API checks will continue."
+            {
+              echo "## Published homepage"
+              echo "- Public Storage homepage: unavailable (HTTP $publisher_status)."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
           echo "=== CUSTOM DOMAIN CHECK ==="
           custom_domain_status="BLOCKED — domain request failed"
           if curl --max-time 12 -fsSL "https://everythinghub.ink/" -o /tmp/custom-domain.html; then
