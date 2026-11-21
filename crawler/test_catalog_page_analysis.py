@@ -527,7 +527,7 @@ class PageDerivedCatalogAnalysisTests(unittest.TestCase):
             ],
         }
         hits = search_catalog_network("Las Vegas", analysis)
-        self.assertEqual([item["catalog_id"] for item in hits[:3]], [
+        self.assertEqual([item["catalog_id"] for item in hits[:4]], [
             "places", "organizations", "events", "articles"
         ])
         self.assertEqual(hits[0]["relevance_class"], "typed_location_match")
