@@ -169,6 +169,17 @@ jobs:
             page.on("pageerror", error => pageErrors.push(error.message));
             page.on("console", message => { if (message.type() === "error") consoleErrors.push(message.text()); });
             const report = { url: process.env.TARGET_URL, startedAt: new Date().toISOString(), searches: {}, categorySearches: {}, newsCategories: {}, coreLinks: {} };
+            report.apiProbes = {};
+            for (const query of ["Rolex","Las Vegas","NASA"]) {
+              const apiUrl = new URL("https://everythinghub-search-backend.vercel.app/api/search");
+              apiUrl.searchParams.set("q", query);
+              apiUrl.searchParams.set("limit", "20");
+              apiUrl.searchParams.set("lane", "web");
+              const apiResponse = await page.request.get(apiUrl.toString(), { timeout: 20000 });
+              let apiBody = {};
+              try { apiBody = await apiResponse.json(); } catch (error) { apiBody = { parseError: String(error) }; }
+              report.apiProbes[query] = { status: apiResponse.status(), pageResults: Array.isArray(apiBody.results) ? apiBody.results.length : 0, catalogResults: Array.isArray(apiBody.catalogResults) ? apiBody.catalogResults.length : 0, externalCatalogResults: Array.isArray(apiBody.externalCatalogResults) ? apiBody.externalCatalogResults.length : 0, catalogPreview: apiBody.catalogPreview || null, providers: apiBody.providers || [], error: apiBody.error || apiBody.message || null };
+            }
             async function goHome() {
               const response = await page.goto(report.url, { waitUntil: "domcontentloaded", timeout: 45000 });
               if (!response || !response.ok()) throw new Error("Homepage HTTP status: " + (response && response.status()));
