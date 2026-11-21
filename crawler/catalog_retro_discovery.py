@@ -16,6 +16,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from index_store import load_index
+from catalog_page_analysis import canonical_url
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_INDEX = ROOT / "data" / "index.json"
@@ -66,12 +67,15 @@ def _catalog_relationships(page_analysis: dict | None) -> dict[str, list[dict]]:
     for page in page_analysis.get("pages", []):
         if not isinstance(page, dict) or not isinstance(page.get("url"), str):
             continue
+        normalized_url = canonical_url(page["url"])
+        if not normalized_url:
+            continue
         related = []
         for key in page.get("catalog_group_keys", []):
             catalog = catalog_by_key.get(key)
             if catalog and catalog not in related:
                 related.append(catalog)
-        relationships[page["url"]] = sorted(
+        relationships[normalized_url] = sorted(
             related, key=lambda item: (-item["source_page_count"], -item["record_count"], item["catalog_id"])
         )
     return relationships
@@ -96,7 +100,8 @@ def build_candidates(index: dict, page_analysis: dict | None = None) -> dict:
         text = " ".join(str(page.get(k) or "") for k in ("title", "description", "text"))[:2500]
         matched = [name for name, pattern in HINTS.items() if pattern.search(text) or pattern.search(url)]
         page_digest = __import__("hashlib").sha256(url.encode("utf-8")).hexdigest()[:24]
-        related_catalogs = page_relationships.get(url, [])
+        normalized_url = canonical_url(url)
+        related_catalogs = page_relationships.get(normalized_url, [])
         related_catalog_ids = [item["catalog_id"] for item in related_catalogs]
         best_page_count = max((item["source_page_count"] for item in related_catalogs), default=0)
         best_record_count = max((item["record_count"] for item in related_catalogs), default=0)
