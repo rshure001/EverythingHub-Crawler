@@ -611,6 +611,12 @@ def _add_global_subject_catalogs(pages: list[dict], page_rows: list[dict], recor
                     existing_record["catalog_ids"] = [value for value in existing_catalog_ids if value != catalog_id]
             existing_catalog.update({
                 "source_key": source_key,
+                "title": token.capitalize() + " Subject Catalog",
+                "catalog_type": "knowledge_base",
+                "record_type": "subject",
+                "subject": token,
+                "source_host": "__global__",
+                "catalog_origin": "derived_from_repeated_records",
                 "source_page_ids": source_page_ids,
                 "source_page_count": len(source_page_ids),
                 "source_url": source_urls[0] if source_urls else existing_catalog.get("source_url"),
@@ -1629,17 +1635,18 @@ def search_catalog_network(query: str, analysis: dict, limit: int = 10) -> list[
         catalog_tokens = set(catalog_text.split())
         catalog_match = token_set.issubset(catalog_tokens)
         record_type = str(catalog.get("record_type", "")).casefold()
+        is_derived_subject = (
+            catalog.get("catalog_origin") == "derived_from_repeated_records"
+            or (record_type == "subject" and catalog.get("source_host") == "__global__")
+        )
+        if is_derived_subject:
+            subject_tokens = set(_norm(catalog.get("subject", "")).split())
+            if not subject_tokens.intersection(token_set):
+                continue
         content_record = record_type in content_types
         # A derived subject catalog represents its own recurring topic, not
         # every topic mentioned by one of its member-page titles. Keep generic
         # subject catalogs out of unrelated searches (e.g. "committed" for Rolex).
-        if (
-            record_type == "subject"
-            and catalog.get("catalog_origin") == "derived_from_repeated_records"
-        ):
-            subject_tokens = set(_norm(catalog.get("subject", "")).split())
-            if not subject_tokens.intersection(token_set):
-                continue
         matched = []
         for record in related:
             title_norm = _norm(record.get("title", ""))
