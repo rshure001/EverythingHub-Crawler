@@ -1180,5 +1180,143 @@ class CatalogInventoryTriggerTests(unittest.TestCase):
         self.assertEqual(result["metrics"]["unique_catalogs_discovered"], 0)
         self.assertEqual(result["metrics"]["unique_records"], 0)
 
+    def test_vetted_same_as_ids_merge_records_across_hosts(self):
+        def page(host, first, second, fetched_at):
+            return {
+                "url": f"https://{host}/catalog",
+                "title": "Watch model collection",
+                "description": "A structured list of watch models.",
+                "text": "Browse the watch models.",
+                "lane": "general",
+                "robots_allowed": True,
+                "fetched_at": fetched_at,
+                "structured_catalog": {
+                    "version": 1,
+                    "lists": [{
+                        "name": "Rolex Watches",
+                        "record_type": "model",
+                        "items": [
+                            {"record_type": "model", "name": first[0], "url": f"https://{host}/{first[0].lower()}", "same_as_ids": [first[1]]},
+                            {"record_type": "model", "name": second[0], "url": f"https://{host}/{second[0].lower()}", "same_as_ids": [second[1]]},
+                        ],
+                    }],
+                },
+            }
+
+        pages = [
+            page("retailer-one.example", ("Submariner", "wikidata:Q12345"), ("Datejust", "wikidata:Q23456"), 100),
+            page("retailer-two.example", ("Submariner", "wikidata:Q12345"), ("Daytona", "wikidata:Q34567"), 101),
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            result = analyze_pages_incremental(pages, source_total=2, cache_dir=Path(tmp))
+        self.assertEqual(result["metrics"]["unique_catalogs_discovered"], 2)
+        self.assertEqual(result["metrics"]["unique_records"], 3)
+        self.assertEqual(result["metrics"]["cross_host_record_merges"], 1)
+        submariner = next(item for item in result["records"] if item["title"] == "Submariner")
+        self.assertEqual(submariner["canonical_entity_key"], "model|external|wikidata:Q12345")
+        self.assertEqual(len(submariner["source_urls"]), 2)
+        self.assertEqual(len(submariner["source_page_ids"]), 2)
+        self.assertEqual(len(submariner["catalog_ids"]), 2)
+
+    def test_unknown_same_as_values_do_not_merge_records_across_hosts(self):
+        pages = [
+            {
+                "url": "https://retailer-one.example/watches/standard",
+                "title": "Watches",
+                "text": "Browse the watch models.",
+                "lane": "shopping",
+                "robots_allowed": True,
+                "structured_catalog": {"version": 1, "lists": [{
+                    "name": "Watch models", "record_type": "model",
+                    "items": [
+                        {"record_type": "model", "name": "Standard Watch", "url": "https://retailer-one.example/watches/standard", "same_as_ids": ["untrusted:123"]},
+                        {"record_type": "model", "name": "Other Watch", "url": "https://retailer-one.example/watches/other", "same_as_ids": ["untrusted:456"]},
+                    ],
+                }]},
+            },
+            {
+                "url": "https://retailer-two.example/watches/standard",
+                "title": "Watches",
+                "text": "Browse the watch models.",
+                "lane": "shopping",
+                "robots_allowed": True,
+                "structured_catalog": {"version": 1, "lists": [{
+                    "name": "Watch models", "record_type": "model",
+                    "items": [
+                        {"record_type": "model", "name": "Standard Watch", "url": "https://retailer-two.example/watches/standard", "same_as_ids": ["untrusted:123"]},
+                        {"record_type": "model", "name": "Other Watch", "url": "https://retailer-two.example/watches/other", "same_as_ids": ["untrusted:456"]},
+                    ],
+                }]},
+            },
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            result = analyze_pages_incremental(pages, source_total=2, cache_dir=Path(tmp))
+        self.assertEqual(result["metrics"]["unique_records"], 4)
+        self.assertEqual(result["metrics"]["cross_host_record_merges"], 0)
+
+
+    def test_structured_dataset_catalog_creates_typed_catalog_and_records(self):
+        result = analyze_pages([{
+            "url": "https://data.example/catalog",
+            "title": "Nevada Open Data Catalog",
+            "description": "Browse public datasets from Nevada.",
+            "text": "A structured catalog of public datasets.",
+            "lane": "general",
+            "robots_allowed": True,
+            "fetched_at": 200,
+            "structured_catalog": {
+                "version": 1,
+                "lists": [{
+                    "name": "Nevada Public Datasets",
+                    "record_type": "dataset",
+                    "items": [
+                        {"record_type": "dataset", "name": "Business Licenses", "url": "https://data.example/datasets/licenses"},
+                        {"record_type": "dataset", "name": "Building Permits", "url": "https://data.example/datasets/permits"},
+                    ],
+                }],
+            },
+        }], source_total=1)
+        metrics = result["metrics"]
+        self.assertEqual(metrics["structured_catalog_pages"], 1)
+        self.assertEqual(metrics["structured_catalog_lists"], 1)
+        self.assertEqual(metrics["structured_catalog_items"], 2)
+        self.assertEqual(metrics["structured_catalog_records"], 2)
+        self.assertEqual(metrics["unique_records_by_type"], {"dataset": 2})
+        self.assertEqual(metrics["unique_catalogs_discovered"], 1)
+
+
+    def test_invalid_orcid_and_isni_check_digits_do_not_merge_across_hosts(self):
+        pages = []
+        for host in ("retailer-one.example", "retailer-two.example"):
+            pages.append({
+                "url": f"https://{host}/researchers",
+                "title": "Researcher directory",
+                "text": "Browse researcher profiles.",
+                "lane": "general",
+                "robots_allowed": True,
+                "structured_catalog": {"version": 1, "lists": [{
+                    "name": "Researcher directory",
+                    "record_type": "person",
+                    "items": [
+                        {
+                            "record_type": "person",
+                            "name": "Researcher A",
+                            "url": f"https://{host}/researcher-a",
+                            "same_as_ids": ["orcid:0000-0002-1825-0098"],
+                        },
+                        {
+                            "record_type": "person",
+                            "name": "Researcher B",
+                            "url": f"https://{host}/researcher-b",
+                            "same_as_ids": ["isni:0000000122819550"],
+                        },
+                    ],
+                }]},
+            })
+        with tempfile.TemporaryDirectory() as tmp:
+            result = analyze_pages_incremental(pages, source_total=2, cache_dir=Path(tmp))
+        self.assertEqual(result["metrics"]["unique_records"], 4)
+        self.assertEqual(result["metrics"]["cross_host_record_merges"], 0)
+
 if __name__ == "__main__":
     unittest.main()

@@ -1,6 +1,7 @@
 """Extract conservative product metadata from HTML for Everything Hub search."""
 from html.parser import HTMLParser
 import json
+import re
 from urllib.parse import urljoin, urlsplit
 
 MAX_JSON_LD_BYTES = 1_000_000
@@ -27,6 +28,80 @@ def _absolute_http(value, base_url):
         return url
     except ValueError:
         return ""
+
+
+def _valid_mod_11_2(value):
+    """Validate ORCID/ISNI ISO 7064 MOD 11-2 check digits."""
+    compact = str(value or "").replace("-", "").upper()
+    if not re.fullmatch(r"\d{15}[\dX]", compact):
+        return False
+    total = 0
+    for digit in compact[:15]:
+        total = (total + int(digit)) * 2
+    check = (12 - (total % 11)) % 11
+    expected = "X" if check == 10 else str(check)
+    return compact[-1] == expected
+
+
+def _stable_same_as_ids(value):
+    """Keep only stable, namespaced HTTPS entity identifiers from schema.org sameAs."""
+    pending = [value]
+    found = []
+    seen = set()
+    while pending and len(found) < 5:
+        current = pending.pop(0)
+        if isinstance(current, list):
+            pending.extend(current[:20])
+            continue
+        if isinstance(current, dict):
+            pending.extend([current.get("@id"), current.get("url")])
+            continue
+        if not isinstance(current, str) or not current.strip():
+            continue
+        try:
+            parsed = urlsplit(current.strip())
+        except ValueError:
+            continue
+        if (
+            parsed.scheme.lower() != "https"
+            or not parsed.hostname
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.query
+            or parsed.fragment
+        ):
+            continue
+        host = parsed.hostname.lower().rstrip(".")
+        path = parsed.path.rstrip("/")
+        identity = ""
+        if host in {"www.wikidata.org", "wikidata.org"}:
+            match = re.fullmatch(r"/(?:entity|wiki)/(Q[1-9]\d*)", path, re.I)
+            if match:
+                identity = "wikidata:" + match.group(1).upper()
+        elif host in {"orcid.org", "www.orcid.org"}:
+            match = re.fullmatch(r"/(\d{4}-\d{4}-\d{4}-\d{3}[\dXx])", path)
+            if match and _valid_mod_11_2(match.group(1)):
+                identity = "orcid:" + match.group(1).upper()
+        elif host == "viaf.org":
+            match = re.fullmatch(r"/viaf/(\d+)", path)
+            if match:
+                identity = "viaf:" + match.group(1)
+        elif host in {"isni.org", "www.isni.org"}:
+            match = re.fullmatch(r"/isni/(\d{15}[\dXx])", path)
+            if match and _valid_mod_11_2(match.group(1)):
+                identity = "isni:" + match.group(1).upper()
+        elif host in {"geonames.org", "www.geonames.org"}:
+            match = re.fullmatch(r"/(\d+)", path)
+            if match:
+                identity = "geonames:" + match.group(1)
+        elif host in {"openstreetmap.org", "www.openstreetmap.org"}:
+            match = re.fullmatch(r"/(node|way|relation)/(\d+)", path)
+            if match:
+                identity = "osm:" + match.group(1) + ":" + match.group(2)
+        if identity and identity not in seen:
+            seen.add(identity)
+            found.append(identity)
+    return found
 
 
 class _MetadataParser(HTMLParser):
@@ -102,9 +177,12 @@ def extract_product_metadata(html, page_url):
         return {}
     product = product or {}
 
-    brand = product.get("brand") or parser.meta.get("product:brand") or {}
-    if isinstance(brand, dict):
-        brand = brand.get("name", "")
+    brand_value = product.get("brand") or parser.meta.get("product:brand") or {}
+    brand_same_as_ids = _stable_same_as_ids(
+        [brand_value.get("sameAs"), brand_value.get("@id")]
+    ) if isinstance(brand_value, dict) else []
+    brand = brand_value.get("name", "") if isinstance(brand_value, dict) else brand_value
+    same_as_ids = _stable_same_as_ids([product.get("sameAs"), product.get("@id")])
     offers = product.get("offers") or {}
     if isinstance(offers, list):
         offers = offers[0] if offers else {}
@@ -141,6 +219,8 @@ def extract_product_metadata(html, page_url):
         "currency": _text(offers.get("priceCurrency") or meta.get("product:price:currency"), 8),
         "availability": _text(availability, 80),
         "image": _absolute_http(image, page_url),
+        "same_as_ids": same_as_ids,
+        "brand_same_as_ids": brand_same_as_ids,
         "url": _absolute_http(product.get("url") or page_url, page_url),
     }
     return {k: v for k, v in result.items() if v}
@@ -217,7 +297,7 @@ def _schema_record_type(obj):
 
 
 def _walk_schema_objects(value, depth=0, seen=None, budget=None):
-    """Walk only bounded JSON-LD relationship fields; never traverse arbitrary properties."""
+    """Walk bounded JSON-LD relationship fields; never traverse arbitrary properties."""
     if seen is None:
         seen = set()
     if budget is None:
@@ -236,21 +316,48 @@ def _walk_schema_objects(value, depth=0, seen=None, budget=None):
     seen.add(marker)
     budget[0] += 1
     yield value
-    for key in ("@graph", "mainEntity", "mainEntityOfPage", "hasPart", "itemListElement", "item", "about"):
+    for key in (
+        "@graph", "mainEntity", "mainEntityOfPage", "hasPart",
+        "itemListElement", "item", "itemOffered", "dataset",
+        "hasVariant", "about",
+    ):
         if key in value:
             yield from _walk_schema_objects(value[key], depth + 1, seen, budget)
 
 
-def extract_structured_catalog_metadata(html, page_url):
-    """Extract a bounded schema.org ItemList preview with direct item URLs.
+def _structured_container_relationships(obj):
+    """Return only schema.org relationships that explicitly represent collections."""
+    types = _schema_type_names(obj)
+    relationships = []
+    if "itemlist" in types:
+        relationships.append(("itemlist", "itemListElement", obj.get("itemListElement")))
+    if "datacatalog" in types:
+        relationships.append(("datacatalog", "dataset", obj.get("dataset")))
+    if "collectionpage" in types:
+        for key in ("mainEntity", "hasPart"):
+            relationships.append(("collectionpage", key, obj.get(key)))
+    if "productgroup" in types:
+        relationships.append(("productgroup", "hasVariant", obj.get("hasVariant")))
+    if "offercatalog" in types:
+        for key in ("itemListElement", "itemOffered"):
+            relationships.append(("offercatalog", key, obj.get(key)))
+    return relationships
 
-    This is metadata-only: item URLs are recorded as provenance and are not
-    fetched here. A list needs at least two typed, uniquely linked items.
+
+def extract_structured_catalog_metadata(html, page_url):
+    """Extract bounded, typed schema.org collections with direct item URLs.
+
+    Supported containers are ItemList, DataCatalog, CollectionPage,
+    ProductGroup, and OfferCatalog. This is metadata-only: item URLs are
+    provenance and click-through locations; they are not fetched here.
+    A candidate needs at least two uniquely linked records of one type.
     """
     if not isinstance(html, str) or not html:
         return {}
     lowered = html.casefold()
-    if "itemlist" not in lowered or "itemlistelement" not in lowered:
+    if not any(marker in lowered for marker in (
+        "itemlist", "datacatalog", "collectionpage", "productgroup", "offercatalog"
+    )):
         return {}
     if not _absolute_http(page_url, page_url):
         return {}
@@ -266,86 +373,109 @@ def extract_structured_catalog_metadata(html, page_url):
         except (ValueError, TypeError, RecursionError):
             continue
         for obj in _walk_schema_objects(payload):
-            if "itemlist" not in _schema_type_names(obj):
+            if not isinstance(obj, dict):
                 continue
             list_name = _text(obj.get("name") or obj.get("headline"), 120)
-            elements = obj.get("itemListElement")
-            if not list_name or not isinstance(elements, list):
-                continue
-            list_key = list_name.casefold()
-            if list_key in seen_lists:
+            if not list_name:
                 continue
 
-            items = []
-            seen_items = set()
-            for position, element in enumerate(elements[:100], start=1):
-                wrapper = element if isinstance(element, dict) else {}
-                item = wrapper.get("item") if isinstance(wrapper, dict) else None
-                if not isinstance(item, dict):
-                    item = wrapper if wrapper else {}
-                item_name = _text(item.get("name") or item.get("headline") or wrapper.get("name"), 100)
-                item_url = _absolute_http(
-                    item.get("url") or item.get("@id") or wrapper.get("url") or wrapper.get("@id"),
-                    page_url,
-                )
-                record_type = _schema_record_type(item) or _schema_record_type(wrapper)
-                if not item_name or not item_url or not record_type:
+            for container_type, relationship, elements in _structured_container_relationships(obj):
+                if not isinstance(elements, list):
                     continue
-                identity = (record_type, item_url.casefold())
-                if identity in seen_items:
-                    continue
-                seen_items.add(identity)
+                items = []
+                seen_items = set()
+                for element in elements[:100]:
+                    wrapper = element if isinstance(element, dict) else {}
+                    item = None
+                    for item_key in ("item", "itemOffered", "dataset", "mainEntity"):
+                        candidate = wrapper.get(item_key)
+                        if isinstance(candidate, dict):
+                            item = candidate
+                            break
+                    if item is None:
+                        item = wrapper
+                    item_name = _text(
+                        item.get("name") or item.get("headline") or wrapper.get("name"), 100
+                    )
+                    item_url = _absolute_http(
+                        item.get("url") or item.get("@id") or
+                        wrapper.get("url") or wrapper.get("@id"),
+                        page_url,
+                    )
+                    record_type = _schema_record_type(item) or _schema_record_type(wrapper)
+                    if not item_name or not item_url or not record_type:
+                        continue
+                    identity = (record_type, item_url.casefold())
+                    if identity in seen_items:
+                        continue
+                    seen_items.add(identity)
 
-                entry = {
-                    "record_type": record_type,
-                    "name": item_name,
-                    "url": item_url,
-                }
-                sku = _text(item.get("sku") or item.get("mpn"), 48)
-                gtin = _text(
-                    item.get("gtin14") or item.get("gtin13") or
-                    item.get("gtin12") or item.get("gtin8") or item.get("gtin"),
-                    32,
+                    entry = {
+                        "record_type": record_type,
+                        "name": item_name,
+                        "url": item_url,
+                    }
+                    sku = _text(item.get("sku") or item.get("mpn"), 48)
+                    gtin = _text(
+                        item.get("gtin14") or item.get("gtin13") or
+                        item.get("gtin12") or item.get("gtin8") or item.get("gtin"),
+                        32,
+                    )
+                    brand_value = item.get("brand") or item.get("manufacturer") or ""
+                    brand_same_as_ids = _stable_same_as_ids(
+                        [brand_value.get("sameAs"), brand_value.get("@id")]
+                    ) if isinstance(brand_value, dict) else []
+                    brand = (
+                        brand_value.get("name") or ""
+                        if isinstance(brand_value, dict) else brand_value
+                    )
+                    brand = _text(brand, 48)
+                    same_as_ids = _stable_same_as_ids([item.get("sameAs"), item.get("@id")])
+                    if sku:
+                        entry["sku"] = sku
+                    if gtin:
+                        entry["gtin"] = gtin
+                    if brand:
+                        entry["brand"] = brand
+                    if same_as_ids:
+                        entry["same_as_ids"] = same_as_ids
+                    if brand_same_as_ids:
+                        entry["brand_same_as_ids"] = brand_same_as_ids
+                    raw_position = wrapper.get("position")
+                    if isinstance(raw_position, int) and not isinstance(raw_position, bool) and raw_position > 0:
+                        entry["position"] = raw_position
+                    items.append(entry)
+
+                type_counts = {}
+                for item in items:
+                    type_counts[item["record_type"]] = type_counts.get(item["record_type"], 0) + 1
+                dominant_type, count = max(
+                    type_counts.items(), key=lambda pair: (pair[1], pair[0]), default=("", 0)
                 )
-                brand = item.get("brand") or item.get("manufacturer") or ""
-                if isinstance(brand, dict):
-                    brand = brand.get("name") or ""
-                brand = _text(brand, 48)
-                if sku:
-                    entry["sku"] = sku
-                if gtin:
-                    entry["gtin"] = gtin
-                if brand:
-                    entry["brand"] = brand
-                raw_position = wrapper.get("position")
-                if isinstance(raw_position, int) and not isinstance(raw_position, bool) and raw_position > 0:
-                    entry["position"] = raw_position
-                items.append(entry)
+                if count < 2:
+                    continue
+                items = [item for item in items if item["record_type"] == dominant_type]
+                items = items[:_MAX_STRUCTURED_ITEMS_PER_LIST]
+                if len(items) < 2:
+                    continue
 
-            # Do not turn a one-off mention or a malformed list into a catalog.
-            type_counts = {}
-            for item in items:
-                type_counts[item["record_type"]] = type_counts.get(item["record_type"], 0) + 1
-            dominant_type, count = max(type_counts.items(), key=lambda pair: (pair[1], pair[0]), default=("", 0))
-            if count < 2:
-                continue
-            items = [item for item in items if item["record_type"] == dominant_type]
-            items = items[:_MAX_STRUCTURED_ITEMS_PER_LIST]
-            if len(items) < 2:
-                continue
-            lists.append({
-                "name": list_name,
-                "record_type": dominant_type,
-                "items": items,
-            })
-            seen_lists.add(list_key)
+                list_key = container_type + "|" + list_name.casefold() + "|" + dominant_type
+                if list_key in seen_lists:
+                    continue
+                seen_lists.add(list_key)
+                lists.append({
+                    "name": list_name,
+                    "record_type": dominant_type,
+                    "items": items,
+                })
+                if len(lists) >= _MAX_STRUCTURED_LISTS:
+                    break
             if len(lists) >= _MAX_STRUCTURED_LISTS:
                 break
         if len(lists) >= _MAX_STRUCTURED_LISTS:
             break
 
     result = {"version": 1, "lists": lists}
-    # Keep the canonical index within a fixed per-page metadata budget.
     while lists and len(json.dumps(result, ensure_ascii=False, separators=(",", ":")).encode("utf-8")) > _MAX_STRUCTURED_CATALOG_BYTES:
         largest = max(range(len(lists)), key=lambda index: len(lists[index]["items"]))
         if len(lists[largest]["items"]) > 2:
@@ -356,4 +486,3 @@ def extract_structured_catalog_metadata(html, page_url):
             return {}
         result = {"version": 1, "lists": lists}
     return result if lists else {}
-
