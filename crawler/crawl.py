@@ -22,7 +22,7 @@ from media_discovery import discover_media, merge_media_candidates
 from seed_coverage import DEFAULT_SEED_RETRY_SECONDS, schedule_missing_seed_urls
 from index_store import load_index, save_index
 from catalog_frontier import load_catalog_seed_urls, plan_catalog_seed_enqueue
-from product_metadata import extract_product_metadata
+from product_metadata import extract_product_metadata, extract_structured_catalog_metadata
 
 ROOT = Path(__file__).resolve().parents[1]
 SEEDS = ROOT / "crawler" / "seeds.txt"
@@ -205,7 +205,7 @@ def normalize_text(value, limit):
 
 
 def build_page_record(url, title, description, text, depth, directives, published_at=None,
-                      product_metadata=None):
+                      product_metadata=None, structured_catalog_metadata=None):
     """Build a page record while retaining crawl depth for noindex pages."""
     if "noindex" in directives:
         # noindex suppresses publication, not link discovery; keep depth so
@@ -237,6 +237,50 @@ def build_page_record(url, title, description, text, depth, directives, publishe
         }
         if product.get("name"):
             record["product"] = {"type": "product", **product}
+    if isinstance(structured_catalog_metadata, dict) and structured_catalog_metadata.get("version") == 1:
+        safe_lists = []
+        for raw_list in (structured_catalog_metadata.get("lists") or [])[:2]:
+            if not isinstance(raw_list, dict):
+                continue
+            list_name = normalize_text(raw_list.get("name"), 120)
+            record_type = normalize_text(raw_list.get("record_type"), 40).casefold()
+            if not list_name or not record_type:
+                continue
+            safe_items = []
+            seen_item_urls = set()
+            for raw_item in (raw_list.get("items") or [])[:8]:
+                if not isinstance(raw_item, dict):
+                    continue
+                item_name = normalize_text(raw_item.get("name"), 100)
+                item_url = normalize_text(raw_item.get("url"), 512)
+                try:
+                    parsed_item_url = urllib.parse.urlsplit(item_url)
+                except ValueError:
+                    continue
+                if (
+                    not item_name or parsed_item_url.scheme not in ("http", "https")
+                    or not parsed_item_url.hostname
+                    or parsed_item_url.username is not None
+                    or parsed_item_url.password is not None
+                ):
+                    continue
+                normalized_item_url = item_url.split("#", 1)[0]
+                if normalized_item_url in seen_item_urls:
+                    continue
+                seen_item_urls.add(normalized_item_url)
+                item = {"record_type": record_type, "name": item_name, "url": normalized_item_url}
+                for key, limit in (("sku", 48), ("gtin", 32), ("brand", 48)):
+                    value = normalize_text(raw_item.get(key), limit)
+                    if value:
+                        item[key] = value
+                position = raw_item.get("position")
+                if isinstance(position, int) and not isinstance(position, bool) and position > 0:
+                    item["position"] = position
+                safe_items.append(item)
+            if len(safe_items) >= 2:
+                safe_lists.append({"name": list_name, "record_type": record_type, "items": safe_items})
+        if safe_lists:
+            record["structured_catalog"] = {"version": 1, "lists": safe_lists}
     return record
 
 
@@ -1210,6 +1254,7 @@ def main():
                         page_media_robots_blocked += 1
             text, description = apply_snippet_policy(text, description, directives)
             product_metadata = {}
+            structured_catalog_metadata = {}
             if "noindex" not in directives:
                 try:
                     product_metadata = extract_product_metadata(html, final)
@@ -1217,9 +1262,15 @@ def main():
                     # Product metadata is additive; malformed structured data
                     # must never make an otherwise valid page fail to index.
                     product_metadata = {}
+                if "itemlist" in html.casefold():
+                    try:
+                        structured_catalog_metadata = extract_structured_catalog_metadata(html, final)
+                    except (ValueError, TypeError, RecursionError):
+                        # Structured catalog metadata is additive and bounded.
+                        structured_catalog_metadata = {}
             record = build_page_record(
                 final, title, description, text, depth, directives,
-                parser.published_at, product_metadata,
+                parser.published_at, product_metadata, structured_catalog_metadata,
             )
             links = []
             if depth < MAX_DEPTH and "nofollow" not in directives:

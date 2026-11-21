@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_INDEX = ROOT / "data" / "index.json"
 DEFAULT_OUTPUT = ROOT / "data" / "page-derived-catalogs"
 DEFAULT_SOURCE_POLICY_REVIEWS = ROOT / "data" / "source-policy-reviews.json"
-ANALYZER_VERSION = 11
+ANALYZER_VERSION = 12
 TRACKING_KEYS = {"fbclid", "gclid", "dclid", "mc_cid", "mc_eid", "ref", "source"}
 STOP_TOKENS = {
     "the", "and", "for", "with", "from", "our", "your", "all", "new", "home", "page",
@@ -441,6 +441,9 @@ def analyze_pages(
     pages_with_signals = 0
     content_entity_mentions = 0
     structured_product_pages = 0
+    structured_catalog_pages = 0
+    structured_catalog_list_count = 0
+    structured_catalog_item_count = 0
 
     for page in pages:
         if not isinstance(page, dict):
@@ -484,6 +487,56 @@ def analyze_pages(
                 if isinstance(value, (str, int, float)) and str(value).strip():
                     product_attributes[key] = str(value).strip()[:limit]
             structured_product_pages += 1
+
+        structured_lists = []
+        structured_catalog = page.get("structured_catalog") if is_eligible else None
+        if isinstance(structured_catalog, dict) and structured_catalog.get("version") == 1:
+            for raw_list in (structured_catalog.get("lists") or [])[:2]:
+                if not isinstance(raw_list, dict):
+                    continue
+                list_name = _title(raw_list.get("name"))
+                list_kind = str(raw_list.get("record_type") or "").casefold()
+                if not list_name or list_kind not in CATALOG_TYPE:
+                    continue
+                structured_items = []
+                seen_structured_items = set()
+                for raw_item in (raw_list.get("items") or [])[:8]:
+                    if not isinstance(raw_item, dict):
+                        continue
+                    item_kind = str(raw_item.get("record_type") or list_kind).casefold()
+                    item_title = _title(raw_item.get("name"))
+                    item_url = canonical_url(raw_item.get("url"))
+                    if item_kind != list_kind or not _valid_title(item_title) or not item_url:
+                        continue
+                    identity = (item_kind, item_url)
+                    if identity in seen_structured_items:
+                        continue
+                    seen_structured_items.add(identity)
+                    attributes = {}
+                    for key, limit in (("brand", 80), ("sku", 64), ("gtin", 32)):
+                        value = raw_item.get(key)
+                        if isinstance(value, (str, int, float)) and str(value).strip():
+                            attributes[key] = str(value).strip()[:limit]
+                    position = raw_item.get("position")
+                    if isinstance(position, int) and not isinstance(position, bool) and position > 0:
+                        attributes["position"] = position
+                    structured_items.append({
+                        "record_type": item_kind,
+                        "title": item_title,
+                        "url": item_url,
+                        "attributes": attributes,
+                    })
+                if len(structured_items) >= 2:
+                    structured_lists.append({
+                        "name": list_name,
+                        "record_type": list_kind,
+                        "items": structured_items,
+                    })
+        if structured_lists:
+            structured_catalog_pages += 1
+            structured_catalog_list_count += len(structured_lists)
+            structured_catalog_item_count += sum(len(item["items"]) for item in structured_lists)
+
         page_media = set()
         if is_eligible:
             page_media.update({
@@ -510,7 +563,7 @@ def analyze_pages(
             entity_kind for entity_kind, _entity_title, cue in content_entities
             if not cue.endswith("_examples")
         )
-        is_catalog_definition = bool(explicit) or any(count >= 2 for count in content_counts.values())
+        is_catalog_definition = bool(explicit) or any(count >= 2 for count in content_counts.values()) or bool(structured_lists)
         kind = _record_type(page, segments) if is_eligible else None
         if structured_product and kind in (None, "product", "model"):
             kind = product_kind
@@ -684,9 +737,95 @@ def analyze_pages(
                     group_titles[group_key_for_record].append(title)
                 page_group_keys.append(group_key_for_record)
 
+        for structured_list in structured_lists:
+            list_kind = structured_list["record_type"]
+            list_name = structured_list["name"]
+            list_slug = re.sub(r"[^a-z0-9]+", "-", _norm(list_name)).strip("-")[:80]
+            if not list_slug:
+                continue
+            parent_path = _content_group_path(list_kind, segments)
+            generic_list_names = {
+                "product": {"products", "items", "catalog", "catalogue"},
+                "model": {"models", "watches", "catalog", "catalogue"},
+                "brand": {"brands", "catalog", "catalogue"},
+                "business": {"businesses", "business", "stores", "catalog", "catalogue"},
+                "place": {"places", "locations", "catalog", "catalogue"},
+                "service": {"services", "catalog", "catalogue"},
+                "event": {"events", "catalog", "catalogue"},
+                "dataset": {"datasets", "data sets", "catalog", "catalogue"},
+                "article": {"articles", "publications", "catalog", "catalogue"},
+                "software": {"software", "tools", "catalog", "catalogue"},
+                "person": {"people", "authors", "catalog", "catalogue"},
+                "organization": {"organizations", "agencies", "catalog", "catalogue"},
+                "media": {"media", "images", "videos", "catalog", "catalogue"},
+                "resource": {"resources", "catalog", "catalogue"},
+                "subject": {"subjects", "topics", "catalog", "catalogue"},
+            }
+            if _norm(list_name) in generic_list_names.get(list_kind, set()):
+                path = parent_path
+            else:
+                path = (parent_path.rstrip("/") + "/" + list_slug) if parent_path != "/" else "/" + list_slug
+            structured_key = host + "|" + list_kind + "|" + path
+            group_info = content_list_groups.setdefault(structured_key, {
+                "catalog_key": structured_key,
+                "catalog_type": CATALOG_TYPE[list_kind],
+                "record_type": list_kind,
+                "path": path,
+                "evidence": set(),
+                "title": list_name,
+            })
+            group_info["evidence"].update({"structured_item_list", "schema_org_itemlist"})
+            group_pages[structured_key].add(page_id)
+            group_urls[structured_key].add(url)
+            if list_name not in group_titles[structured_key]:
+                group_titles[structured_key].append(list_name)
+            page_group_keys.append(structured_key)
+
+            for entry in structured_list["items"]:
+                record_title = entry["title"]
+                attributes = dict(entry.get("attributes") or {})
+                if list_kind in ("product", "model"):
+                    entity_key = _product_entity_key(list_kind, host, record_title, attributes)
+                elif list_kind == "brand":
+                    entity_key = _brand_entity_key(record_title)
+                else:
+                    entity_key = _record_entity_key(list_kind, host, record_title)
+                structured_record_id = stable_id("record", entity_key)
+                structured_item = records.setdefault(structured_record_id, {
+                    "record_id": structured_record_id,
+                    "entity_id": stable_id("entity", entity_key),
+                    "canonical_entity_key": entity_key,
+                    "record_type": list_kind,
+                    "title": record_title,
+                    "description": description or text[:500],
+                    "source_urls": [],
+                    "source_page_ids": [],
+                    "catalog_ids": [],
+                    "last_seen_at": page.get("fetched_at"),
+                    "attributes": {},
+                    "structured_catalog_item": True,
+                })
+                structured_item.setdefault("attributes", {}).update(attributes)
+                structured_item["structured_catalog_item"] = True
+                item_url = entry["url"]
+                if item_url not in structured_item["source_urls"]:
+                    structured_item["source_urls"].append(item_url)
+                if page_id not in structured_item["source_page_ids"]:
+                    structured_item["source_page_ids"].append(page_id)
+                if page.get("fetched_at") and (
+                    not structured_item.get("last_seen_at")
+                    or page["fetched_at"] > structured_item["last_seen_at"]
+                ):
+                    structured_item["last_seen_at"] = page["fetched_at"]
+                record_groups[structured_key].add(structured_record_id)
+                group_pages[structured_key].add(page_id)
+                group_urls[structured_key].add(url)
+                if structured_record_id not in page_record_ids:
+                    page_record_ids.append(structured_record_id)
+
         if group_key:
             page_group_keys.append(group_key)
-        if kind or explicit or content_entities or structured_product:
+        if kind or explicit or content_entities or structured_product or structured_lists:
             pages_with_signals += 1
         page_rows.append({
             "page_id": page_id, "url": url, "eligible": is_eligible,
@@ -697,6 +836,8 @@ def analyze_pages(
             "media_reference_count": len(page_media),
             "content_entity_count": len(content_entities),
             "structured_product": bool(structured_product),
+            "structured_catalog_list_count": len(structured_lists),
+            "structured_catalog_item_count": sum(len(item["items"]) for item in structured_lists),
             "fetched_at": page.get("fetched_at"),
         })
 
@@ -729,7 +870,14 @@ def analyze_pages(
         source_rows = [page_by_id.get(page_id, {}) for page_id in source_page_ids]
         source_timestamps = sorted(stamp for stamp in (_timestamp_iso(row.get("fetched_at")) for row in source_rows) if stamp)
         record_ids = sorted(record_groups.get(key, set()))
-        title = _catalog_title(key.split("|", 1)[0], kind, path, group_titles.get(key, []))
+        structured_info = content_list_groups.get(key, {}) if is_content_list else {}
+        generic_titles = {"products", "items", "models", "watches", "brands", "businesses", "stores", "places", "locations", "services", "events", "datasets", "data sets", "articles", "publications", "software", "tools", "people", "authors", "organizations", "agencies", "media", "images", "videos", "resources", "subjects", "topics", "catalog", "catalogue"}
+        declared_list_title = structured_info.get("title")
+        title = (
+            declared_list_title
+            if isinstance(declared_list_title, str) and _norm(declared_list_title) not in generic_titles
+            else _catalog_title(key.split("|", 1)[0], kind, path, group_titles.get(key, []))
+        )
         if not is_declared and not is_content_list:
             title += " — referenced in indexed pages"
         evidence_strength = (
@@ -743,6 +891,7 @@ def analyze_pages(
         )
         catalog_origin = (
             "source_declared_collection" if is_declared
+            else "structured_schema_collection" if is_content_list and "structured_item_list" in evidence
             else "content_list_declared_collection" if is_content_list
             else "derived_from_repeated_records"
         )
@@ -824,6 +973,7 @@ def analyze_pages(
         "source_declared_catalogs": sum(bool(x.get("is_source_declared_catalog")) for x in catalog_list),
         "derived_catalogs": sum(x.get("catalog_origin") == "derived_from_repeated_records" for x in catalog_list),
         "content_list_catalogs": sum(x.get("catalog_origin") == "content_list_declared_collection" for x in catalog_list),
+        "structured_schema_catalogs": sum(x.get("catalog_origin") == "structured_schema_collection" for x in catalog_list),
         "catalogs_with_records": sum(bool(x.get("record_ids")) for x in catalog_list),
         "catalogs_without_records": sum(not x.get("record_ids") for x in catalog_list),
         "catalogs_with_multiple_records": sum(len(x.get("record_ids", [])) >= 2 for x in catalog_list),
@@ -850,6 +1000,10 @@ def analyze_pages(
         "structured_product_pages": structured_product_pages,
         "structured_product_records": sum(1 for item in record_list if item.get("structured_product")),
         "structured_brand_records": sum(1 for item in record_list if item.get("structured_brand")),
+        "structured_catalog_pages": structured_catalog_pages,
+        "structured_catalog_lists": structured_catalog_list_count,
+        "structured_catalog_items": structured_catalog_item_count,
+        "structured_catalog_records": sum(1 for item in record_list if item.get("structured_catalog_item")),
         "media_references": len(media_references),
         "unique_media_urls": len(media_urls),
         "records_staged": len(record_list),
@@ -922,7 +1076,7 @@ def _merge_cross_host_records(records: list[dict]) -> tuple[list[dict], int]:
 
         for key in ("source_urls", "source_page_ids", "catalog_ids"):
             current[key] = sorted(set(current.get(key, [])) | set(item.get(key, [])))
-        for key in ("structured_product", "structured_brand", "content_extracted"):
+        for key in ("structured_product", "structured_brand", "content_extracted", "structured_catalog_item"):
             if item.get(key):
                 current[key] = True
         current["commercial_eligible"] = False
@@ -963,6 +1117,8 @@ def analyze_pages_incremental(
     all_media: set[str] = set()
     all_media_references = []
     content_entity_mentions = 0
+    structured_catalog_lists = 0
+    structured_catalog_items = 0
     eligible = signals = 0
     reused = rebuilt = 0
     for host, host_pages in sorted(grouped.items()):
@@ -991,6 +1147,8 @@ def analyze_pages_incremental(
         all_media.update(shard["media_urls"])
         all_media_references.extend(shard.get("media_references", []))
         content_entity_mentions += shard["metrics"].get("content_entity_mentions", 0)
+        structured_catalog_lists += shard["metrics"].get("structured_catalog_lists", 0)
+        structured_catalog_items += shard["metrics"].get("structured_catalog_items", 0)
         eligible += shard["metrics"]["eligible_pages"]
         signals += shard["metrics"]["pages_with_catalog_signals"]
     all_records, cross_host_record_merges = _merge_cross_host_records(all_records)
@@ -1027,6 +1185,7 @@ def analyze_pages_incremental(
         "source_declared_catalogs": sum(bool(x.get("is_source_declared_catalog")) for x in all_catalogs),
         "derived_catalogs": sum(x.get("catalog_origin") == "derived_from_repeated_records" for x in all_catalogs),
         "content_list_catalogs": sum(x.get("catalog_origin") == "content_list_declared_collection" for x in all_catalogs),
+        "structured_schema_catalogs": sum(x.get("catalog_origin") == "structured_schema_collection" for x in all_catalogs),
         "catalogs_with_records": sum(bool(x.get("record_ids")) for x in all_catalogs),
         "catalogs_without_records": sum(not x.get("record_ids") for x in all_catalogs),
         "catalogs_with_multiple_records": sum(len(x.get("record_ids", [])) >= 2 for x in all_catalogs),
@@ -1053,6 +1212,10 @@ def analyze_pages_incremental(
         "structured_product_pages": sum(1 for item in all_page_rows if item.get("structured_product")),
         "structured_product_records": sum(1 for item in all_records if item.get("structured_product")),
         "structured_brand_records": sum(1 for item in all_records if item.get("structured_brand")),
+        "structured_catalog_pages": sum(1 for item in all_page_rows if item.get("structured_catalog_list_count", 0) > 0),
+        "structured_catalog_lists": structured_catalog_lists,
+        "structured_catalog_items": structured_catalog_items,
+        "structured_catalog_records": sum(1 for item in all_records if item.get("structured_catalog_item")),
         "media_references": len({(x["source_page_id"], x["media_url"]) for x in all_media_references}),
         "unique_media_urls": len(all_media), "records_staged": len(all_records),
         "records_published": 0, "catalogs_verified": 0,
@@ -1798,7 +1961,7 @@ def validate_outputs(output_dir: Path) -> dict:
     for catalog in catalogs:
         if stable_id("catalog", catalog.get("source_key", "")) != catalog.get("catalog_id"):
             raise ValueError("catalog ID does not match its canonical source key")
-        if catalog.get("catalog_origin") not in ("source_declared_collection", "content_list_declared_collection", "derived_from_repeated_records"):
+        if catalog.get("catalog_origin") not in ("source_declared_collection", "content_list_declared_collection", "structured_schema_collection", "derived_from_repeated_records"):
             raise ValueError("catalog origin is missing or invalid")
         if catalog.get("commercial_eligible") is not False or catalog.get("source_terms_status") != "not_reviewed":
             raise ValueError("candidate catalogs cannot be marked commercially eligible or source-cleared")

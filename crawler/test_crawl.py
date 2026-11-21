@@ -285,6 +285,32 @@ class CrawlerTests(unittest.TestCase):
         self.assertEqual(record["product"]["price"], "1299.00")
         self.assertEqual(record["product"]["image"], "https://shop.example/ring.jpg")
 
+    def test_build_page_record_preserves_structured_catalog_items_and_blocks_noindex(self):
+        metadata = {
+            "version": 1,
+            "lists": [{
+                "name": "Rolex Watches",
+                "record_type": "product",
+                "items": [
+                    {"record_type": "product", "name": "Submariner", "url": "https://shop.example/submariner", "brand": "Rolex", "sku": "124060"},
+                    {"record_type": "product", "name": "Datejust", "url": "https://shop.example/datejust", "brand": "Rolex", "sku": "126200"},
+                ],
+            }],
+        }
+        record = crawl.build_page_record(
+            "https://shop.example/watches", "Watches", "", "Rolex watch collection", 1, set(),
+            structured_catalog_metadata=metadata,
+        )
+        self.assertEqual(record["structured_catalog"]["lists"][0]["name"], "Rolex Watches")
+        self.assertEqual(len(record["structured_catalog"]["lists"][0]["items"]), 2)
+        self.assertEqual(record["structured_catalog"]["lists"][0]["items"][0]["url"], "https://shop.example/submariner")
+        noindex = crawl.build_page_record(
+            "https://shop.example/private", "Private", "", "", 1, {"noindex"},
+            structured_catalog_metadata=metadata,
+        )
+        self.assertTrue(noindex["_eh_noindex"])
+        self.assertNotIn("structured_catalog", noindex)
+
     def test_build_page_record_does_not_publish_product_metadata_on_noindex(self):
         record = crawl.build_page_record(
             "https://shop.example/private", "Private product", "", "", 1, {"noindex"},

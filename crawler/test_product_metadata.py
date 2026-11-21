@@ -1,6 +1,6 @@
 import unittest
 
-from product_metadata import extract_product_metadata
+from product_metadata import extract_product_metadata, extract_structured_catalog_metadata
 
 
 class ProductMetadataTests(unittest.TestCase):
@@ -59,6 +59,44 @@ class ProductMetadataTests(unittest.TestCase):
         <meta property="og:image" content="https://user:pass@example.com/image.jpg">"""
         self.assertNotIn("image", extract_product_metadata(html, "https://example.com/p"))
 
+
+
+    def test_extracts_typed_item_list_with_direct_item_urls(self):
+        html = """<script type="application/ld+json">{
+          "@context":"https://schema.org","@type":"ItemList","name":"Rolex Watches",
+          "itemListElement":[
+            {"@type":"ListItem","position":1,"item":{"@type":"Product","name":"Submariner","url":"/watches/submariner","sku":"124060","brand":{"@type":"Brand","name":"Rolex"}}},
+            {"@type":"ListItem","position":2,"item":{"@type":"Product","name":"Datejust","url":"/watches/datejust","sku":"126200","brand":{"@type":"Brand","name":"Rolex"}}}
+          ]
+        }</script>"""
+        result = extract_structured_catalog_metadata(html, "https://shop.example/watches")
+        self.assertEqual(result["version"], 1)
+        self.assertEqual(len(result["lists"]), 1)
+        self.assertEqual(result["lists"][0]["name"], "Rolex Watches")
+        self.assertEqual(result["lists"][0]["record_type"], "product")
+        self.assertEqual(len(result["lists"][0]["items"]), 2)
+        self.assertEqual(result["lists"][0]["items"][0]["url"], "https://shop.example/watches/submariner")
+        self.assertEqual(result["lists"][0]["items"][0]["brand"], "Rolex")
+        self.assertEqual(result["lists"][0]["items"][1]["sku"], "126200")
+
+    def test_item_list_requires_two_typed_unique_items_and_is_size_bounded(self):
+        single = """<script type="application/ld+json">{
+          "@type":"ItemList","name":"One item",
+          "itemListElement":[{"@type":"ListItem","item":{"@type":"Product","name":"Only","url":"/only"}}]
+        }</script>"""
+        self.assertEqual(extract_structured_catalog_metadata(single, "https://shop.example/"), {})
+
+        many_items = [{"@type":"ListItem","position":i,"item":{
+            "@type":"Product","name":"Product " + str(i),
+            "url":"/products/" + str(i)
+        }} for i in range(1, 30)]
+        import json
+        html = '<script type="application/ld+json">' + json.dumps({
+            "@type":"ItemList","name":"Products","itemListElement":many_items
+        }) + "</script>"
+        result = extract_structured_catalog_metadata(html, "https://shop.example/")
+        self.assertTrue(result["lists"])
+        self.assertLessEqual(len(json.dumps(result, separators=(",", ":")).encode("utf-8")), 1024)
 
 if __name__ == "__main__":
     unittest.main()
