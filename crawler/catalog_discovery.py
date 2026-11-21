@@ -22,6 +22,8 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "data" / "catalogs.json.gz"
 MAX_RESPONSE_BYTES = 8_000_000
 TIMEOUT_SECONDS = 25
+DEFAULT_MAX_PAGES = 40
+MAX_PAGES_PER_SOURCE = 80
 USER_AGENT = "EverythingHubCatalogDiscovery/1.0 (+https://github.com/rshure001/EverythingHub-Crawler)"
 
 # Explicit public CKAN API hosts with reviewed, per-dataset rights handling.
@@ -127,12 +129,32 @@ def discover_source(source: dict[str, Any], rows: int, max_pages: int, pause: fl
             "source_terms_url": (policy or {}).get("terms_url", ""),
             "source_terms_status": (policy or {}).get("terms_status", "unreviewed"),
             "datasets_discovered": 0, "resources_discovered": 0,
-            "pages_requested": 0,
+            "available_dataset_count": None, "page_limit_applied": 0, "pages_requested": 0,
             "errors": ["source terms do not authorize catalog discovery"],
             "datasets": [],
         }
+    request_budget = policy.get("max_requests_per_run")
+    if (
+        not isinstance(request_budget, int)
+        or isinstance(request_budget, bool)
+        or request_budget <= 0
+    ):
+        return {
+            "id": source["id"], "name": source["name"],
+            "base_url": source["base"], "api_path": source["api_path"],
+            "source_url": source["base"].rstrip("/") + source["api_path"],
+            "category": source["category"],
+            "source_terms_url": policy.get("terms_url", ""),
+            "source_terms_status": policy.get("terms_status", "unreviewed"),
+            "datasets_discovered": 0, "resources_discovered": 0,
+            "available_dataset_count": None, "page_limit_applied": 0, "pages_requested": 0,
+            "errors": ["source policy has no valid per-run request budget"],
+            "datasets": [],
+        }
+    page_limit_applied = min(max_pages, request_budget, MAX_PAGES_PER_SOURCE)
     pages_requested = 0
-    for page in range(max_pages):
+    available_dataset_count = None
+    for page in range(page_limit_applied):
         params = urllib.parse.urlencode({
             "q": "*:*", "rows": rows, "start": page * rows,
             "sort": "metadata_modified desc",
@@ -162,7 +184,12 @@ def discover_source(source: dict[str, Any], rows: int, max_pages: int, pause: fl
                     seen.add(item["id"])
                     datasets.append(item)
             count = result.get("count")
-            if not batch or (isinstance(count, int) and (page + 1) * rows >= count):
+            if isinstance(count, int) and not isinstance(count, bool) and count >= 0:
+                available_dataset_count = count
+            if not batch or (
+                available_dataset_count is not None
+                and (page + 1) * rows >= available_dataset_count
+            ):
                 break
         except (OSError, ValueError, urllib.error.URLError, json.JSONDecodeError) as exc:
             errors.append(f"page {page + 1}: {type(exc).__name__}: {str(exc)[:240]}")
@@ -182,15 +209,17 @@ def discover_source(source: dict[str, Any], rows: int, max_pages: int, pause: fl
         "per_dataset_rights_required": bool(policy.get("per_dataset_rights_required", True)),
         "datasets_discovered": len(datasets),
         "resources_discovered": sum(item["resource_count"] for item in datasets),
+        "available_dataset_count": available_dataset_count,
+        "page_limit_applied": page_limit_applied,
         "pages_requested": pages_requested,
         "errors": errors, "datasets": datasets,
     }
 
-def build_catalog(rows: int = 250, max_pages: int = 40) -> dict[str, Any]:
+def build_catalog(rows: int = 250, max_pages: int = DEFAULT_MAX_PAGES) -> dict[str, Any]:
     if not 1 <= rows <= 1000:
         raise ValueError("rows must be between 1 and 1000")
-    if not 1 <= max_pages <= 100:
-        raise ValueError("max_pages must be between 1 and 100")
+    if not 1 <= max_pages <= MAX_PAGES_PER_SOURCE:
+        raise ValueError(f"max_pages must be between 1 and {MAX_PAGES_PER_SOURCE}")
     results = [discover_source(source, rows, max_pages) for source in SOURCES]
     datasets = [item for result in results for item in result["datasets"]]
     return {
@@ -208,7 +237,7 @@ def build_catalog(rows: int = 250, max_pages: int = 40) -> dict[str, Any]:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--rows", type=int, default=250)
-    parser.add_argument("--max-pages", type=int, default=40)
+    parser.add_argument("--max-pages", type=int, default=DEFAULT_MAX_PAGES)
     parser.add_argument("--output", type=pathlib.Path, default=OUTPUT)
     args = parser.parse_args()
     catalog = build_catalog(args.rows, args.max_pages)
@@ -220,7 +249,21 @@ def main() -> None:
     else:
         temporary.write_bytes(payload)
     temporary.replace(args.output)
-    print(json.dumps({key: catalog[key] for key in ("catalog_count", "datasets_discovered", "resources_discovered", "updated_at")}, indent=2))
+    summary = {
+        key: catalog[key]
+        for key in ("catalog_count", "datasets_discovered", "resources_discovered", "updated_at")
+    }
+    summary["source_catalogs"] = [{
+        "id": item["id"],
+        "name": item["name"],
+        "datasets_discovered": item["datasets_discovered"],
+        "available_dataset_count": item.get("available_dataset_count"),
+        "page_limit_applied": item.get("page_limit_applied", 0),
+        "pages_requested": item["pages_requested"],
+        "errors": item["errors"],
+        "source_terms_status": item.get("source_terms_status", "unreviewed"),
+    } for item in catalog["catalogs"]]
+    print(json.dumps(summary, indent=2))
 
 if __name__ == "__main__":
     main()
