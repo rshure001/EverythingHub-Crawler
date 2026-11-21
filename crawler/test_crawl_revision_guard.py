@@ -58,7 +58,7 @@ class CrawlRevisionGuardTests(unittest.TestCase):
             "Publish crawler health summary",
             "Measure Hurricane Core strength",
             "Commit updated index and frontier",
-            "Dispatch catalog publishing and search verification",
+            "Dispatch live search verification (no GitHub Pages deployment)",
         ):
             block = workflow.split(f"- name: {step_name}", 1)[1].split("\n      - name:", 1)[0]
             self.assertIn("if: steps.freshness.outputs.current == 'true'", block)
