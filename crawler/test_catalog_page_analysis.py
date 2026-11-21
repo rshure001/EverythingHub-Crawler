@@ -1254,5 +1254,35 @@ class CatalogInventoryTriggerTests(unittest.TestCase):
         self.assertEqual(result["metrics"]["unique_records"], 4)
         self.assertEqual(result["metrics"]["cross_host_record_merges"], 0)
 
+
+    def test_structured_dataset_catalog_creates_typed_catalog_and_records(self):
+        result = analyze_pages([{
+            "url": "https://data.example/catalog",
+            "title": "Nevada Open Data Catalog",
+            "description": "Browse public datasets from Nevada.",
+            "text": "A structured catalog of public datasets.",
+            "lane": "general",
+            "robots_allowed": True,
+            "fetched_at": 200,
+            "structured_catalog": {
+                "version": 1,
+                "lists": [{
+                    "name": "Nevada Public Datasets",
+                    "record_type": "dataset",
+                    "items": [
+                        {"record_type": "dataset", "name": "Business Licenses", "url": "https://data.example/datasets/licenses"},
+                        {"record_type": "dataset", "name": "Building Permits", "url": "https://data.example/datasets/permits"},
+                    ],
+                }],
+            },
+        }], source_total=1)
+        metrics = result["metrics"]
+        self.assertEqual(metrics["structured_catalog_pages"], 1)
+        self.assertEqual(metrics["structured_catalog_lists"], 1)
+        self.assertEqual(metrics["structured_catalog_items"], 2)
+        self.assertEqual(metrics["structured_catalog_records"], 2)
+        self.assertEqual(metrics["unique_records_by_type"], {"dataset": 2})
+        self.assertEqual(metrics["unique_catalogs_discovered"], 1)
+
 if __name__ == "__main__":
     unittest.main()
