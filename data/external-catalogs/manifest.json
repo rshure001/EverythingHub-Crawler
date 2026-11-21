@@ -1,12 +1,35 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-11-21T15:54:00Z",
-  "catalog_count": 1,
-  "record_count": 6,
+  "generated_at": "2026-11-21T16:08:00Z",
+  "catalog_count": 3,
+  "record_count": 18,
   "source_page_count": 0,
   "rights_cleared_records": 0,
   "commercially_eligible_records": 0,
   "registry_path": "data/external-catalogs/registry.json",
   "backend_snapshot_path": "vercel-search-backend/src/data/external-catalogs.json",
-  "note": "One curated, link-only external directory. These records are not included in page-derived catalog counts; no Rolex pages were fetched or copied."
+  "catalogs": [
+    {
+      "catalog_id": "external:rolex:official-collections",
+      "record_count": 6,
+      "source_host": "www.rolex.com",
+      "source_terms_reviewed": false,
+      "rights_status": "link_only_not_cleared_for_redistribution"
+    },
+    {
+      "catalog_id": "external:las-vegas:official-resources",
+      "record_count": 6,
+      "source_host": "www.lasvegasnevada.gov",
+      "source_terms_reviewed": false,
+      "rights_status": "link_only_not_cleared_for_redistribution"
+    },
+    {
+      "catalog_id": "external:nasa:official-resources",
+      "record_count": 6,
+      "source_host": "www.nasa.gov",
+      "source_terms_reviewed": false,
+      "rights_status": "link_only_not_cleared_for_redistribution"
+    }
+  ],
+  "note": "Three curated link-only external directories, counted separately from page-derived catalogs. No source pages were fetched or copied."
 }
