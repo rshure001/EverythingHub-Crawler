@@ -69,6 +69,20 @@ def patched_pinned_opener(response=None, side_effect=None):
 
 
 class CrawlerTests(unittest.TestCase):
+    def test_summarize_fetch_durations_reports_average_percentiles_and_max(self):
+        self.assertEqual(
+            crawl.summarize_fetch_durations([4, 1, 3, 2, 5]),
+            {"average_seconds": 3.0, "p50_seconds": 3.0, "p95_seconds": 5.0, "max_seconds": 5.0},
+        )
+        self.assertEqual(
+            crawl.summarize_fetch_durations([1, None, -2, float("nan")]),
+            {"average_seconds": 1.0, "p50_seconds": 1.0, "p95_seconds": 1.0, "max_seconds": 1.0},
+        )
+        self.assertEqual(
+            crawl.summarize_fetch_durations([]),
+            {"average_seconds": 0.0, "p50_seconds": 0.0, "p95_seconds": 0.0, "max_seconds": 0.0},
+        )
+
     def test_normalize_text_removes_nul_and_collapses_whitespace(self):
         self.assertEqual(crawl.normalize_text(" Alpha\x00Beta\n Gamma ", 100), "AlphaBeta Gamma")
 

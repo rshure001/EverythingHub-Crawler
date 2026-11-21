@@ -930,6 +930,23 @@ def summarize_fetch_outcomes(outcomes):
     }
 
 
+def summarize_fetch_durations(durations):
+    """Report observed request latency without conflating concurrency with throughput."""
+    values = sorted(
+        float(value) for value in durations
+        if isinstance(value, (int, float)) and math.isfinite(value) and value >= 0
+    )
+    if not values:
+        return {"average_seconds": 0.0, "p50_seconds": 0.0, "p95_seconds": 0.0, "max_seconds": 0.0}
+    p95_index = min(len(values) - 1, math.ceil(len(values) * 0.95) - 1)
+    return {
+        "average_seconds": round(sum(values) / len(values), 3),
+        "p50_seconds": round(values[(len(values) - 1) // 2], 3),
+        "p95_seconds": round(values[p95_index], 3),
+        "max_seconds": round(values[-1], 3),
+    }
+
+
 def main():
     seeds = [clean(x.strip()) for x in SEEDS.read_text(encoding="utf-8").splitlines()
              if x.strip() and not x.startswith("#")]
@@ -1225,6 +1242,8 @@ def main():
     depth_counts = {}
     requests_by_host = {}
     fetch_outcomes = []
+    fetch_durations = []
+    max_in_flight_requests = 0
 
     def fetch(item):
         url, depth = item
@@ -1338,6 +1357,7 @@ def main():
     # completion, preserving the existing per-host politeness guarantees.
     with concurrent.futures.ThreadPoolExecutor(max_workers=WORKERS) as pool:
         in_flight = {}
+        fetch_started_at = {}
         while queue or in_flight:
             elapsed = time.monotonic() - run_started
             may_submit = elapsed < MAX_RUN_SECONDS and fetched < MAX_FETCH_PER_RUN
@@ -1355,6 +1375,8 @@ def main():
                 for item in batch:
                     future = pool.submit(fetch, item)
                     in_flight[future] = item
+                    max_in_flight_requests = max(max_in_flight_requests, len(in_flight))
+                    fetch_started_at[future] = time.monotonic()
                     fetched += 1
 
             if not in_flight:
@@ -1383,6 +1405,8 @@ def main():
 
             for future in completed:
                 url, depth = in_flight.pop(future)
+                started_at = fetch_started_at.pop(future, time.monotonic())
+                fetch_durations.append(max(0.0, time.monotonic() - started_at))
                 result = future.result()
                 completed_at = time.time()
                 host = host_key(url)
@@ -1417,6 +1441,7 @@ def main():
 
     run_duration = round(time.monotonic() - run_started, 2)
     fetch_metrics = summarize_fetch_outcomes(fetch_outcomes)
+    fetch_latency_metrics = summarize_fetch_durations(fetch_durations)
     old = old_index
     old_challenge_urls = {
         page.get("url")
@@ -1481,6 +1506,8 @@ def main():
         "catalog_seed_queue_full_this_run": catalog_seed_metrics["queue_full"],
         "catalog_seed_urls_queued_this_run": catalog_seed_metrics["queued"],
         "run_duration_seconds": run_duration,
+        "max_in_flight_requests_this_run": max_in_flight_requests,
+        "fetch_latency_seconds_this_run": fetch_latency_metrics,
         "host_requests_this_run": requests_by_host,
         "depth_counts_this_run": depth_counts,
         "queue_remaining": len(queue),
@@ -1499,7 +1526,10 @@ def main():
     })
     print(f"Fetched {fetched}; indexed {len(records)}; not indexed {fetched - len(records)}; "
           f"robots blocked {robots_blocked_count[0]}; access challenges excluded {access_challenge_pages_count[0]}; "
-          f"duration {run_duration:.2f}s; "
+          f"duration {run_duration:.2f}s; peak in-flight {max_in_flight_requests}; "
+          f"fetch latency avg/p50/p95/max {fetch_latency_metrics['average_seconds']}/"
+          f"{fetch_latency_metrics['p50_seconds']}/{fetch_latency_metrics['p95_seconds']}/"
+          f"{fetch_latency_metrics['max_seconds']}s; "
           f"depth counts {depth_counts}; frontier remaining {len(queue)}; "
           f"discovered {len(seen)} URLs; catalog seeds considered {catalog_seed_metrics['candidates']}; "
           f"already indexed {catalog_seed_metrics['already_indexed']}; already queued {catalog_seed_metrics['already_queued']}; "
