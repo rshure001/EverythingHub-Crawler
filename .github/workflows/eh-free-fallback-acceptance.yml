@@ -68,7 +68,7 @@ jobs:
             const goHome = async () => {
               await page.goto(process.env.TARGET_URL, { waitUntil: "domcontentloaded", timeout: 45000 });
               const release = await page.locator("body").getAttribute("data-release").catch(() => null);
-              if (release !== "fallback-2026-11-21-r3") throw new Error("Unexpected live release marker: " + release);
+              if (release !== "fallback-2026-11-21-r4") throw new Error("Unexpected live release marker: " + release);
               await page.locator("#query").waitFor({ state: "visible", timeout: 20000 });
               const image = page.locator(".art img").first();
               await image.waitFor({ state: "visible", timeout: 20000 });
@@ -84,7 +84,7 @@ jobs:
               for (let attempt = 0; attempt < 24; attempt++) {
                 try { response = await page.goto(report.url, { waitUntil: "domcontentloaded", timeout: 20000 }); } catch {}
                 release = await page.locator("body").getAttribute("data-release").catch(() => null);
-                if (response && response.status() === 200 && release === "fallback-2026-11-21-r3") return response;
+                if (response && response.status() === 200 && release === "fallback-2026-11-21-r4") return response;
                 await page.waitForTimeout(5000);
               }
               throw new Error("Vercel fallback did not serve r3 release marker; last release=" + release);
@@ -114,7 +114,7 @@ jobs:
               const response = await waitForRelease();
               if (!response || response.status() !== 200) throw new Error("Homepage did not return HTTP 200");
               const release = await page.locator("body").getAttribute("data-release");
-              if (release !== "fallback-2026-11-21-r3") throw new Error("Live release marker mismatch: " + release);
+              if (release !== "fallback-2026-11-21-r4") throw new Error("Live release marker mismatch: " + release);
               const artworkImage = page.locator(".art img").first();
               await artworkImage.waitFor({ state: "visible", timeout: 20000 });
               await artworkImage.scrollIntoViewIfNeeded();
