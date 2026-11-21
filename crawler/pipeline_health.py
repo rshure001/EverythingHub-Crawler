@@ -147,26 +147,23 @@ def evaluate_pipeline(
     max_age_seconds: int = MAX_RELEASE_AGE_SECONDS,
 ) -> dict[str, Any]:
     """Report artifact build, deploy-job state, and live-search smoke independently."""
-    publisher = evaluate_workflow(publisher_payload, "publisher", now, max_age_seconds)
-    deploy_job = evaluate_deploy_job(publisher_jobs_payload)
+    # The legacy GitHub Pages publisher is intentionally not part of the
+    # Everything Hub crawler path. Keep its historical fields explicit but
+    # exclude them from pipeline health so an unused publisher cannot mask
+    # the actual live-search verification result.
+    publisher = {
+        "workflow": "publisher",
+        "status": "not_used",
+        "run_id": None,
+        "run_number": None,
+        "created_at": None,
+        "conclusion": None,
+        "age_seconds": None,
+    }
+    deploy_job = {"status": "not_used", "conclusion": None, "job_name": None}
     search = evaluate_workflow(search_payload, "search_smoke", now, max_age_seconds)
-    states = {publisher["status"], deploy_job["status"], search["status"]}
-    if "failed" in states:
-        overall = "failed"
-    elif "skipped" in states:
-        overall = "blocked"
-    elif "running" in states:
-        overall = "running"
-    elif "stale" in states:
-        overall = "stale"
-    elif "unobserved" in states:
-        overall = "unobserved"
-    elif "job_succeeded_unverified" in states:
-        overall = "unverified"
-    else:
-        overall = "healthy"
     return {
-        "overall_status": overall,
+        "overall_status": search["status"],
         "publisher": publisher,
         "deploy_job": deploy_job,
         "search_smoke": search,

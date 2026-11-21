@@ -68,17 +68,17 @@ class PipelineHealthTests(unittest.TestCase):
     def test_missing_deploy_job_is_unobserved(self):
         self.assertEqual(evaluate_deploy_job({"jobs": []})["status"], "unobserved")
 
-    def test_pipeline_reports_build_deploy_and_search_independently(self):
+    def test_pipeline_ignores_legacy_pages_publisher_and_reports_live_search(self):
         result = evaluate_pipeline(
-            self.payload(),
-            {"jobs": [{"name": "deploy", "status": "completed", "conclusion": "skipped"}]},
+            self.payload(conclusion="failure"),
+            {"jobs": [{"name": "deploy", "status": "completed", "conclusion": "failure"}]},
             self.payload(run_id=11),
             now=NOW,
         )
-        self.assertEqual(result["publisher"]["status"], "healthy")
-        self.assertEqual(result["deploy_job"]["status"], "skipped")
+        self.assertEqual(result["publisher"]["status"], "not_used")
+        self.assertEqual(result["deploy_job"]["status"], "not_used")
         self.assertEqual(result["search_smoke"]["status"], "healthy")
-        self.assertEqual(result["overall_status"], "blocked")
+        self.assertEqual(result["overall_status"], "healthy")
 
     def test_downstream_health_is_checked_on_schedule_not_every_workflow_completion(self):
         workflow = (

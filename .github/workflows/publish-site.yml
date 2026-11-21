@@ -1,13 +1,8 @@
 name: EverythingHub Publisher
-# Revalidate and retain the current crawler catalog even while Pages deployment is permission-gated.
+# Legacy GitHub Pages workflow; retained for explicit manual use only.
+# The Everything Hub crawler does not publish through GitHub Pages.
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - "site/**"
-      - "public-search/**"
-      - "publisher/**"
 permissions:
   contents: read
   pages: write
