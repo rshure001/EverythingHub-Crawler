@@ -4,12 +4,9 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/everything-hub-production-browser-check.yml"
-      - "src/**"
-      - "supabase/functions/everything-hub-site/**"
-      - "vercel-homepage/**"
   workflow_dispatch:
   workflow_run:
-    workflows: ["EverythingHub Publisher"]
+    workflows: ["Publish and verify Everything Hub — in-house Supabase route"]
     types: [completed]
     branches: [main]
 permissions:
@@ -23,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     env:
-      TARGET_URL: https://everythinghub-search-engine-4x25f8.v2.appdeploy.ai/
+      TARGET_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/storage/v1/object/public/everything-hub-publishing/index.html
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
