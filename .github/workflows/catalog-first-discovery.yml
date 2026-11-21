@@ -154,7 +154,7 @@ jobs:
             fi
             echo "Main advanced during catalog publication; rebuilding snapshot from $remote_head (retry $attempt)."
             git reset --hard origin/main
-            python crawler/catalog_discovery.py --rows "${{ inputs.rows || '250' }}" --max-pages "${{ inputs.max_pages || '20' }}"
+            python crawler/catalog_discovery.py --rows "${{ inputs.rows || '250' }}" --max-pages "${{ inputs.max_pages || '40' }}"
             python crawler/catalog_openlibrary.py --pause 1
             python crawler/catalog_ingest.py
             python project/ledger.py --record-catalog-discovery
