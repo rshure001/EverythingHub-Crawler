@@ -155,6 +155,30 @@ def run_landing_page_robots(
     if not 0 <= limit <= 100 or recheck_seconds < 0:
         raise ValueError("landing robots limit must be 0..100 and recheck_seconds non-negative")
     if not queue_path.is_file() or limit == 0:
+        output = {
+            "schema_version": 1,
+            "status": "robots_preflight_only_not_fetch_authorization",
+            "generated_at": _utc_now(),
+            "analysis_version": None,
+            "source_index_pages": None,
+            "source_index_updated_at": None,
+            "source_index_sha256": None,
+            "eligible_catalog_landing_urls": 0,
+            "last_batch_urls_checked": 0,
+            "urls_checked": 0,
+            "robots_checks_performed": 0,
+            "robots_allowed": 0,
+            "robots_denied": 0,
+            "robots_unverified": 0,
+            "source_policy_blocked": 0,
+            "fetch_authorized_urls": 0,
+            "page_content_fetched_urls": 0,
+            "page_requests": 0,
+            "results": [],
+        }
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        if not output_path.exists():
+            output_path.write_text(json.dumps(output, ensure_ascii=False, separators=(",", ":")) + "\\n", encoding="utf-8")
         return {
             "status": "queue_missing" if not queue_path.is_file() else "disabled",
             "last_batch_urls_checked": 0,
