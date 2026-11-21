@@ -1,7 +1,5 @@
 name: EverythingHub first-party catalog search smoke test
-# Run after the validation-gated catalog workflow completes so the public page index
-# and page-derived catalog registry cannot race each other.
-# The catalog publisher dispatches this only after a validated snapshot is pushed.
+# Manual entry point; the catalog publisher dispatches this after validation and commit.
 on:
   workflow_dispatch:
 permissions:
