@@ -477,6 +477,128 @@ def _catalog_title(host: str, kind: str, path: str, source_titles: list[str]) ->
     return _host_label(host) + " " + TYPE_LABEL[kind]
 
 
+
+def _add_global_subject_catalogs(pages: list[dict], page_rows: list[dict], records, catalogs) -> int:
+    """Create cross-host topic catalogs only from recurring page-title evidence."""
+    page_rows_by_id = {row.get("page_id"): row for row in page_rows if row.get("page_id")}
+    topic_pages: dict[str, dict[str, dict]] = defaultdict(dict)
+    topic_hosts: dict[str, set[str]] = defaultdict(set)
+    excluded = {
+        "about", "best", "complete", "facts", "free", "guide", "guides", "history",
+        "home", "information", "latest", "learn", "news", "official", "online",
+        "page", "pages", "photos", "picture", "pictures", "search", "site",
+        "website", "welcome", "what", "when", "where", "with", "your",
+    }
+    for page in pages:
+        if not isinstance(page, dict) or page.get("robots_allowed") is False:
+            continue
+        url = canonical_url(page.get("url"))
+        if not url:
+            continue
+        page_id = stable_id("page", url)
+        row = page_rows_by_id.get(page_id)
+        if not row or row.get("eligible") is not True:
+            continue
+        title = _title(page.get("title"))
+        host = urlsplit(url).hostname or ""
+        for raw_token in _search_tokens(title):
+            token = _singular_search_token(raw_token) or raw_token
+            if len(token) < 4 or token in excluded:
+                continue
+            topic_pages[token][page_id] = {
+                "page_id": page_id, "url": url, "host": host, "title": title,
+                "description": re.sub(r"\s+", " ", str(page.get("description") or page.get("text") or "")).strip()[:500],
+                "fetched_at": page.get("fetched_at"),
+            }
+            topic_hosts[token].add(host)
+
+    if isinstance(records, dict):
+        record_map = records
+    else:
+        record_map = {item["record_id"]: item for item in records}
+    if isinstance(catalogs, dict):
+        catalog_map = catalogs
+    else:
+        catalog_map = {item["catalog_id"]: item for item in catalogs}
+
+    created = 0
+    for token in sorted(topic_pages):
+        members = topic_pages[token]
+        hosts = topic_hosts[token]
+        if len(members) < 3 or len(hosts) < 2:
+            continue
+        slug = re.sub(r"[^a-z0-9]+", "-", token).strip("-")
+        source_key = "__global__|subject|/topics/" + slug
+        catalog_id = stable_id("catalog", source_key)
+        record_ids = []
+        for member in sorted(members.values(), key=lambda item: item["url"]):
+            entity_key = "subject|" + token + "|" + member["url"]
+            record_id = stable_id("record", entity_key)
+            record = record_map.setdefault(record_id, {
+                "record_id": record_id,
+                "entity_id": stable_id("entity", entity_key),
+                "canonical_entity_key": entity_key,
+                "record_type": "subject",
+                "title": member["title"],
+                "description": member["description"],
+                "source_urls": [member["url"]],
+                "source_page_ids": [member["page_id"]],
+                "catalog_ids": [],
+                "last_seen_at": member["fetched_at"],
+                "attributes": {"topic": token},
+                "content_extracted": True,
+                "source_terms_status": "not_reviewed",
+                "rights_status": "publicly_accessible_not_cleared_for_redistribution",
+                "commercial_eligible": False,
+                "record_level_clearance": "not_reviewed",
+                "source_url": member["url"],
+                "source_page_count": 1,
+            })
+            if catalog_id not in record["catalog_ids"]:
+                record["catalog_ids"].append(catalog_id)
+            record_ids.append(record_id)
+            row = page_rows_by_id[member["page_id"]]
+            row["record_ids"] = sorted(set(row.get("record_ids", [])) | {record_id})
+            group_key = "__global__|subject|/topics/" + slug
+            row["catalog_group_keys"] = sorted(set(row.get("catalog_group_keys", [])) | {group_key})
+        if catalog_id in catalog_map:
+            continue
+        source_urls = sorted(item["url"] for item in members.values())
+        timestamps = sorted(
+            stamp for stamp in (_timestamp_iso(item["fetched_at"]) for item in members.values()) if stamp
+        )
+        catalog_map[catalog_id] = {
+            "catalog_id": catalog_id,
+            "source_key": source_key,
+            "title": token.capitalize() + " Subject Catalog",
+            "catalog_type": "knowledge_base",
+            "record_type": "subject",
+            "subject": token,
+            "source_host": "__global__",
+            "source_url": source_urls[0],
+            "source_page_ids": sorted(members),
+            "source_page_count": len(members),
+            "first_seen_at": timestamps[0] if timestamps else None,
+            "last_seen_at": timestamps[-1] if timestamps else None,
+            "record_ids": sorted(record_ids),
+            "record_count": len(record_ids),
+            "parent_catalog_id": None,
+            "evidence": ["recurring_page_title_topic", "minimum_3_pages", "minimum_2_hosts"],
+            "catalog_origin": "derived_from_repeated_records",
+            "is_source_declared_catalog": False,
+            "catalog_definition": False,
+            "evidence_strength": "derived",
+            "catalog_status": "derived_candidate_needs_source_validation",
+            "source_terms_status": "not_reviewed",
+            "rights_status": "publicly_accessible_not_cleared_for_redistribution",
+            "commercial_eligible": False,
+            "status": "derived_candidate_needs_source_validation",
+            "verified": False,
+        }
+        created += 1
+    return created
+
+
 def analyze_pages(
     pages: list[dict],
     source_total: int | None = None,
@@ -1001,6 +1123,8 @@ def analyze_pages(
             if catalog_id not in records[record_id]["catalog_ids"]:
                 records[record_id]["catalog_ids"].append(catalog_id)
 
+    global_subject_catalogs = _add_global_subject_catalogs(pages, page_rows, records, catalogs)
+
     for item in records.values():
         item["source_urls"] = sorted(item["source_urls"])
         item["source_page_ids"] = sorted(item["source_page_ids"])
@@ -1038,6 +1162,7 @@ def analyze_pages(
         "source_row_coverage_percentage": round(source_row_coverage, 4),
         "source_row_deduplication_percentage": round(source_row_deduplication, 4),
         "eligible_page_coverage_status": "complete" if source_set_complete else "unknown_incomplete_source_set",
+        "global_subject_catalogs": global_subject_catalogs,
         "unique_catalogs_discovered": len(catalog_list),
         "unique_catalogs_by_type": dict(sorted(Counter(x["catalog_type"] for x in catalog_list).items())),
         "source_declared_catalogs": sum(bool(x.get("is_source_declared_catalog")) for x in catalog_list),
@@ -1223,6 +1348,7 @@ def analyze_pages_incremental(
         eligible += shard["metrics"]["eligible_pages"]
         signals += shard["metrics"]["pages_with_catalog_signals"]
     all_records, cross_host_record_merges = _merge_cross_host_records(all_records)
+    global_subject_catalogs = _add_global_subject_catalogs(pages, all_page_rows, all_records, all_catalogs)
     all_catalogs.sort(key=lambda x: (x["catalog_type"], x["title"].casefold(), x["catalog_id"]))
     all_records.sort(key=lambda x: (x["record_type"], x["title"].casefold(), x["record_id"]))
     all_page_rows.sort(key=lambda x: (x.get("url") or "", x.get("page_id") or ""))
@@ -1251,6 +1377,7 @@ def analyze_pages_incremental(
         "source_row_coverage_percentage": round(source_row_coverage, 4),
         "source_row_deduplication_percentage": round(source_row_deduplication, 4),
         "eligible_page_coverage_status": "complete" if source_set_complete else "unknown_incomplete_source_set",
+        "global_subject_catalogs": global_subject_catalogs,
         "unique_catalogs_discovered": len(all_catalogs),
         "unique_catalogs_by_type": dict(sorted(Counter(x["catalog_type"] for x in all_catalogs).items())),
         "source_declared_catalogs": sum(bool(x.get("is_source_declared_catalog")) for x in all_catalogs),
