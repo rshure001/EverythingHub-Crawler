@@ -178,7 +178,7 @@ def run_landing_page_robots(
         }
         output_path.parent.mkdir(parents=True, exist_ok=True)
         if not output_path.exists():
-            output_path.write_text(json.dumps(output, ensure_ascii=False, separators=(",", ":")) + "\\n", encoding="utf-8")
+            output_path.write_text(json.dumps(output, ensure_ascii=False, separators=(",", ":")) + "\n", encoding="utf-8")
         return {
             "status": "queue_missing" if not queue_path.is_file() else "disabled",
             "last_batch_urls_checked": 0,
