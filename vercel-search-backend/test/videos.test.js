@@ -3,7 +3,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const handler = require("../src/api/videos");
-const { parseRobots, normalizeNASAItem, resetForTests } = handler._test;
+const { parseRobots, normalizeCommonsItem, isAllowedCommonsLicense, resetForTests } = handler._test;
 
 function response(status, body, url) {
   return {
@@ -15,23 +15,22 @@ function response(status, body, url) {
   };
 }
 
-function nasaItem(index, overrides = {}) {
-  const id = "NASA_VIDEO_" + index;
+function commonsPage(index, overrides = {}) {
+  const title = "File:NASA mission video " + index + ".webm";
   return {
-    data: [{
-      nasa_id: id,
-      title: "NASA mission video " + index,
-      media_type: "video",
-      date_created: "2026-11-20T00:00:00Z",
-      center: "NASA",
-      photographer: "NASA",
-      copyright: "NASA",
-      description: "A NASA mission video.",
-      ...overrides
-    }],
-    links: [{
-      rel: "preview",
-      href: "https://images-assets.nasa.gov/video/" + id + "/" + id + "~thumb.jpg"
+    pageid: index + 1000,
+    title,
+    imageinfo: [{
+      mime: "video/webm",
+      thumburl: "https://upload.wikimedia.org/wikipedia/commons/thumb/" + index + "/NASA_video_" + index + ".jpg/640px-NASA_video_" + index + ".jpg",
+      extmetadata: {
+        LicenseShortName: { value: "CC BY 4.0" },
+        LicenseUrl: { value: "https://creativecommons.org/licenses/by/4.0/" },
+        Artist: { value: "NASA Video Team" },
+        Credit: { value: "NASA" },
+        AttributionRequired: { value: "true" },
+        ...overrides
+      }
     }]
   };
 }
@@ -54,61 +53,76 @@ test("robots parser applies longest matching rule and crawl delay", () => {
     "User-agent: *",
     "Disallow: /private",
     "Allow: /private/public",
-    "Crawl-delay: 3"
+    "Crawl-delay: 2"
   ].join("\n"), "EverythingHubVideoSearch/1.0");
-  assert.equal(policy.allows("https://images-api.nasa.gov/private/hidden"), false);
-  assert.equal(policy.allows("https://images-api.nasa.gov/private/public/item"), true);
-  assert.equal(policy.allows("https://images-api.nasa.gov/search?q=NASA"), true);
-  assert.equal(policy.delayMs, 3000);
+  assert.equal(policy.allows("https://commons.wikimedia.org/private/hidden"), false);
+  assert.equal(policy.allows("https://commons.wikimedia.org/private/public/item"), true);
+  assert.equal(policy.allows("https://commons.wikimedia.org/w/api.php?action=query"), true);
+  assert.equal(policy.delayMs, 2000);
 });
 
 test("robots parser prefers a specific user-agent group over wildcard", () => {
   resetForTests();
   const policy = parseRobots([
     "User-agent: EverythingHubVideoSearch",
-    "Disallow: /search",
+    "Disallow: /w/api.php",
     "User-agent: *",
     "Allow: /"
   ].join("\n"), "EverythingHubVideoSearch/1.0");
-  assert.equal(policy.allows("https://images-api.nasa.gov/search?q=NASA"), false);
+  assert.equal(policy.allows("https://commons.wikimedia.org/w/api.php?action=query"), false);
 });
 
-test("NASA normalizer requires video metadata and an HTTPS NASA preview", () => {
-  const valid = normalizeNASAItem(nasaItem(1));
+test("Commons normalizer accepts only video files with allowed licenses and credit", () => {
+  const valid = normalizeCommonsItem(commonsPage(1), "NASA");
   assert.ok(valid);
-  assert.equal(valid.source, "NASA Image and Video Library");
-  assert.equal(valid.url, "https://images.nasa.gov/details/NASA_VIDEO_1");
-  assert.match(valid.thumbnail, /^https:\/\/images-assets\.nasa\.gov\//);
-  assert.equal(valid.credit, "NASA");
+  assert.equal(valid.source, "Wikimedia Commons");
+  assert.equal(valid.title, "NASA mission video 1.webm");
+  assert.match(valid.url, /^https:\/\/commons\.wikimedia\.org\/wiki\/File/);
+  assert.match(valid.thumbnail, /^https:\/\/upload\.wikimedia\.org\//);
+  assert.equal(valid.license, "CC BY 4.0");
+  assert.equal(valid.creator, "NASA Video Team");
 
-  const thirdParty = nasaItem(2, { copyright: "Third Party Studio" });
-  assert.equal(normalizeNASAItem(thirdParty), null);
+  const nonVideo = commonsPage(2);
+  nonVideo.imageinfo[0].mime = "image/jpeg";
+  assert.equal(normalizeCommonsItem(nonVideo, "NASA"), null);
 
-  const nonVideo = nasaItem(3, { media_type: "image" });
-  assert.equal(normalizeNASAItem(nonVideo), null);
+  const noCreator = commonsPage(3, { Artist: { value: "" }, Credit: { value: "" } });
+  assert.equal(normalizeCommonsItem(noCreator, "NASA"), null);
 
-  const insecurePreview = nasaItem(4);
-  insecurePreview.links[0].href = "http://images-assets.nasa.gov/video/unsafe.jpg";
-  assert.equal(normalizeNASAItem(insecurePreview), null);
+  const nonCommercial = commonsPage(4, {
+    LicenseShortName: { value: "CC BY-NC 4.0" },
+    LicenseUrl: { value: "https://creativecommons.org/licenses/by-nc/4.0/" }
+  });
+  assert.equal(normalizeCommonsItem(nonCommercial, "NASA"), null);
 });
 
-test("video handler returns deduplicated NASA metadata after API and thumbnail robots checks", async () => {
+test("license policy allows CC BY, CC BY-SA, CC0 and explicit public domain only", () => {
+  assert.equal(isAllowedCommonsLicense("CC BY 4.0", "https://creativecommons.org/licenses/by/4.0/", true, "Creator"), true);
+  assert.equal(isAllowedCommonsLicense("CC BY-SA 3.0", "https://creativecommons.org/licenses/by-sa/3.0/", true, "Creator"), true);
+  assert.equal(isAllowedCommonsLicense("CC0 1.0", "", false, ""), true);
+  assert.equal(isAllowedCommonsLicense("Public domain", "", false, ""), true);
+  assert.equal(isAllowedCommonsLicense("CC BY-NC 4.0", "https://creativecommons.org/licenses/by-nc/4.0/", true, "Creator"), false);
+  assert.equal(isAllowedCommonsLicense("CC BY-ND 4.0", "https://creativecommons.org/licenses/by-nd/4.0/", true, "Creator"), false);
+  assert.equal(isAllowedCommonsLicense("CC BY 4.0", "https://example.com/license", true, "Creator"), false);
+  assert.equal(isAllowedCommonsLicense("CC BY 4.0", "https://creativecommons.org/licenses/by/4.0/", true, ""), false);
+  assert.equal(isAllowedCommonsLicense("Public domain", "", null, ""), false);
+});
+
+test("video handler returns deduplicated Commons metadata after robots checks", async () => {
   resetForTests();
   const originalFetch = global.fetch;
   const calls = [];
   global.fetch = async (url) => {
     const parsed = new URL(url);
     calls.push(parsed.href);
-    if (parsed.hostname === "images-api.nasa.gov" && parsed.pathname === "/robots.txt") {
-      return response(200, "User-agent: *\nAllow: /search\n", parsed.href);
+    if (parsed.hostname === "commons.wikimedia.org" && parsed.pathname === "/robots.txt") {
+      return response(200, "User-agent: *\nAllow: /w/api.php\n", parsed.href);
     }
-    if (parsed.hostname === "images-assets.nasa.gov" && parsed.pathname === "/robots.txt") {
-      return response(200, "User-agent: *\nAllow: /video/\n", parsed.href);
-    }
-    if (parsed.hostname === "images-api.nasa.gov" && parsed.pathname === "/search") {
-      const items = Array.from({ length: 20 }, (_, index) => nasaItem(index));
-      items.push(nasaItem(0));
-      return response(200, JSON.stringify({ collection: { items } }), parsed.href);
+    if (parsed.hostname === "commons.wikimedia.org" && parsed.pathname === "/w/api.php") {
+      const pages = {};
+      for (let index = 0; index < 20; index += 1) pages[String(index + 1)] = commonsPage(index);
+      pages.duplicate = commonsPage(0);
+      return response(200, JSON.stringify({ query: { pages } }), parsed.href);
     }
     throw new Error("Unexpected external request: " + parsed.href);
   };
@@ -117,26 +131,26 @@ test("video handler returns deduplicated NASA metadata after API and thumbnail r
     const res = mockResponse();
     await handler({ method: "GET", query: { q: "NASA" } }, res);
     assert.equal(res.statusCode, 200);
-    assert.equal(res.body.provider, "NASA Image and Video Library");
+    assert.equal(res.body.provider, "Wikimedia Commons");
     assert.equal(res.body.count, 20);
     assert.equal(res.body.items.length, 20);
-    assert.ok(res.body.items.every(item => item.title && item.credit && item.thumbnail));
-    assert.ok(res.body.items.every(item => item.url.startsWith("https://images.nasa.gov/details/")));
-    assert.ok(res.body.items.every(item => item.attributionUrl.includes("nasa.gov")));
-    assert.ok(calls.every(url => ["images-api.nasa.gov", "images-assets.nasa.gov"].includes(new URL(url).hostname)));
+    assert.ok(res.body.items.every(item => item.title && item.license && item.creator));
+    assert.ok(res.body.items.every(item => item.url.startsWith("https://commons.wikimedia.org/wiki/")));
+    assert.ok(res.body.items.every(item => item.thumbnail.startsWith("https://upload.wikimedia.org/")));
+    assert.ok(calls.every(url => new URL(url).hostname === "commons.wikimedia.org"));
   } finally {
     global.fetch = originalFetch;
     resetForTests();
   }
 });
 
-test("robots denial blocks the NASA API request and fails closed", async () => {
+test("robots denial blocks the Commons API request and fails closed", async () => {
   resetForTests();
   const originalFetch = global.fetch;
   const calls = [];
   global.fetch = async (url) => {
     calls.push(String(url));
-    return response(200, "User-agent: *\nDisallow: /search\n", String(url));
+    return response(200, "User-agent: *\nDisallow: /w/api.php\n", String(url));
   };
   try {
     const res = mockResponse();
@@ -144,33 +158,6 @@ test("robots denial blocks the NASA API request and fails closed", async () => {
     assert.equal(res.statusCode, 503);
     assert.equal(res.body.status, "unavailable");
     assert.equal(calls.length, 1);
-  } finally {
-    global.fetch = originalFetch;
-    resetForTests();
-  }
-});
-
-test("robots denial of preview assets prevents their display", async () => {
-  resetForTests();
-  const originalFetch = global.fetch;
-  global.fetch = async (url) => {
-    const parsed = new URL(url);
-    if (parsed.hostname === "images-api.nasa.gov" && parsed.pathname === "/robots.txt") {
-      return response(200, "User-agent: *\nAllow: /search\n", parsed.href);
-    }
-    if (parsed.hostname === "images-assets.nasa.gov" && parsed.pathname === "/robots.txt") {
-      return response(200, "User-agent: *\nDisallow: /video/\n", parsed.href);
-    }
-    if (parsed.hostname === "images-api.nasa.gov" && parsed.pathname === "/search") {
-      return response(200, JSON.stringify({ collection: { items: [nasaItem(1)] } }), parsed.href);
-    }
-    throw new Error("Unexpected external request: " + parsed.href);
-  };
-  try {
-    const res = mockResponse();
-    await handler({ method: "GET", query: { q: "NASA" } }, res);
-    assert.equal(res.statusCode, 200);
-    assert.equal(res.body.count, 0);
   } finally {
     global.fetch = originalFetch;
     resetForTests();
