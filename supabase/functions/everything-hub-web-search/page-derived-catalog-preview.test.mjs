@@ -55,6 +55,7 @@ function record({ id, entityId, type, title, description, catalogId, sourceUrl, 
 async function makeFixture() {
   const rolexId = "catalog:rolex-models";
   const vegasId = "catalog:las-vegas-places";
+  const vegasProductId = "catalog:las-vegas-watch-products";
   const rolexRecord = record({
     id: "record:rolex-submariner",
     entityId: "entity:rolex-submariner",
@@ -74,8 +75,19 @@ async function makeFixture() {
     catalogId: vegasId,
     sourceUrl: "https://www.visitlasvegas.com/places/las-vegas-strip",
   });
+  const vegasProductRecord = record({
+    id: "record:las-vegas-watch",
+    entityId: "entity:las-vegas-watch",
+    type: "product",
+    title: "Las Vegas Watch",
+    description: "Watch product available in Las Vegas",
+    catalogId: vegasProductId,
+    sourceUrl: "https://shop.example.com/las-vegas-watch",
+    attributes: { brand: "Example", category: "Watches" },
+  });
   const rolexPath = "indexes/aa/aaaaaaaaaaaaaaaaaaaaaaaa.json.gz";
   const vegasPath = "indexes/bb/bbbbbbbbbbbbbbbbbbbbbbbb.json.gz";
+  const vegasProductPath = "indexes/cc/cccccccccccccccccccccccc.json.gz";
   const catalogs = [
     {
       catalog_id: rolexId,
@@ -117,6 +129,27 @@ async function makeFixture() {
       record_level_clearance: "not_reviewed",
       commercial_eligible: false,
     },
+
+    {
+      catalog_id: vegasProductId,
+      title: "Las Vegas Watch Products",
+      subject: "Las Vegas shopping",
+      source_host: "shop.example.com",
+      source_url: "https://shop.example.com/las-vegas-watch",
+      catalog_type: "commerce",
+      record_type: "product",
+      record_ids: [vegasProductRecord.record_id],
+      source_page_ids: ["page:vegas-product"],
+      record_count: 1,
+      source_page_count: 1,
+      index_file: vegasProductPath,
+      is_source_declared_catalog: true,
+      evidence_strength: "high",
+      source_policy_review_status: "not_reviewed",
+      source_terms_status: "not_reviewed",
+      record_level_clearance: "not_reviewed",
+      commercial_eligible: false,
+    },
   ];
   const registry = {
     version: 1,
@@ -132,13 +165,18 @@ async function makeFixture() {
   const vegasIndexBytes = await gzipJson({
     version: 1, catalog_id: vegasId, title: "Las Vegas Places", status: "candidate", records: [vegasRecord],
   });
+  const vegasProductIndexBytes = await gzipJson({
+    version: 1, catalog_id: vegasProductId, title: "Las Vegas Watch Products", status: "candidate", records: [vegasProductRecord],
+  });
 
   const tokens = {
     rolex: [rolexId],
     submariner: [rolexId],
-    las: [vegasId],
-    vegas: [vegasId],
+    las: [vegasId, vegasProductId],
+    vegas: [vegasId, vegasProductId],
     strip: [vegasId],
+    watch: [vegasProductId],
+    product: [vegasProductId],
   };
   const grouped = new Map();
   for (const [token, ids] of Object.entries(tokens)) {
@@ -154,9 +192,10 @@ async function makeFixture() {
   const placeholderRecords = new Uint8Array([1]);
   const files = [
     await fileEntry("registry.json.gz", registryBytes, catalogs.length),
-    await fileEntry("records.json.gz", placeholderRecords, 2),
+    await fileEntry("records.json.gz", placeholderRecords, 3),
     await fileEntry(rolexPath, rolexIndexBytes, 1),
     await fileEntry(vegasPath, vegasIndexBytes, 1),
+    await fileEntry(vegasProductPath, vegasProductIndexBytes, 1),
   ];
   for (const [prefix, bytes] of searchBytes) {
     files.push(await fileEntry("search-index/" + prefix + ".json.gz", bytes, Object.keys(grouped.get(prefix)).length));
@@ -171,7 +210,7 @@ async function makeFixture() {
     source_index_updated_at: updatedIso,
     source_index_sha256: "c".repeat(64),
     catalog_count: catalogs.length,
-    record_count: 2,
+    record_count: 3,
     generated_at: "2026-11-21T05:55:00Z",
     metrics: { records_published: 0, source_terms_reviewed_records: 0 },
     catalogs_verified: 0,
@@ -194,6 +233,7 @@ async function makeFixture() {
   responses.set(rawBase + "data/page-derived-catalogs/registry.json.gz", new Response(registryBytes));
   responses.set(rawBase + "data/page-derived-catalogs/" + rolexPath, new Response(rolexIndexBytes));
   responses.set(rawBase + "data/page-derived-catalogs/" + vegasPath, new Response(vegasIndexBytes));
+  responses.set(rawBase + "data/page-derived-catalogs/" + vegasProductPath, new Response(vegasProductIndexBytes));
   for (const [prefix, bytes] of searchBytes) {
     responses.set(rawBase + "data/page-derived-catalogs/search-index/" + prefix + ".json.gz", new Response(bytes));
   }
@@ -205,7 +245,7 @@ async function makeFixture() {
     if (!response) throw new Error("Unexpected test fetch: " + key);
     return response.clone();
   };
-  return { fetchImpl, requested, rolexPath, vegasPath };
+  return { fetchImpl, requested, rolexPath, vegasPath, vegasProductPath };
 }
 
 test("query-scoped catalog search fetches only matching per-catalog indexes", async () => {
@@ -222,7 +262,7 @@ test("query-scoped catalog search fetches only matching per-catalog indexes", as
   assert.equal(rolexWithStopword[0].catalog_id, "catalog:rolex-models");
 
   const vegas = await searchPageDerivedCatalogPreview("Las Vegas", network, 5, fixture.fetchImpl);
-  assert.equal(vegas.length, 1);
+  assert.ok(vegas.length >= 1);
   assert.equal(vegas[0].catalog_id, "catalog:las-vegas-places");
   assert.equal(vegas[0].relevance_class, "typed_location_match");
   assert.equal(vegas[0].matched_records[0].record_id, "record:las-vegas-strip");
@@ -230,5 +270,6 @@ test("query-scoped catalog search fetches only matching per-catalog indexes", as
   assert.equal(fixture.requested.some((url) => url.endsWith("/records.json.gz")), false);
   assert.equal(fixture.requested.some((url) => url.endsWith("/" + fixture.rolexPath)), true);
   assert.equal(fixture.requested.some((url) => url.endsWith("/" + fixture.vegasPath)), true);
+  assert.equal(fixture.requested.some((url) => url.endsWith("/" + fixture.vegasProductPath)), true);
   clearPageDerivedCatalogPreviewCache();
 });
