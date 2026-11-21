@@ -19,7 +19,7 @@ on:
     branches: [main]
   workflow_dispatch:
 permissions:
-  actions: read
+  actions: write
   contents: write
 concurrency:
   group: eh-crawler-schedule-watchdog
@@ -221,7 +221,7 @@ jobs:
               "version": 1,
               "updated_at": now.isoformat(timespec="milliseconds").replace("+00:00", "Z"),
               "reason": (
-                  f"Push-triggered fallback after scheduled crawl delivery was {schedule_age}s old "
+                  f"Explicit workflow_dispatch fallback after scheduled crawl delivery was {schedule_age}s old "
                   f"(>25 minutes); no queued or running crawler; public manifest was {manifest_age}s old "
                   f"(>10 minutes). One bounded recovery crawl; normal schedule unchanged."
               ),
@@ -305,7 +305,30 @@ jobs:
                 exit 0
               fi
               git push --force-with-lease="refs/heads/main:${expected_head}" origin HEAD:refs/heads/main
-              echo "Committed one bounded recovery marker with expected-head protection; crawl.yml push path will start the bounded crawl."
+              echo "Committed one bounded recovery marker with expected-head protection."
+
+              # GITHUB_TOKEN pushes do not start another push-triggered workflow.
+              # Explicitly dispatch the crawl only after a fresh no-overlap check.
+              gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/crawl.yml/runs?per_page=100" > /tmp/crawl-runs-postpush.json
+              recovery_sha="$(git rev-parse HEAD)"
+              RECOVERY_SHA="$recovery_sha" python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          from crawler.schedule_watchdog import recovery_dispatch_decision
+
+          payload = json.loads(Path("/tmp/crawl-runs-postpush.json").read_text(encoding="utf-8"))
+          decision = recovery_dispatch_decision(payload.get("workflow_runs"), os.environ["RECOVERY_SHA"])
+          print("Post-push recovery dispatch decision:", json.dumps(decision, sort_keys=True))
+          if decision["action"] == "dispatch":
+              Path("/tmp/crawl-dispatch-eligible").write_text("yes", encoding="utf-8")
+          PY
+              if [ ! -f /tmp/crawl-dispatch-eligible ]; then
+                echo "Post-push check found an existing crawler run or could not authorize a second dispatch; no workflow_dispatch was sent."
+                exit 0
+              fi
+              gh workflow run crawl.yml --ref main
+              echo "Dispatched one bounded crawler workflow_dispatch after the post-push no-overlap check."
               ;;
             wait)
               echo "An existing crawler is queued or running, or one of the freshness gates is not satisfied; no marker update."
