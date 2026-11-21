@@ -82,6 +82,33 @@ jobs:
               report.liveNewsVisible = await news.count() > 0;
               report.liveNewsText = report.liveNewsVisible ? (await news.innerText()).slice(0,1200) : "No visible Live News section";
               report.liveNewsPassed = report.liveNewsVisible && /temporarily unavailable|stories|headlines|top stories|live news/i.test(report.liveNewsText);
+              await page.goto(report.url,{waitUntil:"domcontentloaded",timeout:45000});
+              await page.locator("#news-items .news-item").first().waitFor({state:"visible",timeout:30000});
+              report.news={topStories:await page.locator("#news-items .news-item").count(),status:await page.locator("#news-status").innerText()};
+              report.newsCategories={};
+              for(const category of ["world","technology","business","science"]){
+                await page.locator('[data-news="'+category+'"]').click();
+                await page.locator("#news-items .news-item").first().waitFor({state:"visible",timeout:20000});
+                report.newsCategories[category]=await page.locator("#news-items .news-item").count();
+              }
+              await page.locator("#news-refresh").click();
+              await page.locator("#news-items .news-item").first().waitFor({state:"visible",timeout:20000});
+              await page.screenshot({path:"everythinghub-fallback-news.png",fullPage:true});
+              await page.goto(report.url,{waitUntil:"domcontentloaded",timeout:45000});
+              await page.locator('.hotspots [data-mode="images"]').click();
+              await page.locator("#query").fill("dog");
+              await page.locator("#searchForm button[type=submit]").click();
+              await page.locator("#results .media-card img").first().waitFor({state:"visible",timeout:30000});
+              report.imageSearch={cards:await page.locator("#results .media-card").count(),title:(await page.locator("#results .results-heading h2").innerText())};
+              await page.screenshot({path:"everythinghub-fallback-images.png",fullPage:true});
+              await page.goto(report.url,{waitUntil:"domcontentloaded",timeout:45000});
+              await page.locator('.hotspots [data-mode="videos"]').click();
+              await page.locator("#query").fill("NASA");
+              await page.locator("#searchForm button[type=submit]").click();
+              await page.locator("#results .video-card img").first().waitFor({state:"visible",timeout:30000});
+              report.videoSearch={cards:await page.locator("#results .video-card").count(),title:(await page.locator("#results .results-heading h2").innerText())};
+              await page.screenshot({path:"everythinghub-fallback-videos.png",fullPage:true});
+              if(report.news.topStories<1||Object.values(report.newsCategories).some(x=>x<1)||report.imageSearch.cards<1||report.videoSearch.cards<1)throw new Error("News, image, or video acceptance failed: "+JSON.stringify({news:report.news,newsCategories:report.newsCategories,imageSearch:report.imageSearch,videoSearch:report.videoSearch}));
               await page.setViewportSize({width:390,height:844});
               await page.goto(report.url,{waitUntil:"domcontentloaded",timeout:45000});
               report.mobile = await page.evaluate(() => ({
@@ -124,7 +151,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     env:
-      TARGET_URL: https://everythinghub-homepage-fixed-ar5qt8cmd-rshure001-8053.vercel.app/
+      TARGET_URL: https://everythinghub-homepage-fixed-ngyc14lb2-rshure001-8053.vercel.app/
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
