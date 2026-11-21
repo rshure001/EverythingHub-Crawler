@@ -22,6 +22,7 @@ class SearchApiSmokeFreshnessTests(unittest.TestCase):
         self.assertIn('payload.get("catalogResults")', workflow)
         self.assertIn('"Rolex"', workflow)
         self.assertIn('"Las Vegas"', workflow)
+        self.assertIn('"NASA"', workflow)
         self.assertIn('item.get("preview_only") is not True', workflow)
         self.assertIn('item.get("commercial_eligible") is not False', workflow)
         self.assertIn('item.get("source_terms_status") != "not_reviewed"', workflow)
@@ -32,25 +33,31 @@ class SearchApiSmokeFreshnessTests(unittest.TestCase):
         self.assertIn('preview.get("recordsPublished") != 0', workflow)
         self.assertNotIn("VERCEL_API", workflow)
         self.assertNotIn("get_vercel", workflow)
-        self.assertNotIn("workflow_run:", workflow)
+        self.assertIn('workflows: ["Retroactive catalog inventory"]', workflow)
+        self.assertIn("types: [completed]", workflow)
+        self.assertIn("branches: [main]", workflow)
+        self.assertIn("  workflow_dispatch:", workflow)
+        self.assertNotIn("  push:", workflow)
+        self.assertIn("no relevant visible page results", workflow)
+        self.assertIn("unrelated derived subject catalog surfaced", workflow)
 
         run_block = workflow.split("run: |", 1)[1]
         script = run_block.split("python - <<'PY'", 1)[1].split("\n          PY", 1)[0]
         ast.parse(textwrap.dedent(script))
 
-    def test_search_smoke_runs_only_for_corpus_changes_or_manual_dispatch(self):
+    def test_search_smoke_runs_after_catalog_analysis_or_manual_dispatch(self):
         workflow = (
             Path(__file__).resolve().parents[1]
             / ".github"
             / "workflows"
             / "search-api-smoke.yml"
         ).read_text(encoding="utf-8")
-        push_block = workflow.split("  push:\n", 1)[1].split("  workflow_dispatch:", 1)[0]
-        self.assertIn('"public-search/manifest.json"', push_block)
-        self.assertIn('"public-search/shard-*.json.gz"', push_block)
-        self.assertNotIn('"public-search/**"', push_block)
+        self.assertIn("  workflow_run:", workflow)
+        self.assertIn('workflows: ["Retroactive catalog inventory"]', workflow)
+        self.assertIn("types: [completed]", workflow)
+        self.assertIn("branches: [main]", workflow)
         self.assertIn("  workflow_dispatch:", workflow)
-        self.assertNotIn("  workflow_run:", workflow)
+        self.assertNotIn("  push:", workflow)
         self.assertNotIn("EverythingHub Publisher", workflow)
 
 
