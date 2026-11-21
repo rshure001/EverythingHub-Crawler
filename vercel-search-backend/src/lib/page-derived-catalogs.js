@@ -380,5 +380,5 @@ function matchesPageIndexSnapshot(pageDerived,pageIndex){
   pageDerived.sourceIndexPages===pageIndex.indexedPages&&Number.isFinite(sourceTime)&&
   Number.isFinite(pageTime)&&Math.abs(sourceTime-pageTime)<=60000;
 }
-function clearPageDerivedCatalogsCache(){cache=null;}
+function clearPageDerivedCatalogsCache(){cache=null;manifestCache=null;queryCache.clear();}
 module.exports={validateManifest,validatePageDerivedCatalogs,loadPageDerivedCatalogsFromManifest,loadPageDerivedCatalogs,loadQueryScopedPageDerivedCatalogs,searchPageDerivedCatalogs,matchesPageIndexSnapshot,clearPageDerivedCatalogsCache};
