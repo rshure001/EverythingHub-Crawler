@@ -36,7 +36,6 @@ on:
     - cron: "*/5 * * * *"
   workflow_dispatch:
 permissions:
-  actions: write
   contents: write
 concurrency:
   group: everythinghub-crawler
@@ -169,11 +168,3 @@ jobs:
             # Give concurrent catalog/ledger writers a brief chance to finish.
             sleep 1
           done
-      - name: Dispatch live search verification (no GitHub Pages deployment)
-        if: steps.freshness.outputs.current == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          gh workflow run search-api-smoke.yml --ref main
-          echo "Dispatched live search verification after the committed catalog; no GitHub Pages deployment was requested."
