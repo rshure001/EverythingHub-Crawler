@@ -186,7 +186,7 @@ def discover_source(source: dict[str, Any], rows: int, max_pages: int, pause: fl
         "errors": errors, "datasets": datasets,
     }
 
-def build_catalog(rows: int = 250, max_pages: int = 20) -> dict[str, Any]:
+def build_catalog(rows: int = 250, max_pages: int = 40) -> dict[str, Any]:
     if not 1 <= rows <= 1000:
         raise ValueError("rows must be between 1 and 1000")
     if not 1 <= max_pages <= 100:
@@ -208,7 +208,7 @@ def build_catalog(rows: int = 250, max_pages: int = 20) -> dict[str, Any]:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--rows", type=int, default=250)
-    parser.add_argument("--max-pages", type=int, default=20)
+    parser.add_argument("--max-pages", type=int, default=40)
     parser.add_argument("--output", type=pathlib.Path, default=OUTPUT)
     args = parser.parse_args()
     catalog = build_catalog(args.rows, args.max_pages)
