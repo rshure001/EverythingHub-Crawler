@@ -110,6 +110,7 @@ jobs:
               report.passed = true;
             } catch (error) {
               report.error = error instanceof Error ? error.message : String(error);
+    console.error("FALLBACK_ACCEPTANCE_REPORT " + JSON.stringify(report));
               await page.screenshot({ path: "everythinghub-production-failure.png", fullPage: true }).catch(() => undefined);
             } finally {
               report.pageErrors = pageErrors;
@@ -366,8 +367,10 @@ jobs:
                   const creator = card.dataset.creator || "";
                   const small = card.querySelector("small");
                   const text = small?.textContent || "";
-                  return !license || !text.includes("Internet Archive") || !text.includes(license) ||
-                    (ccBy(license) && (!creator || !small?.querySelector("a")));
+                  const creatorLinked = [...(small?.querySelectorAll("a") || [])].some(link => link.textContent.trim() === creator);
+                  const licenseLinked = [...(small?.querySelectorAll("a") || [])].some(link => /creativecommons\\.org/.test(link.href));
+                  return !license || !text.includes("Openverse") || !text.includes(license) ||
+                    (ccBy(license) && (!creator || !creatorLinked || !licenseLinked));
                 }).length;
                 const ccByCards = cards.filter(card => ccBy(card.dataset.license)).length;
                 const ccByCardsWithLinks = cards.filter(card => ccBy(card.dataset.license) && !!card.querySelector("small a")).length;
@@ -378,7 +381,7 @@ jobs:
                     return !!image && image.complete && image.naturalWidth > 0;
                   }).length,
                   placeholders: cards.filter(card => !!card.querySelector(".image-placeholder")).length,
-                  attributionCards: cards.filter(card => (card.querySelector("small")?.textContent || "").includes("Internet Archive")).length,
+                  attributionCards: cards.filter(card => (card.querySelector("small")?.textContent || "").includes("Openverse")).length,
                   badAttribution,
                   ccByCards,
                   ccByCardsWithLinks,
