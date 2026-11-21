@@ -253,11 +253,14 @@ function searchPageDerivedCatalogs(query,network,limit=5){
   const {titleTokens,descTokens,attrTokens}=recordTokens(record);
   const titleMatch=terms.every(t=>titleTokens.has(t)),attrMatch=terms.every(t=>attrTokens.has(t));
   const contentRecord=['article','resource','media','subject'].includes(type);
-  if(contentRecord&&!contentIntent&&!titleMatch)continue;
   for(const id of record.catalog_ids){
    const c=byId.get(id);if(!c)continue;
-   const catalogTokens=new Set(tokenize([c.title,c.subject,c.source_host].join(' ')));
+   const catalogTokens=new Set(tokenize([c.title,c.subject].join(' ')));
    const catalogMatch=terms.every(t=>catalogTokens.has(t));
+   if(!contentIntent){
+    if(contentRecord&&!catalogMatch)continue;
+    if(!contentRecord&&!titleMatch&&!attrMatch&&!catalogMatch)continue;
+   }
    const searchable=new Set([...titleTokens,...attrTokens,...catalogTokens]);
    if(!contentRecord||contentIntent)for(const t of descTokens)searchable.add(t);
    if(!terms.every(t=>searchable.has(t)))continue;
@@ -287,7 +290,7 @@ function searchPageDerivedCatalogs(query,network,limit=5){
   const types=new Set(matched.map(x=>String(x.record.record_type||'').toLowerCase()));
   const recordScores=matched.slice(0,5).map(x=>x.score);
   let score=Math.max(...recordScores)+Math.min(30,recordScores.reduce((sum,value)=>sum+value,0)-Math.max(...recordScores));
-  const ct=new Set(tokenize([c.title,c.subject,c.source_host].join(' ')));
+  const ct=new Set(tokenize([c.title,c.subject].join(' '));
   const contentCatalog=['article','resource','media','subject'].includes(String(c.record_type||'').toLowerCase());
   const catalogMatch=terms.every(t=>ct.has(t));
   if(catalogMatch)score+=contentCatalog&&!contentIntent?25+5*terms.length:100+10*terms.length;
