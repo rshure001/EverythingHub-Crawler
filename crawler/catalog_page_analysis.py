@@ -660,20 +660,15 @@ def _reconcile_page_record_provenance(page_rows: list[dict], records) -> int:
             source_page_ids = record.get("source_page_ids")
             if not isinstance(source_page_ids, list):
                 source_page_ids = []
-            source_urls = record.get("source_urls")
-            if not isinstance(source_urls, list):
-                source_urls = [source_urls] if isinstance(source_urls, str) and source_urls else []
             changed = False
             if page_id not in source_page_ids:
                 source_page_ids.append(page_id)
                 changed = True
-            if page_url and page_url not in source_urls:
-                source_urls.append(page_url)
-                changed = True
 
+            # A source page ID is provenance for the record, but its page URL
+            # must not be mixed into source_urls when a structured item has a
+            # distinct direct record URL.
             record["source_page_ids"] = sorted(set(source_page_ids))
-            record["source_urls"] = sorted(set(source_urls))
-            record["source_url"] = record["source_urls"][0] if record["source_urls"] else ""
             record["source_page_count"] = len(record["source_page_ids"])
             if changed:
                 repaired += 1

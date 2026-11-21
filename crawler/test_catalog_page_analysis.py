@@ -1415,13 +1415,14 @@ class CatalogInventoryTriggerTests(unittest.TestCase):
         page_id = stable_id("page", url)
         entity_key = "subject|nasa|" + url
         record_id = stable_id("record", entity_key)
+        record_url = "https://example.org/entities/nasa"
         record = {
             "record_id": record_id,
             "entity_id": stable_id("entity", entity_key),
             "canonical_entity_key": entity_key,
             "record_type": "subject",
             "title": "NASA",
-            "source_urls": [],
+            "source_urls": [record_url],
             "source_page_ids": [],
             "catalog_ids": [],
             "last_seen_at": None,
@@ -1433,8 +1434,8 @@ class CatalogInventoryTriggerTests(unittest.TestCase):
 
         self.assertEqual(repaired, 1)
         self.assertEqual(record["source_page_ids"], [page_id])
-        self.assertEqual(record["source_urls"], [url])
-        self.assertEqual(record["source_url"], url)
+        self.assertEqual(record["source_urls"], [record_url])
+        self.assertEqual(record["source_url"], record_url)
         self.assertEqual(record["source_page_count"], 1)
 
     def test_reconcile_fails_closed_for_missing_record_identity(self):
