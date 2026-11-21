@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     env:
-      TARGET_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-site
+      TARGET_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-publish-static
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -47,6 +47,7 @@ jobs:
             try {
               const response = await page.goto(report.url, { waitUntil: "networkidle", timeout: 60000 });
               report.httpStatus = response?.status();
+              report.contentType = response?.headers()['content-type'] || '';
               report.title = await page.title();
               const artwork = page.locator(".art > img").first();
               await artwork.waitFor({ state: "visible", timeout: 20000 });
@@ -64,7 +65,7 @@ jobs:
                 nodes.map(node => node.dataset.mode).sort()
               );
               const expected = ["business","images","news","places","research","shopping","videos","web"];
-              if (!response?.ok() || !report.title.includes("Everything Hub") ||
+              if (!response?.ok() || !report.contentType.toLowerCase().startsWith('text/html') || !report.title.includes("Everything Hub") ||
                   report.searchFormCount !== 1 || report.searchInputCount !== 1 ||
                   report.categoryCount !== 8 || JSON.stringify(report.categoryModes) !== JSON.stringify(expected) ||
                   report.approvedArtwork.naturalWidth < 100) {
