@@ -9,6 +9,8 @@ on:
       - "crawler/test_catalog_source_policy.py"
       - "crawler/test_catalog_host_probe.py"
       - "data/host-catalog-candidates.json"
+      - "data/page-derived-catalogs/source-host-review-queue.json"
+      - "data/page-derived-catalogs/manifest.json"
       - ".github/workflows/catalog-host-probe.yml"
   workflow_dispatch:
     inputs:
@@ -63,7 +65,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           for attempt in 1 2 3; do
-            git add -f data/host-catalog-probes.json
+            git add -f data/host-catalog-probes.json data/catalog-landing-page-robots.json
             if git diff --cached --quiet; then
               echo "No probe evidence changes."
               exit 0
