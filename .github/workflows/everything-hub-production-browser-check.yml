@@ -168,7 +168,7 @@ jobs:
             const consoleErrors = [];
             page.on("pageerror", error => pageErrors.push(error.message));
             page.on("console", message => { if (message.type() === "error") consoleErrors.push(message.text()); });
-            const report = { url: process.env.TARGET_URL, startedAt: new Date().toISOString(), searches: {}, categorySearches: {}, newsCategories: {}, coreLinks: {} };
+            const report = { url: process.env.TARGET_URL, backendUrl: "https://everythinghub-search-backend.vercel.app/", deploymentMode: "free-vercel-fallback", startedAt: new Date().toISOString(), searches: {}, categorySearches: {}, newsCategories: {}, coreLinks: {} };
             report.apiProbes = {};
             for (const query of ["Rolex","Las Vegas","NASA"]) {
               const apiUrl = new URL("https://everythinghub-search-backend.vercel.app/api/search");
