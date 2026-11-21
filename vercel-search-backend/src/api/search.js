@@ -10,6 +10,16 @@ const MAX_OFFSET = 5000;
 const BING_CACHE_TTL_MS = 120000;
 const MAX_BING_BYTES = 1000000;
 const bingCache = new Map();
+const CATALOG_LOAD_BUDGET_MS = 4500;
+const PAGE_DERIVED_LOAD_BUDGET_MS = 7000;
+
+function withTimeout(promise, milliseconds, code) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(code)), milliseconds);
+  });
+  return Promise.race([Promise.resolve(promise), timeout]).finally(() => clearTimeout(timer));
+}
 
 function fetchText(url) {
   return new Promise((resolve, reject) => {
@@ -68,6 +78,20 @@ function safeCatalogError(error) {
   return code || 'catalog_unavailable';
 }
 
+function mergeCatalogResults(externalCatalogResults, pageDerivedCatalogResults, limit = 5) {
+  const max = Number.isInteger(limit) ? Math.max(1, Math.min(5, limit)) : 5;
+  const seen = new Set();
+  const merged = [];
+  for (const item of [...(externalCatalogResults || []), ...(pageDerivedCatalogResults || [])]) {
+    const id = String(item && item.catalog_id || '').trim();
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    merged.push(item);
+    if (merged.length >= max) break;
+  }
+  return merged;
+}
+
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -91,15 +115,17 @@ module.exports = async function handler(req, res) {
     return res.status(400).json({ error: 'pagination_out_of_range' });
   }
   const lane = String(params.get('tentacle') || params.get('lane') || '').trim().toLowerCase();
+  const externalCatalogResults = searchExternalCatalogs(query);
+  const externalCatalogStats = getExternalCatalogStats();
   const [catalogResult, bingResult, pageDerivedResult] = await Promise.allSettled([
-    loadCatalog(), loadBing(query), loadPageDerivedCatalogs(query)
+    withTimeout(loadCatalog(), CATALOG_LOAD_BUDGET_MS, 'catalog_load_budget_exceeded'),
+    loadBing(query),
+    withTimeout(loadPageDerivedCatalogs(query), PAGE_DERIVED_LOAD_BUDGET_MS, 'page_catalog_load_budget_exceeded')
   ]);
   const bingResults = bingResult.status === 'fulfilled' ? bingResult.value : [];
   const pageDerivedNetwork = pageDerivedResult.status === 'fulfilled' ? pageDerivedResult.value : null;
-  const externalCatalogResults = searchExternalCatalogs(query);
-  const externalCatalogStats = getExternalCatalogStats();
   let pageDerivedCatalogResults = pageDerivedNetwork ? searchPageDerivedCatalogs(query, pageDerivedNetwork, 5) : [];
-  let catalogResults = [...externalCatalogResults, ...pageDerivedCatalogResults].slice(0, 5);
+  let catalogResults = mergeCatalogResults(externalCatalogResults, pageDerivedCatalogResults);
   const catalogPreview = pageDerivedNetwork ? {
     status: 'freshness-unverified',
     previewOnly: true,
@@ -130,7 +156,7 @@ module.exports = async function handler(req, res) {
       catalogPreview.status = 'stale-candidate-preview';
       catalogPreview.freshnessMatch = false;
       pageDerivedCatalogResults = pageDerivedCatalogResults.map(item => ({ ...item, snippet: item.snippet + ' Current page-index freshness could not be verified.', description: item.snippet + ' Current page-index freshness could not be verified.' }));
-      catalogResults = [...externalCatalogResults, ...pageDerivedCatalogResults].slice(0, 5);
+      catalogResults = mergeCatalogResults(externalCatalogResults, pageDerivedCatalogResults);
     }
     const catalogError = safeCatalogError(catalogResult.reason);
     console.warn('[catalog-load-failed]', catalogError);
@@ -195,3 +221,6 @@ module.exports = async function handler(req, res) {
   res.setHeader('X-Index-Updated-At', String(catalog.updatedAt));
   return res.status(200).json(payload);
 };
+
+module.exports._test = { mergeCatalogResults };
+
