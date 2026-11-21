@@ -162,24 +162,61 @@ jobs:
             exit 0
           fi
           git commit -m "Publish validated page-derived catalog candidates"
-          for attempt in 1 2 3; do
+          dispatch_search_smoke() {
+            if gh workflow run search-api-smoke.yml --ref main; then
+              echo "Dispatched first-party catalog search smoke test after publishing the new catalog snapshot."
+            else
+              echo "::warning::Catalog snapshot committed, but first-party search smoke dispatch failed."
+            fi
+          }
+          for attempt in 1 2 3 4; do
             if git push origin HEAD:main; then
-              if gh workflow run search-api-smoke.yml --ref main; then
-                echo "Dispatched first-party catalog search smoke test after publishing the new catalog snapshot."
-              else
-                echo "::warning::Catalog snapshot committed, but first-party search smoke dispatch failed."
-              fi
+              dispatch_search_smoke
               exit 0
             fi
-            echo "Main advanced during publish; rebasing the validated catalog commit (attempt $attempt)."
+
+            local_head="$(git rev-parse HEAD)"
+            base_commit="$(git rev-parse HEAD^)"
             git fetch origin main
-            if ! git rebase origin/main; then
-              git rebase --abort || true
-              echo "::error::Catalog publication conflicted with concurrent main changes; no remote data was overwritten."
+            remote_head="$(git rev-parse origin/main)"
+
+            if [ "$remote_head" = "$local_head" ]; then
+              echo "Catalog snapshot is already present on main."
+              dispatch_search_smoke
+              exit 0
+            fi
+            if [ "$remote_head" = "$base_commit" ]; then
+              echo "::error::Catalog push failed but main did not advance; no concurrency retry is appropriate."
               exit 1
             fi
+            if ! git merge-base --is-ancestor "$base_commit" "$remote_head"; then
+              echo "::error::Remote main does not descend from the analyzed base; refusing an automatic reset."
+              exit 1
+            fi
+
+            git reset --hard origin/main
+            if [ "$attempt" -eq 4 ]; then
+              echo "::error::Main kept advancing; stopped after three bounded catalog rebuilds."
+              exit 1
+            fi
+
+            echo "Main advanced during catalog publication; rebuilding the complete validated snapshot from the new main tip (rebuild $attempt of 3)."
+            python crawler/catalog_retro_discovery.py
+            python crawler/catalog_page_analysis.py --query Rolex --query "Las Vegas"
+            python crawler/catalog_host_review_queue.py
+            python crawler/catalog_page_analysis.py --validate-only
+            python crawler/catalog_host_review_queue.py --validate-only
+            python project/ledger.py --record-page-derived-catalog-analysis
+            git add -f data/host-catalog-candidates.json data/page-catalog-seeds.json.gz data/page-derived-catalogs data/page-derived-catalogs/source-host-review-queue.json data/project-ledger.json
+            git rm -f --ignore-unmatch data/page-catalog-seeds.json
+            if git diff --cached --quiet; then
+              echo "Latest main already contains this validated catalog snapshot."
+              dispatch_search_smoke
+              exit 0
+            fi
+            git commit -m "Publish validated page-derived catalog candidates"
           done
-          echo "Unable to publish validated catalog analysis after three rebase attempts."
+          echo "::error::Unable to publish validated page-derived catalog analysis after three bounded rebuilds."
           exit 1
       - name: Upload catalog analysis preview from non-main branches
         if: github.ref != 'refs/heads/main'
