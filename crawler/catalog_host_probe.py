@@ -10,11 +10,13 @@ import argparse, hashlib, json, time, urllib.error, urllib.parse, urllib.request
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from catalog_source_policy import SourcePolicyError, authorize_source_url, policy_for_host, request_source_bytes
+from catalog_host_review_queue import validate_review_queue
 
 ROOT = Path(__file__).resolve().parents[1]
 INPUT = ROOT / "data" / "host-catalog-candidates.json"
 OUTPUT = ROOT / "data" / "host-catalog-probes.json"
 LANDING_QUEUE = ROOT / "data" / "page-derived-catalogs" / "source-host-review-queue.json"
+CATALOG_MANIFEST = ROOT / "data" / "page-derived-catalogs" / "manifest.json"
 LANDING_ROBOTS_OUTPUT = ROOT / "data" / "catalog-landing-page-robots.json"
 ROBOTS_RECHECK_SECONDS = 86_400
 MAX_BYTES = 1_500_000
@@ -150,6 +152,7 @@ def run_landing_page_robots(
     *,
     limit: int = 30,
     recheck_seconds: int = ROBOTS_RECHECK_SECONDS,
+    manifest_path: Path | None = None,
 ) -> dict:
     """Robots-only preflight for preapproved catalog landing URLs; never fetch pages."""
     if not 0 <= limit <= 100 or recheck_seconds < 0:
@@ -199,6 +202,12 @@ def run_landing_page_robots(
     candidates = queue.get("candidate_urls")
     if not isinstance(candidates, list):
         raise ValueError("source review candidate_urls must be an array")
+
+    manifest_path = manifest_path or CATALOG_MANIFEST
+    if not manifest_path.is_file():
+        raise ValueError("catalog manifest is required to validate the source review backlog")
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    validate_review_queue(queue, manifest)
 
     previous = {}
     if output_path.is_file():
@@ -279,7 +288,7 @@ def run_landing_page_robots(
     }
 
 
-def run(input_path: Path, output_path: Path, limit: int, offset: int, pause: float, *, landing_queue_path: Path | None = None, landing_output_path: Path | None = None, landing_limit: int = 30, robots_recheck_seconds: int = ROBOTS_RECHECK_SECONDS) -> dict:
+def run(input_path: Path, output_path: Path, limit: int, offset: int, pause: float, *, landing_queue_path: Path | None = None, landing_output_path: Path | None = None, landing_manifest_path: Path | None = None, landing_limit: int = 30, robots_recheck_seconds: int = ROBOTS_RECHECK_SECONDS) -> dict:
     inventory = json.loads(input_path.read_text(encoding="utf-8"))
     hosts = inventory.get("host_candidates", [])
     ordered = sorted(hosts, key=lambda x: (-sum((x.get("hint_counts") or {}).values()), -x.get("source_pages", 0), x.get("host", "")))
@@ -355,4 +364,4 @@ if __name__ == "__main__":
         parser.error("limit must be 1..100, offset >= 0, pause 0..5")
     if not 0 <= args.landing_limit <= 100 or args.robots_recheck_seconds < 0:
         parser.error("landing-limit must be 0..100 and robots-recheck-seconds non-negative")
-    run(args.input, args.output, args.limit, args.offset, args.pause, landing_queue_path=LANDING_QUEUE, landing_output_path=LANDING_ROBOTS_OUTPUT, landing_limit=args.landing_limit, robots_recheck_seconds=args.robots_recheck_seconds)
+    run(args.input, args.output, args.limit, args.offset, args.pause, landing_queue_path=LANDING_QUEUE, landing_output_path=LANDING_ROBOTS_OUTPUT, landing_manifest_path=CATALOG_MANIFEST, landing_limit=args.landing_limit, robots_recheck_seconds=args.robots_recheck_seconds)
