@@ -9,9 +9,10 @@ on:
     paths:
       - 'vercel-search-backend/**'
       - '.github/workflows/validate-vercel-search.yml'
-  schedule:
-    # Stagger lightweight production checks away from GitHub's quarter-hour peaks; completion also wakes the crawler watchdog.
-    - cron: '5,20,35,50 * * * *'
+  workflow_run:
+    workflows: ["Retroactive catalog inventory"]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read
@@ -26,8 +27,8 @@ jobs:
       - name: Run search integrity and pagination tests
         run: node --test vercel-search-backend/test/*.test.js
   live-smoke:
-    # Production freshness is monitored on main and by the schedule; do not fail code PRs because the independent live catalog is stale.
-    if: github.event_name != 'pull_request'
+    # Run production catalog checks only after a successful catalog publication or an explicit manual dispatch.
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
@@ -121,6 +122,53 @@ jobs:
             duplicateUrlsAcrossPages: overlap.length,
             catalogSha256: first.indexSha256
           }, null, 2));
+          NODE
+
+      - name: Verify separate Rolex, Las Vegas and NASA link-only catalogs
+        env:
+          BASE: https://everythinghub-search-backend.vercel.app
+        run: |
+          set -euo pipefail
+          for query in Rolex "Las Vegas" NASA; do
+            key=$(printf '%s' "$query" | tr '[:upper:] ' '[:lower:]_')
+            curl --silent --show-error --fail --max-time 20 -G "$BASE/api/search" \
+              --data-urlencode "q=$query" --data-urlencode "limit=10" -o "/tmp/external-$key.json"
+          done
+          node <<'NODE'
+          const fs = require('node:fs');
+          const expected = [
+            { key: 'rolex', id: 'external:rolex:official-collections', terms: ['Submariner', 'Datejust'] },
+            { key: 'las_vegas', id: 'external:las-vegas:official-resources', terms: ['Business License', 'Things to Do'] },
+            { key: 'nasa', id: 'external:nasa:official-resources', terms: ['NASA Earthdata Search', 'NASA Image and Video Library'] }
+          ];
+          for (const item of expected) {
+            const body = JSON.parse(fs.readFileSync('/tmp/external-' + item.key + '.json', 'utf8'));
+            const catalog = body.catalogResults?.[0];
+            const matched = (catalog?.matched_records || []).map(record => record.title).join(' ');
+            if (
+              body.status !== 'ok' ||
+              body.indexStatus !== 'external-link-only' ||
+              !Array.isArray(body.results) || body.results.length !== 0 ||
+              !Array.isArray(body.catalogResults) || body.catalogResults.length !== 1 ||
+              !Array.isArray(body.externalCatalogResults) || body.externalCatalogResults.length !== 1 ||
+              catalog.catalog_id !== item.id ||
+              catalog.source_kind !== 'curated_external_link_directory' ||
+              catalog.preview_only !== true ||
+              catalog.commercial_eligible !== false ||
+              catalog.source_page_count !== 0 ||
+              catalog.source_terms_status !== 'link_only_no_content_fetched' ||
+              catalog.rights_status !== 'link_only_not_cleared_for_redistribution' ||
+              catalog.record_count !== 6 ||
+              catalog.matched_record_count !== 6 ||
+              !item.terms.every(term => matched.includes(term)) ||
+              body.catalogPreview?.externalCatalogCount !== 3 ||
+              body.catalogPreview?.externalCatalogRecordCount !== 18 ||
+              !body.providers?.includes('Everything Hub External Catalogs')
+            ) {
+              throw new Error('External link-only catalog contract failed for ' + item.key + ': ' + JSON.stringify(body));
+            }
+            console.log(JSON.stringify({ query: item.key, catalogId: catalog.catalog_id, matchedRecords: catalog.matched_record_count, totalExternalCatalogs: body.catalogPreview.externalCatalogCount, totalExternalLinks: body.catalogPreview.externalCatalogRecordCount, rightsStatus: catalog.rights_status }));
+          }
           NODE
 
   video-source-live-smoke:
