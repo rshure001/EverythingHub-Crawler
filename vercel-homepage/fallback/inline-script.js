@@ -94,7 +94,7 @@ function renderImages(data,q){
     const img=document.createElement("img");img.src=safeUrl(item.thumbnail);img.alt=item.title||q;img.loading=index<8?"eager":"lazy";img.decoding="async";img.referrerPolicy="no-referrer";
     img.onerror=()=>{const placeholder=document.createElement("div");placeholder.className="image-placeholder";placeholder.textContent="Preview unavailable";img.replaceWith(placeholder);};
     link.append(img);
-    const title=document.createElement("a");title.href=safeUrl(item.url);title.target="_blank";title.rel="noopener noreferrer";title.textContent=item.title||"Image";
+    const title=document.createElement("a");title.className="video-title";title.href=safeUrl(item.url);title.target="_blank";title.rel="noopener noreferrer";title.textContent=item.title||"Image";
     const small=document.createElement("small");small.append(document.createTextNode("Source: "+String(item.source||"Internet Archive")));
     if(item.creator){
       if(safeUrl(item.creatorUrl)!=="#"){const creatorLink=document.createElement("a");creatorLink.href=safeUrl(item.creatorUrl);creatorLink.target="_blank";creatorLink.rel="noopener noreferrer";creatorLink.textContent=item.creator;small.append(creatorLink);}
