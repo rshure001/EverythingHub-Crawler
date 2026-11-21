@@ -12,7 +12,12 @@ class CatalogSourcePolicyTests(unittest.TestCase):
         self.assertIsNone(policy.policy_for_host("unknown.example"))
         self.assertFalse(policy.policy_for_host("data.gov.au")["discovery_allowed"])
         self.assertFalse(policy.policy_for_host("openlibrary.org")["discovery_allowed"])
-        self.assertTrue(policy.policy_for_host("catalog.data.gov")["discovery_allowed"])
+        self.assertFalse(policy.policy_for_host("catalog.data.gov")["discovery_allowed"])
+        swiss = policy.policy_for_host("opendata.swiss")
+        self.assertTrue(swiss["discovery_allowed"])
+        self.assertEqual(swiss["terms_status"], "reviewed_per_dataset")
+        self.assertEqual(swiss["max_requests_per_run"], 40)
+        self.assertEqual(swiss["min_interval_seconds"], 2.0)
 
     def test_unreviewed_host_is_rejected_before_robots_fetch(self):
         with patch.object(policy, "load_robots_policy") as load_robots:
@@ -23,14 +28,14 @@ class CatalogSourcePolicyTests(unittest.TestCase):
     def test_path_outside_allowlist_is_rejected_before_robots_fetch(self):
         with patch.object(policy, "load_robots_policy") as load_robots:
             with self.assertRaises(policy.SourcePolicyError):
-                policy.authorize_source_url("https://catalog.data.gov/openapi.json")
+                policy.authorize_source_url("https://opendata.swiss/openapi.json")
             load_robots.assert_not_called()
 
     def test_robots_denial_fails_closed(self):
         with patch.object(policy, "load_robots_policy", return_value=object()), \
              patch.object(policy, "robots_can_fetch", return_value=False):
             with self.assertRaises(policy.SourcePolicyError):
-                policy.authorize_source_url("https://catalog.data.gov/api/3/action/package_search")
+                policy.authorize_source_url("https://opendata.swiss/api/3/action/package_search")
 
     def test_rate_delay_uses_strictest_source_and_robots_interval(self):
         parser = object()
