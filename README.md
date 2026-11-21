@@ -1,5 +1,13 @@
 # Everything Hub Crawler
 
+## Current verified operations checkpoint — 2026-11-21 17:46 UTC
+
+- The latest committed public-search manifest contains **157,393 unique pages across 606 shards**.
+- Latest completed crawler run (#348) attempted **382** fetches and indexed **337** new unique records in **432.96 seconds**. The manifest interval was 1,503 seconds, giving an elapsed wall-clock rate of **13.45 new unique pages/minute** (807/hour equivalent).
+- The worker pool was configured for 250 threads, but the run reached only **31 simultaneous in-flight requests**. This is the immediate measured concurrency gap; increasing the configured thread ceiling alone is not the fix. The run also reported 45 robots-policy fetch failures, 94 robots-blocked URL checks, and 2 rate-limited responses. Robots failures remain fail-closed.
+- The durable frontier held **9,421 queued URLs** after the run. The next throughput work should diversify eligible host supply and measure why only 31 distinct hosts were simultaneously serviceable, without bypassing robots.txt, host pacing, or provider limits.
+- The catalog registry has not been rebuilt against this 157,393-page manifest yet; the previous report remains at 157,056 source pages and **zero verified or published catalogs**.
+
 ## Page-derived catalog analysis
 
 - `crawler/catalog_page_analysis.py` analyzes the canonical public index incrementally by host and produces stable catalog, entity, record, source-page, and media-reference IDs.
@@ -32,14 +40,14 @@ Independent, polite crawler for the Everything Hub search project.
 
 ## Current configuration
 - 51 curated public starting sites in `crawler/seeds.txt` (a newly assembled set, not a recovered historical list).
-- Up to 16 concurrent workers, with at most one request per hostname in each batch; a batch never contains two URLs for the same host.
+- Up to 250 concurrent worker threads, with at most one in-flight page request per hostname; the scheduler fills available worker slots as distinct hosts become eligible. Effective concurrency is measured per run and is not assumed to equal the configured ceiling.
 - A 1-second minimum host interval, increased when robots.txt declares a longer Crawl-delay or Request-rate.
-- A six-minute run budget; next-allowed host timestamps are persisted with the frontier across scheduled runs.
-- Persistent frontier with a 50,000 discovered-URL ceiling; host pacing is keyed by hostname across HTTP and HTTPS.
+- A 420-second crawl budget (seven minutes); next-allowed host timestamps are persisted with the frontier across scheduled runs.
+- Persistent frontier with a 100,000 pending-URL ceiling; host pacing is keyed by hostname across HTTP and HTTPS.
 - Same-host redirects are followed only after the target URL passes robots.txt; cross-host redirects are blocked. A strict 8,000-request fetch cap is enforced per run within a six-minute crawl budget; requests remain single-flight per host and honor robots-derived crawl-delay and request-rate directives. Sitemap requests are separately bounded.
 - Public search shards are validated against the canonical index before each crawler commit. New manifests include a SHA-256 digest for every shard; the validator checks the digest as well as byte size, page count, URL uniqueness, and exact canonical-index coverage. Legacy manifests without digest metadata remain readable during rollout.
 - Maximum link depth: 3.
-- Same-host HTML link discovery plus bounded sitemap discovery from robots.txt declarations: up to 3 seed hosts per run, one declared sitemap and up to 2 same-host child sitemaps per host, at most 100 page URLs per host, and a 1 MB sitemap-response cap. Hosts are rechecked after 7 days; robots failures are retried after 1 hour. The crawler honors `Retry-After` on 429/503 responses, applies conservative cooldowns to transient failures, and requeues retryable URLs in the durable frontier.
+- Same-host HTML link discovery plus bounded sitemap discovery from robots.txt declarations: up to 174 seed hosts per run, one declared sitemap and up to 4 same-host child sitemaps per host, at most 500 page URLs per host, and a 2 MB sitemap-response cap. Hosts are rechecked after 7 days; robots failures are retried after 1 hour. The crawler honors `Retry-After` on 429/503 responses, applies conservative cooldowns to transient failures, and requeues retryable URLs in the durable frontier.
 - Checks each site's `robots.txt`; if robots rules cannot be read, the crawler fails closed for that host. Also honors applicable HTML `meta name="robots"` and HTTP `X-Robots-Tag` `noindex`/`nofollow`/`nosnippet` directives, including crawler-specific directives; `max-snippet:N` limits stored text and descriptions; `rel="nofollow"` links are not added to the frontier.
 - Stores normalized page records in `data/index.json` and resumable frontier state in `data/frontier.json`.
 
@@ -54,7 +62,7 @@ python crawler/report.py
 ```
 
 ## Automation and observability
-GitHub Actions schedules the crawler every five minutes (`*/5 * * * *`) and supports manual dispatch. A repository concurrency group serializes crawler runs so a new run cannot overlap an active crawl; at most one pending run is retained by GitHub Actions. Each run validates configuration and tests, allows up to 16 workers across distinct hosts, enforces the six-minute crawl budget and 1,600-page hard cap, rebuilds and verifies the public search shards, and publishes a compact health report. Per-host pacing remains at least one second and increases for robots.txt `Crawl-delay` or `Request-rate`; host timestamps persist in the frontier, and `Retry-After`/transient cooldowns are requeued rather than bypassed. A separate watchdog checks every 15 minutes and also runs after crawler/diagnostic workflow completion; it validates manifest freshness before deciding whether to dispatch a recovery crawl. The isolated importer smoke test runs every 15 minutes against a temporary PostgreSQL service and never connects to production. Ordinary crawler-source pushes trigger validation only; editing the crawler workflow itself triggers one bounded crawl. The live-diagnostics workflow checks the homepage, browser endpoint, database-backed search, independent search fallback, and media APIs hourly at minute 17 UTC and after completed crawler runs. GitHub may delay scheduled runs.
+GitHub Actions schedules the crawler every five minutes (`*/5 * * * *`) and supports manual dispatch. A repository concurrency group serializes crawler runs so a new run cannot overlap an active crawl; at most one pending run is retained by GitHub Actions. Each run validates configuration and tests, allows up to 250 workers across distinct hosts, enforces the 420-second crawl budget and 12,000-fetch hard cap, rebuilds and verifies the public search shards, and publishes a compact health report. Per-host pacing remains at least one second and increases for robots.txt `Crawl-delay` or `Request-rate`; host timestamps persist in the frontier, and `Retry-After`/transient cooldowns are requeued rather than bypassed. A separate watchdog checks every 15 minutes and also runs after crawler/diagnostic workflow completion; it validates manifest freshness before deciding whether to dispatch a recovery crawl. The isolated importer smoke test runs every 15 minutes against a temporary PostgreSQL service and never connects to production. Ordinary crawler-source pushes trigger validation only; editing the crawler workflow itself triggers one bounded crawl. The live-diagnostics workflow checks the homepage, browser endpoint, database-backed search, independent search fallback, and media APIs hourly at minute 17 UTC and after completed crawler runs. GitHub may delay scheduled runs.
 
 The health report distinguishes total indexed records, unique hosts, discovered URLs, queued URLs, fetched pages, parsed pages, depth distribution, robots-policy exclusions, and noindex/nofollow exclusions. Attempted fetches are not counted as indexed pages.
 
