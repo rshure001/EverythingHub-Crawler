@@ -435,6 +435,8 @@ class PageDerivedCatalogAnalysisTests(unittest.TestCase):
         hits = search_catalog_network("Rolex", analysis)
         self.assertEqual({x["catalog_id"] for x in hits}, {"subject-catalog", "article-catalog"})
         self.assertTrue(all(x["matched_records"] for x in hits))
+        self.assertTrue(all(x["relevance_class"] == "related_mention" for x in hits))
+        self.assertTrue(all(x["query_intent"] == "general" for x in hits))
 
     def test_people_are_sentence_does_not_create_person_records(self):
         result = analyze_pages([{
@@ -486,6 +488,45 @@ class PageDerivedCatalogAnalysisTests(unittest.TestCase):
         }
         results = search_catalog_network("Las Vegas", analysis)
         self.assertEqual(results[0]["catalog_id"], "places")
+
+    def test_location_query_prefers_place_and_directory_over_large_article_collection(self):
+        article_ids = [f"article-{index}" for index in range(5)]
+        analysis = {
+            "catalogs": [
+                {"catalog_id": "articles", "catalog_type": "knowledge_base",
+                 "record_type": "article", "title": "National Geographic Articles",
+                 "subject": "articles", "record_ids": article_ids},
+                {"catalog_id": "places", "catalog_type": "geographic",
+                 "record_type": "place", "title": "BLM Places",
+                 "subject": "places", "record_ids": ["place"]},
+                {"catalog_id": "organizations", "catalog_type": "organization_directory",
+                 "record_type": "organization", "title": "BLM Organizations",
+                 "subject": "offices", "record_ids": ["organization"]},
+            ],
+            "records": [
+                *[
+                    {"record_id": record_id, "record_type": "article",
+                     "title": title, "description": "A Las Vegas travel article.", "attributes": {}}
+                    for record_id, title in zip(article_ids, (
+                        "Best places to stay in Las Vegas", "Las Vegas in Photos",
+                        "Las Vegas Must-Dos", "A guide to Las Vegas", "Las Vegas resorts",
+                    ))
+                ],
+                {"record_id": "place", "record_type": "place", "title": "Las Vegas Strip",
+                 "description": "A destination in Las Vegas.", "attributes": {}},
+                {"record_id": "organization", "record_type": "organization",
+                 "title": "Las Vegas Field Office", "description": "Local public office.",
+                 "attributes": {}},
+            ],
+        }
+        hits = search_catalog_network("Las Vegas", analysis)
+        self.assertEqual([item["catalog_id"] for item in hits[:3]], [
+            "places", "organizations", "articles"
+        ])
+        self.assertEqual(hits[0]["relevance_class"], "typed_location_match")
+        self.assertEqual(hits[1]["relevance_class"], "typed_location_match")
+        self.assertEqual(hits[2]["relevance_class"], "related_mention")
+        self.assertEqual(hits[0]["relevance_label"], "Place or local directory match")
 
     def test_duplicate_canonical_source_pages_are_counted_once_and_robots_denial_wins(self):
         pages = [
