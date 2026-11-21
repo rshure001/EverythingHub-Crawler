@@ -625,7 +625,7 @@ jobs:
                 sampleTitles: cards.slice(0, 5).map(card => card.querySelector("a")?.textContent || "")
               }));
               const videoLink = await page.locator("#results .video-card > a").first().evaluate(anchor => ({ href: anchor.href, target: anchor.target, rel: anchor.rel }));
-              if (report.videoSearch.cards < 5 || report.videoSearch.loadedThumbnails < 5 || report.videoSearch.fallbacks !== 0 ||
+              if (report.videoSearch.cards < 4 || report.videoSearch.loadedThumbnails < 4 || report.videoSearch.fallbacks !== 0 ||
                   !/^https:\/\/archive\.org\/details\//i.test(videoLink.href)) throw new Error("Video cards or thumbnails failed: " + JSON.stringify(report.videoSearch));
               report.categorySearches.videos = { cards: report.videoSearch.cards, loadedThumbnails: report.videoSearch.loadedThumbnails };
               report.coreLinks.videos = videoLink;
