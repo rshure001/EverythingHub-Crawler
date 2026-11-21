@@ -31,7 +31,7 @@ on:
       - "crawler/hourly_production.py"
       - "crawler/test_hourly_production.py"
   schedule:
-    # Run every 10 minutes on staggered minutes; the watchdog recovers delayed or missed scheduled runs.
+    # Run every 10 minutes on staggered minutes; keep the independent public search index fresh and let the watchdog recover delayed or missed runs.
     - cron: "3,13,23,33,43,53 * * * *"
   workflow_dispatch:
 permissions:
