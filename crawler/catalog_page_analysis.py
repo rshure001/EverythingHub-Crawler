@@ -1495,12 +1495,30 @@ def _write_gzip(path: Path, payload: dict) -> tuple[int, str]:
     return len(compressed), hashlib.sha256(compressed).hexdigest()
 
 
+def _singular_search_token(token: str) -> str | None:
+    if token in {"news", "series", "species", "politics", "physics", "mathematics", "economics", "ethics"}:
+        return None
+    if token.endswith("ies") and len(token) > 4:
+        return token[:-3] + "y"
+    if token.endswith(("ches", "shes", "sses", "xes", "zes", "oes")) and len(token) > 4:
+        return token[:-2]
+    if token.endswith("s") and len(token) > 3 and not token.endswith(("ss", "us", "is", "as", "os", "ws", "ics")):
+        return token[:-1]
+    return None
+
+
 def _search_tokens(value: object) -> set[str]:
     text = unicodedata.normalize("NFKC", str(value or "")).casefold()
-    return {
+    raw_tokens = {
         token for token in re.findall(r"[^\W_]+", text, flags=re.UNICODE)
         if len(token) >= 2 and token not in STOP_TOKENS
     }
+    tokens = set(raw_tokens)
+    for token in raw_tokens:
+        singular = _singular_search_token(token)
+        if singular and len(singular) >= 2 and singular not in STOP_TOKENS:
+            tokens.add(singular)
+    return tokens
 
 
 def build_search_index(analysis: dict) -> dict[str, dict]:
