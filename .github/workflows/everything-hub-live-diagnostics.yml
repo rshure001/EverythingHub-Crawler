@@ -77,7 +77,7 @@ jobs:
               custom_domain_status="WARNING — response did not match the approved homepage"
             fi
           else
-            echo "::warning::everythinghub.ink is not reachable; canonical Vercel deployment remains the verified publishing target."
+            echo "::warning::everythinghub.ink is not reachable; the in-house AppDeploy deployment remains the verified publishing target."
           fi
           echo "=== CUSTOM EVERYTHING HUB BROWSER ==="
           curl -fsSL -D /tmp/browser-headers.txt "$BASE/everything-hub-browser" -o /tmp/browser.html
