@@ -49,6 +49,6 @@ test("catalog result merge deduplicates stable IDs and respects the five-card li
 
 test("external catalog matches do not short-circuit the crawler or page-derived search", () => {
   assert.doesNotMatch(source, /earlyExternalCatalogResults/);
-  assert.match(source, /loadCatalog\(\), loadBing\(query\), loadPageDerivedCatalogs\(\)/);
+  assert.match(source, /loadCatalog\(\), loadBing\(query\), loadPageDerivedCatalogs\(query\)/);
   assert.match(source, /mergeCatalogResults\(externalCatalogResults, pageDerivedCatalogResults\)/);
 });
