@@ -21,7 +21,7 @@ from safe_http import UnsafeTargetError, build_pinned_opener
 from media_discovery import discover_media, merge_media_candidates
 from seed_coverage import DEFAULT_SEED_RETRY_SECONDS, schedule_missing_seed_urls
 from index_store import load_index, save_index
-from catalog_frontier import load_catalog_seed_urls
+from catalog_frontier import load_catalog_seed_urls, plan_catalog_seed_enqueue
 from product_metadata import extract_product_metadata
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -957,20 +957,26 @@ def main():
         CATALOG_RECORDS, limit=MAX_CATALOG_SEEDS_PER_RUN
     )
     queued_urls = {url for url, _depth in queue}
-    catalog_seed_urls_added = 0
+    cleaned_catalog_seed_urls = []
+    catalog_seed_invalid = 0
     for raw_url in catalog_seed_urls:
         candidate = clean(raw_url)
-        if (
-            candidate
-            and candidate not in indexed_urls
-            and candidate not in seen
-            and candidate not in queued_urls
-            and len(queue) < QUEUE_LIMIT
-        ):
-            queue.append((candidate, 0))
-            seen.add(candidate)
-            queued_urls.add(candidate)
-            catalog_seed_urls_added += 1
+        if candidate:
+            cleaned_catalog_seed_urls.append(candidate)
+        else:
+            catalog_seed_invalid += 1
+    catalog_seed_additions, catalog_seed_metrics = plan_catalog_seed_enqueue(
+        cleaned_catalog_seed_urls,
+        indexed_urls=indexed_urls,
+        seen_urls=seen,
+        queued_urls=queued_urls,
+        queue_remaining=max(0, QUEUE_LIMIT - len(queue)),
+    )
+    catalog_seed_urls_added = len(catalog_seed_additions)
+    for candidate in catalog_seed_additions:
+        queue.append((candidate, 0))
+        seen.add(candidate)
+        queued_urls.add(candidate)
     for seed in seeds:
         if seed not in seen and seed not in indexed_urls and len(queue) < QUEUE_LIMIT:
             seen.add(seed)
@@ -1398,6 +1404,14 @@ def main():
         "media_candidates_robots_blocked_this_run": media_robots_blocked_count,
         "media_external_candidates_deferred_this_run": media_external_deferred_count,
         "media_candidates_total": len(media_merged),
+        "catalog_seed_candidates_this_run": catalog_seed_metrics["candidates"],
+        "catalog_seed_duplicate_candidates_this_run": catalog_seed_metrics["duplicates"],
+        "catalog_seed_invalid_candidates_this_run": catalog_seed_invalid,
+        "catalog_seed_already_indexed_this_run": catalog_seed_metrics["already_indexed"],
+        "catalog_seed_already_queued_this_run": catalog_seed_metrics["already_queued"],
+        "catalog_seed_already_seen_this_run": catalog_seed_metrics["already_seen"],
+        "catalog_seed_queue_full_this_run": catalog_seed_metrics["queue_full"],
+        "catalog_seed_urls_queued_this_run": catalog_seed_metrics["queued"],
         "run_duration_seconds": run_duration,
         "host_requests_this_run": requests_by_host,
         "depth_counts_this_run": depth_counts,
@@ -1419,7 +1433,10 @@ def main():
           f"robots blocked {robots_blocked_count[0]}; access challenges excluded {access_challenge_pages_count[0]}; "
           f"duration {run_duration:.2f}s; "
           f"depth counts {depth_counts}; frontier remaining {len(queue)}; "
-          f"discovered {len(seen)} URLs; catalog landing pages queued {catalog_seed_urls_added}; "
+          f"discovered {len(seen)} URLs; catalog seeds considered {catalog_seed_metrics['candidates']}; "
+          f"already indexed {catalog_seed_metrics['already_indexed']}; already queued {catalog_seed_metrics['already_queued']}; "
+          f"previously seen {catalog_seed_metrics['already_seen']}; queue-full {catalog_seed_metrics['queue_full']}; "
+          f"invalid {catalog_seed_invalid}; newly queued {catalog_seed_urls_added}; "
           f"total index {len(merged)}.")
 
 if __name__ == "__main__":
