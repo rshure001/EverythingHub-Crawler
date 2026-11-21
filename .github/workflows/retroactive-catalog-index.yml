@@ -98,7 +98,7 @@ jobs:
       - name: Inventory every existing indexed host
         run: python crawler/catalog_retro_discovery.py
       - name: Analyze every eligible existing indexed page
-        run: python crawler/catalog_page_analysis.py --query Rolex --query "Las Vegas"
+        run: python crawler/catalog_page_analysis.py --query Rolex --query "Las Vegas" --query NASA
       - name: Record persisted catalog and record throughput
         run: |
           python - <<'PY'

@@ -1,14 +1,11 @@
 name: EverythingHub first-party catalog search smoke test
-# Verify the Supabase Edge search path after committed corpus or page-derived catalog updates.
+# Run after the validation-gated catalog workflow completes so the public page index
+# and page-derived catalog registry cannot race each other.
 on:
-  push:
+  workflow_run:
+    workflows: ["Retroactive catalog inventory"]
+    types: [completed]
     branches: [main]
-    paths:
-      - "public-search/manifest.json"
-      - "public-search/shard-*.json"
-      - "public-search/shard-*.json.gz"
-      - "public-search/catalog-v1.json.gz"
-      - "data/page-derived-catalogs/**"
   workflow_dispatch:
 permissions:
   contents: read
@@ -76,7 +73,8 @@ jobs:
           print("Independent Rolex fallback passed:", independent["count"], "results")
 
           previews = {}
-          for query in ("Rolex", "Las Vegas"):
+          page_results_by_query = {}
+          for query in ("Rolex", "Las Vegas", "NASA"):
               payload = get("everything-hub-web-search", query)
               preview = payload.get("catalogPreview")
               results = payload.get("catalogResults")
@@ -137,6 +135,7 @@ jobs:
               for item in page_results:
                   if not item.get("title") or not safe_http(item.get("url")):
                       raise SystemExit(query + ": page result has an unsafe URL or missing title")
+              page_results_by_query[query] = page_results
               previews[query] = results
               print(json.dumps({
                   "query": query,
@@ -149,6 +148,38 @@ jobs:
                   "catalogResults": len(results),
                   "topCatalogs": [item.get("catalog_title") for item in results[:3]],
               }, sort_keys=True))
+
+          for query in ("Rolex", "Las Vegas", "NASA"):
+              query_tokens = [token for token in query.casefold().split() if len(token) >= 3]
+              relevant_pages = [
+                  item for item in page_results_by_query[query]
+                  if any(
+                      token in (str(item.get("title", "")) + " " + str(item.get("snippet", ""))).casefold()
+                      for token in query_tokens
+                  )
+              ]
+              if not relevant_pages:
+                  raise SystemExit(query + ": no relevant visible page results were returned")
+          nasa_catalog_matches = [
+              item for item in previews["NASA"]
+              if "nasa" in str(item.get("catalog_title", "")).casefold()
+              or any("nasa" in str(record.get("title", "")).casefold() for record in item.get("matched_records", []))
+          ]
+          if previews["NASA"] and not nasa_catalog_matches:
+              raise SystemExit("NASA returned catalog cards with no NASA-relevant catalog or matched record")
+          if not previews["NASA"]:
+              print("NASA: relevant visible page results verified; no first-party catalog candidate was returned.")
+
+          for query in ("Rolex", "Las Vegas", "NASA"):
+              query_tokens = [token for token in query.casefold().split() if len(token) >= 3]
+              for item in previews[query]:
+                  subject_records = [
+                      record for record in item.get("matched_records", [])
+                      if str(record.get("record_type", "")).casefold() == "subject"
+                  ]
+                  catalog_title = str(item.get("catalog_title", "")).casefold()
+                  if subject_records and not any(token in catalog_title for token in query_tokens):
+                      raise SystemExit(query + ": unrelated derived subject catalog surfaced: " + catalog_title)
 
           las_vegas_typed = [
               item for item in previews["Las Vegas"]

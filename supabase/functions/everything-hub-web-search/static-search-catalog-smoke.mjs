@@ -86,7 +86,10 @@ const rankScores = nasa.results.map((item) => item.rankScore);
 if (rankScores.some((score, index) => index > 0 && score > rankScores[index - 1])) {
   throw new Error("Hurricane rank scores are not sorted descending");
 }
+const lasVegas = searchStaticPages(pages, "Las Vegas", null, 5, 0);
+if (lasVegas.count < 1 || lasVegas.results.length < 1) throw new Error("Las Vegas catalog query returned no results");
 const rolex = searchStaticPages(pages, "Rolex", null, 5, 0);
+if (rolex.count < 1 || rolex.results.length < 1) throw new Error("Rolex catalog query returned no results");
 console.log(JSON.stringify({
   catalogPages: pages.length,
   shardCount: manifest.shard_count,
@@ -96,5 +99,8 @@ console.log(JSON.stringify({
   nasaTop: nasa.results[0]?.url,
   nasaTopRankScore: nasa.results[0]?.rankScore,
   nasaTopEvidenceBand: nasa.results[0]?.evidenceBand,
+  lasVegasMatches: lasVegas.count,
+  lasVegasTop: lasVegas.results[0]?.url,
   rolexMatches: rolex.count,
+  rolexTop: rolex.results[0]?.url,
 }, null, 2));

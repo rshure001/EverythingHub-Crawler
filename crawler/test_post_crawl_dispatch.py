@@ -6,18 +6,20 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class PostCrawlDispatchTests(unittest.TestCase):
-    def test_crawler_dispatches_live_search_only_after_catalog_commit(self):
-        workflow = (ROOT / ".github" / "workflows" / "crawl.yml").read_text(encoding="utf-8")
-        commit_step = workflow.index("      - name: Commit updated index and frontier")
-        dispatch_step = workflow.index("      - name: Dispatch live search verification (no GitHub Pages deployment)")
-        self.assertLess(commit_step, dispatch_step)
-        self.assertIn("  actions: write", workflow)
-        self.assertIn("GH_TOKEN: ${{ github.token }}", workflow)
-        self.assertNotIn("gh workflow run publish-site.yml --ref main", workflow)
-        self.assertIn("gh workflow run search-api-smoke.yml --ref main", workflow)
+    def test_first_party_search_smoke_waits_for_catalog_analysis(self):
+        crawler = (ROOT / ".github" / "workflows" / "crawl.yml").read_text(encoding="utf-8")
+        search = (ROOT / ".github" / "workflows" / "search-api-smoke.yml").read_text(encoding="utf-8")
+        self.assertIn("  actions: write", crawler)
+        self.assertIn("gh workflow run crawl.yml --ref main", crawler)
+        self.assertNotIn("gh workflow run search-api-smoke.yml --ref main", crawler)
+        self.assertNotIn("gh workflow run publish-site.yml --ref main", crawler)
+        self.assertIn("  workflow_run:", search)
+        self.assertIn('workflows: ["Retroactive catalog inventory"]', search)
+        self.assertIn("types: [completed]", search)
+        self.assertIn("branches: [main]", search)
 
 
-    def test_crawler_job_has_time_for_commit_and_post_commit_dispatch(self):
+    def test_crawler_job_has_time_for_bounded_crawl_and_commit(self):
         workflow = (ROOT / ".github" / "workflows" / "crawl.yml").read_text(encoding="utf-8")
         match = re.search(r"^    timeout-minutes:\s*(\d+)\s*$", workflow, re.MULTILINE)
         self.assertIsNotNone(match, "crawler job timeout must be explicit")
@@ -29,10 +31,12 @@ class PostCrawlDispatchTests(unittest.TestCase):
             self.assertIn("  workflow_dispatch:", workflow)
 
         search = (ROOT / ".github" / "workflows" / "search-api-smoke.yml").read_text(encoding="utf-8")
-        self.assertNotIn("  workflow_run:", search)
+        self.assertIn("  workflow_run:", search)
+        self.assertIn('workflows: ["Retroactive catalog inventory"]', search)
+        self.assertIn("  workflow_dispatch:", search)
         self.assertNotIn("EverythingHub Publisher", search)
 
-    def test_search_smoke_push_trigger_is_limited_to_catalog_artifacts(self):
+    def test_search_smoke_waits_for_catalog_workflow_completion(self):
         publisher = (ROOT / ".github" / "workflows" / "publish-site.yml").read_text(encoding="utf-8")
         search = (ROOT / ".github" / "workflows" / "search-api-smoke.yml").read_text(encoding="utf-8")
         publisher_triggers = publisher.split("permissions:", 1)[0]
@@ -40,11 +44,14 @@ class PostCrawlDispatchTests(unittest.TestCase):
         self.assertNotIn("  push:", publisher_triggers)
         self.assertNotIn('      - "public-search/**"', publisher_triggers)
         self.assertNotIn('      - "publisher/**"', publisher_triggers)
-        self.assertIn('      - "public-search/manifest.json"', search)
-        self.assertIn('      - "public-search/shard-*.json.gz"', search)
-        self.assertNotIn('      - "public-search/**"', search)
-        self.assertNotIn('      - "supabase/functions/everything-hub-web-search/**"', search)
-        self.assertNotIn('      - ".github/workflows/search-api-smoke.yml"', search)
+        search_triggers = search.split("permissions:", 1)[0]
+        self.assertIn("  workflow_run:", search_triggers)
+        self.assertIn('workflows: ["Retroactive catalog inventory"]', search_triggers)
+        self.assertIn("types: [completed]", search_triggers)
+        self.assertIn("branches: [main]", search_triggers)
+        self.assertIn("  workflow_dispatch:", search_triggers)
+        self.assertNotIn("  push:", search_triggers)
+        self.assertNotIn('      - "public-search/**"', search_triggers)
         self.assertNotIn(".github/workflows/publish-site.yml", publisher)
 
 

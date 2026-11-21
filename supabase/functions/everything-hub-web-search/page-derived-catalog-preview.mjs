@@ -3,22 +3,22 @@ import { readBoundedText } from "./bounded-stream.mjs";
 const REF_URL = "https://api.github.com/repos/rshure001/EverythingHub-Crawler/git/ref/heads/main";
 const RAW_BASE = "https://raw.githubusercontent.com/rshure001/EverythingHub-Crawler/";
 const MAX_REF_BYTES = 16_000;
-const MAX_MANIFEST_BYTES = 4_000_000;
+const MAX_MANIFEST_BYTES = 8_000_000;
 const MAX_PUBLIC_MANIFEST_BYTES = 1_000_000;
-const MAX_REGISTRY_GZIP_BYTES = 5_000_000;
-const MAX_RECORDS_GZIP_BYTES = 16_000_000;
-const MAX_REGISTRY_JSON_BYTES = 32_000_000;
+const MAX_REGISTRY_GZIP_BYTES = 8_000_000;
+const MAX_RECORDS_GZIP_BYTES = 32_000_000;
+const MAX_REGISTRY_JSON_BYTES = 48_000_000;
 const MAX_RECORDS_JSON_BYTES = 96_000_000;
-const MAX_SEARCH_INDEX_SHARD_BYTES = 2_000_000;
-const MAX_SEARCH_INDEX_JSON_BYTES = 8_000_000;
-const MAX_CATALOG_INDEX_GZIP_BYTES = 1_000_000;
-const MAX_CATALOG_INDEX_JSON_BYTES = 4_000_000;
+const MAX_SEARCH_INDEX_SHARD_BYTES = 4_000_000;
+const MAX_SEARCH_INDEX_JSON_BYTES = 16_000_000;
+const MAX_CATALOG_INDEX_GZIP_BYTES = 2_000_000;
+const MAX_CATALOG_INDEX_JSON_BYTES = 8_000_000;
 const MAX_CATALOG_INDEX_FETCHES = 12;
 const MAX_SEARCH_CACHE_ENTRIES = 64;
 const MAX_CATALOG_CACHE_ENTRIES = 64;
-const MAX_SOURCE_PAGES = 180_000;
-const MAX_CATALOGS = 10_000;
-const MAX_RECORDS = 250_000;
+const MAX_SOURCE_PAGES = 250_000;
+const MAX_CATALOGS = 30_000;
+const MAX_RECORDS = 2_000_000;
 const CACHE_MS = 600_000;
 const STALE_MS = 3_600_000;
 const FETCH_TIMEOUT_MS = 12_000;
@@ -718,6 +718,15 @@ function searchCatalogRecords(query, network, limit = 5) {
     for (const id of record.catalog_ids) {
       const catalog = catalogsById.get(id);
       if (!catalog) continue;
+      // A derived subject catalog represents its own recurring topic. Do not
+      // surface it for an incidental mention in a member-page title.
+      if (
+        type === "subject" &&
+        catalog.catalog_origin === "derived_from_repeated_records"
+      ) {
+        const subjectTokens = new Set(tokenize(String(catalog.subject || "")));
+        if (!terms.some((term) => subjectTokens.has(term))) continue;
+      }
       const catalogTokens = new Set(tokenize([catalog.title, catalog.subject, catalog.source_host].join(" ")));
       const catalogMatch = allTermsPresent(terms, catalogTokens);
       const searchable = new Set([...item.titleTokens, ...item.attributeTokens, ...catalogTokens]);

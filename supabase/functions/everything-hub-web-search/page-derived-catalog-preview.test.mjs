@@ -56,6 +56,9 @@ async function makeFixture() {
   const rolexId = "catalog:rolex-models";
   const vegasId = "catalog:las-vegas-places";
   const vegasProductId = "catalog:las-vegas-watch-products";
+  const genericSubjectId = "catalog:global-geographic-subject";
+  const nasaSubjectId = "catalog:nasa-subject";
+  const vegasSubjectId = "catalog:vegas-subject";
   const rolexRecord = record({
     id: "record:rolex-submariner",
     entityId: "entity:rolex-submariner",
@@ -85,9 +88,39 @@ async function makeFixture() {
     sourceUrl: "https://shop.example.com/las-vegas-watch",
     attributes: { brand: "Example", category: "Watches" },
   });
+  const genericSubjectRecord = record({
+    id: "record:geographic-rolex-mention",
+    entityId: "entity:geographic",
+    type: "subject",
+    title: "National Geographic and Rolex Committed to a Perpetual Planet",
+    description: "A National Geographic and Rolex conservation partnership",
+    catalogId: genericSubjectId,
+    sourceUrl: "https://www.nationalgeographic.com/environment/article/rolex-partnership",
+  });
+  const nasaSubjectRecord = record({
+    id: "record:nasa-artemis",
+    entityId: "entity:nasa",
+    type: "subject",
+    title: "NASA Artemis Mission",
+    description: "NASA exploration program",
+    catalogId: nasaSubjectId,
+    sourceUrl: "https://www.nasa.gov/mission/artemis",
+  });
+  const vegasSubjectRecord = record({
+    id: "record:vegas-subject",
+    entityId: "entity:vegas",
+    type: "subject",
+    title: "Las Vegas Strip",
+    description: "Las Vegas destination and landmarks",
+    catalogId: vegasSubjectId,
+    sourceUrl: "https://www.visitlasvegas.com/places/las-vegas-strip",
+  });
   const rolexPath = "indexes/aa/aaaaaaaaaaaaaaaaaaaaaaaa.json.gz";
   const vegasPath = "indexes/bb/bbbbbbbbbbbbbbbbbbbbbbbb.json.gz";
   const vegasProductPath = "indexes/cc/cccccccccccccccccccccccc.json.gz";
+  const genericSubjectPath = "indexes/dd/dddddddddddddddddddddddd.json.gz";
+  const nasaSubjectPath = "indexes/ee/eeeeeeeeeeeeeeeeeeeeeeee.json.gz";
+  const vegasSubjectPath = "indexes/ff/ffffffffffffffffffffffff.json.gz";
   const catalogs = [
     {
       catalog_id: rolexId,
@@ -150,6 +183,69 @@ async function makeFixture() {
       record_level_clearance: "not_reviewed",
       commercial_eligible: false,
     },
+    {
+      catalog_id: genericSubjectId,
+      title: "Geographic Subject Catalog",
+      subject: "geographic",
+      source_host: "__global__",
+      source_url: "https://www.nationalgeographic.com/",
+      catalog_type: "knowledge_base",
+      record_type: "subject",
+      catalog_origin: "derived_from_repeated_records",
+      record_ids: [genericSubjectRecord.record_id],
+      source_page_ids: ["page:geographic-rolex"],
+      record_count: 1,
+      source_page_count: 1,
+      index_file: genericSubjectPath,
+      is_source_declared_catalog: false,
+      evidence_strength: "medium",
+      source_policy_review_status: "not_reviewed",
+      source_terms_status: "not_reviewed",
+      record_level_clearance: "not_reviewed",
+      commercial_eligible: false,
+    },
+    {
+      catalog_id: nasaSubjectId,
+      title: "NASA Subject Catalog",
+      subject: "nasa",
+      source_host: "__global__",
+      source_url: "https://www.nasa.gov/",
+      catalog_type: "knowledge_base",
+      record_type: "subject",
+      catalog_origin: "derived_from_repeated_records",
+      record_ids: [nasaSubjectRecord.record_id],
+      source_page_ids: ["page:nasa"],
+      record_count: 1,
+      source_page_count: 1,
+      index_file: nasaSubjectPath,
+      is_source_declared_catalog: false,
+      evidence_strength: "medium",
+      source_policy_review_status: "not_reviewed",
+      source_terms_status: "not_reviewed",
+      record_level_clearance: "not_reviewed",
+      commercial_eligible: false,
+    },
+    {
+      catalog_id: vegasSubjectId,
+      title: "Vegas Subject Catalog",
+      subject: "vegas",
+      source_host: "__global__",
+      source_url: "https://www.visitlasvegas.com/",
+      catalog_type: "knowledge_base",
+      record_type: "subject",
+      catalog_origin: "derived_from_repeated_records",
+      record_ids: [vegasSubjectRecord.record_id],
+      source_page_ids: ["page:vegas-subject"],
+      record_count: 1,
+      source_page_count: 1,
+      index_file: vegasSubjectPath,
+      is_source_declared_catalog: false,
+      evidence_strength: "medium",
+      source_policy_review_status: "not_reviewed",
+      source_terms_status: "not_reviewed",
+      record_level_clearance: "not_reviewed",
+      commercial_eligible: false,
+    },
   ];
   const registry = {
     version: 1,
@@ -168,15 +264,28 @@ async function makeFixture() {
   const vegasProductIndexBytes = await gzipJson({
     version: 1, catalog_id: vegasProductId, title: "Las Vegas Watch Products", status: "candidate", records: [vegasProductRecord],
   });
+  const genericSubjectIndexBytes = await gzipJson({
+    version: 1, catalog_id: genericSubjectId, title: "Geographic Subject Catalog", status: "candidate", records: [genericSubjectRecord],
+  });
+  const nasaSubjectIndexBytes = await gzipJson({
+    version: 1, catalog_id: nasaSubjectId, title: "NASA Subject Catalog", status: "candidate", records: [nasaSubjectRecord],
+  });
+  const vegasSubjectIndexBytes = await gzipJson({
+    version: 1, catalog_id: vegasSubjectId, title: "Vegas Subject Catalog", status: "candidate", records: [vegasSubjectRecord],
+  });
 
   const tokens = {
-    rolex: [rolexId],
+    rolex: [rolexId, genericSubjectId],
     submariner: [rolexId],
-    las: [vegasId, vegasProductId],
-    vegas: [vegasId, vegasProductId],
-    strip: [vegasId],
+    national: [genericSubjectId],
+    geographic: [genericSubjectId],
+    las: [vegasId, vegasProductId, vegasSubjectId],
+    vegas: [vegasId, vegasProductId, vegasSubjectId],
+    strip: [vegasId, vegasSubjectId],
     watch: [vegasProductId],
     product: [vegasProductId],
+    nasa: [nasaSubjectId],
+    artemis: [nasaSubjectId],
   };
   const grouped = new Map();
   for (const [token, ids] of Object.entries(tokens)) {
@@ -192,10 +301,13 @@ async function makeFixture() {
   const placeholderRecords = new Uint8Array([1]);
   const files = [
     await fileEntry("registry.json.gz", registryBytes, catalogs.length),
-    await fileEntry("records.json.gz", placeholderRecords, 3),
+    await fileEntry("records.json.gz", placeholderRecords, 6),
     await fileEntry(rolexPath, rolexIndexBytes, 1),
     await fileEntry(vegasPath, vegasIndexBytes, 1),
     await fileEntry(vegasProductPath, vegasProductIndexBytes, 1),
+    await fileEntry(genericSubjectPath, genericSubjectIndexBytes, 1),
+    await fileEntry(nasaSubjectPath, nasaSubjectIndexBytes, 1),
+    await fileEntry(vegasSubjectPath, vegasSubjectIndexBytes, 1),
   ];
   for (const [prefix, bytes] of searchBytes) {
     files.push(await fileEntry("search-index/" + prefix + ".json.gz", bytes, Object.keys(grouped.get(prefix)).length));
@@ -210,7 +322,7 @@ async function makeFixture() {
     source_index_updated_at: updatedIso,
     source_index_sha256: "c".repeat(64),
     catalog_count: catalogs.length,
-    record_count: 3,
+    record_count: 6,
     generated_at: "2026-11-21T05:55:00Z",
     metrics: { records_published: 0, source_terms_reviewed_records: 0 },
     catalogs_verified: 0,
@@ -234,6 +346,9 @@ async function makeFixture() {
   responses.set(rawBase + "data/page-derived-catalogs/" + rolexPath, new Response(rolexIndexBytes));
   responses.set(rawBase + "data/page-derived-catalogs/" + vegasPath, new Response(vegasIndexBytes));
   responses.set(rawBase + "data/page-derived-catalogs/" + vegasProductPath, new Response(vegasProductIndexBytes));
+  responses.set(rawBase + "data/page-derived-catalogs/" + genericSubjectPath, new Response(genericSubjectIndexBytes));
+  responses.set(rawBase + "data/page-derived-catalogs/" + nasaSubjectPath, new Response(nasaSubjectIndexBytes));
+  responses.set(rawBase + "data/page-derived-catalogs/" + vegasSubjectPath, new Response(vegasSubjectIndexBytes));
   for (const [prefix, bytes] of searchBytes) {
     responses.set(rawBase + "data/page-derived-catalogs/search-index/" + prefix + ".json.gz", new Response(bytes));
   }
@@ -245,7 +360,7 @@ async function makeFixture() {
     if (!response) throw new Error("Unexpected test fetch: " + key);
     return response.clone();
   };
-  return { fetchImpl, requested, rolexPath, vegasPath, vegasProductPath };
+  return { fetchImpl, requested, rolexPath, vegasPath, vegasProductPath, genericSubjectPath, nasaSubjectPath, vegasSubjectPath };
 }
 
 test("query-scoped catalog search fetches only matching per-catalog indexes", async () => {
@@ -258,6 +373,7 @@ test("query-scoped catalog search fetches only matching per-catalog indexes", as
   assert.equal(rolex[0].catalog_id, "catalog:rolex-models");
   assert.equal(rolex[0].relevance_class, "typed_product_match");
   assert.equal(rolex[0].matched_records[0].record_id, "record:rolex-submariner");
+  assert.equal(rolex.some((item) => item.catalog_id === "catalog:global-geographic-subject"), false);
   const rolexWithStopword = await searchPageDerivedCatalogPreview("The Rolex", network, 5, fixture.fetchImpl);
   assert.equal(rolexWithStopword[0].catalog_id, "catalog:rolex-models");
 
@@ -266,10 +382,19 @@ test("query-scoped catalog search fetches only matching per-catalog indexes", as
   assert.equal(vegas[0].catalog_id, "catalog:las-vegas-places");
   assert.equal(vegas[0].relevance_class, "typed_location_match");
   assert.equal(vegas[0].matched_records[0].record_id, "record:las-vegas-strip");
+  assert.ok(vegas.some((item) => item.catalog_id === "catalog:vegas-subject"));
+
+  const nasa = await searchPageDerivedCatalogPreview("NASA", network, 5, fixture.fetchImpl);
+  assert.equal(nasa.length, 1);
+  assert.equal(nasa[0].catalog_id, "catalog:nasa-subject");
+  assert.equal(nasa[0].matched_records[0].record_id, "record:nasa-artemis");
 
   assert.equal(fixture.requested.some((url) => url.endsWith("/records.json.gz")), false);
   assert.equal(fixture.requested.some((url) => url.endsWith("/" + fixture.rolexPath)), true);
   assert.equal(fixture.requested.some((url) => url.endsWith("/" + fixture.vegasPath)), true);
   assert.equal(fixture.requested.some((url) => url.endsWith("/" + fixture.vegasProductPath)), true);
+  assert.equal(fixture.requested.some((url) => url.endsWith("/" + fixture.genericSubjectPath)), true);
+  assert.equal(fixture.requested.some((url) => url.endsWith("/" + fixture.nasaSubjectPath)), true);
+  assert.equal(fixture.requested.some((url) => url.endsWith("/" + fixture.vegasSubjectPath)), true);
   clearPageDerivedCatalogPreviewCache();
 });
