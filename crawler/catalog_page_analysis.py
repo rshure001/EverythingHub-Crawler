@@ -1072,15 +1072,58 @@ def search_catalog_network(query: str, analysis: dict, limit: int = 10) -> list[
     token_set = set(tokens)
     query_phrase = " ".join(tokens)
     records = {x["record_id"]: x for x in analysis.get("records", [])}
+    product_types = {"product", "brand", "model"}
+    location_types = {"place", "business", "service", "organization", "event", "dataset"}
+    content_types = {"article", "resource", "media", "subject"}
+    product_terms = {
+        "product", "products", "model", "models", "watch", "watches",
+        "buy", "shop", "retailer", "retailers", "dealer", "dealers",
+        "price", "prices", "reference", "references",
+    }
+    business_terms = {
+        "business", "businesses", "restaurant", "restaurants", "hotel",
+        "hotels", "store", "stores", "shop", "shops", "venue", "venues",
+        "dealer", "dealers",
+    }
+    event_terms = {
+        "event", "events", "concert", "concerts", "festival", "festivals",
+        "calendar", "schedule", "schedules", "grand", "prix",
+    }
+    content_intent = bool(token_set & CONTENT_INTENT_TOKENS)
+    event_intent = bool(token_set & event_terms)
+    business_intent = bool(token_set & business_terms)
+    product_term_intent = bool(token_set & product_terms)
+
+    def query_matches_record(record: dict) -> bool:
+        title_tokens = set(_norm(record.get("title", "")).split())
+        description_tokens = set(_norm(record.get("description", "")).split())
+        attribute_tokens = set(_norm(_searchable_attribute_text(record.get("attributes", {}))).split())
+        return token_set.issubset(title_tokens | description_tokens | attribute_tokens)
+
+    global_product_match = any(
+        str(record.get("record_type", "")).casefold() in product_types
+        and query_matches_record(record)
+        for record in records.values()
+    )
+    global_place_match = any(
+        str(record.get("record_type", "")).casefold() == "place"
+        and query_matches_record(record)
+        for record in records.values()
+    )
+    product_intent = not content_intent and (product_term_intent or global_product_match)
+    geo_intent = (
+        len(tokens) >= 2 and global_place_match
+        and not content_intent and not event_intent and not business_intent
+    )
+    location_business_intent = business_intent and not content_intent
     results = []
     for catalog in analysis.get("catalogs", []):
         related = [records[x] for x in catalog.get("record_ids", []) if x in records]
         catalog_text = _norm(" ".join((catalog.get("title", ""), catalog.get("subject", ""))))
         catalog_tokens = set(catalog_text.split())
         catalog_match = token_set.issubset(catalog_tokens)
-        record_type = str(catalog.get("record_type", ""))
-        content_record = record_type in ("article", "resource", "media", "subject")
-        content_intent = bool(token_set & CONTENT_INTENT_TOKENS)
+        record_type = str(catalog.get("record_type", "")).casefold()
+        content_record = record_type in content_types
         matched = []
         for record in related:
             title_norm = _norm(record.get("title", ""))
@@ -1108,21 +1151,84 @@ def search_catalog_network(query: str, analysis: dict, limit: int = 10) -> list[
         ranked = sorted(matched, key=lambda x: (-x[0], x[1]["title"].casefold()))[:5]
         matched_types = {str(record.get("record_type", "")).casefold() for _, record in ranked}
         catalog_type = str(catalog.get("catalog_type", "")).casefold()
-        # Favor matching product/place/business record types; reduce incidental content-title matches.
-        catalog_score = (
-            25 + (5 * len(tokens))
-            if catalog_match and content_record and not content_intent
-            else 100 + (10 * len(tokens)) if catalog_match else 0
-        )
+        record_scores = [score for score, _record in ranked]
+        aggregate_record_score = max(record_scores) + min(30, sum(record_scores) - max(record_scores))
+        catalog_score = 100 + (10 * len(tokens)) if catalog_match else 0
+
         type_bonus = 0
-        if catalog_type == "geographic":
-            type_bonus = 70 if len(tokens) >= 2 and "place" in matched_types else -20
-        elif catalog_type == "commerce":
-            type_bonus = 50 if matched_types & {"product", "brand", "model"} else -20
-        elif catalog_type == "business_directory":
-            type_bonus = 40 if "business" in matched_types else -15
-        elif catalog_type == "service_directory":
-            type_bonus = 40 if "service" in matched_types else -15
+        if product_intent:
+            if matched_types & product_types:
+                type_bonus = 180
+            elif matched_types & content_types:
+                type_bonus = -100
+        elif geo_intent:
+            if catalog_type == "geographic" and "place" in matched_types:
+                type_bonus = 180
+            elif catalog_type == "business_directory" and "business" in matched_types:
+                type_bonus = 145
+            elif catalog_type == "service_directory" and "service" in matched_types:
+                type_bonus = 140
+            elif catalog_type == "organization_directory" and "organization" in matched_types:
+                type_bonus = 110
+            elif catalog_type == "events" and "event" in matched_types:
+                type_bonus = 60
+            elif matched_types & content_types:
+                type_bonus = -100
+        elif location_business_intent:
+            if catalog_type == "business_directory" and "business" in matched_types:
+                type_bonus = 180
+            elif catalog_type == "service_directory" and "service" in matched_types:
+                type_bonus = 160
+            elif catalog_type == "geographic" and "place" in matched_types:
+                type_bonus = 100
+            elif matched_types & content_types:
+                type_bonus = -80
+        elif event_intent:
+            if catalog_type == "events" and "event" in matched_types:
+                type_bonus = 180
+            elif matched_types & content_types:
+                type_bonus = -80
+        else:
+            if catalog_type == "geographic":
+                type_bonus = 70 if len(tokens) >= 2 and "place" in matched_types else -20
+            elif catalog_type == "commerce":
+                type_bonus = 50 if matched_types & product_types else -20
+            elif catalog_type == "business_directory":
+                type_bonus = 40 if "business" in matched_types else -15
+            elif catalog_type == "service_directory":
+                type_bonus = 40 if "service" in matched_types else -15
+
+        if product_intent and matched_types & product_types:
+            relevance_class = "typed_product_match"
+        elif geo_intent and matched_types & location_types:
+            relevance_class = "typed_location_match"
+        elif location_business_intent and matched_types & {"business", "service"}:
+            relevance_class = "typed_business_match"
+        elif event_intent and "event" in matched_types:
+            relevance_class = "typed_event_match"
+        elif matched_types & content_types:
+            relevance_class = "related_mention"
+        elif catalog_match:
+            relevance_class = "catalog_match"
+        else:
+            relevance_class = "record_match"
+        query_intent = (
+            "product" if product_intent else
+            "location" if geo_intent else
+            "business" if location_business_intent else
+            "event" if event_intent else
+            "content" if content_intent else
+            "general"
+        )
+        relevance_label = {
+            "typed_product_match": "Product or model match",
+            "typed_location_match": "Place or local directory match",
+            "typed_business_match": "Business or service match",
+            "typed_event_match": "Event catalog match",
+            "related_mention": "Related mention, not a dedicated catalog match",
+            "catalog_match": "Catalog title match",
+            "record_match": "Record match",
+        }[relevance_class]
         results.append({
             "catalog_id": catalog["catalog_id"], "title": catalog["title"],
             "catalog_type": catalog["catalog_type"], "record_type": catalog.get("record_type"),
@@ -1138,7 +1244,10 @@ def search_catalog_network(query: str, analysis: dict, limit: int = 10) -> list[
             "verified": bool(catalog.get("verified", False)),
             "status": catalog.get("status", "candidate_needs_source_validation"),
             "match_scope": "catalog" if catalog_match else "records",
-            "score": catalog_score + type_bonus + sum(x[0] for x in ranked),
+            "query_intent": query_intent,
+            "relevance_class": relevance_class,
+            "relevance_label": relevance_label,
+            "score": catalog_score + type_bonus + aggregate_record_score,
             "record_count": len(related),
             "source_page_count": catalog.get("source_page_count", len(catalog.get("source_page_ids", []))),
             "matched_records": [{
