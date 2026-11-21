@@ -1,4 +1,5 @@
 name: Everything Hub free fallback acceptance
+# Re-run live desktop/mobile acceptance after the latest free-backend media-attribution deployment.
 on:
   push:
     branches:
