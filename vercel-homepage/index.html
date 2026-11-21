@@ -1037,7 +1037,7 @@ form.addEventListener('submit',async e=>{
   const d=await r.json();
   apiHasMore=Boolean(d.hasMore);
   totalIndexed=Number(d.indexedPages)||totalIndexed;
-  const catalogResults=(d.catalogResults||[]).map(x=>{
+  const catalogResults=(page===1?(d.catalogResults||[]):[]).map(x=>{
    const snippet=x.snippet||x.description||'Candidate catalog preview; source terms and reuse rights have not been reviewed.';
    return {...x,title:x.title||x.catalog_title||x.catalog_id||'Catalog candidate',url:x.url||x.source_url||'',snippet,description:snippet,source:x.source||'Everything Hub Catalog Preview',origin:x.origin||'Everything Hub Catalog Preview',mediaType:'web',score:Number(x.score)||0};
   }).filter(x=>x.url);
