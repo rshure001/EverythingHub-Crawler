@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-11-21T09:48:34.608085+00:00",
+  "updated_at": "2026-11-21T09:59:13.879681+00:00",
   "target_new_records_per_hour": 60000,
   "runs": [
     {
@@ -1009,26 +1009,50 @@
         "wall_clock_records_per_minute": 25.84,
         "wall_clock_records_per_hour": 1550.3
       }
+    },
+    {
+      "run_id": "44891402728",
+      "run_number": "326",
+      "timestamp": "2026-11-21T09:57:36Z",
+      "indexed_records_processed": 739,
+      "fetch_attempts": 980,
+      "duration_seconds": 420.05,
+      "commit_sha": "4b02a702dc42",
+      "manifest_interval": {
+        "valid": true,
+        "reason": null,
+        "before_pages": 149304,
+        "after_pages": 150028,
+        "before_updated_at": "2026-11-21T09:47:20Z",
+        "after_updated_at": "2026-11-21T09:57:36Z",
+        "elapsed_seconds": 616.0,
+        "run_duration_seconds": 420.05,
+        "new_unique_records": 724,
+        "records_per_minute": 103.42,
+        "records_per_hour": 6205.0,
+        "wall_clock_records_per_minute": 70.52,
+        "wall_clock_records_per_hour": 4231.2
+      }
     }
   ],
   "latest_manifest_interval": {
     "valid": true,
     "reason": null,
-    "before_pages": 148438,
-    "after_pages": 149304,
-    "before_updated_at": "2026-11-21T09:13:49Z",
-    "after_updated_at": "2026-11-21T09:47:20Z",
-    "elapsed_seconds": 2011.0,
-    "run_duration_seconds": 420.84,
-    "new_unique_records": 866,
-    "records_per_minute": 123.47,
-    "records_per_hour": 7408.0,
-    "wall_clock_records_per_minute": 25.84,
-    "wall_clock_records_per_hour": 1550.3
+    "before_pages": 149304,
+    "after_pages": 150028,
+    "before_updated_at": "2026-11-21T09:47:20Z",
+    "after_updated_at": "2026-11-21T09:57:36Z",
+    "elapsed_seconds": 616.0,
+    "run_duration_seconds": 420.05,
+    "new_unique_records": 724,
+    "records_per_minute": 103.42,
+    "records_per_hour": 6205.0,
+    "wall_clock_records_per_minute": 70.52,
+    "wall_clock_records_per_hour": 4231.2
   },
   "recent_run_activity": {
-    "records_processed": 1808,
-    "fetch_attempts": 2247,
-    "run_count": 2
+    "records_processed": 2547,
+    "fetch_attempts": 3227,
+    "run_count": 3
   }
 }
