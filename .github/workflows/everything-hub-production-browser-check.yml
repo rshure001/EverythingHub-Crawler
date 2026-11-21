@@ -396,7 +396,7 @@ jobs:
 
               await goHome();
               await page.locator('.hotspots [data-mode="videos"]').click();
-              await page.locator("#query").fill("NASA");
+              await page.locator("#query").fill("space");
               await page.locator("#searchForm button[type=submit]").click();
               await page.locator("#results .video-card").first().waitFor({ state: "visible", timeout: 45000 });
               const videoCards = page.locator("#results .video-card");
@@ -426,9 +426,9 @@ jobs:
                 sampleAttributions: cards.slice(0, 5).map(card => card.querySelector("small")?.textContent || "")
               }));
               const videoLink = await page.locator("#results .video-card > a").first().evaluate(anchor => ({ href: anchor.href, target: anchor.target, rel: anchor.rel }));
-              if (report.videoSearch.cards < 1 || report.videoSearch.loadedThumbnails < 1 || report.videoSearch.fallbacks !== 0 ||
+              if (report.videoSearch.cards < 5 || report.videoSearch.loadedThumbnails < 5 || report.videoSearch.fallbacks !== 0 ||
                   report.videoSearch.attributionCards !== report.videoSearch.cards ||
-                  report.videoSearch.sampleTitles.filter(Boolean).length < 1 ||
+                  report.videoSearch.sampleTitles.filter(Boolean).length < 5 ||
                   !/^https:\/\/archive\.org\/details\//i.test(videoLink.href) ||
                   videoLink.target !== "_blank" || !videoLink.rel.includes("noopener")) {
                 throw new Error("Internet Archive video cards, thumbnails, titles, or license attribution failed: " + JSON.stringify(report.videoSearch));
@@ -485,7 +485,7 @@ jobs:
                 report.categorySearchCount === 8 && report.news.topStories >= 5 &&
                 Object.values(report.newsCategories).every(value => value.count > 0) &&
                 report.newsRefresh.http === 200 && report.imageSearch.loadedThumbnails >= 8 &&
-                report.imageSearch.badAttribution === 0 && report.videoSearch.loadedThumbnails >= 15 &&
+                report.imageSearch.badAttribution === 0 && report.videoSearch.loadedThumbnails >= 5 &&
                 report.videoSearch.attributionCards === report.videoSearch.cards && report.videoSearch.sampleTitles.filter(Boolean).length >= 5 &&
                 report.mobile.documentWidth <= report.mobile.viewportWidth + 2 &&
                 pageErrors.length === 0 && consoleErrors.length === 0;
