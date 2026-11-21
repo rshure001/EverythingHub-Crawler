@@ -65,7 +65,7 @@ function renderResults(data,q){
   const catalogCount=renderCatalogResults(data.catalogResults,q);
   const visibleCount=Array.isArray(data.results)?data.results.length:(Number(data.count)||0);
   const indexedCount=Number(data.indexedPages)||0;
-  makeHeading(q,'Web results',visibleCount.toLocaleString()+' visible results'+(indexedCount?' · '+indexedCount.toLocaleString()+' indexed pages':''));
+  makeHeading(q,'Web results',visibleCount.toLocaleString()+' web results · '+catalogCount.toLocaleString()+' catalog previews'+(indexedCount?' · '+indexedCount.toLocaleString()+' indexed pages':''));
   const list=document.createElement('div');list.className='results-list';
   for(const item of (Array.isArray(data.results)?data.results:[])){
     const card=document.createElement('article');card.className='eh-result';
@@ -74,7 +74,7 @@ function renderResults(data,q){
     const source=document.createElement('small');source.textContent=(item.source||'Public web')+(item.origin?' · '+item.origin:'');
     card.append(link,snippet,source);list.append(card);
   }
-  if(!list.children.length){const empty=document.createElement('div');empty.className='results-empty';empty.textContent='No matching web results came back. Try another search or category.';list.append(empty);}
+  if(!list.children.length&&!catalogCount){const empty=document.createElement('div');empty.className='results-empty';empty.textContent='No matching web results came back. Try another search or category.';list.append(empty);}
   resultsRoot.append(list);
   if(!catalogCount&&data.catalogPreview&&data.catalogPreview.status!=='ready'){
     const note=document.createElement('p');note.className='results-note';
@@ -151,9 +151,9 @@ async function runSearch(){
     if(mode==='videos'){await runVideoSearch(q);return;}
     const u=new URL('https://everythinghub-search-backend.vercel.app/api/search');u.searchParams.set('q',q);u.searchParams.set('limit','20');u.searchParams.set('lane',mode);
     let data=null;
-    try{const response=await fetch(u,{headers:{accept:'application/json'},signal:AbortSignal.timeout(15000)});if(response.ok){const candidate=await response.json();if(Array.isArray(candidate.results)&&candidate.results.length)data=candidate;}}catch(error){}
+    try{const response=await fetch(u,{headers:{accept:'application/json'},signal:AbortSignal.timeout(15000)});if(response.ok){const candidate=await response.json();if((Array.isArray(candidate.results)&&candidate.results.length)||(Array.isArray(candidate.catalogResults)&&candidate.catalogResults.length))data=candidate;}}catch(error){}
     if(!data){const fast=new URL('https://everythinghub-search-backend.vercel.app/api/search-fast');fast.searchParams.set('q',q);fast.searchParams.set('lane',mode);const response=await fetch(fast,{headers:{accept:'application/json'},signal:AbortSignal.timeout(12000)});if(!response.ok)throw new Error('Live web search returned HTTP '+response.status);data=await response.json();if(data.status!=='ok'||!Array.isArray(data.results)||!data.results.length)throw new Error(data.message||'No public results returned');}
-    renderResults(data,q);const visibleCount=Array.isArray(data.results)?data.results.length:(Number(data.count)||0);status.textContent=visibleCount.toLocaleString()+' visible results from '+(data.providers||[]).join(' and ')+'.';
+    renderResults(data,q);const pageCount=Array.isArray(data.results)?data.results.length:(Number(data.count)||0);const catalogCount=Array.isArray(data.catalogResults)?data.catalogResults.length:0;status.textContent=pageCount.toLocaleString()+' web results and '+catalogCount.toLocaleString()+' catalog previews from '+(data.providers||[]).join(' and ')+'.';
   }catch(error){status.textContent=mode==='images'?'Image search is temporarily unavailable.':mode==='videos'?'Video sources are temporarily unavailable.':'Search is temporarily unavailable. Please try again.';const message=document.createElement('div');message.className='results-empty';message.textContent=error.message||'The search service did not respond. Please try again.';resultsRoot.replaceChildren(message);}
 }
 const newsItems=document.getElementById('news-items'),newsStatus=document.getElementById('news-status');
