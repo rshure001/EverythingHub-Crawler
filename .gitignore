@@ -1,0 +1,5 @@
+# Local-only credentials and database backups
+database/.env
+database/*.dump
+database/*.dump.*
+database/everythinghub-*.dump
