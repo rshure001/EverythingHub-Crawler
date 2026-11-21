@@ -33,11 +33,16 @@ class SearchApiSmokeFreshnessTests(unittest.TestCase):
         self.assertIn('preview.get("recordsPublished") != 0', workflow)
         self.assertNotIn("VERCEL_API", workflow)
         self.assertNotIn("get_vercel", workflow)
-        self.assertIn('workflows: ["Retroactive catalog inventory"]', workflow)
-        self.assertIn("types: [completed]", workflow)
-        self.assertIn("branches: [main]", workflow)
+        self.assertNotIn("  workflow_run:", workflow)
         self.assertIn("  workflow_dispatch:", workflow)
         self.assertNotIn("  push:", workflow)
+        catalog = (
+            Path(__file__).resolve().parents[1]
+            / ".github"
+            / "workflows"
+            / "retroactive-catalog-index.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn("gh workflow run search-api-smoke.yml --ref main", catalog)
         self.assertIn("no relevant visible page results", workflow)
         self.assertIn("unrelated derived subject catalog surfaced", workflow)
 
@@ -52,12 +57,16 @@ class SearchApiSmokeFreshnessTests(unittest.TestCase):
             / "workflows"
             / "search-api-smoke.yml"
         ).read_text(encoding="utf-8")
-        self.assertIn("  workflow_run:", workflow)
-        self.assertIn('workflows: ["Retroactive catalog inventory"]', workflow)
-        self.assertIn("types: [completed]", workflow)
-        self.assertIn("branches: [main]", workflow)
+        self.assertNotIn("  workflow_run:", workflow)
         self.assertIn("  workflow_dispatch:", workflow)
         self.assertNotIn("  push:", workflow)
+        catalog = (
+            Path(__file__).resolve().parents[1]
+            / ".github"
+            / "workflows"
+            / "retroactive-catalog-index.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn("gh workflow run search-api-smoke.yml --ref main", catalog)
         self.assertNotIn("EverythingHub Publisher", workflow)
 
 
