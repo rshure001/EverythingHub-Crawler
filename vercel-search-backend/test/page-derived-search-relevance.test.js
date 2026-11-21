@@ -45,7 +45,7 @@ function fixture() {
       record("r-nasa-org", "NASA", "organization", ["catalog:nasa-org"]),
       record("r-vegas-article", "Chandelier bars and old-school kitsch: the best places to stay in Las Vegas", "article", ["catalog:vegas-articles"]),
       record("r-vegas-place", "Las Vegas Strip", "place", ["catalog:vegas-places"]),
-      record("r-vegas-event", "Las Vegas Event Schedule", "event", ["catalog:vegas-events"]),
+      record("r-vegas-event", "Las Vegas Events Calendar", "event", ["catalog:vegas-events"]),
       record("r-nasa-news", "NASA Announces New Mission", "article", ["catalog:vegas-articles"], "Latest NASA news and mission updates")
     ]
   };
