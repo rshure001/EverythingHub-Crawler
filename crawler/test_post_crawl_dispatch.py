@@ -6,14 +6,14 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class PostCrawlDispatchTests(unittest.TestCase):
-    def test_crawler_dispatches_publisher_and_search_after_catalog_commit(self):
+    def test_crawler_dispatches_live_search_only_after_catalog_commit(self):
         workflow = (ROOT / ".github" / "workflows" / "crawl.yml").read_text(encoding="utf-8")
         commit_step = workflow.index("      - name: Commit updated index and frontier")
-        dispatch_step = workflow.index("      - name: Dispatch catalog publishing and search verification")
+        dispatch_step = workflow.index("      - name: Dispatch live search verification (no GitHub Pages deployment)")
         self.assertLess(commit_step, dispatch_step)
         self.assertIn("  actions: write", workflow)
         self.assertIn("GH_TOKEN: ${{ github.token }}", workflow)
-        self.assertIn("gh workflow run publish-site.yml --ref main", workflow)
+        self.assertNotIn("gh workflow run publish-site.yml --ref main", workflow)
         self.assertIn("gh workflow run search-api-smoke.yml --ref main", workflow)
 
 
@@ -36,8 +36,11 @@ class PostCrawlDispatchTests(unittest.TestCase):
     def test_search_smoke_push_trigger_is_limited_to_catalog_artifacts(self):
         publisher = (ROOT / ".github" / "workflows" / "publish-site.yml").read_text(encoding="utf-8")
         search = (ROOT / ".github" / "workflows" / "search-api-smoke.yml").read_text(encoding="utf-8")
-        self.assertIn('      - "public-search/**"', publisher)
-        self.assertIn('      - "publisher/**"', publisher)
+        publisher_triggers = publisher.split("permissions:", 1)[0]
+        self.assertIn("  workflow_dispatch:", publisher_triggers)
+        self.assertNotIn("  push:", publisher_triggers)
+        self.assertNotIn('      - "public-search/**"', publisher_triggers)
+        self.assertNotIn('      - "publisher/**"', publisher_triggers)
         self.assertIn('      - "public-search/manifest.json"', search)
         self.assertIn('      - "public-search/shard-*.json.gz"', search)
         self.assertNotIn('      - "public-search/**"', search)
