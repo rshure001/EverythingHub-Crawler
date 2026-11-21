@@ -176,7 +176,7 @@ Deno.serve(async (req: Request) => {
     error: "Search temporarily unavailable",
   }, 503);
 
-  const independentFallback = async (reason: string, crawlerIndexCount: number | null) => {
+  const independentFallback = async (reason: string, crawlerIndexCount: number | null, attachCatalogPreview?: (payload: Record<string, any>) => Record<string, any>) => {
     try {
       const projectUrl = Deno.env.get("SUPABASE_URL");
       if (!projectUrl) return null;
@@ -217,7 +217,7 @@ Deno.serve(async (req: Request) => {
 
       if (!allResults.length) return null;
       const pageResults = allResults.slice(offset, offset + limit);
-      return json(attachCatalogPreview({
+      const result = {
         results: pageResults,
         count: allResults.length,
         query,
@@ -233,7 +233,12 @@ Deno.serve(async (req: Request) => {
         fallbackReason: reason,
         independentOfDatabase: true,
         crawlerIndexCount,
-      }), 200, "public, max-age=15, stale-while-revalidate=30");
+      };
+      return json(
+        attachCatalogPreview ? attachCatalogPreview(result) : result,
+        200,
+        "public, max-age=15, stale-while-revalidate=30",
+      );
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       console.error("Independent web fallback unavailable:", detail);
@@ -313,7 +318,7 @@ Deno.serve(async (req: Request) => {
         console.error("Vercel public catalog fallback unavailable:", detail);
       }
       if (reason === "database_unavailable") {
-        const independent = await independentFallback(reason, null);
+        const independent = await independentFallback(reason, null, attachCatalogPreview);
         if (independent) return independent;
       }
     }
@@ -363,7 +368,7 @@ Deno.serve(async (req: Request) => {
     }
 
     if (reason !== "database_unavailable") {
-      const independent = await independentFallback(reason, crawlerIndexCount);
+      const independent = await independentFallback(reason, crawlerIndexCount, attachCatalogPreview);
       if (independent) return independent;
     }
 
