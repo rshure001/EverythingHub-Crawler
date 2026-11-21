@@ -65,9 +65,9 @@ class CumulativeProbeTests(unittest.TestCase):
     def test_catalog_landing_page_robots_preflight_never_fetches_page_content(self):
         item = self._landing_candidate()
         policy = {"max_requests_per_run": 40}
-        with patch.object(catalog_host_probe, "authorize_source_url", return_value=(policy, object(), 3.0, [])) as authorize, \\
-             patch.object(catalog_host_probe, "request_source_bytes") as request:
-            result = catalog_host_probe.probe_catalog_landing_page_robots(item)
+        with patch.object(catalog_host_probe, "authorize_source_url", return_value=(policy, object(), 3.0, [])) as authorize:
+            with patch.object(catalog_host_probe, "request_source_bytes") as request:
+                result = catalog_host_probe.probe_catalog_landing_page_robots(item)
         authorize.assert_called_once_with(item["source_url"], purpose="landing_page")
         request.assert_not_called()
         self.assertEqual(result["status"], "robots_allowed")
@@ -79,9 +79,9 @@ class CumulativeProbeTests(unittest.TestCase):
     def test_catalog_landing_page_robots_denial_fails_closed(self):
         from catalog_source_policy import SourcePolicyError
         item = self._landing_candidate()
-        with patch.object(catalog_host_probe, "authorize_source_url", side_effect=SourcePolicyError("robots.txt disallows /journals/example/articles on frontiersin.org")), \\
-             patch.object(catalog_host_probe, "request_source_bytes") as request:
-            result = catalog_host_probe.probe_catalog_landing_page_robots(item)
+        with patch.object(catalog_host_probe, "authorize_source_url", side_effect=SourcePolicyError("robots.txt disallows /journals/example/articles on frontiersin.org")):
+            with patch.object(catalog_host_probe, "request_source_bytes") as request:
+                result = catalog_host_probe.probe_catalog_landing_page_robots(item)
         request.assert_not_called()
         self.assertEqual(result["status"], "robots_denied")
         self.assertFalse(result["robots_allowed"])
@@ -116,6 +116,17 @@ class CumulativeProbeTests(unittest.TestCase):
             self.assertEqual(second["fetch_authorized_urls"], 0)
             self.assertEqual(second["page_requests"], 0)
             self.assertEqual(authorize.call_count, 35)
+
+    def test_missing_review_queue_writes_safe_empty_ledger(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            output_path = root / "robots.json"
+            result = catalog_host_probe.run_landing_page_robots(root / "missing.json", output_path)
+            ledger = json.loads(output_path.read_text(encoding="utf-8"))
+        self.assertEqual(result["status"], "queue_missing")
+        self.assertEqual(ledger["status"], "robots_preflight_only_not_fetch_authorization")
+        self.assertEqual(ledger["fetch_authorized_urls"], 0)
+        self.assertEqual(ledger["page_requests"], 0)
 
     def test_landing_robots_queue_rejects_fetch_authorized_backlog(self):
         with tempfile.TemporaryDirectory() as tmp:
