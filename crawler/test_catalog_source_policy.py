@@ -94,6 +94,16 @@ class CatalogSourcePolicyTests(unittest.TestCase):
             )
         self.assertTrue(source["metadata_only"])
 
+
+    def test_frontiers_encoded_path_separator_is_rejected_before_robots(self):
+        with patch.object(policy, "load_robots_policy") as load_robots:
+            with self.assertRaises(policy.SourcePolicyError):
+                policy.authorize_source_url(
+                    "https://frontiersin.org/journals/insect%2Fscience/articles",
+                    purpose="landing_page",
+                )
+            load_robots.assert_not_called()
+
     def test_frontiers_individual_article_fulltext_path_is_rejected_before_robots(self):
         with patch.object(policy, "load_robots_policy") as load_robots:
             with self.assertRaises(policy.SourcePolicyError):
