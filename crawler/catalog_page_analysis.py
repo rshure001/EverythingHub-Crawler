@@ -1107,6 +1107,7 @@ def search_catalog_network(query: str, analysis: dict, limit: int = 10) -> list[
         ranked = sorted(matched, key=lambda x: (-x[0], x[1]["title"].casefold()))[:5]
         matched_types = {str(record.get("record_type", "")).casefold() for _, record in ranked}
         catalog_type = str(catalog.get("catalog_type", "")).casefold()
+        # Favor matching product/place/business record types; reduce incidental content-title matches.
         catalog_score = (
             25 + (5 * len(tokens))
             if catalog_match and content_record and not content_intent
