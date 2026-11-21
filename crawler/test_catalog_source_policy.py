@@ -197,41 +197,51 @@ class CatalogSourcePolicyTests(unittest.TestCase):
             policy.authorize_source_url("https://openlibrary.org/subjects/science.json?limit=500")
 
 
-    def test_nasa_video_api_allows_only_metadata_search_endpoint(self):
-        source = policy.policy_for_host("images-api.nasa.gov")
+    def test_commons_video_api_allows_only_metadata_search_endpoint(self):
+        source = policy.policy_for_host("commons.wikimedia.org")
         self.assertIsNotNone(source)
         self.assertTrue(source["metadata_only"])
         self.assertTrue(source["per_dataset_rights_required"])
-        self.assertEqual(source["allowed_api_paths"], ["/search"])
+        self.assertEqual(source["allowed_api_paths"], ["/w/api.php"])
         with patch.object(policy, "load_robots_policy", return_value=object()), \
              patch.object(policy, "robots_can_fetch", return_value=True), \
              patch.object(policy, "effective_host_delay", return_value=0.0):
             authorized, parser, delay, allowed_paths = policy.authorize_source_url(
-                "https://images-api.nasa.gov/search?q=NASA",
+                "https://commons.wikimedia.org/w/api.php?action=query",
                 purpose="discovery",
             )
         self.assertEqual(authorized["terms_status"], "reviewed_per_dataset")
-        self.assertEqual(allowed_paths, ["/search"])
-        self.assertGreaterEqual(delay, 2.0)
+        self.assertEqual(allowed_paths, ["/w/api.php"])
+        self.assertGreaterEqual(delay, 1.0)
 
-    def test_nasa_video_api_rejects_asset_and_bulk_download_paths(self):
+    def test_commons_video_api_rejects_wiki_pages_and_asset_download_paths(self):
         with patch.object(policy, "load_robots_policy") as load_robots:
             for url in (
-                "https://images-api.nasa.gov/assets/video/123",
-                "https://images-api.nasa.gov/download/123",
-                "https://images-api.nasa.gov/metadata/123",
+                "https://commons.wikimedia.org/wiki/File:Example.webm",
+                "https://commons.wikimedia.org/w/index.php?title=File:Example.webm",
+                "https://commons.wikimedia.org/download/file/123",
             ):
                 with self.subTest(url=url):
                     with self.assertRaises(policy.SourcePolicyError):
                         policy.authorize_source_url(url, purpose="discovery")
             load_robots.assert_not_called()
 
-    def test_nasa_video_policy_requires_per_item_credit_and_excludes_commercial_clearance(self):
-        source = policy.policy_for_host("images-api.nasa.gov")
+    def test_commons_video_policy_requires_per_item_open_license_and_credit(self):
+        source = policy.policy_for_host("commons.wikimedia.org")
         self.assertEqual(source["attribution_required"], "per_item")
         self.assertFalse(source["commercial_eligible"])
-        self.assertIn("third_party_copyrighted_items", source["prohibited_content"])
-        self.assertIn("links.preview", source["allowed_metadata_fields"])
+        self.assertIn("noncommercial_licenses", source["prohibited_content"])
+        self.assertIn("no_derivatives_licenses", source["prohibited_content"])
+        self.assertIn("imageinfo.extmetadata.LicenseShortName", source["allowed_metadata_fields"])
+
+    def test_nasa_video_api_remains_disabled_when_preview_robots_are_unverifiable(self):
+        source = policy.policy_for_host("images-api.nasa.gov")
+        self.assertFalse(source["discovery_allowed"])
+        self.assertIn("HTTP 403", source["blocked_reason"])
+        with patch.object(policy, "load_robots_policy") as load_robots:
+            with self.assertRaises(policy.SourcePolicyError):
+                policy.authorize_source_url("https://images-api.nasa.gov/search?q=NASA", purpose="discovery")
+            load_robots.assert_not_called()
 
 
 if __name__ == "__main__":
