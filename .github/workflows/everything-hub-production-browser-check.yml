@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     env:
-      TARGET_URL: https://everythinghub-search-engine-4x25f8.v2.appdeploy.ai/
+      TARGET_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-site
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -47,54 +47,65 @@ jobs:
               const response = await page.goto(report.url, { waitUntil: "networkidle", timeout: 60000 });
               report.httpStatus = response?.status();
               report.title = await page.title();
-              const artwork = page.locator(".everythinghub-approved-home-art img.approved-master-image").first();
+              const artwork = page.locator(".art > img").first();
               await artwork.waitFor({ state: "visible", timeout: 20000 });
               await page.waitForFunction(() => {
-                const img = document.querySelector(".everythinghub-approved-home-art img.approved-master-image");
+                const img = document.querySelector(".art > img");
                 return !!img && img.complete && img.naturalWidth >= 100;
               }, null, { timeout: 30000 });
               report.approvedArtwork = await artwork.evaluate(img => ({
                 src: img.currentSrc, naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight
               }));
-              const categoryButtons = page.locator(".hub-hero-divisions button:visible");
-              report.categoryCount = await categoryButtons.count();
-              report.categoryNames = (await categoryButtons.evaluateAll(nodes =>
-                nodes.map(node => node.getAttribute("aria-label") || node.textContent.trim()).sort()
-              ));
-              const expected = ["Business","Images","News","Places","Research","Shopping","Videos","Web"].sort();
-              const search = page.locator("input#hub-search:visible").first();
-              report.searchInputCount = await page.locator("input#hub-search:visible").count();
-              if (!response?.ok() || !report.title.includes("EverythingHub") ||
-                  report.categoryCount !== 8 || JSON.stringify(report.categoryNames) !== JSON.stringify(expected) ||
-                  report.searchInputCount < 1 || report.approvedArtwork.naturalWidth < 100) {
-                throw new Error("In-house homepage structure check failed: " + JSON.stringify(report));
+              report.searchFormCount = await page.locator("form#searchForm").count();
+              report.searchInputCount = await page.locator("#q").count();
+              report.categoryCount = await page.locator(".hotspot[data-mode]").count();
+              report.categoryModes = await page.locator(".hotspot[data-mode]").evaluateAll(nodes =>
+                nodes.map(node => node.dataset.mode).sort()
+              );
+              const expected = ["business","images","news","places","research","shopping","videos","web"];
+              if (!response?.ok() || !report.title.includes("Everything Hub") ||
+                  report.searchFormCount !== 1 || report.searchInputCount !== 1 ||
+                  report.categoryCount !== 8 || JSON.stringify(report.categoryModes) !== JSON.stringify(expected) ||
+                  report.approvedArtwork.naturalWidth < 100) {
+                throw new Error("Published homepage structure check failed: " + JSON.stringify(report));
               }
               await page.screenshot({ path: "everything-hub-homepage.png", fullPage: true });
               for (const query of ["Rolex", "NASA"]) {
                 await page.goto(report.url, { waitUntil: "networkidle", timeout: 60000 });
-                const input = page.locator("input#hub-search:visible").first();
-                await input.waitFor({ state: "visible", timeout: 20000 });
-                await input.fill(query);
-                await input.press("Enter");
-                await page.locator(".eh-result-card").first().waitFor({ state: "visible", timeout: 45000 });
-                const count = await page.locator(".eh-result-card").count();
-                const titles = await page.locator(".eh-result-title").allTextContents();
+                await page.locator("#q").fill(query);
+                await page.locator("#searchForm button[type=submit]").click();
+                await page.locator("#results .result").first().waitFor({ state: "visible", timeout: 45000 });
+                const count = await page.locator("#results .result").count();
+                const titles = await page.locator("#results .result .copy a").allTextContents();
                 report[query.toLowerCase()] = { count, sampleTitles: titles.slice(0, 5) };
-                if (!count) throw new Error(query + " produced no visible in-house search results");
+                if (!count) throw new Error(query + " produced no published search results");
                 await page.screenshot({ path: "everything-hub-" + query.toLowerCase() + ".png", fullPage: true });
+              }
+              for (const [mode, query] of [["images","octopus"],["videos","Apollo 11 NASA"]]) {
+                await page.goto(report.url, { waitUntil: "networkidle", timeout: 60000 });
+                await page.locator('.hotspot[data-mode="' + mode + '"]').click();
+                await page.locator("#q").fill(query);
+                await page.locator("#searchForm button[type=submit]").click();
+                await page.locator("#results .result").first().waitFor({ state: "visible", timeout: 45000 });
+                const count = await page.locator("#results .result").count();
+                const images = await page.locator("#results .result img.thumb").count();
+                report[mode] = { count, previewImages: images };
+                if (!count || !images) throw new Error(mode + " search returned no visible results or previews");
               }
               await page.setViewportSize({ width: 390, height: 844 });
               await page.goto(report.url, { waitUntil: "networkidle", timeout: 60000 });
               report.mobile = await page.evaluate(() => ({
                 viewportWidth: document.documentElement.clientWidth,
                 documentWidth: document.documentElement.scrollWidth,
-                artworkVisible: !!document.querySelector(".everythinghub-approved-home-art img.approved-master-image")?.getClientRects().length,
-                searchVisible: !!document.querySelector("input#hub-search")?.getClientRects().length,
-                categoryCount: document.querySelectorAll(".hub-hero-divisions button").length
+                artworkVisible: !!document.querySelector(".art > img")?.getClientRects().length,
+                searchVisible: !!document.querySelector("#q")?.getClientRects().length,
+                searchFormCount: document.querySelectorAll("form#searchForm").length,
+                categoryCount: document.querySelectorAll(".hotspot[data-mode]").length
               }));
               if (report.mobile.documentWidth > report.mobile.viewportWidth + 2 ||
-                  !report.mobile.artworkVisible || !report.mobile.searchVisible || report.mobile.categoryCount !== 8) {
-                throw new Error("Mobile in-house homepage check failed: " + JSON.stringify(report.mobile));
+                  !report.mobile.artworkVisible || !report.mobile.searchVisible ||
+                  report.mobile.searchFormCount !== 1 || report.mobile.categoryCount !== 8) {
+                throw new Error("Mobile published homepage check failed: " + JSON.stringify(report.mobile));
               }
               report.pageErrors = errors;
               report.passed = errors.length === 0;
