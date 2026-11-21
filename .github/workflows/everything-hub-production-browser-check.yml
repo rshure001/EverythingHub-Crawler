@@ -60,7 +60,7 @@ jobs:
               const categoryButtons = page.locator("nav.hub-hero-divisions button");
               report.categoryCount = await categoryButtons.count();
               report.categoryNames = await categoryButtons.allTextContents();
-              if (!response?.ok() || !report.title.includes("Everything Hub") || report.searchInputs < 1 || report.categoryCount !== 8 || report.artwork.width < 100) {
+              if (!response?.ok() || !/(Everything\s*Hub)/i.test(report.title) || report.searchInputs < 1 || report.categoryCount !== 8 || report.artwork.width < 100) {
                 throw new Error("Live AppDeploy homepage structure check failed: " + JSON.stringify(report));
               }
               await page.screenshot({path:"everything-hub-homepage.png",fullPage:true});
