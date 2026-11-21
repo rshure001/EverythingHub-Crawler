@@ -1053,5 +1053,13 @@ class PageDerivedCatalogAnalysisTests(unittest.TestCase):
             record["source_policy_review_evidence_urls"],
         )
 
+class CatalogInventoryTriggerTests(unittest.TestCase):
+    def test_new_public_search_manifest_triggers_retroactive_inventory(self):
+        repository_root = Path(__file__).resolve().parents[1]
+        workflow = (repository_root / ".github" / "workflows" / "retroactive-catalog-index.yml").read_text(encoding="utf-8")
+        push_paths = workflow.split("  push:\n", 1)[1].split("  workflow_dispatch:", 1)[0]
+        self.assertIn('"public-search/manifest.json"', push_paths)
+
+
 if __name__ == "__main__":
     unittest.main()
