@@ -5,14 +5,14 @@ class UniversalCatalogIngestTests(unittest.TestCase):
     def test_ckan_datasets_become_catalog_records_not_pages(self):
         result = adapt({
             "updated_at": "2026-11-20T00:00:00Z",
-            "catalogs": [{"id":"test","name":"Test Data","base_url":"https://catalog.data.gov","source_terms_url":"","source_terms_status":"unreviewed","source_terms_reviewed_at":"","attribution_required":"per_dataset","errors":[]}],
+            "catalogs": [{"id":"test","name":"Test Data","base_url":"https://opendata.swiss","source_terms_url":"https://opendata.swiss/en/terms-of-use","source_terms_status":"reviewed_per_dataset","source_terms_reviewed_at":"2026-11-21","attribution_required":"per_dataset","errors":[]}],
             "datasets": [{
                 "catalog_id":"test","id":"test:roads","dataset_id":"roads","title":"Road Network",
-                "description":"Roads and routes","landing_url":"https://catalog.data.gov/dataset/roads",
+                "description":"Roads and routes","landing_url":"https://opendata.swiss/dataset/roads",
                 "organization":"Transport","tags":["roads","maps"],
-                "resources":[{"name":"GeoJSON","format":"GEOJSON","url":"https://catalog.data.gov/roads.geojson"}],
+                "resources":[{"name":"GeoJSON","format":"GEOJSON","url":"https://opendata.swiss/roads.geojson"}],
                 "license":{"id":"cc-by","url":"https://creativecommons.org/licenses/by/4.0/","title":"CC BY"},
-                "source_terms_url":"","source_terms_status":"unreviewed",
+                "source_terms_url":"https://opendata.swiss/en/terms-of-use","source_terms_status":"reviewed_per_dataset",
                 "resource_count":1,"metadata_modified":"2026-11-19"
             }]
         })
@@ -27,6 +27,66 @@ class UniversalCatalogIngestTests(unittest.TestCase):
         self.assertTrue(result["records"][0]["attributes"]["public_search_allowed"])
         self.assertTrue(result["source_pages"][0]["policy_allowed"])
         self.assertEqual(result["metrics"]["production_eligible_records"],1)
+
+    def test_dataset_rights_metadata_is_preserved_without_claiming_commercial_clearance(self):
+        result = adapt({
+            "updated_at": "2026-11-21T00:00:00Z",
+            "catalogs": [{
+                "id": "swiss-open-data",
+                "name": "opendata.swiss",
+                "base_url": "https://opendata.swiss",
+                "source_terms_url": "https://opendata.swiss/en/terms-of-use",
+                "source_terms_status": "reviewed_per_dataset",
+                "source_terms_reviewed_at": "2026-11-21",
+                "attribution_required": "per_dataset",
+                "errors": [],
+            }],
+            "datasets": [{
+                "catalog_id": "swiss-open-data",
+                "id": "swiss-open-data:transport",
+                "dataset_id": "transport",
+                "title": "Transport Statistics",
+                "landing_url": "https://opendata.swiss/dataset/transport",
+                "license": {"rights": "Open use. Must provide the source", "is_open": False},
+                "resources": [{
+                    "name": "CSV",
+                    "format": "CSV",
+                    "url": "https://opendata.swiss/resources/transport.csv",
+                    "rights": "Open use. Must provide the source",
+                }],
+                "resource_count": 1,
+            }],
+        })
+        record = result["records"][0]
+        self.assertTrue(record["attributes"]["public_search_allowed"])
+        self.assertEqual(record["attributes"]["rights_status"], "dataset_rights_metadata_present")
+        self.assertEqual(record["attributes"]["license"]["rights"], "Open use. Must provide the source")
+        self.assertEqual(record["attributes"]["resources"][0]["rights"], "Open use. Must provide the source")
+        self.assertIsNot(record["attributes"].get("commercial_eligible"), True)
+
+
+    def test_private_dataset_never_becomes_public_searchable(self):
+        result = adapt({
+            "updated_at": "2026-11-21T00:00:00Z",
+            "catalogs": [{
+                "id": "swiss-open-data", "name": "opendata.swiss",
+                "base_url": "https://opendata.swiss",
+                "source_terms_url": "https://opendata.swiss/en/terms-of-use",
+                "source_terms_status": "reviewed_per_dataset",
+                "source_terms_reviewed_at": "2026-11-21",
+                "errors": [],
+            }],
+            "datasets": [{
+                "catalog_id": "swiss-open-data", "id": "swiss-open-data:private",
+                "dataset_id": "private", "title": "Private Dataset",
+                "landing_url": "https://opendata.swiss/dataset/private",
+                "license": {"rights": "Open use", "is_open": True, "private": True},
+                "resource_count": 0,
+            }],
+        })
+        self.assertFalse(result["records"][0]["attributes"]["public_search_allowed"])
+        self.assertEqual(result["records"][0]["attributes"]["rights_status"], "private_dataset")
+        self.assertFalse(result["source_pages"][0]["policy_allowed"])
 
     def test_merges_library_archive_catalogs_and_document_records(self):
         result = adapt({

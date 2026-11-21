@@ -5,16 +5,14 @@
     "catalog.data.gov": {
       "terms_url": "https://resources.data.gov/catalog-api/",
       "terms_status": "reviewed_per_dataset",
-      "reviewed_at": "2026-11-20",
-      "discovery_allowed": true,
+      "reviewed_at": "2026-11-21",
+      "discovery_allowed": false,
       "metadata_only": true,
       "per_dataset_rights_required": true,
       "attribution_required": "per_dataset",
-      "allowed_api_paths": ["/api/3/action/package_search"],
-      "allowed_probe_paths": ["/api/3/action/package_search"],
-      "min_interval_seconds": 1.0,
-      "max_requests_per_run": 80,
-      "policy_note": "Data.gov is a metadata catalog. Preserve dataset-level access, use, and license information; do not fetch bulk resources through this adapter."
+      "allowed_api_paths": [],
+      "allowed_probe_paths": [],
+      "reason": "The legacy CKAN endpoint returns HTTP 404 because Data.gov migrated to its v4 Catalog API. The replacement requires a free personal API key; DEMO_KEY is explicitly unsuitable for automated queries. A separate v4 adapter and configured key are required before discovery resumes."
     },
     "open.canada.ca": {
       "terms_url": "https://open.canada.ca/en/open-government-licence-canada/",
@@ -24,9 +22,13 @@
       "metadata_only": true,
       "per_dataset_rights_required": true,
       "attribution_required": true,
-      "allowed_api_paths": ["/data/en/api/3/action/package_search"],
-      "allowed_probe_paths": ["/data/en/api/3/action/package_search"],
-      "min_interval_seconds": 1.0,
+      "allowed_api_paths": [
+        "/data/en/api/3/action/package_search"
+      ],
+      "allowed_probe_paths": [
+        "/data/en/api/3/action/package_search"
+      ],
+      "min_interval_seconds": 1,
       "max_requests_per_run": 80,
       "policy_note": "Apply the Open Government Licence where it is actually attached to the record; federated datasets may carry different terms."
     },
@@ -37,11 +39,16 @@
       "metadata_only": true,
       "per_dataset_rights_required": true,
       "attribution_required": "per_dataset",
-      "allowed_api_paths": ["/api/3/action/package_search"],
-      "allowed_probe_paths": ["/api/3/action/package_search"],
-      "min_interval_seconds": 1.0,
-      "max_requests_per_run": 80,
-      "policy_note": "Preserve the dataset usage symbol and license; commercial permission and attribution vary by dataset."
+      "allowed_api_paths": [
+        "/api/3/action/package_search"
+      ],
+      "allowed_probe_paths": [
+        "/api/3/action/package_search"
+      ],
+      "min_interval_seconds": 2,
+      "max_requests_per_run": 40,
+      "policy_note": "Official CKAN API documentation supports metadata search. Preserve dataset-level isopen/private/rights and each resource's controlled rights value, attribution and license fields. This adapter is metadata-only and must not fetch bulk resources. Runtime access remains fail-closed on robots.txt and the effective host delay.",
+      "reviewed_at": "2026-11-21"
     },
     "data.gov.au": {
       "terms_url": "",

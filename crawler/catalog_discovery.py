@@ -29,11 +29,6 @@ USER_AGENT = "EverythingHubCatalogDiscovery/1.0 (+https://github.com/rshure001/E
 # Explicit public CKAN API hosts with reviewed, per-dataset rights handling.
 SOURCES = (
     {
-        "id": "us-data-gov", "name": "Data.gov",
-        "base": "https://catalog.data.gov", "landing_base": "https://catalog.data.gov",
-        "api_path": "/api/3/action/package_search", "category": "government",
-    },
-    {
         "id": "canada-open-data", "name": "Open Government Canada",
         "base": "https://open.canada.ca", "landing_base": "https://open.canada.ca/data/en",
         "api_path": "/data/en/api/3/action/package_search", "category": "government",
@@ -47,6 +42,8 @@ SOURCES = (
 EXCLUDED_SOURCES = (
     {"id": "australia-data-gov", "name": "Data.gov.au",
      "reason": "Source terms and dataset-level reuse conditions have not been reviewed."},
+    {"id": "us-data-gov", "name": "Data.gov",
+     "reason": "The legacy CKAN endpoint now returns HTTP 404. The replacement v4 API requires a free personal API key; DEMO_KEY is explicitly unsuitable for automated queries. Keep excluded until a dedicated v4 adapter and configured key are available."},
 )
 
 def _request_json(url: str) -> dict[str, Any]:
@@ -69,6 +66,12 @@ def normalize_dataset(dataset: dict[str, Any], source: dict[str, Any]) -> dict[s
     title = _clean_text(dataset.get("title") or name, 500)
     if not name or not title:
         return None
+    # Never stage private or inactive records from a public catalog adapter.
+    if dataset.get("private") is True:
+        return None
+    state = _clean_text(dataset.get("state"), 40).casefold()
+    if state and state != "active":
+        return None
     resources = []
     for resource in dataset.get("resources") or []:
         if not isinstance(resource, dict):
@@ -79,7 +82,10 @@ def normalize_dataset(dataset: dict[str, Any], source: dict[str, Any]) -> dict[s
             continue
         resources.append({
             "name": _clean_text(resource.get("name") or resource.get("description"), 300),
+            "description": _clean_text(resource.get("description"), 1000),
             "format": _clean_text(resource.get("format"), 40).upper(),
+            "media_type": _clean_text(resource.get("mimetype") or resource.get("media-type"), 160),
+            "rights": _clean_text(resource.get("rights"), 800),
             "url": url,
             "bytes": resource.get("size") if isinstance(resource.get("size"), int) else None,
         })
@@ -91,6 +97,7 @@ def normalize_dataset(dataset: dict[str, Any], source: dict[str, Any]) -> dict[s
         "url": _clean_text(dataset.get("license_url"), 1000),
         "rights": _clean_text(dataset.get("rights") or dataset.get("access_and_use"), 1000),
         "is_open": dataset.get("isopen") if isinstance(dataset.get("isopen"), bool) else None,
+        "private": dataset.get("private") if isinstance(dataset.get("private"), bool) else None,
     }
     return {
         "id": source["id"] + ":" + name,

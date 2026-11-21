@@ -4,7 +4,7 @@ from unittest.mock import patch
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from catalog_discovery import build_catalog, normalize_dataset, SOURCES
+from catalog_discovery import build_catalog, normalize_dataset, SOURCES, EXCLUDED_SOURCES
 from catalog_source_policy import policy_for_host
 
 class CatalogDiscoveryTests(unittest.TestCase):
@@ -16,16 +16,33 @@ class CatalogDiscoveryTests(unittest.TestCase):
             "organization": {"title": "Transport Agency"},
             "tags": [{"name": "transport"}],
             "license_id": "cc-by", "license_title": "Creative Commons Attribution", "license_url": "https://creativecommons.org/licenses/by/4.0/",
+            "rights": "Open use. Must provide the source", "isopen": True, "private": False,
             "resources": [
-                {"name": "CSV download", "format": "csv", "url": "https://downloads.example.org/data.csv", "size": 1200},
+                {"name": "CSV download", "description": "Dataset distribution", "format": "csv", "mimetype": "text/csv", "rights": "Open use. Must provide the source", "url": "https://downloads.example.org/data.csv", "size": 1200},
                 {"name": "Unsafe", "format": "zip", "url": "http://downloads.example.org/data.zip"},
             ],
         }, SOURCES[0])
-        self.assertEqual(item["catalog_id"], "us-data-gov")
+        self.assertEqual(item["catalog_id"], "canada-open-data")
         self.assertEqual(item["resource_count"], 1)
         self.assertEqual(item["license"]["id"], "cc-by")
+        self.assertEqual(item["license"]["rights"], "Open use. Must provide the source")
+        self.assertTrue(item["license"]["is_open"])
+        self.assertFalse(item["license"]["private"])
         self.assertEqual(item["resources"][0]["format"], "CSV")
-        self.assertTrue(item["landing_url"].startswith("https://catalog.data.gov/dataset/"))
+        self.assertEqual(item["resources"][0]["media_type"], "text/csv")
+        self.assertEqual(item["resources"][0]["rights"], "Open use. Must provide the source")
+        self.assertTrue(item["landing_url"].startswith("https://open.canada.ca/data/en/dataset/"))
+
+
+    def test_private_or_inactive_dataset_is_skipped(self):
+        private_item = normalize_dataset({
+            "name": "private-data", "title": "Private Data", "private": True, "state": "active"
+        }, SOURCES[0])
+        inactive_item = normalize_dataset({
+            "name": "draft-data", "title": "Draft Data", "private": False, "state": "draft"
+        }, SOURCES[0])
+        self.assertIsNone(private_item)
+        self.assertIsNone(inactive_item)
 
     def test_missing_dataset_identifier_is_skipped(self):
         self.assertIsNone(normalize_dataset({"title": "No ID"}, SOURCES[0]))
@@ -98,6 +115,10 @@ class CatalogDiscoveryTests(unittest.TestCase):
     def test_catalog_sources_are_https(self):
         self.assertTrue(all(source["base"].startswith("https://") for source in SOURCES))
         self.assertNotIn("australia-data-gov", {source["id"] for source in SOURCES})
+        self.assertNotIn("us-data-gov", {source["id"] for source in SOURCES})
+        excluded = {source["id"]: source for source in EXCLUDED_SOURCES}
+        self.assertIn("us-data-gov", excluded)
+        self.assertIn("free personal API key", excluded["us-data-gov"]["reason"])
 
 if __name__ == "__main__":
     unittest.main()
