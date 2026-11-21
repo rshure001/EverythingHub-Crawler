@@ -28,7 +28,7 @@ class LiveDiagnosticsScheduleTests(unittest.TestCase):
             / "everything-hub-live-diagnostics.yml"
         ).read_text(encoding="utf-8")
         start = workflow.index('          echo "=== PUBLISHED HOMEPAGE ==="')
-        end = workflow.index('          echo "=== SEARCH API', start)
+        end = workflow.index('          echo "=== CUSTOM DOMAIN CHECK', start)
         homepage_check = workflow[start:end]
 
         for marker in (
