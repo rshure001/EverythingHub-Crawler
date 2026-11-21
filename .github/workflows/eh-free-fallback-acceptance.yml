@@ -101,7 +101,7 @@ jobs:
                 licenses: cards.map(card => card.dataset.license || ""),
                 creators: cards.map(card => card.dataset.creator || "")
               }));
-              if (imageStats.loaded < 8 || imageStats.providers.some(x => !x.includes("Openverse")) || imageStats.licenses.some(x => !x)) throw new Error("Openverse image checks failed: " + JSON.stringify(imageStats));
+              if (imageStats.loaded < 8 || imageStats.providers.some(x => !x.includes("Internet Archive")) || imageStats.licenses.some(x => !x)) throw new Error("Openverse image checks failed: " + JSON.stringify(imageStats));
               report.checks.images = imageStats;
               await shot("everythinghub-images.png");
               await goHome();
