@@ -423,8 +423,7 @@ def clean(url):
     query = [(k, v) for k, v in query if not k.lower().startswith("utm_")
              and k.lower() not in ("fbclid", "gclid", "mc_cid", "mc_eid")]
     normalized_path = _robots_normalize_component(
-        p.path or "/", safe="/%:@!    return urllib.parse.urlunsplit((p.scheme.lower(), p.netloc.lower(), p.path or "/",
-                                    urllib.parse.urlencode(query), ""))'()*+,;=-._~"
+        p.path or "/", safe="/%:@!$&'()*+,;=-._~"
     )
     return urllib.parse.urlunsplit((p.scheme.lower(), p.netloc.lower(), normalized_path,
                                     urllib.parse.urlencode(query), ""))
