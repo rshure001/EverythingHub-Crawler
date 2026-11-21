@@ -1,0 +1,106 @@
+name: Self-hosted PostgreSQL 17 schema smoke test
+
+on:
+  pull_request:
+    paths:
+      - "database/**"
+      - ".github/workflows/self-hosted-postgres-smoke.yml"
+  push:
+    branches: [main]
+    paths:
+      - "database/**"
+      - ".github/workflows/self-hosted-postgres-smoke.yml"
+  workflow_dispatch:
+
+jobs:
+  self-hosted-postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: everythinghub_test
+          POSTGRES_USER: everythinghub
+          POSTGRES_PASSWORD: test-only-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U everythinghub -d everythinghub_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply the exact self-hosted bootstrap and migrations
+        env:
+          PGPASSWORD: test-only-password
+        run: |
+          set -euo pipefail
+          for migration in \
+            database/000_create_service_role.sql \
+            database/002_eh_quad_schema.sql \
+            database/003_eh_quad_intelligence.sql \
+            database/004_eh_quad_feedback_cursor.sql \
+            database/005_eh_quad_catalogs.sql; do
+            psql -h localhost -U everythinghub -d everythinghub_test -v ON_ERROR_STOP=1 -f "$migration"
+          done
+      - name: Verify page, queue, catalog, RLS, grants, and search
+        env:
+          PGPASSWORD: test-only-password
+        run: |
+          set -euo pipefail
+          psql -h localhost -U everythinghub -d everythinghub_test -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          BEGIN
+            IF to_regclass('eh_quad.eh_documents') IS NULL
+              OR to_regclass('eh_quad.eh_crawl_queue') IS NULL
+              OR to_regclass('eh_quad.eh_catalogs') IS NULL
+              OR to_regclass('eh_quad.eh_catalog_records') IS NULL THEN
+              RAISE EXCEPTION 'Required eh_quad tables are missing';
+            END IF;
+            IF NOT (SELECT relrowsecurity FROM pg_class WHERE oid='eh_quad.eh_documents'::regclass) THEN
+              RAISE EXCEPTION 'RLS is not enabled on eh_documents';
+            END IF;
+            IF NOT has_table_privilege('service_role', 'eh_quad.eh_documents', 'SELECT')
+              OR NOT has_table_privilege('service_role', 'eh_quad.eh_catalog_records', 'SELECT') THEN
+              RAISE EXCEPTION 'service_role search grants are missing';
+            END IF;
+            IF has_table_privilege('service_role', 'eh_quad.eh_crawl_queue', 'SELECT') THEN
+              RAISE EXCEPTION 'service_role unexpectedly has crawl queue access';
+            END IF;
+          END $$;
+
+          INSERT INTO eh_quad.eh_documents
+            (canonical_url, source_host, lane, title, description, body_text, content_hash)
+          VALUES
+            ('https://fixture.example/rolex', 'fixture.example', 'general',
+             'Rolex independent search fixture', 'Precision watch catalog',
+             'PostgreSQL full text search smoke test', 'fixture-hash')
+          ON CONFLICT (canonical_url) DO UPDATE
+            SET title=excluded.title, content_hash=excluded.content_hash;
+
+          INSERT INTO eh_quad.eh_catalogs
+            (catalog_id, source_id, title, catalog_type, source_url)
+          VALUES
+            ('fixture-catalog', 'fixture-source', 'Watch catalog fixture',
+             'product_catalog', 'https://fixture.example/catalog')
+          ON CONFLICT (catalog_id) DO UPDATE SET title=excluded.title;
+
+          INSERT INTO eh_quad.eh_catalog_records
+            (record_id, catalog_id, record_type, title, source_key, source_url, subject, attributes)
+          VALUES
+            ('fixture-rolex', 'fixture-catalog', 'product', 'Rolex fixture watch',
+             'rolex-fixture', 'https://fixture.example/rolex', 'watches',
+             '{"public_search_allowed":true}'::jsonb)
+          ON CONFLICT (record_id) DO UPDATE SET title=excluded.title;
+
+          DO $$
+          BEGIN
+            IF NOT EXISTS (SELECT 1 FROM eh_quad.eh_search_pages('Rolex', NULL, 10)) THEN
+              RAISE EXCEPTION 'Page search RPC did not return the fixture';
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM eh_quad.eh_search_catalog_records('Rolex', NULL, NULL, 10)) THEN
+              RAISE EXCEPTION 'Catalog search RPC did not return the fixture';
+            END IF;
+          END $$;
+          SQL
