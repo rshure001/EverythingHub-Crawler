@@ -248,7 +248,7 @@ class CanonicalIndexStoreTests(unittest.TestCase):
         manifest_path = public_dir / "manifest.json"
         pages = self.pages(3)
         payload = {"version": 1, "pages": pages}
-        decoded = (json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\\n").encode("utf-8")
+        decoded = (json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n").encode("utf-8")
         raw = gzip.compress(decoded, compresslevel=9, mtime=0)
         shard_name = "shard-0001.json.gz"
         (public_dir / shard_name).write_bytes(raw)
@@ -278,7 +278,7 @@ class CanonicalIndexStoreTests(unittest.TestCase):
         public_dir.mkdir()
         manifest_path = public_dir / "manifest.json"
         pages = self.pages(1)
-        decoded = (json.dumps({"version": 1, "pages": pages}, separators=(",", ":")) + "\\n").encode("utf-8")
+        decoded = (json.dumps({"version": 1, "pages": pages}, separators=(",", ":")) + "\n").encode("utf-8")
         raw = gzip.compress(decoded, compresslevel=9, mtime=0)
         shard_name = "shard-0001.json.gz"
         (public_dir / shard_name).write_bytes(raw[:-1] + bytes([raw[-1] ^ 1]))
