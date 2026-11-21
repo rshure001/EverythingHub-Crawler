@@ -125,7 +125,7 @@ class CumulativeProbeTests(unittest.TestCase):
                 self.assertEqual(first["urls_checked"], 30)
                 self.assertEqual(first["fetch_authorized_urls"], 0)
                 self.assertEqual(first["page_content_fetched_urls"], 0)
-                second = catalog_host_probe.run_landing_page_robots(queue_path, output_path, limit=30, recheck_seconds=86_400)
+                second = catalog_host_probe.run_landing_page_robots(queue_path, output_path, limit=30, recheck_seconds=86_400, manifest_path=manifest_path)
             self.assertEqual(second["last_batch_urls_checked"], 5)
             self.assertEqual(second["urls_checked"], 35)
             self.assertEqual(second["robots_allowed"], 35)
