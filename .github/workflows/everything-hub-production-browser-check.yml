@@ -123,7 +123,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     env:
-      TARGET_URL: https://everythinghub-homepage-fixed-1yxcezmie-rshure001-8053.vercel.app/
+      TARGET_URL: https://everythinghub-homepage-fixed-8o0zyeeqs-rshure001-8053.vercel.app/
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -153,12 +153,18 @@ jobs:
               report.httpStatus=response?.status();
               report.title=await page.title();
               report.artwork=await image.evaluate(i=>({src:i.currentSrc,width:i.naturalWidth,height:i.naturalHeight,renderedWidth:i.getBoundingClientRect().width}));
+              if(!report.artwork.src.includes("everythinghub-approved-octopus.png"))throw new Error("Approved master artwork is not being used: "+report.artwork.src);
               report.desktopLayout=await page.evaluate(()=>{const a=document.querySelector(".art").getBoundingClientRect(),r=document.querySelector("#results").getBoundingClientRect();return {mainDirection:getComputedStyle(document.querySelector("main")).flexDirection,artRight:a.right,artBottom:a.bottom,resultsTop:r.top,viewportWidth:document.documentElement.clientWidth}});
               report.searchInputCount=await page.locator("#query").count();
               report.categoryCount=await page.locator(".hotspots [data-mode]").count();
               report.categoryModes=await page.locator(".hotspots [data-mode]").evaluateAll(xs=>xs.map(x=>x.dataset.mode));
               if(!response?.ok()||!report.title.includes("Everything Hub")||report.searchInputCount!==1||report.categoryCount!==8||report.artwork.renderedWidth<700||report.desktopLayout.mainDirection!=="column"||report.desktopLayout.resultsTop<report.desktopLayout.artBottom)throw new Error("Fallback homepage structure failed: "+JSON.stringify(report));
               await page.screenshot({path:"everythinghub-fallback-home.png",fullPage:true});
+              for(const mode of report.categoryModes){
+                await page.locator(".hotspots [data-mode=\""+mode+"\"]").click();
+                const selected=await page.locator("#status").innerText();
+                if(!selected.toLowerCase().includes("selected"))throw new Error("Category did not activate: "+mode+" / "+selected);
+              }
               for(const query of ["Rolex","Las Vegas","NASA"]){
                 await page.goto(report.url,{waitUntil:"domcontentloaded",timeout:45000});
                 await page.locator("#query").fill(query);
