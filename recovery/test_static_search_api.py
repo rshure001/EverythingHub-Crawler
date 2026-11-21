@@ -62,34 +62,56 @@ class StaticSearchTests(unittest.TestCase):
         return manifest
 
     def test_capacity_bounds_cover_current_public_catalog(self):
-        # Verified public-search snapshot at 2026-11-20T22:23:31Z: 133,026 pages across 514 shards.
-        # The recovery service must match the publisher's 150k pages, 640 shards, 80 MB compressed, and 320 MB decoded bounds.
+        # Verified public-search snapshot at 2026-11-21T12:09:31Z: 151,584 rows across 586 shards.
+        # The recovery service matches the publisher's 180k pages, 768 shards, 256 KB manifest, 100 MB compressed, and 400 MB decoded bounds.
         self.assertEqual(
-            api._manifest_int(133_026, "total_pages", 1, api.MAX_PAGES),
-            133_026,
+            api._manifest_int(151_584, "total_pages", 1, api.MAX_PAGES),
+            151_584,
         )
         self.assertEqual(
             api._manifest_int(
-                255_987_451,
+                291_973_398,
                 "total uncompressed bytes",
                 1,
                 api.MAX_TOTAL_UNCOMPRESSED_BYTES,
             ),
-            255_987_451,
+            291_973_398,
         )
         self.assertEqual(
             api._manifest_int(
-                64_459_270,
+                72_608_773,
                 "total compressed bytes",
                 1,
                 api.MAX_TOTAL_COMPRESSED_BYTES,
             ),
-            64_459_270,
+            72_608_773,
         )
         self.assertEqual(
-            api._manifest_int(514, "shard_count", 1, api.MAX_SHARDS),
-            514,
+            api._manifest_int(586, "shard_count", 1, api.MAX_SHARDS),
+            586,
         )
+        self.assertEqual(api.MAX_PAGES, 180_000)
+        self.assertEqual(api.MAX_SHARDS, 768)
+        self.assertEqual(api.MAX_MANIFEST_BYTES, 256_000)
+        self.assertEqual(api.MAX_TOTAL_COMPRESSED_BYTES, 100_000_000)
+        self.assertEqual(api.MAX_TOTAL_UNCOMPRESSED_BYTES, 400_000_000)
+        self.assertEqual(
+            api._manifest_int(123_819, "manifest bytes", 1, api.MAX_MANIFEST_BYTES),
+            123_819,
+        )
+
+    def test_capacity_rejects_values_above_publisher_envelope(self):
+        limits = [
+            (180_001, "total_pages", api.MAX_PAGES),
+            (769, "shard_count", api.MAX_SHARDS),
+            (100_000_001, "total compressed bytes", api.MAX_TOTAL_COMPRESSED_BYTES),
+            (400_000_001, "total uncompressed bytes", api.MAX_TOTAL_UNCOMPRESSED_BYTES),
+            (256_001, "manifest bytes", api.MAX_MANIFEST_BYTES),
+        ]
+        for value, name, maximum in limits:
+            with self.subTest(name=name):
+                with self.assertRaisesRegex(ValueError, "safe bounds"):
+                    api._manifest_int(value, name, 1, maximum)
 
     def test_title_hits_rank_first(self):
         result = api.search("Apollo", "", 10, 0)
