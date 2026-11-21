@@ -58,6 +58,20 @@ def _utc_now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
+def _landing_runtime_policy_item(item: dict, policy: dict | None = None) -> dict:
+    if policy is None:
+        host = urllib.parse.urlsplit(str(item.get("source_url") or "")).hostname or ""
+        policy = policy_for_host(host) or {}
+    runtime = dict(item)
+    for key in (
+        "terms_url", "terms_status", "reviewed_at", "allowed_catalog_path_patterns",
+        "metadata_only", "allowed_metadata_fields", "prohibited_content",
+        "max_response_bytes", "min_interval_seconds", "max_requests_per_run",
+    ):
+        runtime[key] = policy.get(key)
+    return runtime
+
+
 def _landing_policy_fingerprint(item: dict) -> str:
     keys = (
         "source_url", "source_access_mode", "review_status", "terms_url",
@@ -85,6 +99,8 @@ def _is_preapproved_landing_url(item: object) -> bool:
 def probe_catalog_landing_page_robots(item: dict) -> dict:
     """Check source policy and robots for one exact landing URL; never fetch page content."""
     url = item.get("source_url")
+    runtime_policy = policy_for_host(str(item.get("source_host") or "")) or {}
+    runtime_item = _landing_runtime_policy_item(item, runtime_policy)
     base = {
         "source_url": url,
         "source_host": item.get("source_host"),
@@ -92,21 +108,25 @@ def probe_catalog_landing_page_robots(item: dict) -> dict:
         "catalog_count": item.get("catalog_count", 0),
         "source_access_mode": "catalog_landing_page",
         "review_status": item.get("review_status"),
-        "terms_url": item.get("terms_url"),
-        "terms_status": item.get("terms_status"),
-        "reviewed_at": item.get("reviewed_at"),
-        "allowed_catalog_path_patterns": item.get("allowed_catalog_path_patterns", []),
-        "metadata_only": True,
-        "allowed_metadata_fields": item.get("allowed_metadata_fields", []),
-        "prohibited_content": item.get("prohibited_content", []),
-        "max_response_bytes": item.get("max_response_bytes"),
-        "min_interval_seconds": item.get("min_interval_seconds"),
-        "max_requests_per_run": item.get("max_requests_per_run"),
+        "candidate_terms_url": item.get("terms_url"),
+        "candidate_terms_status": item.get("terms_status"),
+        "candidate_reviewed_at": item.get("reviewed_at"),
+        "terms_url": runtime_policy.get("terms_url"),
+        "terms_status": runtime_policy.get("terms_status"),
+        "reviewed_at": runtime_policy.get("reviewed_at"),
+        "allowed_catalog_path_patterns": runtime_policy.get("allowed_catalog_path_patterns", []),
+        "metadata_only": runtime_policy.get("metadata_only") is True,
+        "allowed_metadata_fields": runtime_policy.get("allowed_metadata_fields", []),
+        "prohibited_content": runtime_policy.get("prohibited_content", []),
+        "max_response_bytes": runtime_policy.get("max_response_bytes"),
+        "min_interval_seconds": runtime_policy.get("min_interval_seconds"),
+        "max_requests_per_run": runtime_policy.get("max_requests_per_run"),
         "fetch_authorized": False,
         "page_content_fetched": False,
         "page_requests": 0,
         "robots_check_performed": False,
         "checked_at": _utc_now(),
+        "policy_fingerprint": _landing_policy_fingerprint(runtime_item),
     }
     if not _is_preapproved_landing_url(item):
         return {**base, "status": "not_preapproved", "robots_allowed": None}
@@ -114,8 +134,20 @@ def probe_catalog_landing_page_robots(item: dict) -> dict:
         policy, _parser, delay, _allowed_paths = authorize_source_url(
             url, purpose="landing_page"
         )
+        runtime_item = _landing_runtime_policy_item(item, policy)
         return {
             **base,
+            "terms_url": policy.get("terms_url"),
+            "terms_status": policy.get("terms_status"),
+            "reviewed_at": policy.get("reviewed_at"),
+            "allowed_catalog_path_patterns": policy.get("allowed_catalog_path_patterns", []),
+            "metadata_only": policy.get("metadata_only") is True,
+            "allowed_metadata_fields": policy.get("allowed_metadata_fields", []),
+            "prohibited_content": policy.get("prohibited_content", []),
+            "max_response_bytes": policy.get("max_response_bytes"),
+            "min_interval_seconds": policy.get("min_interval_seconds"),
+            "max_requests_per_run": policy.get("max_requests_per_run"),
+            "policy_fingerprint": _landing_policy_fingerprint(runtime_item),
             "status": "robots_allowed",
             "robots_allowed": True,
             "robots_check_performed": True,
@@ -227,7 +259,8 @@ def run_landing_page_robots(
     now = datetime.now(timezone.utc)
     pending = []
     for item in eligible:
-        fingerprint = _landing_policy_fingerprint(item)
+        runtime_item = _landing_runtime_policy_item(item)
+        fingerprint = _landing_policy_fingerprint(runtime_item)
         prior = previous.get(item["source_url"])
         if (
             prior
