@@ -338,6 +338,24 @@ class CrawlerTests(unittest.TestCase):
         self.assertTrue(noindex["_eh_noindex"])
         self.assertNotIn("structured_catalog", noindex)
 
+    def test_extract_page_structured_catalog_metadata_accepts_data_catalog(self):
+        html = """<script type="application/ld+json">{
+          "@context":"https://schema.org","@type":"DataCatalog",
+          "name":"Nevada Public Datasets",
+          "dataset":[
+            {"@type":"Dataset","name":"Business Licenses","url":"/datasets/licenses"},
+            {"@type":"Dataset","name":"Building Permits","url":"/datasets/permits"}
+          ]
+        }</script>"""
+        result = crawl.extract_page_structured_catalog_metadata(html, "https://data.example/catalog")
+        self.assertEqual(len(result["lists"]), 1)
+        self.assertEqual(result["lists"][0]["record_type"], "dataset")
+        self.assertEqual(len(result["lists"][0]["items"]), 2)
+        self.assertEqual(
+            crawl.extract_page_structured_catalog_metadata("<p>ordinary page</p>", "https://data.example/page"),
+            {},
+        )
+
     def test_build_page_record_does_not_publish_product_metadata_on_noindex(self):
         record = crawl.build_page_record(
             "https://shop.example/private", "Private product", "", "", 1, {"noindex"},
