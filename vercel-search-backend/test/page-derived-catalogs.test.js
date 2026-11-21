@@ -32,7 +32,8 @@ test('accepts the live search index after it grows beyond 150,000 pages',()=>{
  const f=fixture();f.manifest.source_index_pages=152631;
  const network=validatePageDerivedCatalogs(f.manifest,f.registry,f.recordsFile);
  assert.equal(network.sourceIndexPages,152631);
-});\ntest('loads both artifacts from one commit-pinned GitHub snapshot',async()=>{
+});
+test('loads both artifacts from one commit-pinned GitHub snapshot',async()=>{
  const f=fixture(),sha='b'.repeat(40),base='https://raw.githubusercontent.com/rshure001/EverythingHub-Crawler/'+sha+'/data/page-derived-catalogs/';
  const artifacts=new Map([[base+'registry.json.gz',f.registry],[base+'records.json.gz',f.recordsFile]]);
  const loaded=await loadPageDerivedCatalogsFromManifest(f.manifest,sha,f.manifestRaw,async url=>{assert.ok(artifacts.has(url));return artifacts.get(url);});
