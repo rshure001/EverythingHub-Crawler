@@ -34,11 +34,11 @@ class ScheduleWatchdogTests(unittest.TestCase):
         push = workflow.split("  push:" + chr(10), 1)[1].split("  schedule:", 1)[0]
         self.assertIn('      - "crawler/automation-trigger.json"', push)
 
-    def test_crawler_schedule_uses_staggered_ten_minute_cadence(self):
+    def test_crawler_schedule_uses_five_minute_cadence(self):
         workflow = (Path(__file__).resolve().parents[1] / ".github" / "workflows" / "crawl.yml").read_text(encoding="utf-8")
-        self.assertIn('    - cron: "3,13,23,33,43,53 * * * *"', workflow)
-        self.assertNotIn('    - cron: "*/5 * * * *"', workflow)
-        self.assertIn("every 10 minutes", workflow)
+        self.assertIn('    - cron: "*/5 * * * *"', workflow)
+        self.assertNotIn('    - cron: "3,13,23,33,43,53 * * * *"', workflow)
+        self.assertIn("every five minutes", workflow)
 
     def test_watchdog_runs_after_crawler_completion_without_redundant_workflow_fanout(self):
         workflow = (Path(__file__).resolve().parents[1] / ".github" / "workflows" / "crawl-watchdog.yml").read_text(encoding="utf-8")
