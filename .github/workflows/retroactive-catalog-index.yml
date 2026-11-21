@@ -155,14 +155,14 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f data/host-catalog-candidates.json data/page-catalog-seeds.json.gz data/page-derived-catalogs data/page-derived-catalogs/source-host-review-queue.json data/project-ledger.json
+          git rm -f --ignore-unmatch data/page-catalog-seeds.json
+          if git diff --cached --quiet; then
+            echo "No catalog analysis changes."
+            exit 0
+          fi
+          git commit -m "Publish validated page-derived catalog candidates"
           for attempt in 1 2 3; do
-            git add -f data/host-catalog-candidates.json data/page-catalog-seeds.json.gz data/page-derived-catalogs data/page-derived-catalogs/source-host-review-queue.json data/project-ledger.json
-            git rm -f --ignore-unmatch data/page-catalog-seeds.json
-            if git diff --cached --quiet; then
-              echo "No catalog analysis changes."
-              exit 0
-            fi
-            git commit -m "Publish validated page-derived catalog candidates"
             if git push origin HEAD:main; then
               if gh workflow run search-api-smoke.yml --ref main; then
                 echo "Dispatched first-party catalog search smoke test after publishing the new catalog snapshot."
@@ -171,17 +171,15 @@ jobs:
               fi
               exit 0
             fi
-            echo "Main advanced during publish; rebuilding from the latest canonical index (attempt $attempt)."
+            echo "Main advanced during publish; rebasing the validated catalog commit (attempt $attempt)."
             git fetch origin main
-            git reset --hard origin/main
-            python crawler/catalog_retro_discovery.py
-            python crawler/catalog_page_analysis.py --query Rolex --query "Las Vegas"
-            python crawler/catalog_host_review_queue.py
-            python crawler/catalog_page_analysis.py --validate-only
-            python crawler/catalog_host_review_queue.py --validate-only
-            python project/ledger.py --record-page-derived-catalog-analysis
+            if ! git rebase origin/main; then
+              git rebase --abort || true
+              echo "::error::Catalog publication conflicted with concurrent main changes; no remote data was overwritten."
+              exit 1
+            fi
           done
-          echo "Unable to publish validated catalog analysis after three protected attempts."
+          echo "Unable to publish validated catalog analysis after three rebase attempts."
           exit 1
       - name: Upload catalog analysis preview from non-main branches
         if: github.ref != 'refs/heads/main'
