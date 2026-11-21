@@ -2162,6 +2162,7 @@ def write_outputs(analysis: dict, output_dir: Path) -> dict:
         "elapsed_wall_clock_seconds": analysis.get("elapsed_wall_clock_seconds"),
         "previous_counts": analysis.get("previous_counts"),
         "count_deltas": analysis.get("count_deltas"),
+        "negative_count_deltas": analysis.get("negative_count_deltas"),
         "throughput": analysis.get("throughput"),
     }
     report = {
@@ -2462,6 +2463,41 @@ def _read_previous_snapshot(output_dir: Path) -> dict | None:
         return None
 
 
+def measure_persisted_count_deltas(previous_counts: dict, current_counts: dict,
+                                     wall_seconds: float) -> dict:
+    """Keep signed count changes visible while rates remain non-negative.
+
+    A stricter analyzer can remove previously counted false-positive candidates.
+    Such decreases are real count corrections, not negative production throughput.
+    """
+    minutes = max(0.001, float(wall_seconds)) / 60.0
+    deltas = {
+        key: int(current_counts.get(key, 0)) - int(previous_counts.get(key, 0))
+        for key in previous_counts
+    }
+    negative_deltas = {key: value for key, value in deltas.items() if value < 0}
+    rate_keys = {
+        "pages_per_minute": "pages_analyzed",
+        "catalogs_per_minute": "unique_catalogs_discovered",
+        "records_per_minute": "unique_records",
+        "subcatalogs_per_minute": "subcatalogs_discovered",
+        "media_references_per_minute": "media_references",
+    }
+    throughput = {
+        rate: round(max(0, deltas.get(count_key, 0)) / minutes, 4)
+        for rate, count_key in rate_keys.items()
+    }
+    throughput.update({
+        "measurement": "persisted_count_delta_over_wall_clock_interval",
+        "negative_count_deltas_excluded": True,
+    })
+    return {
+        "count_deltas": deltas,
+        "negative_count_deltas": negative_deltas,
+        "throughput": throughput,
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--index", type=Path, default=DEFAULT_INDEX)
@@ -2498,19 +2534,14 @@ def main() -> None:
         previous_at = datetime.fromisoformat(previous_snapshot["snapshot_at"].replace("Z", "+00:00"))
         wall_seconds = max(0.001, (finished_at - previous_at).total_seconds())
         current_counts = {key: analysis["metrics"].get(key, 0) for key in previous_snapshot["counts"]}
-        deltas = {key: current_counts[key] - previous_snapshot["counts"][key] for key in current_counts}
-        minutes = wall_seconds / 60.0
+        measured = measure_persisted_count_deltas(
+            previous_snapshot["counts"], current_counts, wall_seconds
+        )
         analysis["previous_counts"] = previous_snapshot["counts"]
-        analysis["count_deltas"] = deltas
+        analysis["count_deltas"] = measured["count_deltas"]
+        analysis["negative_count_deltas"] = measured["negative_count_deltas"]
         analysis["elapsed_wall_clock_seconds"] = round(wall_seconds, 3)
-        analysis["throughput"] = {
-            "pages_per_minute": round(deltas["pages_analyzed"] / minutes, 4),
-            "catalogs_per_minute": round(deltas["unique_catalogs_discovered"] / minutes, 4),
-            "records_per_minute": round(deltas["unique_records"] / minutes, 4),
-            "subcatalogs_per_minute": round(deltas["subcatalogs_discovered"] / minutes, 4),
-            "media_references_per_minute": round(deltas["media_references"] / minutes, 4),
-            "measurement": "persisted_count_delta_over_wall_clock_interval",
-        }
+        analysis["throughput"] = measured["throughput"]
     else:
         analysis["previous_counts"] = None
         analysis["count_deltas"] = None
