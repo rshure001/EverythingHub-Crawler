@@ -1372,5 +1372,43 @@ class CatalogInventoryTriggerTests(unittest.TestCase):
         self.assertEqual(result["metrics"]["unique_records"], 4)
         self.assertEqual(result["metrics"]["cross_host_record_merges"], 0)
 
+
+    def test_cross_host_subject_catalog_groups_recurring_page_topics(self):
+        pages = []
+        for host, suffixes in (
+            ("nature-one.example", ("101", "102")),
+            ("nature-two.example", ("103", "104")),
+        ):
+            for suffix in suffixes:
+                pages.append({
+                    "url": f"https://{host}/articles/ladybug-{suffix}",
+                    "title": f"Ladybug {suffix}",
+                    "description": "Field observations and species notes.",
+                    "text": "Ladybug behavior and habitat.",
+                    "lane": "general",
+                    "robots_allowed": True,
+                    "fetched_at": 100 + int(suffix),
+                })
+
+        for analyze in (
+            lambda rows: analyze_pages(rows, source_total=len(rows)),
+            lambda rows: analyze_pages_incremental(rows, source_total=len(rows)),
+        ):
+            with tempfile.TemporaryDirectory() as tmp:
+                result = analyze(pages)
+                self.assertEqual(result["metrics"]["global_subject_catalogs"], 1)
+                catalog = next(
+                    item for item in result["catalogs"]
+                    if item["title"] == "Ladybug Subject Catalog"
+                )
+                self.assertEqual(catalog["source_host"], "__global__")
+                self.assertEqual(catalog["source_page_count"], 4)
+                self.assertEqual(catalog["record_count"], 4)
+                self.assertTrue(search_catalog_network("ladybug", result))
+                write_outputs(result, Path(tmp))
+                validated = validate_outputs(Path(tmp))
+                self.assertEqual(validated["catalogs"], result["metrics"]["unique_catalogs_discovered"])
+
+
 if __name__ == "__main__":
     unittest.main()
