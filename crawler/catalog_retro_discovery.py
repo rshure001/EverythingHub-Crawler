@@ -16,11 +16,13 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from index_store import load_index
+from catalog_page_analysis import canonical_url
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_INDEX = ROOT / "data" / "index.json"
 DEFAULT_OUTPUT = ROOT / "data" / "host-catalog-candidates.json"
 DEFAULT_PAGE_OUTPUT = ROOT / "data" / "page-catalog-seeds.json.gz"
+DEFAULT_PAGE_ANALYSIS_DIR = ROOT / "data" / "page-derived-catalogs"
 
 HINTS = {
     "sitemap": re.compile(r"sitemap|site-map", re.I),
@@ -43,8 +45,45 @@ def host_key(url: str) -> str | None:
     except ValueError:
         return None
 
-def build_candidates(index: dict) -> dict:
+def _catalog_relationships(page_analysis: dict | None) -> dict[str, list[dict]]:
+    """Map each indexed page to real catalog candidates from the page analyzer."""
+    if not isinstance(page_analysis, dict):
+        return {}
+    catalog_by_key = {}
+    for catalog in page_analysis.get("catalogs", []):
+        if not isinstance(catalog, dict):
+            continue
+        key = catalog.get("source_key")
+        catalog_id = catalog.get("catalog_id")
+        if isinstance(key, str) and isinstance(catalog_id, str):
+            catalog_by_key[key] = {
+                "catalog_id": catalog_id,
+                "title": str(catalog.get("title") or "")[:240],
+                "source_page_count": len(catalog.get("source_page_ids") or []),
+                "record_count": len(catalog.get("record_ids") or []),
+                "catalog_status": catalog.get("catalog_status", catalog.get("status", "candidate")),
+            }
+    relationships = {}
+    for page in page_analysis.get("pages", []):
+        if not isinstance(page, dict) or not isinstance(page.get("url"), str):
+            continue
+        normalized_url = canonical_url(page["url"])
+        if not normalized_url:
+            continue
+        related = []
+        for key in page.get("catalog_group_keys", []):
+            catalog = catalog_by_key.get(key)
+            if catalog and catalog not in related:
+                related.append(catalog)
+        relationships[normalized_url] = sorted(
+            related, key=lambda item: (-item["source_page_count"], -item["record_count"], item["catalog_id"])
+        )
+    return relationships
+
+
+def build_candidates(index: dict, page_analysis: dict | None = None) -> dict:
     page_seeds = []
+    page_relationships = _catalog_relationships(page_analysis)
     grouped = defaultdict(lambda: {"source_pages": 0, "hint_pages": 0, "examples": [], "hint_counts": defaultdict(int), "lanes": defaultdict(int)})
     for page in index.get("pages", []):
         if not isinstance(page, dict):
@@ -61,14 +100,29 @@ def build_candidates(index: dict) -> dict:
         text = " ".join(str(page.get(k) or "") for k in ("title", "description", "text"))[:2500]
         matched = [name for name, pattern in HINTS.items() if pattern.search(text) or pattern.search(url)]
         page_digest = __import__("hashlib").sha256(url.encode("utf-8")).hexdigest()[:24]
+        normalized_url = canonical_url(url)
+        related_catalogs = page_relationships.get(normalized_url, [])
+        related_catalog_ids = [item["catalog_id"] for item in related_catalogs]
+        best_page_count = max((item["source_page_count"] for item in related_catalogs), default=0)
+        best_record_count = max((item["record_count"] for item in related_catalogs), default=0)
+        profile_status = "catalog_associated" if related_catalogs else "pending_catalog_discovery"
+        coverage_status = (
+            "meets_100_page_target" if best_page_count >= 100
+            else "below_100_page_target" if related_catalogs
+            else "not_yet_classified"
+        )
         page_seeds.append({
             "page_id": page_digest,
             "page_profile_id": "page-catalog-profile:" + page_digest,
             "profile_type": "source_page_catalog_profile",
-            "profile_status": "pending_catalog_classification",
-            "related_catalog_ids": [],
+            "profile_status": profile_status,
+            "related_catalog_ids": related_catalog_ids,
+            "related_catalog_count": len(related_catalog_ids),
+            "best_catalog_source_page_count": best_page_count,
+            "best_catalog_record_count": best_record_count,
+            "catalog_coverage_status": coverage_status,
             "discovery_seed_id": "page-seed:" + page_digest,
-            "analysis_status": "pending_page_content_analysis",
+            "analysis_status": "catalogs_associated" if related_catalogs else "pending_expansion",
             "url": url[:2048],
             "host": host,
             "title": str(page.get("title") or "")[:240],
@@ -110,8 +164,12 @@ def build_candidates(index: dict) -> dict:
         "metrics": {
             "pages_as_discovery_seeds": len(page_seeds),
             "page_catalog_profiles_created": len(page_seeds),
-            "profiles_pending_catalog_classification": len(page_seeds),
-            "unique_catalog_candidates": 0,
+            "profiles_associated_with_catalogs": sum(bool(x["related_catalog_ids"]) for x in page_seeds),
+            "profiles_pending_catalog_discovery": sum(not x["related_catalog_ids"] for x in page_seeds),
+            "page_catalog_associations": sum(len(x["related_catalog_ids"]) for x in page_seeds),
+            "profiles_with_catalogs_meeting_100_page_target": sum(x["catalog_coverage_status"] == "meets_100_page_target" for x in page_seeds),
+            "profiles_with_catalogs_below_100_page_target": sum(x["catalog_coverage_status"] == "below_100_page_target" for x in page_seeds),
+            "unique_catalog_candidates": len({catalog_id for x in page_seeds for catalog_id in x["related_catalog_ids"]}),
             "verified_page_catalogs": 0,
             "pages_with_catalog_signals": sum(bool(x["catalog_signals"]) for x in page_seeds),
             "page_catalog_signal_references": sum(len(x["catalog_signals"]) for x in page_seeds),
@@ -126,9 +184,17 @@ def main() -> None:
     parser.add_argument("--index", type=Path, default=DEFAULT_INDEX)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--page-output", type=Path, default=DEFAULT_PAGE_OUTPUT)
+    parser.add_argument("--page-analysis-dir", type=Path, default=DEFAULT_PAGE_ANALYSIS_DIR)
     args = parser.parse_args()
     index = load_index(args.index)
-    result = build_candidates(index)
+    page_analysis = None
+    registry_path = args.page_analysis_dir / "registry.json.gz"
+    pages_path = args.page_analysis_dir / "pages.json.gz"
+    if registry_path.is_file() and pages_path.is_file():
+        registry = json.loads(gzip.decompress(registry_path.read_bytes()).decode("utf-8"))
+        pages_payload = json.loads(gzip.decompress(pages_path.read_bytes()).decode("utf-8"))
+        page_analysis = {"catalogs": registry.get("catalogs", []), "pages": pages_payload.get("pages", [])}
+    result = build_candidates(index, page_analysis=page_analysis)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     temp = args.output.with_suffix(args.output.suffix + ".tmp")
     host_result = dict(result)
@@ -139,7 +205,12 @@ def main() -> None:
         "schema_version": 1,
         "strategy": "one-persistent-page-catalog-profile-per-indexed-page",
         "source_index_pages": result["source_index_pages"],
-        "metrics": {key: value for key, value in result["metrics"].items() if key.startswith("pages_") or key in ("page_catalog_signal_references", "unique_catalog_candidates", "verified_page_catalogs")},
+        "metrics": {
+            key: value for key, value in result["metrics"].items()
+            if key.startswith("pages_") or key.startswith("profiles_")
+            or key.startswith("page_catalog_")
+            or key in ("unique_catalog_candidates", "verified_page_catalogs")
+        },
         "pages": result["page_catalog_seeds"],
     }
     args.page_output.parent.mkdir(parents=True, exist_ok=True)
