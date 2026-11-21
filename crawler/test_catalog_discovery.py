@@ -4,7 +4,7 @@ from unittest.mock import patch
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from catalog_discovery import build_catalog, normalize_dataset, SOURCES
+from catalog_discovery import build_catalog, normalize_dataset, SOURCES, EXCLUDED_SOURCES
 from catalog_source_policy import policy_for_host
 
 class CatalogDiscoveryTests(unittest.TestCase):
@@ -21,11 +21,11 @@ class CatalogDiscoveryTests(unittest.TestCase):
                 {"name": "Unsafe", "format": "zip", "url": "http://downloads.example.org/data.zip"},
             ],
         }, SOURCES[0])
-        self.assertEqual(item["catalog_id"], "us-data-gov")
+        self.assertEqual(item["catalog_id"], "canada-open-data")
         self.assertEqual(item["resource_count"], 1)
         self.assertEqual(item["license"]["id"], "cc-by")
         self.assertEqual(item["resources"][0]["format"], "CSV")
-        self.assertTrue(item["landing_url"].startswith("https://catalog.data.gov/dataset/"))
+        self.assertTrue(item["landing_url"].startswith("https://open.canada.ca/data/en/dataset/"))
 
     def test_missing_dataset_identifier_is_skipped(self):
         self.assertIsNone(normalize_dataset({"title": "No ID"}, SOURCES[0]))
@@ -98,6 +98,10 @@ class CatalogDiscoveryTests(unittest.TestCase):
     def test_catalog_sources_are_https(self):
         self.assertTrue(all(source["base"].startswith("https://") for source in SOURCES))
         self.assertNotIn("australia-data-gov", {source["id"] for source in SOURCES})
+        self.assertNotIn("us-data-gov", {source["id"] for source in SOURCES})
+        excluded = {source["id"]: source for source in EXCLUDED_SOURCES}
+        self.assertIn("us-data-gov", excluded)
+        self.assertIn("free personal API key", excluded["us-data-gov"]["reason"])
 
 if __name__ == "__main__":
     unittest.main()
