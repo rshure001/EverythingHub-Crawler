@@ -140,7 +140,7 @@ async function loadRobots(host) {
   if (response.status === 404 || response.status === 410) {
     policy = parseRobots("", USER_AGENT);
   } else {
-    if (!response.ok) throw new Error("robots_unverified");
+    if (!response.ok) throw new Error("robots_unverified:" + host + ":" + response.status);
     const text = await response.text();
     if (text.length > MAX_ROBOTS_BYTES) throw new Error("robots_response_too_large");
     policy = parseRobots(text, USER_AGENT);
