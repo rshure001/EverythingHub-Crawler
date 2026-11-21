@@ -43,7 +43,7 @@ class CatalogSourcePolicyTests(unittest.TestCase):
              patch.object(policy, "robots_can_fetch", return_value=True), \
              patch.object(policy, "effective_host_delay", return_value=2.5):
             source, loaded_parser, delay, paths = policy.authorize_source_url(
-                "https://catalog.data.gov/api/3/action/package_search"
+                "https://opendata.swiss/api/3/action/package_search"
             )
         self.assertIs(loaded_parser, parser)
         self.assertEqual(delay, 2.5)
