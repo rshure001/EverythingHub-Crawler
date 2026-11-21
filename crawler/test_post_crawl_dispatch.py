@@ -6,17 +6,18 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class PostCrawlDispatchTests(unittest.TestCase):
-    def test_first_party_search_smoke_waits_for_catalog_analysis(self):
+    def test_first_party_search_smoke_runs_after_validated_catalog_publish(self):
         crawler = (ROOT / ".github" / "workflows" / "crawl.yml").read_text(encoding="utf-8")
         search = (ROOT / ".github" / "workflows" / "search-api-smoke.yml").read_text(encoding="utf-8")
+        catalog = (ROOT / ".github" / "workflows" / "retroactive-catalog-index.yml").read_text(encoding="utf-8")
         self.assertIn("  actions: write", crawler)
         self.assertIn("gh workflow run crawl.yml --ref main", crawler)
         self.assertNotIn("gh workflow run search-api-smoke.yml --ref main", crawler)
         self.assertNotIn("gh workflow run publish-site.yml --ref main", crawler)
-        self.assertIn("  workflow_run:", search)
-        self.assertIn('workflows: ["Retroactive catalog inventory"]', search)
-        self.assertIn("types: [completed]", search)
-        self.assertIn("branches: [main]", search)
+        self.assertNotIn("  workflow_run:", search)
+        self.assertIn("  workflow_dispatch:", search)
+        self.assertIn("Dispatch live search verification", catalog)
+        self.assertIn("gh workflow run search-api-smoke.yml --ref main", catalog)
 
 
     def test_crawler_job_has_time_for_bounded_crawl_and_commit(self):
