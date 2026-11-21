@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-11-21T17:21:03.719843+00:00",
+  "updated_at": "2026-11-21T17:46:13.585591+00:00",
   "target_new_records_per_hour": 60000,
   "runs": [
     {
@@ -985,26 +985,50 @@
         "wall_clock_records_per_minute": 35.5,
         "wall_clock_records_per_hour": 2129.9
       }
+    },
+    {
+      "run_id": "44930968313",
+      "run_number": "348",
+      "timestamp": "2026-11-21T17:44:33Z",
+      "indexed_records_processed": 337,
+      "fetch_attempts": 382,
+      "duration_seconds": 432.96,
+      "commit_sha": "457c2a800bf6",
+      "manifest_interval": {
+        "valid": true,
+        "reason": null,
+        "before_pages": 157056,
+        "after_pages": 157393,
+        "before_updated_at": "2026-11-21T17:19:30Z",
+        "after_updated_at": "2026-11-21T17:44:33Z",
+        "elapsed_seconds": 1503.0,
+        "run_duration_seconds": 432.96,
+        "new_unique_records": 337,
+        "records_per_minute": 46.7,
+        "records_per_hour": 2802.1,
+        "wall_clock_records_per_minute": 13.45,
+        "wall_clock_records_per_hour": 807.2
+      }
     }
   ],
   "latest_manifest_interval": {
     "valid": true,
     "reason": null,
-    "before_pages": 156688,
-    "after_pages": 157056,
-    "before_updated_at": "2026-11-21T17:09:08Z",
-    "after_updated_at": "2026-11-21T17:19:30Z",
-    "elapsed_seconds": 622.0,
-    "run_duration_seconds": 420.01,
-    "new_unique_records": 368,
-    "records_per_minute": 52.57,
-    "records_per_hour": 3154.2,
-    "wall_clock_records_per_minute": 35.5,
-    "wall_clock_records_per_hour": 2129.9
+    "before_pages": 157056,
+    "after_pages": 157393,
+    "before_updated_at": "2026-11-21T17:19:30Z",
+    "after_updated_at": "2026-11-21T17:44:33Z",
+    "elapsed_seconds": 1503.0,
+    "run_duration_seconds": 432.96,
+    "new_unique_records": 337,
+    "records_per_minute": 46.7,
+    "records_per_hour": 2802.1,
+    "wall_clock_records_per_minute": 13.45,
+    "wall_clock_records_per_hour": 807.2
   },
   "recent_run_activity": {
-    "records_processed": 1383,
-    "fetch_attempts": 1660,
+    "records_processed": 1260,
+    "fetch_attempts": 1540,
     "run_count": 3
   }
 }
