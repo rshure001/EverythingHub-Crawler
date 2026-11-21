@@ -22,6 +22,7 @@ from index_store import load_index
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_INDEX = ROOT / "data" / "index.json"
 DEFAULT_OUTPUT = ROOT / "data" / "page-derived-catalogs"
+DEFAULT_SOURCE_POLICY_REVIEWS = ROOT / "data" / "source-policy-reviews.json"
 ANALYZER_VERSION = 9
 TRACKING_KEYS = {"fbclid", "gclid", "dclid", "mc_cid", "mc_eid", "ref", "source"}
 STOP_TOKENS = {
@@ -1071,15 +1072,58 @@ def search_catalog_network(query: str, analysis: dict, limit: int = 10) -> list[
     token_set = set(tokens)
     query_phrase = " ".join(tokens)
     records = {x["record_id"]: x for x in analysis.get("records", [])}
+    product_types = {"product", "brand", "model"}
+    location_types = {"place", "business", "service", "organization", "dataset"}
+    content_types = {"article", "resource", "media", "subject"}
+    product_terms = {
+        "product", "products", "model", "models", "watch", "watches",
+        "buy", "shop", "retailer", "retailers", "dealer", "dealers",
+        "price", "prices", "reference", "references",
+    }
+    business_terms = {
+        "business", "businesses", "restaurant", "restaurants", "hotel",
+        "hotels", "store", "stores", "shop", "shops", "venue", "venues",
+        "dealer", "dealers",
+    }
+    event_terms = {
+        "event", "events", "concert", "concerts", "festival", "festivals",
+        "calendar", "schedule", "schedules", "grand", "prix",
+    }
+    content_intent = bool(token_set & CONTENT_INTENT_TOKENS)
+    event_intent = bool(token_set & event_terms)
+    business_intent = bool(token_set & business_terms)
+    product_term_intent = bool(token_set & product_terms)
+
+    def query_matches_record(record: dict) -> bool:
+        title_tokens = set(_norm(record.get("title", "")).split())
+        description_tokens = set(_norm(record.get("description", "")).split())
+        attribute_tokens = set(_norm(_searchable_attribute_text(record.get("attributes", {}))).split())
+        return token_set.issubset(title_tokens | description_tokens | attribute_tokens)
+
+    global_product_match = any(
+        str(record.get("record_type", "")).casefold() in product_types
+        and query_matches_record(record)
+        for record in records.values()
+    )
+    global_place_match = any(
+        str(record.get("record_type", "")).casefold() == "place"
+        and query_matches_record(record)
+        for record in records.values()
+    )
+    product_intent = not content_intent and not business_intent and (product_term_intent or global_product_match)
+    geo_intent = (
+        len(tokens) >= 2 and global_place_match
+        and not content_intent and not event_intent and not business_intent
+    )
+    location_business_intent = business_intent and not content_intent
     results = []
     for catalog in analysis.get("catalogs", []):
         related = [records[x] for x in catalog.get("record_ids", []) if x in records]
         catalog_text = _norm(" ".join((catalog.get("title", ""), catalog.get("subject", ""))))
         catalog_tokens = set(catalog_text.split())
         catalog_match = token_set.issubset(catalog_tokens)
-        record_type = str(catalog.get("record_type", ""))
-        content_record = record_type in ("article", "resource", "media", "subject")
-        content_intent = bool(token_set & CONTENT_INTENT_TOKENS)
+        record_type = str(catalog.get("record_type", "")).casefold()
+        content_record = record_type in content_types
         matched = []
         for record in related:
             title_norm = _norm(record.get("title", ""))
@@ -1107,21 +1151,87 @@ def search_catalog_network(query: str, analysis: dict, limit: int = 10) -> list[
         ranked = sorted(matched, key=lambda x: (-x[0], x[1]["title"].casefold()))[:5]
         matched_types = {str(record.get("record_type", "")).casefold() for _, record in ranked}
         catalog_type = str(catalog.get("catalog_type", "")).casefold()
-        # Favor matching product/place/business record types; reduce incidental content-title matches.
-        catalog_score = (
-            25 + (5 * len(tokens))
-            if catalog_match and content_record and not content_intent
-            else 100 + (10 * len(tokens)) if catalog_match else 0
-        )
+        record_scores = [score for score, _record in ranked]
+        aggregate_record_score = max(record_scores) + min(30, sum(record_scores) - max(record_scores))
+        catalog_score = 100 + (10 * len(tokens)) if catalog_match else 0
+
         type_bonus = 0
-        if catalog_type == "geographic":
-            type_bonus = 70 if len(tokens) >= 2 and "place" in matched_types else -20
-        elif catalog_type == "commerce":
-            type_bonus = 50 if matched_types & {"product", "brand", "model"} else -20
-        elif catalog_type == "business_directory":
-            type_bonus = 40 if "business" in matched_types else -15
-        elif catalog_type == "service_directory":
-            type_bonus = 40 if "service" in matched_types else -15
+        if product_intent:
+            if matched_types & product_types:
+                type_bonus = 180
+            elif matched_types & content_types:
+                type_bonus = -100
+        elif geo_intent:
+            if catalog_type == "geographic" and "place" in matched_types:
+                type_bonus = 180
+            elif catalog_type == "business_directory" and "business" in matched_types:
+                type_bonus = 145
+            elif catalog_type == "service_directory" and "service" in matched_types:
+                type_bonus = 140
+            elif catalog_type == "organization_directory" and "organization" in matched_types:
+                type_bonus = 110
+            elif catalog_type == "events" and "event" in matched_types:
+                type_bonus = 60
+            elif matched_types & content_types:
+                type_bonus = -100
+        elif location_business_intent:
+            if catalog_type == "business_directory" and "business" in matched_types:
+                type_bonus = 180
+            elif catalog_type == "service_directory" and "service" in matched_types:
+                type_bonus = 160
+            elif catalog_type == "geographic" and "place" in matched_types:
+                type_bonus = 100
+            elif matched_types & content_types:
+                type_bonus = -80
+        elif event_intent:
+            if catalog_type == "events" and "event" in matched_types:
+                type_bonus = 180
+            elif matched_types & content_types:
+                type_bonus = -80
+        else:
+            if catalog_type == "geographic":
+                type_bonus = 70 if len(tokens) >= 2 and "place" in matched_types else -20
+            elif catalog_type == "commerce":
+                type_bonus = 50 if matched_types & product_types else -20
+            elif catalog_type == "business_directory":
+                type_bonus = 40 if "business" in matched_types else -15
+            elif catalog_type == "service_directory":
+                type_bonus = 40 if "service" in matched_types else -15
+
+        if product_intent and matched_types & product_types:
+            relevance_class = "typed_product_match"
+        elif geo_intent and matched_types & location_types:
+            relevance_class = "typed_location_match"
+        elif geo_intent and "event" in matched_types:
+            relevance_class = "related_event_match"
+        elif location_business_intent and matched_types & {"business", "service"}:
+            relevance_class = "typed_business_match"
+        elif event_intent and "event" in matched_types:
+            relevance_class = "typed_event_match"
+        elif matched_types & content_types:
+            relevance_class = "related_mention"
+        elif catalog_match:
+            relevance_class = "catalog_match"
+        else:
+            relevance_class = "record_match"
+        query_intent = (
+            "product" if product_intent else
+            "location" if geo_intent else
+            "business" if location_business_intent else
+            "event" if event_intent else
+            "content" if content_intent else
+            "general"
+        )
+        relevance_label = {
+            "typed_product_match": "Product or model match",
+            "typed_location_match": "Place or local directory match",
+            "typed_business_match": "Business or service match",
+            "typed_event_match": "Event catalog match",
+            "related_event_match": "Related event mention for this location",
+            "related_mention": "Related mention, not a dedicated catalog match",
+            "catalog_match": "Catalog title match",
+            "record_match": "Record match",
+        }[relevance_class]
         results.append({
             "catalog_id": catalog["catalog_id"], "title": catalog["title"],
             "catalog_type": catalog["catalog_type"], "record_type": catalog.get("record_type"),
@@ -1137,7 +1247,10 @@ def search_catalog_network(query: str, analysis: dict, limit: int = 10) -> list[
             "verified": bool(catalog.get("verified", False)),
             "status": catalog.get("status", "candidate_needs_source_validation"),
             "match_scope": "catalog" if catalog_match else "records",
-            "score": catalog_score + type_bonus + sum(x[0] for x in ranked),
+            "query_intent": query_intent,
+            "relevance_class": relevance_class,
+            "relevance_label": relevance_label,
+            "score": catalog_score + type_bonus + aggregate_record_score,
             "record_count": len(related),
             "source_page_count": catalog.get("source_page_count", len(catalog.get("source_page_ids", []))),
             "matched_records": [{
@@ -1185,6 +1298,192 @@ def search_source_page_evidence(query: str, pages: list[dict], limit: int = 5) -
     return matches[:limit]
 
 
+
+
+def _normalized_policy_host(value: object) -> str:
+    if not isinstance(value, str):
+        return ""
+    host = value.strip().lower().rstrip(".")
+    return host[4:] if host.startswith("www.") else host
+
+
+def _policy_hosts_from_urls(urls: object) -> set[str]:
+    hosts = set()
+    if not isinstance(urls, list):
+        return hosts
+    for value in urls:
+        if not isinstance(value, str):
+            continue
+        try:
+            host = _normalized_policy_host(urlsplit(value).hostname or "")
+        except ValueError:
+            host = ""
+        if host:
+            hosts.add(host)
+    return hosts
+
+
+def _policy_host_matches(source_host: str, aliases: set[str]) -> bool:
+    return any(
+        source_host == alias or source_host.endswith("." + alias)
+        for alias in aliases if alias
+    )
+
+
+def apply_source_policy_reviews(
+    analysis: dict,
+    policy_path: Path = DEFAULT_SOURCE_POLICY_REVIEWS,
+) -> dict:
+    """Annotate matching source-level policy reviews without clearing record-level rights."""
+    raw = Path(policy_path).read_bytes()
+    register = json.loads(raw.decode("utf-8"))
+    policy = register.get("policy") if isinstance(register, dict) else None
+    reviews = register.get("reviews") if isinstance(register, dict) else None
+    if (
+        register.get("schema_version") != 1
+        or not isinstance(register.get("reviewed_at"), str)
+        or not register.get("reviewed_at")
+        or not isinstance(policy, dict)
+        or policy.get("default_status") != "candidate_only"
+        or policy.get("record_level_clearance") != "not_reviewed"
+        or policy.get("commercial_eligibility") is not False
+        or policy.get("republication") != "not_cleared"
+        or not isinstance(reviews, list)
+    ):
+        raise ValueError("source policy review register must remain conditional and deny-by-default")
+
+    normalized_reviews = []
+    for review in reviews:
+        if not isinstance(review, dict):
+            raise ValueError("source policy review entry is malformed")
+        host = _normalized_policy_host(review.get("host"))
+        api_host = _normalized_policy_host(review.get("api_host"))
+        evidence_urls = review.get("evidence_urls")
+        if (
+            not host
+            or not isinstance(review.get("status"), str)
+            or not review.get("status")
+            or review.get("record_level_clearance") != "not_reviewed"
+            or review.get("commercial_eligibility") is not False
+            or not isinstance(evidence_urls, list)
+            or not evidence_urls
+        ):
+            raise ValueError("source policy review entry cannot grant record-level clearance")
+        safe_evidence = []
+        for evidence_url in evidence_urls:
+            if not isinstance(evidence_url, str):
+                raise ValueError("source policy evidence URL is malformed")
+            parsed = urlsplit(evidence_url)
+            if parsed.scheme.lower() != "https" or not parsed.hostname or parsed.username or parsed.password:
+                raise ValueError("source policy evidence must use credential-free HTTPS URLs")
+            safe_evidence.append(evidence_url)
+        normalized_reviews.append({
+            "host": host,
+            "aliases": {host, api_host},
+            "status": review["status"],
+            "evidence_urls": sorted(set(safe_evidence)),
+        })
+
+    matched_review_hosts = set()
+
+    def annotate(item: dict, source_hosts: set[str]) -> str:
+        matched = []
+        matched_source_hosts = set()
+        for review in normalized_reviews:
+            covered = {
+                host for host in source_hosts
+                if _policy_host_matches(host, review["aliases"])
+            }
+            if covered:
+                matched.append(review)
+                matched_source_hosts.update(covered)
+                matched_review_hosts.add(review["host"])
+        unmatched_hosts = sorted(source_hosts - matched_source_hosts)
+        matched_hosts = sorted({review["host"] for review in matched})
+        if not matched:
+            status = "not_reviewed"
+        elif unmatched_hosts:
+            status = "partial_source_review"
+        else:
+            status = "conditional_source_review"
+        item.update({
+            "source_policy_review_status": status,
+            "source_policy_review_hosts": matched_hosts,
+            "source_policy_review_categories": sorted({review["status"] for review in matched}),
+            "source_policy_review_evidence_urls": sorted({
+                url for review in matched for url in review["evidence_urls"]
+            }),
+            "source_policy_review_unmatched_hosts": unmatched_hosts,
+            "source_policy_reviewed_at": register["reviewed_at"] if matched else None,
+            "source_policy_review_scope": "source-level-only" if matched else "none",
+            "record_level_clearance": "not_reviewed",
+            "source_terms_status": "not_reviewed",
+            "rights_status": "publicly_accessible_not_cleared_for_redistribution",
+            "commercial_eligible": False,
+        })
+        return status
+
+    records = analysis.get("records", [])
+    catalogs = analysis.get("catalogs", [])
+    if not isinstance(records, list) or not isinstance(catalogs, list):
+        raise ValueError("source policy annotation requires record and catalog lists")
+
+    for record in records:
+        urls = record.get("source_urls", [])
+        if not urls and record.get("source_url"):
+            urls = [record["source_url"]]
+        source_hosts = _policy_hosts_from_urls(urls)
+        if record.get("source_host"):
+            host = _normalized_policy_host(record["source_host"])
+            if host:
+                source_hosts.add(host)
+        annotate(record, source_hosts)
+
+    for catalog in catalogs:
+        urls = [catalog.get("source_url")] if catalog.get("source_url") else []
+        source_hosts = _policy_hosts_from_urls(urls)
+        if catalog.get("source_host"):
+            host = _normalized_policy_host(catalog["source_host"])
+            if host:
+                source_hosts.add(host)
+        annotate(catalog, source_hosts)
+
+    metrics = analysis.setdefault("metrics", {})
+    metrics.update({
+        "records_with_conditional_source_policy_review": sum(
+            item.get("source_policy_review_status") == "conditional_source_review" for item in records
+        ),
+        "records_with_partial_source_policy_review": sum(
+            item.get("source_policy_review_status") == "partial_source_review" for item in records
+        ),
+        "catalogs_with_conditional_source_policy_review": sum(
+            item.get("source_policy_review_status") == "conditional_source_review" for item in catalogs
+        ),
+        "catalogs_with_partial_source_policy_review": sum(
+            item.get("source_policy_review_status") == "partial_source_review" for item in catalogs
+        ),
+        "source_policy_review_hosts_matched": sorted(matched_review_hosts),
+        "source_policy_review_register_entries": len(normalized_reviews),
+        "source_terms_reviewed_records": sum(
+            item.get("source_terms_status") != "not_reviewed" for item in records
+        ),
+        "commercially_eligible_records": sum(bool(item.get("commercial_eligible")) for item in records),
+    })
+    analysis["source_policy_review"] = {
+        "schema_version": 1,
+        "register_path": "data/source-policy-reviews.json",
+        "register_sha256": hashlib.sha256(raw).hexdigest(),
+        "reviewed_at": register["reviewed_at"],
+        "review_count": len(normalized_reviews),
+        "matched_hosts": sorted(matched_review_hosts),
+        "scope": "source-level-only",
+        "record_level_clearance": "not_reviewed",
+        "commercial_eligibility": False,
+        "republication": "not_cleared",
+    }
+    return analysis
+
+
 def _write_gzip(path: Path, payload: dict) -> tuple[int, str]:
     path.parent.mkdir(parents=True, exist_ok=True)
     raw = (json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n").encode("utf-8")
@@ -1196,6 +1495,7 @@ def _write_gzip(path: Path, payload: dict) -> tuple[int, str]:
 
 
 def write_outputs(analysis: dict, output_dir: Path) -> dict:
+    apply_source_policy_reviews(analysis)
     output_dir.mkdir(parents=True, exist_ok=True)
     files = []
     for catalog in analysis["catalogs"]:
@@ -1212,7 +1512,7 @@ def write_outputs(analysis: dict, output_dir: Path) -> dict:
     size, digest = _write_gzip(output_dir / "registry.json.gz", {
         "version": 1, "analysis_version": analysis.get("analysis_version", ANALYZER_VERSION),
         "status": "candidate_staging_not_production",
-        "metrics": analysis["metrics"], "catalogs": analysis["catalogs"],
+        "metrics": analysis["metrics"], "source_policy_review": analysis.get("source_policy_review"), "catalogs": analysis["catalogs"],
     })
     files.append({"file": "registry.json.gz", "bytes": size, "sha256": digest, "items": len(analysis["catalogs"])})
     records_by_catalog = defaultdict(list)
@@ -1252,6 +1552,7 @@ def write_outputs(analysis: dict, output_dir: Path) -> dict:
         "source_index_updated_at": analysis["source_index_updated_at"],
         "source_index_sha256": analysis.get("source_index_sha256"),
         "metrics": analysis["metrics"],
+        "source_policy_review": analysis.get("source_policy_review"),
         "catalogs_verified": 0, "records_published": 0,
         **snapshot_fields,
     }
@@ -1265,6 +1566,7 @@ def write_outputs(analysis: dict, output_dir: Path) -> dict:
         "catalog_count": len(analysis["catalogs"]), "record_count": len(analysis["records"]),
         "generated_at": analysis["generated_at"],
         "metrics": analysis["metrics"],
+        "source_policy_review": analysis.get("source_policy_review"),
         **snapshot_fields,
         "files": sorted(files, key=lambda x: x["file"]),
     }
@@ -1283,6 +1585,17 @@ def validate_outputs(output_dir: Path) -> dict:
     report = json.loads((output_dir / "report.json").read_text(encoding="utf-8"))
     if manifest.get("metrics") != report.get("metrics"):
         raise ValueError("report and manifest metrics do not match")
+    policy_review = manifest.get("source_policy_review")
+    if (
+        policy_review != report.get("source_policy_review")
+        or not isinstance(policy_review, dict)
+        or not re.fullmatch(r"[0-9a-f]{64}", str(policy_review.get("register_sha256", "")))
+        or policy_review.get("scope") != "source-level-only"
+        or policy_review.get("record_level_clearance") != "not_reviewed"
+        or policy_review.get("commercial_eligibility") is not False
+        or policy_review.get("republication") != "not_cleared"
+    ):
+        raise ValueError("source policy review summary is missing or overstates record-level clearance")
     pages_raw = (output_dir / "pages.json.gz").read_bytes()
     pages = json.loads(gzip.decompress(pages_raw).decode("utf-8"))["pages"]
     page_by_id = {item["page_id"]: item for item in pages if item.get("page_id")}
@@ -1329,6 +1642,19 @@ def validate_outputs(output_dir: Path) -> dict:
             raise ValueError("record ID does not match its canonical entity key")
         if record.get("commercial_eligible") is not False or record.get("source_terms_status") != "not_reviewed":
             raise ValueError("candidate records cannot be marked commercially eligible or source-cleared")
+        if (
+            record.get("source_policy_review_status") not in (
+                "not_reviewed", "conditional_source_review", "partial_source_review"
+            )
+            or record.get("record_level_clearance") != "not_reviewed"
+        ):
+            raise ValueError("source-level policy review cannot clear an individual record")
+        if record.get("source_policy_review_status") != "not_reviewed" and (
+            not record.get("source_policy_review_hosts")
+            or not record.get("source_policy_review_evidence_urls")
+            or record.get("source_policy_review_scope") != "source-level-only"
+        ):
+            raise ValueError("conditional source-policy annotations lack evidence or scope")
         if stable_id("entity", record.get("canonical_entity_key", "")) != record.get("entity_id"):
             raise ValueError("entity ID does not match its canonical entity key")
         if not set(record.get("source_page_ids", [])).issubset(page_ids):
@@ -1350,6 +1676,19 @@ def validate_outputs(output_dir: Path) -> dict:
             raise ValueError("catalog origin is missing or invalid")
         if catalog.get("commercial_eligible") is not False or catalog.get("source_terms_status") != "not_reviewed":
             raise ValueError("candidate catalogs cannot be marked commercially eligible or source-cleared")
+        if (
+            catalog.get("source_policy_review_status") not in (
+                "not_reviewed", "conditional_source_review", "partial_source_review"
+            )
+            or catalog.get("record_level_clearance") != "not_reviewed"
+        ):
+            raise ValueError("source-level policy review cannot clear an individual catalog")
+        if catalog.get("source_policy_review_status") != "not_reviewed" and (
+            not catalog.get("source_policy_review_hosts")
+            or not catalog.get("source_policy_review_evidence_urls")
+            or catalog.get("source_policy_review_scope") != "source-level-only"
+        ):
+            raise ValueError("conditional catalog policy annotations lack evidence or scope")
         if catalog.get("record_count") != len(catalog.get("record_ids", [])):
             raise ValueError("catalog record count does not match its membership")
         if catalog.get("source_page_count") != len(catalog.get("source_page_ids", [])):

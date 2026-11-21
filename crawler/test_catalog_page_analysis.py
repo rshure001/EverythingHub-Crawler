@@ -7,6 +7,7 @@ from pathlib import Path
 from catalog_page_analysis import (
     ANALYZER_VERSION, analyze_pages, analyze_pages_incremental,
     search_catalog_network, search_source_page_evidence, write_outputs, validate_outputs, stable_id,
+    apply_source_policy_reviews,
 )
 
 
@@ -434,6 +435,8 @@ class PageDerivedCatalogAnalysisTests(unittest.TestCase):
         hits = search_catalog_network("Rolex", analysis)
         self.assertEqual({x["catalog_id"] for x in hits}, {"subject-catalog", "article-catalog"})
         self.assertTrue(all(x["matched_records"] for x in hits))
+        self.assertTrue(all(x["relevance_class"] == "related_mention" for x in hits))
+        self.assertTrue(all(x["query_intent"] == "general" for x in hits))
 
     def test_people_are_sentence_does_not_create_person_records(self):
         result = analyze_pages([{
@@ -485,6 +488,53 @@ class PageDerivedCatalogAnalysisTests(unittest.TestCase):
         }
         results = search_catalog_network("Las Vegas", analysis)
         self.assertEqual(results[0]["catalog_id"], "places")
+        self.assertEqual(results[1]["catalog_id"], "events")
+        self.assertEqual(results[1]["relevance_class"], "related_event_match")
+        self.assertEqual(results[1]["relevance_label"], "Related event mention for this location")
+
+    def test_location_query_prefers_place_and_directory_over_large_article_collection(self):
+        article_ids = [f"article-{index}" for index in range(5)]
+        analysis = {
+            "catalogs": [
+                {"catalog_id": "articles", "catalog_type": "knowledge_base",
+                 "record_type": "article", "title": "National Geographic Articles",
+                 "subject": "articles", "record_ids": article_ids},
+                {"catalog_id": "places", "catalog_type": "geographic",
+                 "record_type": "place", "title": "BLM Places",
+                 "subject": "places", "record_ids": ["place"]},
+                {"catalog_id": "organizations", "catalog_type": "organization_directory",
+                 "record_type": "organization", "title": "BLM Organizations",
+                 "subject": "offices", "record_ids": ["organization"]},
+                {"catalog_id": "events", "catalog_type": "events", "record_type": "event",
+                 "title": "DOE Events", "subject": "events", "record_ids": ["event"]},
+            ],
+            "records": [
+                *[
+                    {"record_id": record_id, "record_type": "article",
+                     "title": title, "description": "A Las Vegas travel article.", "attributes": {}}
+                    for record_id, title in zip(article_ids, (
+                        "Best places to stay in Las Vegas", "Las Vegas in Photos",
+                        "Las Vegas Must-Dos", "A guide to Las Vegas", "Las Vegas resorts",
+                    ))
+                ],
+                {"record_id": "place", "record_type": "place", "title": "Las Vegas Strip",
+                 "description": "A destination in Las Vegas.", "attributes": {}},
+                {"record_id": "organization", "record_type": "organization",
+                 "title": "Las Vegas Field Office", "description": "Local public office.",
+                 "attributes": {}},
+                {"record_id": "event", "record_type": "event", "title": "Las Vegas Grand Prix",
+                 "description": "A major Las Vegas event.", "attributes": {}},
+            ],
+        }
+        hits = search_catalog_network("Las Vegas", analysis)
+        self.assertEqual([item["catalog_id"] for item in hits[:4]], [
+            "places", "organizations", "events", "articles"
+        ])
+        self.assertEqual(hits[0]["relevance_class"], "typed_location_match")
+        self.assertEqual(hits[1]["relevance_class"], "typed_location_match")
+        self.assertEqual(hits[2]["relevance_class"], "related_event_match")
+        self.assertEqual(hits[3]["relevance_class"], "related_mention")
+        self.assertEqual(hits[0]["relevance_label"], "Place or local directory match")
 
     def test_duplicate_canonical_source_pages_are_counted_once_and_robots_denial_wins(self):
         pages = [
@@ -867,6 +917,113 @@ class PageDerivedCatalogAnalysisTests(unittest.TestCase):
         self.assertEqual(rolex_hits[0]["catalog_id"], "rolex-models")
         vegas_hits = search_catalog_network("Las Vegas", analysis)
         self.assertEqual(vegas_hits[0]["catalog_id"], "vegas-places")
+
+
+    def test_source_policy_reviews_are_conditional_and_never_clear_record_level_rights(self):
+        register = {
+            "schema_version": 1,
+            "reviewed_at": "2026-11-21T00:22:00Z",
+            "policy": {
+                "default_status": "candidate_only",
+                "record_level_clearance": "not_reviewed",
+                "commercial_eligibility": False,
+                "republication": "not_cleared",
+            },
+            "reviews": [
+                {
+                    "host": "nist.gov",
+                    "status": "source_policy_reviewed_conditional",
+                    "record_level_clearance": "not_reviewed",
+                    "commercial_eligibility": False,
+                    "evidence_urls": ["https://www.nist.gov/copyrights-disclaimers"],
+                },
+                {
+                    "host": "nps.gov",
+                    "api_host": "developer.nps.gov",
+                    "status": "source_policy_reviewed_conditional",
+                    "record_level_clearance": "not_reviewed",
+                    "commercial_eligibility": False,
+                    "evidence_urls": ["https://www.nps.gov/aboutus/disclaimer.htm"],
+                },
+                {
+                    "host": "census.gov",
+                    "api_host": "api.census.gov",
+                    "status": "api_terms_reviewed_conditional",
+                    "record_level_clearance": "not_reviewed",
+                    "commercial_eligibility": False,
+                    "evidence_urls": ["https://www.census.gov/data/developers/about/terms-of-service.html"],
+                },
+            ],
+        }
+        analysis = {
+            "records": [
+                {"record_id": "nist", "source_urls": ["https://www.nist.gov/data/example"]},
+                {"record_id": "mixed", "source_urls": [
+                    "https://api.census.gov/data/2020/acs", "https://example.com/reference"
+                ]},
+                {"record_id": "spoof", "source_urls": ["https://nist.gov.example.com/data"]},
+            ],
+            "catalogs": [
+                {"catalog_id": "nps", "source_host": "developer.nps.gov",
+                 "source_url": "https://developer.nps.gov/api"}
+            ],
+            "metrics": {},
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            policy_path = Path(tmp) / "source-policy-reviews.json"
+            policy_path.write_text(json.dumps(register), encoding="utf-8")
+            apply_source_policy_reviews(analysis, policy_path)
+
+        records = {item["record_id"]: item for item in analysis["records"]}
+        self.assertEqual(records["nist"]["source_policy_review_status"], "conditional_source_review")
+        self.assertEqual(records["nist"]["source_policy_review_hosts"], ["nist.gov"])
+        self.assertEqual(records["mixed"]["source_policy_review_status"], "partial_source_review")
+        self.assertEqual(records["mixed"]["source_policy_review_hosts"], ["census.gov"])
+        self.assertEqual(records["mixed"]["source_policy_review_unmatched_hosts"], ["example.com"])
+        self.assertEqual(records["spoof"]["source_policy_review_status"], "not_reviewed")
+        self.assertEqual(
+            analysis["catalogs"][0]["source_policy_review_status"], "conditional_source_review"
+        )
+        self.assertEqual(
+            analysis["metrics"]["records_with_conditional_source_policy_review"], 1
+        )
+        self.assertEqual(
+            analysis["metrics"]["records_with_partial_source_policy_review"], 1
+        )
+        self.assertEqual(
+            analysis["metrics"]["catalogs_with_conditional_source_policy_review"], 1
+        )
+        self.assertEqual(
+            analysis["metrics"]["source_terms_reviewed_records"], 0
+        )
+        self.assertEqual(
+            analysis["metrics"]["commercially_eligible_records"], 0
+        )
+        for item in analysis["records"] + analysis["catalogs"]:
+            self.assertEqual(item["record_level_clearance"], "not_reviewed")
+            self.assertEqual(item["source_terms_status"], "not_reviewed")
+            self.assertFalse(item["commercial_eligible"])
+            if item["source_policy_review_status"] != "not_reviewed":
+                self.assertTrue(item["source_policy_review_evidence_urls"])
+                self.assertEqual(item["source_policy_review_scope"], "source-level-only")
+
+    def test_source_policy_register_rejects_any_default_clearance(self):
+        register = {
+            "schema_version": 1,
+            "reviewed_at": "2026-11-21T00:22:00Z",
+            "policy": {
+                "default_status": "approved",
+                "record_level_clearance": "reviewed",
+                "commercial_eligibility": True,
+                "republication": "cleared",
+            },
+            "reviews": [],
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            policy_path = Path(tmp) / "source-policy-reviews.json"
+            policy_path.write_text(json.dumps(register), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "deny-by-default"):
+                apply_source_policy_reviews({"records": [], "catalogs": [], "metrics": {}}, policy_path)
 
 if __name__ == "__main__":
     unittest.main()

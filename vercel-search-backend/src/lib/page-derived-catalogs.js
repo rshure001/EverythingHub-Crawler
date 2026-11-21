@@ -61,20 +61,43 @@ function validatePageDerivedCatalogs(manifest,registryRaw,recordsRaw){
  const payload=decodeArtifact(files.get('records.json.gz'),recordsRaw,MAX_RECORDS_GZIP,MAX_RECORDS_JSON,'page_catalog_records');
  if(!registry||registry.version!==1||registry.status!=='candidate_staging_not_production'||!Array.isArray(registry.catalogs)||registry.catalogs.length!==manifest.catalog_count)throw new Error('page_catalog_registry_schema_invalid');
  if(!payload||payload.version!==1||!Array.isArray(payload.records)||payload.records.length!==manifest.record_count)throw new Error('page_catalog_records_schema_invalid');
+ const policyReview=registry.source_policy_review||manifest.source_policy_review||null;
+ if(policyReview){
+  if(manifest.source_policy_review&&registry.source_policy_review&&
+   manifest.source_policy_review.register_sha256!==registry.source_policy_review.register_sha256)throw new Error('page_catalog_policy_review_digest_mismatch');
+  if(policyReview.schema_version!==1||typeof policyReview.register_sha256!=='string'||
+   !/^[a-f0-9]{64}$/i.test(policyReview.register_sha256)||policyReview.scope!=='source-level-only'||
+   policyReview.record_level_clearance!=='not_reviewed'||policyReview.commercial_eligibility!==false||
+   policyReview.republication!=='not_cleared')throw new Error('page_catalog_policy_review_invalid');
+ }
+ const validatePolicyAnnotation=item=>{
+  if(!policyReview)return;
+  const status=item.source_policy_review_status;
+  const hosts=item.source_policy_review_hosts;
+  const evidence=item.source_policy_review_evidence_urls;
+  if(!['not_reviewed','conditional_source_review','partial_source_review'].includes(status)||
+   item.record_level_clearance!=='not_reviewed'||item.source_terms_status!=='not_reviewed'||
+   item.commercial_eligible!==false)throw new Error('page_catalog_record_policy_annotation_invalid');
+  if(status!=='not_reviewed'&&(!Array.isArray(hosts)||!hosts.length||
+   !Array.isArray(evidence)||!evidence.length||item.source_policy_review_scope!=='source-level-only'))throw new Error('page_catalog_record_policy_evidence_invalid');
+  if(status==='not_reviewed'&&((Array.isArray(hosts)&&hosts.length)||(Array.isArray(evidence)&&evidence.length)))throw new Error('page_catalog_unreviewed_policy_has_evidence');
+ };
  const catalogs=new Map();
  for(const c of registry.catalogs){
   if(!c||typeof c.catalog_id!=='string'||!c.catalog_id||catalogs.has(c.catalog_id)||!Array.isArray(c.record_ids)||c.record_count!==c.record_ids.length||!Array.isArray(c.source_page_ids)||c.source_page_count!==c.source_page_ids.length||c.commercial_eligible!==false)throw new Error('page_catalog_identity_or_membership_invalid');
   if(c.source_url&&!safeUrl(c.source_url))throw new Error('page_catalog_source_url_invalid');
+  validatePolicyAnnotation(c);
   catalogs.set(c.catalog_id,c);
  }
  const records=new Map();
  for(const r of payload.records){
   if(!r||typeof r.record_id!=='string'||!r.record_id||records.has(r.record_id)||!Array.isArray(r.catalog_ids)||r.commercial_eligible!==false||!Array.isArray(r.source_urls)||!r.source_urls.length||r.source_urls.some(u=>!safeUrl(u)))throw new Error('page_record_identity_or_provenance_invalid');
   if(new Set(r.catalog_ids).size!==r.catalog_ids.length||r.catalog_ids.some(id=>!catalogs.has(id)))throw new Error('page_record_catalog_membership_invalid');
+  validatePolicyAnnotation(r);
   records.set(r.record_id,r);
  }
  for(const c of registry.catalogs)if(new Set(c.record_ids).size!==c.record_ids.length||c.record_ids.some(id=>!records.has(id)))throw new Error('page_catalog_record_reference_invalid');
- return {catalogs:registry.catalogs,records:payload.records,generatedAt:manifest.generated_at,analysisVersion:manifest.analysis_version,sourceIndexPages:manifest.source_index_pages,sourceIndexUpdatedAt:manifest.source_index_updated_at,sourceIndexSha256:manifest.source_index_sha256,catalogCount:manifest.catalog_count,recordCount:manifest.record_count,metrics:manifest.metrics||{}};
+ return {catalogs:registry.catalogs,records:payload.records,generatedAt:manifest.generated_at,analysisVersion:manifest.analysis_version,sourceIndexPages:manifest.source_index_pages,sourceIndexUpdatedAt:manifest.source_index_updated_at,sourceIndexSha256:manifest.source_index_sha256,catalogCount:manifest.catalog_count,recordCount:manifest.record_count,metrics:manifest.metrics||{},sourcePolicyReview:policyReview};
 }
 async function loadPageDerivedCatalogsFromManifest(manifest,commitSha,manifestRaw,fetchBuffer=getBuffer){
  if(typeof commitSha!=='string'||!/^[a-f0-9]{40}$/i.test(commitSha))throw new Error('page_catalog_git_ref_invalid');
@@ -107,14 +130,32 @@ function searchPageDerivedCatalogs(query,network,limit=5){
  if(!text||text.length>160||!network||!Array.isArray(network.catalogs)||!Array.isArray(network.records))return [];
  const terms=Array.from(new Set(tokenize(text))).slice(0,12);if(!terms.length)return [];
  const phrase=terms.join(' '),contentIntent=terms.some(t=>CONTENT_INTENT.has(t));
+ const productTerms=new Set(['product','products','model','models','watch','watches','buy','retailer','retailers','price','prices','reference','references']);
+ const businessTerms=new Set(['business','businesses','restaurant','restaurants','hotel','hotels','store','stores','shop','shops','venue','venues','dealer','dealers']);
+ const eventTerms=new Set(['event','events','concert','concerts','festival','festivals','calendar','schedule','schedules','grand','prix']);
+ const businessIntent=terms.some(t=>businessTerms.has(t));
+ const eventIntent=terms.some(t=>eventTerms.has(t));
+ const productTermIntent=terms.some(t=>productTerms.has(t));
+ const recordTokens=record=>{
+  const titleTokens=new Set(tokenize(String(record.title||'')));
+  const descTokens=new Set(tokenize(String(record.description||'').slice(0,2000)));
+  const attrs=record.attributes&&typeof record.attributes==='object'?record.attributes:{};
+  const attrText=Object.entries(attrs).filter(([k,v])=>ATTRIBUTE_KEYS.has(String(k).toLowerCase())&&(typeof v==='string'||typeof v==='number')).map(([,v])=>String(v)).join(' ');
+  const attrTokens=new Set(tokenize(attrText));
+  return {titleTokens,descTokens,attrTokens,all:new Set([...titleTokens,...descTokens,...attrTokens])};
+ };
+ const queryMatchesRecord=record=>terms.every(t=>recordTokens(record).all.has(t));
+ const globalProductMatch=network.records.some(r=>['product','brand','model'].includes(String(r.record_type||'').toLowerCase())&&queryMatchesRecord(r));
+ const globalPlaceMatch=network.records.some(r=>String(r.record_type||'').toLowerCase()==='place'&&queryMatchesRecord(r));
+ const productIntent=!contentIntent&&!businessIntent&&(productTermIntent||globalProductMatch);
+ const geoIntent=terms.length>=2&&globalPlaceMatch&&!contentIntent&&!eventIntent&&!businessIntent;
+ const locationBusinessIntent=businessIntent&&!contentIntent;
  const byId=new Map(network.catalogs.map(c=>[c.catalog_id,c])),groups=new Map();
  for(const record of network.records){
   if(!record||!Array.isArray(record.catalog_ids)||!record.catalog_ids.length)continue;
   const type=String(record.record_type||'').toLowerCase(),title=String(record.title||'').toLowerCase();
-  const titleTokens=new Set(tokenize(title)),descTokens=new Set(tokenize(String(record.description||'').slice(0,2000)));
-  const attrs=record.attributes&&typeof record.attributes==='object'?record.attributes:{};
-  const attrText=Object.entries(attrs).filter(([k,v])=>ATTRIBUTE_KEYS.has(String(k).toLowerCase())&&(typeof v==='string'||typeof v==='number')).map(([,v])=>String(v)).join(' ');
-  const attrTokens=new Set(tokenize(attrText)),titleMatch=terms.every(t=>titleTokens.has(t)),attrMatch=terms.every(t=>attrTokens.has(t));
+  const {titleTokens,descTokens,attrTokens}=recordTokens(record);
+  const titleMatch=terms.every(t=>titleTokens.has(t)),attrMatch=terms.every(t=>attrTokens.has(t));
   const contentRecord=['article','resource','media','subject'].includes(type);
   if(contentRecord&&!contentIntent&&!titleMatch)continue;
   for(const id of record.catalog_ids){
@@ -138,18 +179,65 @@ function searchPageDerivedCatalogs(query,network,limit=5){
  for(const [id,g] of groups){
   const c=g.catalog,matched=Array.from(g.matches.values()).sort((a,b)=>b.score-a.score||String(a.record.title||'').localeCompare(String(b.record.title||'')));
   if(!matched.length)continue;
-  const matchedRecords=matched.slice(0,5).map(({record:r})=>({record_id:r.record_id,title:String(r.title||'Untitled record').slice(0,240),record_type:String(r.record_type||'record'),source_url:(r.source_urls||[]).map(safeUrl).find(Boolean)||'',last_seen_at:r.last_seen_at||null}));
+  const matchedRecords=matched.slice(0,5).map(({record:r})=>({
+   record_id:r.record_id,title:String(r.title||'Untitled record').slice(0,240),
+   record_type:String(r.record_type||'record'),
+   source_url:(r.source_urls||[]).map(safeUrl).find(Boolean)||'',
+   last_seen_at:r.last_seen_at||null,
+   source_policy_review_status:r.source_policy_review_status||'not_reviewed',
+   record_level_clearance:r.record_level_clearance||'not_reviewed'
+  }));
   const url=safeUrl(c.source_url)||matchedRecords.map(r=>r.source_url).find(Boolean)||'';if(!url)continue;
   const types=new Set(matched.map(x=>String(x.record.record_type||'').toLowerCase()));
-  let score=matched.slice(0,3).reduce((sum,x)=>sum+x.score,0);
+  const recordScores=matched.slice(0,5).map(x=>x.score);
+  let score=Math.max(...recordScores)+Math.min(30,recordScores.reduce((sum,value)=>sum+value,0)-Math.max(...recordScores));
   const ct=new Set(tokenize([c.title,c.subject,c.source_host].join(' ')));
   const contentCatalog=['article','resource','media','subject'].includes(String(c.record_type||'').toLowerCase());
-  if(terms.every(t=>ct.has(t)))score+=contentCatalog&&!contentIntent?25+5*terms.length:100+10*terms.length;
+  const catalogMatch=terms.every(t=>ct.has(t));
+  if(catalogMatch)score+=contentCatalog&&!contentIntent?25+5*terms.length:100+10*terms.length;
   if(c.is_source_declared_catalog)score+=8;if(c.evidence_strength==='high')score+=4;
-  if(c.catalog_type==='geographic')score+=types.has('place')&&terms.length>=2?70:-20;
-  if(c.catalog_type==='commerce')score+=['product','brand','model'].some(t=>types.has(t))?50:-20;
-  if(c.catalog_type==='business_directory')score+=types.has('business')?40:-15;
-  if(c.catalog_type==='service_directory')score+=types.has('service')?40:-15;
+  if(productIntent){
+   if(['product','brand','model'].some(t=>types.has(t)))score+=180;
+   else if(['article','resource','media','subject'].some(t=>types.has(t)))score-=100;
+  }else if(geoIntent){
+   if(c.catalog_type==='geographic'&&types.has('place'))score+=180;
+   else if(c.catalog_type==='business_directory'&&types.has('business'))score+=145;
+   else if(c.catalog_type==='service_directory'&&types.has('service'))score+=140;
+   else if(c.catalog_type==='organization_directory'&&types.has('organization'))score+=110;
+   else if(c.catalog_type==='events'&&types.has('event'))score+=60;
+   else if(['article','resource','media','subject'].some(t=>types.has(t)))score-=100;
+  }else if(locationBusinessIntent){
+   if(c.catalog_type==='business_directory'&&types.has('business'))score+=180;
+   else if(c.catalog_type==='service_directory'&&types.has('service'))score+=160;
+   else if(c.catalog_type==='geographic'&&types.has('place'))score+=100;
+   else if(['article','resource','media','subject'].some(t=>types.has(t)))score-=80;
+  }else if(eventIntent){
+   if(c.catalog_type==='events'&&types.has('event'))score+=180;
+   else if(['article','resource','media','subject'].some(t=>types.has(t)))score-=80;
+  }else{
+   if(c.catalog_type==='geographic')score+=types.has('place')&&terms.length>=2?70:-20;
+   if(c.catalog_type==='commerce')score+=['product','brand','model'].some(t=>types.has(t))?50:-20;
+   if(c.catalog_type==='business_directory')score+=types.has('business')?40:-15;
+   if(c.catalog_type==='service_directory')score+=types.has('service')?40:-15;
+  }
+  let relevanceClass='record_match';
+  if(productIntent&&['product','brand','model'].some(t=>types.has(t)))relevanceClass='typed_product_match';
+  else if(geoIntent&&['place','business','service','organization','dataset'].some(t=>types.has(t)))relevanceClass='typed_location_match';
+  else if(geoIntent&&types.has('event'))relevanceClass='related_event_match';
+  else if(locationBusinessIntent&&['business','service'].some(t=>types.has(t)))relevanceClass='typed_business_match';
+  else if(eventIntent&&types.has('event'))relevanceClass='typed_event_match';
+  else if(['article','resource','media','subject'].some(t=>types.has(t)))relevanceClass='related_mention';
+  else if(catalogMatch)relevanceClass='catalog_match';
+  const relevanceLabel={
+   typed_product_match:'Product or model match',
+   typed_location_match:'Place or local directory match',
+   typed_business_match:'Business or service match',
+   typed_event_match:'Event catalog match',
+   related_event_match:'Related event mention for this location',
+   related_mention:'Related mention, not a dedicated catalog match',
+   catalog_match:'Catalog title match',
+   record_match:'Record match'
+  }[relevanceClass];
   let label=String(c.catalog_type||'subject').replace(/_/g,' ')+' catalog';
   if(c.catalog_type==='geographic')label='Place catalog';
   if(c.catalog_type==='commerce')label='Product catalog';
@@ -158,8 +246,33 @@ function searchPageDerivedCatalogs(query,network,limit=5){
   const recordCount=Number.isSafeInteger(c.record_count)?c.record_count:matched.length;
   const sourcePageCount=Number.isSafeInteger(c.source_page_count)?c.source_page_count:0;
   const names=matchedRecords.map(r=>r.record_type+': '+r.title);
-  const snippet='Candidate catalog preview · '+recordCount.toLocaleString()+' records · '+sourcePageCount.toLocaleString()+' source pages. Matching records: '+names.join(' · ')+'. Source terms and reuse rights have not been reviewed; preview only.';
-  results.push({title:String(c.title||'Catalog')+' — '+label+': '+matchedRecords[0].title,url,snippet,description:snippet,source:'Everything Hub Catalog Preview · '+label,origin:'Everything Hub Catalog Preview',provider:'everythinghub-catalog-preview',mediaType:'web',score,catalog_id:id,catalog_title:String(c.title||''),catalog_type:c.catalog_type,record_type:c.record_type,catalog_status:c.catalog_status||c.status||'candidate_needs_source_validation',catalog_origin:c.catalog_origin||'unknown',evidence_strength:c.evidence_strength||'unknown',source_terms_status:c.source_terms_status||'not_reviewed',rights_status:c.rights_status||'publicly_accessible_not_cleared_for_redistribution',commercial_eligible:false,preview_only:true,record_count:recordCount,source_page_count:sourcePageCount,matched_records:matchedRecords});
+  const policyStatus=String(c.source_policy_review_status||'not_reviewed');
+  const policyHosts=Array.isArray(c.source_policy_review_hosts)?c.source_policy_review_hosts:[];
+  const policyMessage=policyStatus==='conditional_source_review'
+   ?'Source-level policy review is conditional for '+policyHosts.join(', ')+'. Individual record rights remain unreviewed.'
+   :policyStatus==='partial_source_review'
+    ?'Source-level policy review is partial. Individual record rights remain unreviewed.'
+    :'Source-level policy review is not recorded. Individual record rights remain unreviewed.';
+  const snippet='Candidate catalog preview · '+recordCount.toLocaleString()+' records · '+sourcePageCount.toLocaleString()+' source pages. Matching records: '+names.join(' · ')+'. '+policyMessage+' Preview only.';
+  const queryIntent=productIntent?'product':geoIntent?'location':locationBusinessIntent?'business':eventIntent?'event':contentIntent?'content':'general';
+  if(relevanceClass==='related_mention')label+=' · Related mention';
+  results.push({
+   title:String(c.title||'Catalog')+' — '+label+': '+matchedRecords[0].title,
+   url,snippet,description:snippet,
+   source:'Everything Hub Catalog Preview · '+label,
+   origin:'Everything Hub Catalog Preview',provider:'everythinghub-catalog-preview',
+   mediaType:'web',score,catalog_id:id,catalog_title:String(c.title||''),
+   catalog_type:c.catalog_type,record_type:c.record_type,
+   catalog_status:c.catalog_status||c.status||'candidate_needs_source_validation',
+   catalog_origin:c.catalog_origin||'unknown',evidence_strength:c.evidence_strength||'unknown',
+   source_terms_status:c.source_terms_status||'not_reviewed',
+   source_policy_review_status:policyStatus,source_policy_review_hosts:policyHosts,
+   record_level_clearance:c.record_level_clearance||'not_reviewed',
+   rights_status:c.rights_status||'publicly_accessible_not_cleared_for_redistribution',
+   commercial_eligible:false,preview_only:true,query_intent:queryIntent,
+   relevance_class:relevanceClass,relevance_label:relevanceLabel,
+   record_count:recordCount,source_page_count:sourcePageCount,matched_records:matchedRecords
+  });
  }
  const n=Number.isInteger(limit)?Math.max(1,Math.min(8,limit)):5;
  return results.sort((a,b)=>b.score-a.score||b.matched_records.length-a.matched_records.length||a.title.localeCompare(b.title)).slice(0,n);
