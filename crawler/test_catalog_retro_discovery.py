@@ -35,14 +35,68 @@ class RetroCatalogDiscoveryTests(unittest.TestCase):
         self.assertEqual(len({x["discovery_seed_id"] for x in result["page_catalog_seeds"]}), 2)
         self.assertEqual(len({x["page_profile_id"] for x in result["page_catalog_seeds"]}), 2)
         self.assertTrue(all(x["profile_type"] == "source_page_catalog_profile" for x in result["page_catalog_seeds"]))
-        self.assertTrue(all(x["profile_status"] == "pending_catalog_classification" for x in result["page_catalog_seeds"]))
+        self.assertTrue(all(x["profile_status"] == "pending_catalog_discovery" for x in result["page_catalog_seeds"]))
         self.assertTrue(all(x["related_catalog_ids"] == [] for x in result["page_catalog_seeds"]))
+        self.assertTrue(all(x["catalog_coverage_status"] == "not_yet_classified" for x in result["page_catalog_seeds"]))
         self.assertEqual(result["metrics"]["page_catalog_profiles_created"], 2)
-        self.assertEqual(result["metrics"]["profiles_pending_catalog_classification"], 2)
+        self.assertEqual(result["metrics"]["profiles_pending_catalog_discovery"], 2)
+        self.assertEqual(result["metrics"]["profiles_associated_with_catalogs"], 0)
+        self.assertEqual(result["metrics"]["profiles_with_catalogs_meeting_100_page_target"], 0)
         self.assertTrue(all("catalog_candidate_id" not in x for x in result["page_catalog_seeds"]))
         self.assertTrue(all(x["analysis_status"] == "pending_page_content_analysis" for x in result["page_catalog_seeds"]))
         self.assertEqual(result["metrics"]["pages_with_catalog_signals"], 1)
         self.assertGreaterEqual(result["metrics"]["page_catalog_signal_references"], 1)
+
+
+    def test_each_page_profile_links_to_real_catalog_and_measures_100_page_coverage(self):
+        url = "https://www.example.com/products"
+        other_urls = [f"https://example.com/products/item-{n}" for n in range(99)]
+        from catalog_page_analysis import canonical_url
+        canonical = canonical_url(url)
+        result = build_candidates(
+            {"total_pages": 1, "pages": [{"url": url, "title": "Product catalog"}]},
+            page_analysis={
+                "catalogs": [{
+                    "source_key": "example.com|product|/products",
+                    "catalog_id": "catalog-products",
+                    "title": "Example Products",
+                    "source_page_ids": [f"page-{n}" for n in range(100)],
+                    "record_ids": [f"record-{n}" for n in range(120)],
+                    "catalog_status": "candidate_needs_source_validation",
+                }],
+                "pages": [{
+                    "url": canonical,
+                    "catalog_group_keys": ["example.com|product|/products"],
+                }],
+            },
+        )
+        profile = result["page_catalog_seeds"][0]
+        self.assertEqual(profile["profile_status"], "catalog_associated")
+        self.assertEqual(profile["related_catalog_ids"], ["catalog-products"])
+        self.assertEqual(profile["best_catalog_source_page_count"], 100)
+        self.assertEqual(profile["best_catalog_record_count"], 120)
+        self.assertEqual(profile["catalog_coverage_status"], "meets_100_page_target")
+        self.assertEqual(result["metrics"]["profiles_associated_with_catalogs"], 1)
+        self.assertEqual(result["metrics"]["profiles_with_catalogs_meeting_100_page_target"], 1)
+        self.assertEqual(result["metrics"]["profiles_pending_catalog_discovery"], 0)
+
+    def test_catalog_with_fewer_than_100_source_pages_is_not_marked_complete(self):
+        url = "https://example.com/products"
+        result = build_candidates(
+            {"total_pages": 1, "pages": [{"url": url, "title": "Product catalog"}]},
+            page_analysis={
+                "catalogs": [{
+                    "source_key": "example.com|product|/products",
+                    "catalog_id": "catalog-products",
+                    "source_page_ids": ["one", "two"],
+                    "record_ids": ["a", "b"],
+                }],
+                "pages": [{"url": url, "catalog_group_keys": ["example.com|product|/products"]}],
+            },
+        )
+        profile = result["page_catalog_seeds"][0]
+        self.assertEqual(profile["catalog_coverage_status"], "below_100_page_target")
+        self.assertEqual(profile["best_catalog_source_page_count"], 2)
 
     def test_rejects_credential_urls_and_normalizes_www(self):
         self.assertEqual(host_key("https://www.example.com/a"), "example.com")
