@@ -1073,7 +1073,7 @@ def search_catalog_network(query: str, analysis: dict, limit: int = 10) -> list[
     query_phrase = " ".join(tokens)
     records = {x["record_id"]: x for x in analysis.get("records", [])}
     product_types = {"product", "brand", "model"}
-    location_types = {"place", "business", "service", "organization", "event", "dataset"}
+    location_types = {"place", "business", "service", "organization", "dataset"}
     content_types = {"article", "resource", "media", "subject"}
     product_terms = {
         "product", "products", "model", "models", "watch", "watches",
@@ -1202,6 +1202,8 @@ def search_catalog_network(query: str, analysis: dict, limit: int = 10) -> list[
             relevance_class = "typed_product_match"
         elif geo_intent and matched_types & location_types:
             relevance_class = "typed_location_match"
+        elif geo_intent and "event" in matched_types:
+            relevance_class = "related_event_match"
         elif location_business_intent and matched_types & {"business", "service"}:
             relevance_class = "typed_business_match"
         elif event_intent and "event" in matched_types:
@@ -1225,6 +1227,7 @@ def search_catalog_network(query: str, analysis: dict, limit: int = 10) -> list[
             "typed_location_match": "Place or local directory match",
             "typed_business_match": "Business or service match",
             "typed_event_match": "Event catalog match",
+            "related_event_match": "Related event mention for this location",
             "related_mention": "Related mention, not a dedicated catalog match",
             "catalog_match": "Catalog title match",
             "record_match": "Record match",
