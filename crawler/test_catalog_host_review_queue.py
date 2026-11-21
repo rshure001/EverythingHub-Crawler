@@ -112,6 +112,20 @@ class CatalogHostReviewQueueTests(unittest.TestCase):
                 "source_url": "https://frontiersin.org/journals/insect-science/articles/10.3389/fmicb.2021.123456/full",
             },
             {
+                "catalog_id": "catalog:frontiers-encoded",
+                "title": "Frontiers Encoded Path",
+                "catalog_type": "knowledge_base",
+                "record_type": "article",
+                "catalog_origin": "source_declared_collection",
+                "catalog_definition": True,
+                "evidence_strength": "high",
+                "catalog_status": "candidate_needs_source_validation",
+                "record_count": 1,
+                "source_page_count": 1,
+                "source_host": "frontiersin.org",
+                "source_url": "https://frontiersin.org/journals/insect%2Fscience/articles",
+            },
+            {
                 "catalog_id": "catalog:derived",
                 "title": "Derived records are not landing-page definitions",
                 "catalog_type": "knowledge_base",
@@ -207,11 +221,11 @@ class CatalogHostReviewQueueTests(unittest.TestCase):
             manifest_path, registry_path, policy_path = self._fixture(Path(tmp))
             manifest, payload = build_from_files(manifest_path, registry_path, policy_path)
             summary = validate_review_queue(payload, manifest)
-            self.assertEqual(summary["catalog_definition_candidates"], 7)
-            self.assertEqual(summary["unique_source_urls"], 6)
+            self.assertEqual(summary["catalog_definition_candidates"], 8)
+            self.assertEqual(summary["unique_source_urls"], 7)
             self.assertEqual(summary["policy_preapproved_urls_needing_runtime_robots_check"], 2)
             self.assertEqual(summary["policy_preapproved_catalog_page_urls_needing_runtime_robots_check"], 1)
-            self.assertEqual(summary["path_not_allowlisted_urls"], 2)
+            self.assertEqual(summary["path_not_allowlisted_urls"], 3)
             self.assertEqual(summary["policy_review_required_urls"], 2)
             self.assertEqual(summary["fetch_authorized_urls"], 0)
             self.assertEqual(payload["status"], "source_review_backlog_not_a_fetch_queue")
@@ -231,6 +245,7 @@ class CatalogHostReviewQueueTests(unittest.TestCase):
             self.assertEqual(statuses["catalog:five"], "path_not_allowlisted")
             self.assertEqual(statuses["catalog:frontiers"], "policy_preapproved_robots_recheck_required")
             self.assertEqual(statuses["catalog:frontiers-fulltext"], "path_not_allowlisted")
+            self.assertEqual(statuses["catalog:frontiers-encoded"], "path_not_allowlisted")
             self.assertNotIn("catalog:derived", statuses)
 
     def test_registry_hash_mismatch_is_rejected(self):
