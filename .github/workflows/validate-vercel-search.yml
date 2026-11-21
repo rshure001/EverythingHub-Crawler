@@ -66,6 +66,7 @@ jobs:
             relevantPageDerivedCatalogs:relevant.map(x=>({id:x.catalog_id,title:x.catalog_title||x.title})),
             externalCatalogs:data.catalogResults.filter(x=>String(x.catalog_id||'').startsWith('external:')).map(x=>x.catalog_title||x.title||x.name),
             previewStatus:data.catalogPreview.status,
+            previewError:data.catalogPreview.error||null,
             previewCount:data.catalogPreview.resultCount,
             analysisVersion:data.catalogPreview.analysisVersion,
             sourceIndexPages:data.catalogPreview.sourceIndexPages
