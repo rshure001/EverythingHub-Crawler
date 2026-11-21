@@ -718,6 +718,15 @@ function searchCatalogRecords(query, network, limit = 5) {
     for (const id of record.catalog_ids) {
       const catalog = catalogsById.get(id);
       if (!catalog) continue;
+      // A derived subject catalog represents its own recurring topic. Do not
+      // surface it for an incidental mention in a member-page title.
+      if (
+        type === "subject" &&
+        catalog.catalog_origin === "derived_from_repeated_records"
+      ) {
+        const subjectTokens = new Set(tokenize(String(catalog.subject || "")));
+        if (!terms.some((term) => subjectTokens.has(term))) continue;
+      }
       const catalogTokens = new Set(tokenize([catalog.title, catalog.subject, catalog.source_host].join(" ")));
       const catalogMatch = allTermsPresent(terms, catalogTokens);
       const searchable = new Set([...item.titleTokens, ...item.attributeTokens, ...catalogTokens]);
