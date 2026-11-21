@@ -91,6 +91,7 @@ def probe_catalog_landing_page_robots(item: dict) -> dict:
         "catalog_ids": item.get("catalog_ids", []),
         "catalog_count": item.get("catalog_count", 0),
         "source_access_mode": "catalog_landing_page",
+        "review_status": item.get("review_status"),
         "terms_url": item.get("terms_url"),
         "terms_status": item.get("terms_status"),
         "reviewed_at": item.get("reviewed_at"),
@@ -228,7 +229,11 @@ def run_landing_page_robots(
     for item in eligible:
         fingerprint = _landing_policy_fingerprint(item)
         prior = previous.get(item["source_url"])
-        if prior and prior.get("policy_fingerprint") == fingerprint:
+        if (
+            prior
+            and prior.get("policy_fingerprint") == fingerprint
+            and prior.get("review_status") == item.get("review_status")
+        ):
             try:
                 checked = datetime.fromisoformat(str(prior.get("checked_at", "")).replace("Z", "+00:00"))
                 if checked.tzinfo is None:
