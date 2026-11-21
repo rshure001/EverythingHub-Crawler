@@ -15,6 +15,12 @@ on:
       - "public-search/manifest.json"
       - ".github/workflows/retroactive-catalog-index.yml"
   workflow_dispatch:
+  workflow_run:
+    workflows:
+      - "Everything Hub crawler"
+    types:
+      - completed
+    branches: [main]
   schedule:
     - cron: "23 * * * *"
 
@@ -27,6 +33,7 @@ concurrency:
 
 jobs:
   inventory:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
