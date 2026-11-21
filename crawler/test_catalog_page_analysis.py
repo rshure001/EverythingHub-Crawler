@@ -8,6 +8,7 @@ from catalog_page_analysis import (
     ANALYZER_VERSION, analyze_pages, analyze_pages_incremental,
     search_catalog_network, search_source_page_evidence, write_outputs, validate_outputs, stable_id,
     apply_source_policy_reviews, _reconcile_page_record_provenance,
+    _add_global_subject_catalogs, _global_subject_catalog_source_key,
 )
 
 
@@ -1444,6 +1445,59 @@ class CatalogInventoryTriggerTests(unittest.TestCase):
         page_rows = [{"page_id": page_id, "url": url, "record_ids": ["missing-record"]}]
         with self.assertRaisesRegex(ValueError, "references missing record"):
             _reconcile_page_record_provenance(page_rows, [])
+
+    def test_global_subject_catalog_source_keys_disambiguate_slug_collisions(self):
+        self.assertNotEqual(
+            _global_subject_catalog_source_key("foo/bar"),
+            _global_subject_catalog_source_key("foo-bar"),
+        )
+
+    def test_existing_global_subject_catalog_refreshes_exact_membership(self):
+        pages = [
+            {"url": "https://one.example/nasa/one", "title": "NASA Mission Alpha", "description": "NASA mission", "fetched_at": 100},
+            {"url": "https://two.example/nasa/two", "title": "NASA Mission Beta", "description": "NASA mission", "fetched_at": 200},
+            {"url": "https://three.example/nasa/three", "title": "NASA Mission Gamma", "description": "NASA mission", "fetched_at": 300},
+        ]
+        page_rows = [
+            {
+                "page_id": stable_id("page", page["url"]),
+                "url": page["url"],
+                "eligible": True,
+                "record_ids": [],
+                "catalog_group_keys": [],
+            }
+            for page in pages
+        ]
+        source_key = _global_subject_catalog_source_key("nasa")
+        catalog_id = stable_id("catalog", source_key)
+        catalogs = [{
+            "catalog_id": catalog_id,
+            "source_key": source_key,
+            "record_ids": ["stale-record"],
+            "record_count": 1,
+            "source_page_ids": ["stale-page"],
+            "source_page_count": 1,
+            "source_url": "https://stale.example/nasa",
+        }]
+        records = []
+
+        _add_global_subject_catalogs(pages, page_rows, records, catalogs)
+
+        nasa_catalog = next(item for item in catalogs if item["catalog_id"] == catalog_id)
+        expected_record_ids = sorted(
+            stable_id("record", "subject|nasa|" + page["url"])
+            for page in pages
+        )
+        expected_page_ids = sorted(stable_id("page", page["url"]) for page in pages)
+        self.assertEqual(nasa_catalog["record_ids"], expected_record_ids)
+        self.assertEqual(nasa_catalog["record_count"], 3)
+        self.assertEqual(nasa_catalog["source_page_ids"], expected_page_ids)
+        self.assertEqual(nasa_catalog["source_page_count"], 3)
+        self.assertNotIn("stale-record", nasa_catalog["record_ids"])
+        for record_id in expected_record_ids:
+            record = next(item for item in records if item["record_id"] == record_id)
+            self.assertIn(catalog_id, record["catalog_ids"])
+        self.assertTrue(all(source_key in row["catalog_group_keys"] for row in page_rows))
 
 
 if __name__ == "__main__":

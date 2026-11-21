@@ -478,6 +478,12 @@ def _catalog_title(host: str, kind: str, path: str, source_titles: list[str]) ->
 
 
 
+def _global_subject_catalog_source_key(token: str) -> str:
+    """Keep canonical topic tokens distinct even when their display slugs collide."""
+    slug = re.sub(r"[^a-z0-9]+", "-", token).strip("-")
+    return "__global__|subject|/topics/" + slug + "|" + token
+
+
 def _add_global_subject_catalogs(pages: list[dict], page_rows: list[dict], records, catalogs) -> int:
     """Create cross-host topic catalogs only from recurring page-title evidence."""
     page_rows_by_id = {row.get("page_id"): row for row in page_rows if row.get("page_id")}
@@ -532,7 +538,7 @@ def _add_global_subject_catalogs(pages: list[dict], page_rows: list[dict], recor
         if len(members) < 3 or len(hosts) < 2:
             continue
         slug = re.sub(r"[^a-z0-9]+", "-", token).strip("-")
-        source_key = "__global__|subject|/topics/" + slug
+        source_key = _global_subject_catalog_source_key(token)
         catalog_id = stable_id("catalog", source_key)
         record_ids = []
         for member in sorted(members.values(), key=lambda item: item["url"]):
@@ -580,14 +586,32 @@ def _add_global_subject_catalogs(pages: list[dict], page_rows: list[dict], recor
             record_ids.append(record_id)
             row = page_rows_by_id[member["page_id"]]
             row["record_ids"] = sorted(set(row.get("record_ids", [])) | {record_id})
-            group_key = "__global__|subject|/topics/" + slug
+            group_key = source_key
             row["catalog_group_keys"] = sorted(set(row.get("catalog_group_keys", [])) | {group_key})
-        if catalog_id in catalog_map:
-            continue
+        record_ids = sorted(set(record_ids))
+        source_page_ids = sorted(members)
         source_urls = sorted(item["url"] for item in members.values())
         timestamps = sorted(
             stamp for stamp in (_timestamp_iso(item["fetched_at"]) for item in members.values()) if stamp
         )
+        if catalog_id in catalog_map:
+            existing_catalog = catalog_map[catalog_id]
+            current_record_ids = set(record_ids)
+            for existing_record in record_map.values():
+                existing_catalog_ids = existing_record.get("catalog_ids", [])
+                if catalog_id in existing_catalog_ids and existing_record.get("record_id") not in current_record_ids:
+                    existing_record["catalog_ids"] = [value for value in existing_catalog_ids if value != catalog_id]
+            existing_catalog.update({
+                "source_key": source_key,
+                "source_page_ids": source_page_ids,
+                "source_page_count": len(source_page_ids),
+                "source_url": source_urls[0] if source_urls else existing_catalog.get("source_url"),
+                "first_seen_at": timestamps[0] if timestamps else None,
+                "last_seen_at": timestamps[-1] if timestamps else None,
+                "record_ids": record_ids,
+                "record_count": len(record_ids),
+            })
+            continue
         catalog_map[catalog_id] = {
             "catalog_id": catalog_id,
             "source_key": source_key,
@@ -597,11 +621,11 @@ def _add_global_subject_catalogs(pages: list[dict], page_rows: list[dict], recor
             "subject": token,
             "source_host": "__global__",
             "source_url": source_urls[0],
-            "source_page_ids": sorted(members),
-            "source_page_count": len(members),
+            "source_page_ids": source_page_ids,
+            "source_page_count": len(source_page_ids),
             "first_seen_at": timestamps[0] if timestamps else None,
             "last_seen_at": timestamps[-1] if timestamps else None,
-            "record_ids": sorted(record_ids),
+            "record_ids": record_ids,
             "record_count": len(record_ids),
             "parent_catalog_id": None,
             "evidence": ["recurring_page_title_topic", "minimum_3_pages", "minimum_2_hosts"],
@@ -2312,7 +2336,13 @@ def validate_outputs(output_dir: Path) -> dict:
             indexed_ids = [x["record_id"] for x in payload.get("records", [])]
             expected_ids = set(catalogs_by_id[catalog_id].get("record_ids", []))
             if len(indexed_ids) != len(set(indexed_ids)) or set(indexed_ids) != expected_ids:
-                raise ValueError("per-catalog index does not exactly match registry record membership")
+                missing_ids = sorted(expected_ids - set(indexed_ids))[:5]
+                extra_ids = sorted(set(indexed_ids) - expected_ids)[:5]
+                raise ValueError(
+                    f"per-catalog index {catalog_id} membership mismatch: "
+                    f"indexed={len(indexed_ids)}, registry={len(expected_ids)}, "
+                    f"missing={missing_ids}, extra={extra_ids}"
+                )
             if any(catalog_id not in records_by_id[x].get("catalog_ids", []) for x in indexed_ids):
                 raise ValueError("per-catalog index record is missing its catalog relationship")
         elif entry["file"].startswith("search-index/"):
