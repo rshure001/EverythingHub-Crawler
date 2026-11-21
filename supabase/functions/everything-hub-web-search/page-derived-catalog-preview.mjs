@@ -510,8 +510,9 @@ export async function searchPageDerivedCatalogPreview(query, network, limit = 5,
   const hasPlaceCatalog = candidateCatalogs.some((catalog) =>
     catalog.catalog_type === "geographic" || String(catalog.record_type || "").toLowerCase() === "place"
   );
-  const productIntent = !contentIntent && !businessIntent && (productTermIntent || hasProductCatalog);
   const geoIntent = terms.length >= 2 && hasPlaceCatalog && !contentIntent && !eventIntent && !businessIntent;
+  const productIntent = !geoIntent && !eventIntent && !contentIntent && !businessIntent &&
+    (productTermIntent || hasProductCatalog);
   const locationBusinessIntent = businessIntent && !contentIntent;
 
   const preScore = (catalog) => {
@@ -585,8 +586,9 @@ function searchCatalogRecords(query, network, limit = 5) {
     if (!globalPlaceMatch && type === "place" && allTermsPresent(terms, all)) globalPlaceMatch = true;
     if (globalProductMatch && globalPlaceMatch) break;
   }
-  const productIntent = !contentIntent && !businessIntent && (productTermIntent || globalProductMatch);
   const geoIntent = terms.length >= 2 && globalPlaceMatch && !contentIntent && !eventIntent && !businessIntent;
+  const productIntent = !geoIntent && !eventIntent && !contentIntent && !businessIntent &&
+    (productTermIntent || globalProductMatch);
   const locationBusinessIntent = businessIntent && !contentIntent;
   const catalogsById = new Map(network.catalogs.map((catalog) => [catalog.catalog_id, catalog]));
   const groups = new Map();
