@@ -107,13 +107,15 @@ jobs:
               await page.locator('.hotspots [data-mode="' + mode + '"]').click();
               await page.locator("#query").fill(query);
               const expectedQuery = query.trim().toLowerCase();
+              const expectedPath = mode === "images" ? "/api/images" :
+                mode === "videos" ? "/api/videos" : "/api/search";
               const responsePromise = page.waitForResponse(response => {
                 try {
                   const url = new URL(response.url());
                   return url.hostname === "everythinghub-search-backend.vercel.app" &&
-                    url.pathname === "/api/search" &&
+                    url.pathname === expectedPath &&
                     (url.searchParams.get("q") || "").trim().toLowerCase() === expectedQuery &&
-                    url.searchParams.get("lane") === mode;
+                    (expectedPath !== "/api/search" || url.searchParams.get("lane") === mode);
                 } catch { return false; }
               }, { timeout: 60000 });
               await page.locator("#searchForm button[type=submit]").click();
@@ -182,14 +184,17 @@ jobs:
               await shot("everythinghub-home.png");
               await search("web", "Rolex", "#results .eh-result", 1);
               report.checks.rolex = { results: await page.locator("#results .eh-result").count(), catalogs: await page.locator("#results .eh-catalog-result").count() };
+              if (report.checks.rolex.catalogs < 1) throw new Error("Rolex search returned no catalog previews");
               await shot("everythinghub-rolex.png");
               await goHome();
               await search("web", "Las Vegas", "#results .eh-result", 1);
               report.checks.lasVegas = { results: await page.locator("#results .eh-result").count(), catalogs: await page.locator("#results .eh-catalog-result").count() };
+              if (report.checks.lasVegas.catalogs < 1) throw new Error("Las Vegas search returned no catalog previews");
               await shot("everythinghub-las-vegas.png");
               await goHome();
               await search("web", "NASA", "#results .eh-result", 1);
               report.checks.nasa = { results: await page.locator("#results .eh-result").count(), catalogs: await page.locator("#results .eh-catalog-result").count() };
+              if (report.checks.nasa.catalogs < 1) throw new Error("NASA search returned no catalog previews");
               await shot("everythinghub-nasa.png");
               const searchLink = await page.locator("#results .eh-result a").first().evaluate(anchor => ({ href: anchor.href, target: anchor.target, rel: anchor.rel }));
               if (!/^https:\/\//i.test(searchLink.href) || searchLink.target !== "_blank" || !searchLink.rel.includes("noopener")) {
