@@ -28,9 +28,9 @@ jobs:
         run: |
           set -euo pipefail
           curl --silent --show-error --fail --max-time 20 -G "$BASE" \
-            --data-urlencode "q=latest technology science nature" --data-urlencode "type=image" -D /tmp/images.headers -o /tmp/images.json
+            --data-urlencode "q=NASA" --data-urlencode "type=image" -D /tmp/images.headers -o /tmp/images.json
           curl --silent --show-error --fail --max-time 20 -G "$BASE" \
-            --data-urlencode "q=latest science technology discoveries" --data-urlencode "type=video" -D /tmp/videos.headers -o /tmp/videos.json
+            --data-urlencode "q=animation" --data-urlencode "type=video" -D /tmp/videos.headers -o /tmp/videos.json
           node <<'NODE'
           const fs = require("fs");
           for (const type of ["images", "videos"]) {
