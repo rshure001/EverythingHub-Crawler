@@ -1494,10 +1494,39 @@ class CatalogInventoryTriggerTests(unittest.TestCase):
         self.assertEqual(nasa_catalog["source_page_ids"], expected_page_ids)
         self.assertEqual(nasa_catalog["source_page_count"], 3)
         self.assertNotIn("stale-record", nasa_catalog["record_ids"])
-        for record_id in expected_record_ids:
-            record = next(item for item in records if item["record_id"] == record_id)
+        subject_entity_id = stable_id("entity", "subject|nasa")
+        nasa_records = [item for item in records if item.get("canonical_subject_key") == "subject|nasa"]
+        self.assertEqual(len(nasa_records), 3)
+        for page in pages:
+            record_id = stable_id("record", "subject|nasa|" + page["url"])
+            record = next(item for item in nasa_records if item["record_id"] == record_id)
             self.assertIn(catalog_id, record["catalog_ids"])
+            self.assertEqual(record["entity_id"], subject_entity_id)
+            self.assertEqual(record["canonical_subject_key"], "subject|nasa")
+            self.assertEqual(record["canonical_entity_key"], "subject|nasa|" + page["url"])
+        self.assertEqual(len({item["record_id"] for item in nasa_records}), 3)
+        self.assertEqual(len({item["entity_id"] for item in nasa_records}), 1)
         self.assertTrue(all(source_key in row["catalog_group_keys"] for row in page_rows))
+
+
+    def test_global_subject_metrics_separate_page_records_from_entities(self):
+        pages = [
+            {"url": "https://one.example/nasa/one", "title": "NASA Apollo Alpha", "description": "Spaceflight history", "fetched_at": 100, "robots_allowed": True},
+            {"url": "https://two.example/nasa/two", "title": "NASA Hubble Beta", "description": "Space telescope", "fetched_at": 200, "robots_allowed": True},
+            {"url": "https://three.example/nasa/three", "title": "NASA Mars Gamma", "description": "Planetary exploration", "fetched_at": 300, "robots_allowed": True},
+        ]
+        result = analyze_pages(pages, source_total=len(pages))
+        metrics = result["metrics"]
+        self.assertEqual(metrics["global_subject_catalogs"], 1)
+        self.assertEqual(metrics["subject_page_records"], 3)
+        self.assertEqual(metrics["unique_subject_entities"], 1)
+        subject_records = [item for item in result["records"] if item["record_type"] == "subject"]
+        nasa_records = [item for item in subject_records if item.get("canonical_subject_key") == "subject|nasa"]
+        self.assertEqual(len(nasa_records), 3)
+        self.assertEqual(len({item["entity_id"] for item in nasa_records}), 1)
+        self.assertEqual(len({item["record_id"] for item in nasa_records}), 3)
+        self.assertEqual(metrics["subject_page_records"], len(subject_records))
+        self.assertEqual(metrics["unique_subject_entities"], len({item["entity_id"] for item in subject_records}))
 
 
 if __name__ == "__main__":

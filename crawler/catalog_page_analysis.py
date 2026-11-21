@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_INDEX = ROOT / "data" / "index.json"
 DEFAULT_OUTPUT = ROOT / "data" / "page-derived-catalogs"
 DEFAULT_SOURCE_POLICY_REVIEWS = ROOT / "data" / "source-policy-reviews.json"
-ANALYZER_VERSION = 13
+ANALYZER_VERSION = 14
 TRACKING_KEYS = {"fbclid", "gclid", "dclid", "mc_cid", "mc_eid", "ref", "source"}
 STOP_TOKENS = {
     "the", "and", "for", "with", "from", "our", "your", "all", "new", "home", "page",
@@ -542,12 +542,16 @@ def _add_global_subject_catalogs(pages: list[dict], page_rows: list[dict], recor
         catalog_id = stable_id("catalog", source_key)
         record_ids = []
         for member in sorted(members.values(), key=lambda item: item["url"]):
-            entity_key = "subject|" + token + "|" + member["url"]
-            record_id = stable_id("record", entity_key)
+            # A subject entity is shared across source pages; each page-topic
+            # occurrence retains its own stable record ID and provenance.
+            entity_key = "subject|" + token
+            record_key = entity_key + "|" + member["url"]
+            record_id = stable_id("record", record_key)
             record = record_map.setdefault(record_id, {
                 "record_id": record_id,
                 "entity_id": stable_id("entity", entity_key),
-                "canonical_entity_key": entity_key,
+                "canonical_entity_key": record_key,
+                "canonical_subject_key": entity_key,
                 "record_type": "subject",
                 "title": member["title"],
                 "description": member["description"],
@@ -564,10 +568,14 @@ def _add_global_subject_catalogs(pages: list[dict], page_rows: list[dict], recor
                 "source_url": member["url"],
                 "source_page_count": 1,
             })
-            if record.get("canonical_entity_key") not in (None, entity_key):
-                raise ValueError("global subject record ID maps to a different canonical entity key")
-            record.setdefault("canonical_entity_key", entity_key)
-            record.setdefault("entity_id", stable_id("entity", entity_key))
+            if record.get("canonical_entity_key") not in (None, record_key):
+                raise ValueError("global subject record ID maps to a different canonical record key")
+            record["canonical_entity_key"] = record_key
+            record["canonical_subject_key"] = entity_key
+            record["entity_id"] = stable_id("entity", entity_key)
+            if not isinstance(record.get("attributes"), dict):
+                record["attributes"] = {}
+            record["attributes"].setdefault("topic", token)
             if not isinstance(record.get("source_urls"), list):
                 current_urls = record.get("source_urls")
                 record["source_urls"] = [current_urls] if isinstance(current_urls, str) and current_urls else []
@@ -1298,6 +1306,8 @@ def analyze_pages(
         "unique_records": len(record_list),
         "cross_host_record_merges": 0,
         "unique_entities": len({x.get("entity_id") for x in record_list if x.get("entity_id")}),
+        "subject_page_records": sum(1 for x in record_list if x.get("record_type") == "subject"),
+        "unique_subject_entities": len({x.get("entity_id") for x in record_list if x.get("record_type") == "subject" and x.get("entity_id")}),
         "unique_records_by_type": type_counts,
         "content_entity_mentions": content_entity_mentions,
         "content_extracted_unique_records": sum(1 for item in record_list if item.get("content_extracted")),
@@ -1514,6 +1524,8 @@ def analyze_pages_incremental(
         "unique_records": len(all_records),
         "cross_host_record_merges": cross_host_record_merges,
         "unique_entities": len({x.get("entity_id") for x in all_records if x.get("entity_id")}),
+        "subject_page_records": sum(1 for x in all_records if x.get("record_type") == "subject"),
+        "unique_subject_entities": len({x.get("entity_id") for x in all_records if x.get("record_type") == "subject" and x.get("entity_id")}),
         "unique_records_by_type": type_counts,
         "content_entity_mentions": content_entity_mentions,
         "content_extracted_unique_records": sum(1 for item in all_records if item.get("content_extracted")),
@@ -2259,7 +2271,18 @@ def validate_outputs(output_dir: Path) -> dict:
             or record.get("source_policy_review_scope") != "source-level-only"
         ):
             raise ValueError("conditional source-policy annotations lack evidence or scope")
-        if stable_id("entity", record.get("canonical_entity_key", "")) != record.get("entity_id"):
+        canonical_subject_key = record.get("canonical_subject_key")
+        if canonical_subject_key is not None:
+            if (
+                record.get("record_type") != "subject"
+                or not isinstance(canonical_subject_key, str)
+                or not canonical_subject_key.startswith("subject|")
+            ):
+                raise ValueError("canonical subject key is invalid for this record")
+            entity_key = canonical_subject_key
+        else:
+            entity_key = record.get("canonical_entity_key", "")
+        if stable_id("entity", entity_key) != record.get("entity_id"):
             raise ValueError("entity ID does not match its canonical entity key")
         if not set(record.get("source_page_ids", [])).issubset(page_ids):
             raise ValueError("record provenance references an unknown source page")
