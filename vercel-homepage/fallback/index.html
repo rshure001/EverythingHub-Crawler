@@ -107,9 +107,9 @@ function cleanCommonsValue(value){
   return String(value||'').replace(/<[^>]*>/g,' ')
     .replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>')
     .replace(/&quot;/g,'"').replace(/&apos;/g,"'")
-    .replace(/&#(\\d+);/g,(_,n)=>String.fromCodePoint(Number(n)))
+    .replace(/&#(\d+);/g,(_,n)=>String.fromCodePoint(Number(n)))
     .replace(/&#x([0-9a-f]+);/gi,(_,n)=>String.fromCodePoint(parseInt(n,16)))
-    .replace(/\\s+/g,' ').trim();
+    .replace(/\s+/g,' ').trim();
 }
 function mediaPreviewMetadata(meta){
   const license=cleanCommonsValue(meta.LicenseShortName?.value);
@@ -118,13 +118,13 @@ function mediaPreviewMetadata(meta){
   const raw=cleanCommonsValue(meta.AttributionRequired?.value).toLowerCase();
   const attributionRequired=raw==='true'?true:raw==='false'?false:null;
   const publicDomain=license.toLowerCase().startsWith('public domain');
-  const cc0=/^cc0(?:\\s|$)/i.test(license);
-  const ccByMatch=license.match(/^cc by(-sa)?\\s+(1\\.0|2\\.0|2\\.5|3\\.0|4\\.0)$/i);
+  const cc0=/^cc0(?:\s|$)/i.test(license);
+  const ccByMatch=license.match(/^cc by(-sa)?\s+(1\.0|2\.0|2\.5|3\.0|4\.0)$/i);
   let ccByLicenseUrlValid=false;
   if(ccByMatch){try{
     const url=new URL(licenseUrl),kind=ccByMatch[1]?'by-sa':'by';
     const expected='/licenses/'+kind+'/'+ccByMatch[2]+'/';
-    ccByLicenseUrlValid=url.protocol==='https:'&&url.hostname==='creativecommons.org'&&url.pathname.replace(/\\/+$/,'/')===expected;
+    ccByLicenseUrlValid=url.protocol==='https:'&&url.hostname==='creativecommons.org'&&url.pathname.replace(/\/+$/,'/')===expected;
   }catch{}}
   const licenseValid=publicDomain||cc0||(ccByMatch!==null&&ccByLicenseUrlValid);
   const attributionValid=ccByMatch?creator.length>0:(attributionRequired===false||(attributionRequired===true&&creator.length>0));
