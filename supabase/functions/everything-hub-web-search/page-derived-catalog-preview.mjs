@@ -29,6 +29,12 @@ const CONTENT_INTENT = new Set([
 ]);
 const ATTRIBUTE_KEYS = new Set(["brand", "model", "sku", "mpn", "gtin", "manufacturer", "category"]);
 const PRODUCT_TYPES = new Set(["product", "brand", "model"]);
+const SEARCH_STOP_TOKENS = new Set([
+  "the", "and", "for", "with", "from", "our", "your", "all", "new", "home", "page",
+  "official", "welcome", "lock", "menu", "search", "skip", "content", "login", "sign",
+  "subscribe", "close", "cookie", "accept", "privacy", "terms", "policy", "back", "next",
+  "previous", "print", "share",
+]);
 const CONTENT_TYPES = new Set(["article", "resource", "media", "subject"]);
 let cache = null;
 let pending = null;
@@ -438,7 +444,8 @@ function singularSearchToken(token) {
 }
 
 function tokenize(value) {
-  const raw = String(value || "").normalize("NFKC").toLowerCase().match(/[\p{L}\p{N}]+/gu) || [];
+  const raw = (String(value || "").normalize("NFKC").toLowerCase().match(/[\p{L}\p{N}]+/gu) || [])
+    .filter((token) => !SEARCH_STOP_TOKENS.has(token));
   const tokens = new Set(raw);
   for (const token of raw) {
     const singular = singularSearchToken(token);
