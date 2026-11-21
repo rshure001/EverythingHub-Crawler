@@ -121,5 +121,76 @@ class ProductMetadataTests(unittest.TestCase):
         self.assertEqual(result["lists"][0]["items"][0]["same_as_ids"], ["wikidata:Q12345"])
         self.assertEqual(result["lists"][0]["items"][1]["same_as_ids"], ["wikidata:Q23456"])
 
+
+    def test_extracts_data_catalog_dataset_records_without_fetching_them(self):
+        import json
+        payload = {
+            "@context": "https://schema.org",
+            "@type": "DataCatalog",
+            "name": "Nevada Public Datasets",
+            "dataset": [
+                {"@type": "Dataset", "name": "Business Licenses", "url": "/datasets/licenses"},
+                {"@type": "Dataset", "name": "Building Permits", "url": "/datasets/permits"},
+            ],
+        }
+        html = '<script type="application/ld+json">' + json.dumps(payload) + "</script>"
+        result = extract_structured_catalog_metadata(html, "https://data.example/catalog")
+        self.assertEqual(len(result["lists"]), 1)
+        self.assertEqual(result["lists"][0]["record_type"], "dataset")
+        self.assertEqual(
+            [item["url"] for item in result["lists"][0]["items"]],
+            [
+                "https://data.example/datasets/licenses",
+                "https://data.example/datasets/permits",
+            ],
+        )
+
+    def test_extracts_collection_page_place_records(self):
+        import json
+        payload = {
+            "@context": "https://schema.org",
+            "@type": "CollectionPage",
+            "name": "Las Vegas Attractions",
+            "mainEntity": [
+                {"@type": "TouristAttraction", "name": "Fremont Street", "url": "/places/fremont"},
+                {"@type": "Museum", "name": "Neon Museum", "url": "/places/neon"},
+            ],
+        }
+        html = '<script type="application/ld+json">' + json.dumps(payload) + "</script>"
+        result = extract_structured_catalog_metadata(html, "https://visit.example/las-vegas")
+        self.assertEqual(len(result["lists"]), 1)
+        self.assertEqual(result["lists"][0]["record_type"], "place")
+        self.assertEqual(len(result["lists"][0]["items"]), 2)
+
+    def test_extracts_product_group_variants(self):
+        import json
+        payload = {
+            "@context": "https://schema.org",
+            "@type": "ProductGroup",
+            "name": "Submariner Variants",
+            "hasVariant": [
+                {"@type": "Product", "name": "Submariner No Date", "url": "/watches/no-date", "sku": "124060"},
+                {"@type": "Product", "name": "Submariner Date", "url": "/watches/date", "sku": "126610"},
+            ],
+        }
+        html = '<script type="application/ld+json">' + json.dumps(payload) + "</script>"
+        result = extract_structured_catalog_metadata(html, "https://shop.example/watches/submariner")
+        self.assertEqual(len(result["lists"]), 1)
+        self.assertEqual(result["lists"][0]["record_type"], "product")
+        self.assertEqual(len(result["lists"][0]["items"]), 2)
+
+    def test_data_catalog_with_one_dataset_does_not_force_a_catalog(self):
+        import json
+        payload = {
+            "@context": "https://schema.org",
+            "@type": "DataCatalog",
+            "name": "Single Dataset",
+            "dataset": [
+                {"@type": "Dataset", "name": "Only Dataset", "url": "/datasets/only"},
+            ],
+        }
+        html = '<script type="application/ld+json">' + json.dumps(payload) + "</script>"
+        self.assertEqual(extract_structured_catalog_metadata(html, "https://data.example/catalog"), {})
+
 if __name__ == "__main__":
     unittest.main()
