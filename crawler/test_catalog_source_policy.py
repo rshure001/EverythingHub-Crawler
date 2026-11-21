@@ -197,5 +197,42 @@ class CatalogSourcePolicyTests(unittest.TestCase):
             policy.authorize_source_url("https://openlibrary.org/subjects/science.json?limit=500")
 
 
+    def test_nasa_video_api_allows_only_metadata_search_endpoint(self):
+        source = policy.policy_for_host("images-api.nasa.gov")
+        self.assertIsNotNone(source)
+        self.assertTrue(source["metadata_only"])
+        self.assertTrue(source["per_dataset_rights_required"])
+        self.assertEqual(source["allowed_api_paths"], ["/search"])
+        with patch.object(policy, "load_robots_policy", return_value=object()), \
+             patch.object(policy, "robots_can_fetch", return_value=True), \
+             patch.object(policy, "effective_host_delay", return_value=0.0):
+            authorized, parser, delay, allowed_paths = policy.authorize_source_url(
+                "https://images-api.nasa.gov/search?q=NASA",
+                purpose="discovery",
+            )
+        self.assertEqual(authorized["terms_status"], "reviewed_per_dataset")
+        self.assertEqual(allowed_paths, ["/search"])
+        self.assertGreaterEqual(delay, 2.0)
+
+    def test_nasa_video_api_rejects_asset_and_bulk_download_paths(self):
+        with patch.object(policy, "load_robots_policy") as load_robots:
+            for url in (
+                "https://images-api.nasa.gov/assets/video/123",
+                "https://images-api.nasa.gov/download/123",
+                "https://images-api.nasa.gov/metadata/123",
+            ):
+                with self.subTest(url=url):
+                    with self.assertRaises(policy.SourcePolicyError):
+                        policy.authorize_source_url(url, purpose="discovery")
+            load_robots.assert_not_called()
+
+    def test_nasa_video_policy_requires_per_item_credit_and_excludes_commercial_clearance(self):
+        source = policy.policy_for_host("images-api.nasa.gov")
+        self.assertEqual(source["attribution_required"], "per_item")
+        self.assertFalse(source["commercial_eligible"])
+        self.assertIn("third_party_copyrighted_items", source["prohibited_content"])
+        self.assertIn("links.preview", source["allowed_metadata_fields"])
+
+
 if __name__ == "__main__":
     unittest.main()
