@@ -140,7 +140,8 @@ class CatalogSourcePolicyTests(unittest.TestCase):
         source = policy.policy_for_host("frontiersin.org")
         parser = object()
         with patch.object(policy, "authorize_source_url", return_value=(source, parser, 0.0, ["/journals"])), \
-             patch.object(policy, "build_pinned_opener", return_value=Opener()):
+             patch.object(policy, "build_pinned_opener", return_value=Opener()), \
+             patch.object(policy, "robots_can_fetch", return_value=True):
             with self.assertRaises(policy.SourcePolicyError):
                 policy.request_source_bytes(
                     "https://frontiersin.org/journals/insect-science/articles",
