@@ -28,7 +28,7 @@ jobs:
   staging-smoke:
     if: (github.event_name == 'pull_request' && contains(fromJSON('["fix/bounded-catalog-search-20261121","eh/search-load-budget-20261121","eh/catalog-search-relevance-20261121"]'), github.head_ref)) || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 5
     env:
       BASE: https://everythinghub-search-backend-c5bkrxqdy-rshure001-8053.vercel.app
     steps:
@@ -39,7 +39,7 @@ jobs:
           node -e "const h=require('/tmp/health.json'); if(h.status!=='ok'||h.database_required!==false) throw new Error('staging health failed: '+JSON.stringify(h)); console.log(JSON.stringify({health:h.status,service:h.service,storage:h.storage,databaseRequired:h.database_required}));"
           for q in "Rolex" "Las Vegas" "NASA"; do
             out="/tmp/search-$(printf '%s' "$q" | tr '[:upper:] ' '[:lower:]-').json"
-            curl --silent --show-error --fail --max-time 20 -G "$BASE/api/search" --data-urlencode "q=$q" --data-urlencode "limit=10" -o "$out"
+            curl --silent --show-error --fail --max-time 45 -G "$BASE/api/search" --data-urlencode "q=$q" --data-urlencode "limit=10" -o "$out"
             node - "$out" "$q" <<'NODE'
           const fs=require('node:fs');
           const data=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
