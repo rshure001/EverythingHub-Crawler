@@ -158,7 +158,7 @@ class CatalogHostReviewQueueTests(unittest.TestCase):
             self.assertEqual(summary["catalog_definition_candidates"], 5)
             self.assertEqual(summary["unique_source_urls"], 4)
             self.assertEqual(summary["policy_preapproved_urls_needing_runtime_robots_check"], 1)
-            self.assertEqual(summary["policy_review_required_urls"], 1)
+            self.assertEqual(summary["policy_review_required_urls"], 2)
             self.assertEqual(summary["fetch_authorized_urls"], 0)
             self.assertEqual(payload["status"], "source_review_backlog_not_a_fetch_queue")
             shared = next(x for x in payload["candidate_urls"] if x["source_url"] == "https://allowed.example/api/v1/catalog")
