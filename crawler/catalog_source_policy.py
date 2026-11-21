@@ -83,6 +83,14 @@ def authorize_source_url(url: str, purpose: str = "discovery") -> tuple[dict, ob
     elif purpose == "probe":
         allowed_paths = policy.get("allowed_probe_paths") or []
     elif purpose == "landing_page":
+        if policy.get("metadata_only") is not True:
+            raise SourcePolicyError("catalog landing-page discovery must remain metadata-only")
+        metadata_fields = policy.get("allowed_metadata_fields")
+        prohibited_content = policy.get("prohibited_content")
+        if not isinstance(metadata_fields, list) or not metadata_fields:
+            raise SourcePolicyError("catalog landing-page policy must enumerate allowed metadata fields")
+        if not isinstance(prohibited_content, list) or not prohibited_content:
+            raise SourcePolicyError("catalog landing-page policy must enumerate prohibited content")
         allowed_paths = policy.get("allowed_catalog_paths") or []
     else:
         raise SourcePolicyError("unsupported catalog request purpose")
@@ -110,6 +118,16 @@ def request_source_bytes(
     accept: str = "application/json",
 ) -> tuple[bytes, int, dict, dict]:
     policy, parser, delay, allowed_paths = authorize_source_url(url, purpose)
+    if purpose == "landing_page":
+        if accept != "text/html":
+            raise SourcePolicyError("catalog landing-page requests must explicitly accept text/html")
+        try:
+            policy_max_bytes = int(policy.get("max_response_bytes") or 0)
+        except (TypeError, ValueError) as exc:
+            raise SourcePolicyError("catalog landing-page policy has an invalid response-size limit") from exc
+        if policy_max_bytes < 1:
+            raise SourcePolicyError("catalog landing-page policy must set a positive response-size limit")
+        max_bytes = min(max_bytes, policy_max_bytes)
     host = urllib.parse.urlsplit(url).hostname.lower().rstrip(".")
     count = _REQUEST_COUNTS.get(host, 0)
     if count >= int(policy.get("max_requests_per_run", 1)):
