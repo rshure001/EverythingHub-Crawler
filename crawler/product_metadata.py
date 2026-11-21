@@ -30,6 +30,19 @@ def _absolute_http(value, base_url):
         return ""
 
 
+def _valid_mod_11_2(value):
+    """Validate ORCID/ISNI ISO 7064 MOD 11-2 check digits."""
+    compact = str(value or "").replace("-", "").upper()
+    if not re.fullmatch(r"\d{15}[\dX]", compact):
+        return False
+    total = 0
+    for digit in compact[:15]:
+        total = (total + int(digit)) * 2
+    check = (12 - (total % 11)) % 11
+    expected = "X" if check == 10 else str(check)
+    return compact[-1] == expected
+
+
 def _stable_same_as_ids(value):
     """Keep only stable, namespaced HTTPS entity identifiers from schema.org sameAs."""
     pending = [value]
@@ -67,7 +80,7 @@ def _stable_same_as_ids(value):
                 identity = "wikidata:" + match.group(1).upper()
         elif host in {"orcid.org", "www.orcid.org"}:
             match = re.fullmatch(r"/(\d{4}-\d{4}-\d{4}-\d{3}[\dXx])", path)
-            if match:
+            if match and _valid_mod_11_2(match.group(1)):
                 identity = "orcid:" + match.group(1).upper()
         elif host == "viaf.org":
             match = re.fullmatch(r"/viaf/(\d+)", path)
@@ -75,7 +88,7 @@ def _stable_same_as_ids(value):
                 identity = "viaf:" + match.group(1)
         elif host in {"isni.org", "www.isni.org"}:
             match = re.fullmatch(r"/isni/(\d{15}[\dXx])", path)
-            if match:
+            if match and _valid_mod_11_2(match.group(1)):
                 identity = "isni:" + match.group(1).upper()
         elif host in {"geonames.org", "www.geonames.org"}:
             match = re.fullmatch(r"/(\d+)", path)
