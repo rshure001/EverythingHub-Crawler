@@ -1,16 +1,7 @@
 {
-  "updated_at": "2026-11-21T05:17:35.953484+00:00",
+  "updated_at": "2026-11-21T05:42:09.582276+00:00",
   "target_new_records_per_hour": 60000,
   "runs": [
-    {
-      "run_id": "44680235042",
-      "run_number": "239",
-      "timestamp": "2026-11-20T05:28:26.542366+00:00",
-      "indexed_records": 670,
-      "fetch_attempts": 847,
-      "duration_seconds": 367.9,
-      "commit_sha": "0393c8daa218"
-    },
     {
       "run_id": "44685773859",
       "run_number": "240",
@@ -1027,26 +1018,50 @@
         "wall_clock_records_per_minute": 25.89,
         "wall_clock_records_per_hour": 1553.4
       }
+    },
+    {
+      "run_id": "44871378884",
+      "run_number": "318",
+      "timestamp": "2026-11-21T05:40:41Z",
+      "indexed_records_processed": 1048,
+      "fetch_attempts": 1263,
+      "duration_seconds": 421.42,
+      "commit_sha": "ab0dda7efff2",
+      "manifest_interval": {
+        "valid": true,
+        "reason": null,
+        "before_pages": 143228,
+        "after_pages": 144241,
+        "before_updated_at": "2026-11-21T05:16:18Z",
+        "after_updated_at": "2026-11-21T05:40:41Z",
+        "elapsed_seconds": 1463.0,
+        "run_duration_seconds": 421.42,
+        "new_unique_records": 1013,
+        "records_per_minute": 144.23,
+        "records_per_hour": 8653.6,
+        "wall_clock_records_per_minute": 41.54,
+        "wall_clock_records_per_hour": 2492.7
+      }
     }
   ],
   "latest_manifest_interval": {
     "valid": true,
     "reason": null,
-    "before_pages": 141962,
-    "after_pages": 143228,
-    "before_updated_at": "2026-11-21T04:27:24Z",
-    "after_updated_at": "2026-11-21T05:16:18Z",
-    "elapsed_seconds": 2934.0,
-    "run_duration_seconds": 420.5,
-    "new_unique_records": 1266,
-    "records_per_minute": 180.64,
-    "records_per_hour": 10838.5,
-    "wall_clock_records_per_minute": 25.89,
-    "wall_clock_records_per_hour": 1553.4
+    "before_pages": 143228,
+    "after_pages": 144241,
+    "before_updated_at": "2026-11-21T05:16:18Z",
+    "after_updated_at": "2026-11-21T05:40:41Z",
+    "elapsed_seconds": 1463.0,
+    "run_duration_seconds": 421.42,
+    "new_unique_records": 1013,
+    "records_per_minute": 144.23,
+    "records_per_hour": 8653.6,
+    "wall_clock_records_per_minute": 41.54,
+    "wall_clock_records_per_hour": 2492.7
   },
   "recent_run_activity": {
-    "records_processed": 2521,
-    "fetch_attempts": 2967,
+    "records_processed": 2343,
+    "fetch_attempts": 2746,
     "run_count": 2
   }
 }
