@@ -162,5 +162,12 @@ function searchPageDerivedCatalogs(query,network,limit=5){
  const n=Number.isInteger(limit)?Math.max(1,Math.min(8,limit)):5;
  return results.sort((a,b)=>b.score-a.score||b.matched_records.length-a.matched_records.length||a.title.localeCompare(b.title)).slice(0,n);
 }
+function matchesPageIndexSnapshot(pageDerived,pageIndex){
+ const sourceTime=Date.parse(String(pageDerived&&pageDerived.sourceIndexUpdatedAt||''));
+ const pageTime=Number(pageIndex&&pageIndex.updatedAt)*1000;
+ return Number.isSafeInteger(pageDerived&&pageDerived.sourceIndexPages)&&
+  pageDerived.sourceIndexPages===pageIndex.indexedPages&&Number.isFinite(sourceTime)&&
+  Number.isFinite(pageTime)&&Math.abs(sourceTime-pageTime)<=60000;
+}
 function clearPageDerivedCatalogsCache(){cache=null;}
-module.exports={validateManifest,validatePageDerivedCatalogs,loadPageDerivedCatalogsFromManifest,loadPageDerivedCatalogs,searchPageDerivedCatalogs,clearPageDerivedCatalogsCache};
+module.exports={validateManifest,validatePageDerivedCatalogs,loadPageDerivedCatalogsFromManifest,loadPageDerivedCatalogs,searchPageDerivedCatalogs,matchesPageIndexSnapshot,clearPageDerivedCatalogsCache};
