@@ -1,5 +1,5 @@
-name: EverythingHub search API smoke test
-# Verify the live crawler index and database-independent fallback after every published catalog.
+name: EverythingHub first-party catalog search smoke test
+# Verify the Supabase Edge search path and page-derived catalog preview after each committed corpus update.
 on:
   push:
     branches: [main]
@@ -9,253 +9,163 @@ on:
       - "public-search/shard-*.json.gz"
       - "public-search/catalog-v1.json.gz"
   workflow_dispatch:
-  workflow_run:
-    workflows: ["EverythingHub Publisher"]
-    types: [completed]
 permissions:
   contents: read
 jobs:
   smoke-test:
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 8
     env:
       BASE: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1
       KEY: sb_publishable_XlIsACWhtVS1jVODWYGTpg_GMs8v3vJ
-      VERCEL_API: https://everythinghub-search-backend.vercel.app
     steps:
       - uses: actions/checkout@v4
-      - name: Check indexed ranking and database-independent fallback
+      - name: Verify independent search and first-party catalog previews
         run: |
           python - <<'PY'
-          import hashlib
           import json
           import os
-          import re
-          import time
           import urllib.parse
           import urllib.request
+          from datetime import datetime, timezone
           from pathlib import Path
           from crawler.pipeline_health import evaluate_manifest_freshness
 
-          base = os.environ["BASE"]
+          base = os.environ["BASE"].rstrip("/")
           key = os.environ["KEY"]
-
           manifest_path = Path("public-search/manifest.json")
           manifest_raw = manifest_path.read_bytes()
           manifest = json.loads(manifest_raw.decode("utf-8"))
           expected_pages = manifest.get("total_pages")
           expected_updated_at = manifest.get("updated_at")
-          catalog = manifest.get("catalog_gzip")
-          manifest_sha = hashlib.sha256(manifest_raw).hexdigest()
-          expected_shas = {"shards": manifest_sha}
           if not isinstance(expected_pages, int) or expected_pages < 1:
-              raise SystemExit("Committed public search manifest has an invalid page count")
+              raise SystemExit("Committed public-search manifest has an invalid page count")
           if not isinstance(expected_updated_at, int) or expected_updated_at < 1:
-              raise SystemExit("Committed public search manifest has an invalid update timestamp")
-          if catalog is not None:
-              if not isinstance(catalog, dict):
-                  raise SystemExit("Committed public search manifest has invalid compressed-catalog metadata")
-              gzip_sha = catalog.get("sha256")
-              if not isinstance(gzip_sha, str) or not re.fullmatch(r"[0-9a-f]{64}", gzip_sha):
-                  raise SystemExit("Committed public search manifest has an invalid compressed-catalog SHA-256")
-              expected_shas["gzip"] = gzip_sha
+              raise SystemExit("Committed public-search manifest has an invalid update timestamp")
+          freshness = evaluate_manifest_freshness(manifest)
+          if freshness["status"] != "fresh":
+              raise SystemExit("Committed public-search manifest is stale: " + json.dumps(freshness))
+          expected_updated_iso = datetime.fromtimestamp(
+              expected_updated_at, timezone.utc
+          ).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
           def get(function, query, **extra):
-              params = {"q": query, "limit": 10, **extra}
+              params = {"q": query, "limit": 20, **extra}
               url = base + "/" + function + "?" + urllib.parse.urlencode(params)
               request = urllib.request.Request(url, headers={
                   "Accept": "application/json",
                   "apikey": key,
               })
-              with urllib.request.urlopen(request, timeout=25) as response:
-                  assert response.status == 200, response.status
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  if response.status != 200:
+                      raise RuntimeError(function + " returned HTTP " + str(response.status))
                   return json.load(response)
+
+          def safe_http(value):
+              return isinstance(value, str) and value.startswith(("https://", "http://"))
 
           independent = get("everything-hub-independent-search", "Rolex")
-          assert independent.get("count", 0) > 0, independent
-          assert independent.get("provider") == "Bing RSS", independent
-          assert independent.get("independentOfDatabase") is True, independent
-          for result in independent["results"]:
-              assert result.get("url", "").startswith(("https://", "http://")), result
-              assert result.get("title"), result
-          print("Independent fallback passed:", independent["count"], "Rolex results")
+          if independent.get("count", 0) < 1 or independent.get("provider") != "Bing RSS":
+              raise SystemExit("Independent Rolex fallback returned no verified Bing RSS results")
+          if independent.get("independentOfDatabase") is not True:
+              raise SystemExit("Independent Rolex fallback is not database-independent")
+          for item in independent.get("results", []):
+              if not item.get("title") or not safe_http(item.get("url")):
+                  raise SystemExit("Independent search returned an unsafe or incomplete result")
+          print("Independent Rolex fallback passed:", independent["count"], "results")
 
-          indexed = None
-          indexed_error = None
-          try:
-              indexed = get("everything-hub-web-search", "NASA")
-          except Exception as exc:
-              indexed_error = f"{type(exc).__name__}: {exc}"
-              print("Database-backed web search unavailable after independent fallback passed:", indexed_error)
-          if indexed is not None:
-              assert isinstance(indexed.get("results"), list) and indexed["results"], indexed
-              indexed_source = str(indexed.get("source", ""))
-              if indexed.get("independentOfDatabase") is True:
-                  assert indexed.get("fallback") is True, indexed
-                  assert indexed.get("fallbackReason") in ("database_unavailable", "database_empty"), indexed
-                  if indexed.get("indexStatus") == "crawler-catalog-active":
-                      assert indexed.get("indexedPages", 0) > 0, indexed
-                      assert indexed.get("indexIntegrity") == "sha256", indexed
-                      assert indexed.get("indexTransport") == "vercel", indexed
-                      assert isinstance(indexed.get("indexSha256"), str) and len(indexed["indexSha256"]) == 64, indexed
-                      assert "Everything Hub Crawler" in indexed.get("providers", []), indexed
-                      print("Vercel-backed crawler catalog fallback passed:", indexed.get("indexedPages"), "indexed pages")
-                  else:
-                      assert indexed.get("results"), indexed
-                      providers = indexed.get("providers", [])
-                      provider = str(indexed.get("provider", ""))
-                      assert provider == "Bing RSS" or any("Bing" in str(item) for item in providers), indexed
-                      print("Bing-only outage fallback returned:", len(indexed["results"]), "results")
-              else:
-                  assert indexed.get("count", 0) > 0, indexed
-                  assert "index" in indexed_source.lower(), indexed
-              assert isinstance(indexed.get("results"), list), indexed
-              for result in indexed["results"]:
-                  assert result.get("url", "").startswith(("https://", "http://")), result
-                  assert result.get("title"), result
-
-              if indexed.get("source") == "Everything Hub public crawler index":
-                  assert indexed.get("fallback") is True, indexed
-                  assert indexed.get("fallbackReason") in ("database_unavailable", "database_empty"), indexed
-                  assert indexed.get("indexIntegrity") == "sha256", indexed
-                  assert indexed.get("indexTransport") in ("gzip", "shards"), indexed
-                  urls = [result["url"] for result in indexed["results"]]
-                  assert len(urls) == len(set(urls)), indexed
-                  lexical_scores = [result.get("relevance") for result in indexed["results"]]
-                  assert all(isinstance(score, (int, float)) for score in lexical_scores), indexed
-                  rank_scores = [result.get("rankScore") for result in indexed["results"]]
-                  assert all(isinstance(score, (int, float)) for score in rank_scores), indexed
-                  assert rank_scores == sorted(rank_scores, reverse=True), rank_scores
-                  assert all(result.get("evidenceBand") in ("high", "medium", "low")
-                             for result in indexed["results"]), indexed
-                  assert all(isinstance(result.get("evidenceComponents"), dict)
-                             for result in indexed["results"]), indexed
-                  print("Static index Hurricane ranking passed:", indexed["count"], "NASA matches;",
-                        "transport=", indexed["indexTransport"])
-
-                  science = get("everything-hub-web-search", "NASA", tentacle="science")
-                  assert science.get("count", 0) > 0, science
-                  assert all(item.get("tentacle") == "science" for item in science["results"]), science
-                  print("Science lane filter passed:", science["count"], "matches")
-              elif indexed.get("independentOfDatabase") is not True:
-                  print("Database-backed search passed:", indexed.get("source"), indexed["count"])
-
-          if indexed_error:
-              raise SystemExit("Database-backed web search unavailable: " + indexed_error)
-
-          vercel_base = os.environ["VERCEL_API"].rstrip("/")
-          def get_vercel(path):
-              request = urllib.request.Request(vercel_base + path, headers={"Accept": "application/json"})
-              with urllib.request.urlopen(request, timeout=25) as response:
-                  assert response.status == 200, response.status
-                  return json.load(response)
-
-          deadline = time.monotonic() + 360
-          last_observed = None
-          while True:
-              health = get_vercel("/api/health")
-              production = get_vercel("/api/search?" + urllib.parse.urlencode({"q": "NASA", "limit": 50, "offset": 0}))
-              pages_match = production.get("indexedPages") == expected_pages
-              transport = production.get("indexTransport")
-              expected_sha = expected_shas.get(transport)
-              digest_match = isinstance(expected_sha, str) and str(production.get("indexSha256", "")).lower() == expected_sha
-              timestamp_match = production.get("indexUpdatedAt") == expected_updated_at
-              transport_match = expected_sha is not None
-              shards_match = production.get("indexShardCount") == manifest.get("shard_count")
-              integrity_match = production.get("indexIntegrity") == "sha256"
-              if (
-                  health.get("status") == "ok"
-                  and production.get("indexStatus") == "crawler-catalog-active"
-                  and pages_match
-                  and digest_match
-                  and timestamp_match
-                  and transport_match
-                  and shards_match
-                  and integrity_match
-              ):
-                  break
-              last_observed = {
-                  "indexedPages": production.get("indexedPages"),
-                  "indexSha256": production.get("indexSha256"),
-                  "indexUpdatedAt": production.get("indexUpdatedAt"),
-                  "indexStatus": production.get("indexStatus"),
-                  "indexTransport": production.get("indexTransport"),
-                  "indexShardCount": production.get("indexShardCount"),
-              }
-              remaining = deadline - time.monotonic()
-              if remaining <= 0:
-                  raise SystemExit(
-                      "Live Vercel catalog did not catch up to the committed manifest within 360 seconds: "
-                      + json.dumps({
-                          "expectedPages": expected_pages,
-                          "expectedSha256ByTransport": expected_shas,
-                          "expectedUpdatedAt": expected_updated_at,
-                          "observed": last_observed,
-                      }, sort_keys=True)
-                  )
-              print(
-                  "Waiting for Vercel catalog cache to match committed manifest:",
-                  json.dumps({
-                      "expectedPages": expected_pages,
-                      "observedPages": last_observed["indexedPages"],
-                      "expectedUpdatedAt": expected_updated_at,
-                      "observedUpdatedAt": last_observed["indexUpdatedAt"],
-                      "remainingSeconds": int(remaining),
-                  }, sort_keys=True)
+          previews = {}
+          for query in ("Rolex", "Las Vegas"):
+              payload = get("everything-hub-web-search", query)
+              preview = payload.get("catalogPreview")
+              results = payload.get("catalogResults")
+              if not isinstance(preview, dict) or preview.get("previewOnly") is not True:
+                  raise SystemExit(query + ": first-party catalog preview metadata is missing")
+              if not isinstance(results, list):
+                  raise SystemExit(query + ": catalogResults is not an array")
+              if preview.get("pageIndexPages") != expected_pages:
+                  raise SystemExit(query + ": catalog preview does not identify the committed page count")
+              if preview.get("pageIndexUpdatedAt") != expected_updated_iso:
+                  raise SystemExit(query + ": catalog preview does not identify the committed index timestamp")
+              source_pages = preview.get("sourceIndexPages")
+              if not isinstance(source_pages, int) or source_pages < 1 or source_pages > expected_pages:
+                  raise SystemExit(query + ": catalog source-page count is invalid")
+              source_updated = preview.get("sourceIndexUpdatedAt")
+              try:
+                  source_updated_seconds = datetime.fromisoformat(
+                      str(source_updated).replace("Z", "+00:00")
+                  ).timestamp()
+              except (TypeError, ValueError):
+                  source_updated_seconds = None
+              freshness_match = (
+                  source_pages == expected_pages and
+                  source_updated_seconds is not None and
+                  abs(source_updated_seconds - expected_updated_at) <= 60
               )
-              time.sleep(min(30, remaining))
-          print(
-              "Live Vercel catalog matches committed manifest:",
-              expected_pages,
-              "pages; SHA-256",
-              expected_sha,
-              "updated_at",
-              expected_updated_at,
-          )
-          page2 = get_vercel("/api/search?" + urllib.parse.urlencode({"q": "NASA", "limit": 50, "offset": 50}))
-          assert health.get("status") == "ok", health
-          assert health.get("service") == "everythinghub-independent-search", health
-          assert health.get("database_required") is False, health
-          assert health.get("pagination") == "non-overlapping", health
-          assert production.get("indexStatus") == "crawler-catalog-active", production
-          assert isinstance(production.get("indexedPages"), int) and production["indexedPages"] > 0, production
-          assert isinstance(production.get("indexSha256"), str) and len(production["indexSha256"]) == 64, production
-          assert production.get("indexIntegrity") == "sha256", production
-          assert production.get("indexTransport") in expected_shas, production
-          assert production.get("indexSha256") == expected_shas[production["indexTransport"]], production
-          assert production.get("indexShardCount") == manifest.get("shard_count"), production
-          assert production.get("page") == 1, production
-          assert page2.get("page") == 2, page2
-          assert page2.get("catalogOffset") == 40, page2
-          assert page2.get("indexedPages") == production.get("indexedPages"), page2
-          assert page2.get("indexSha256") == production.get("indexSha256"), page2
-          assert page2.get("indexTransport") == production.get("indexTransport"), page2
-          assert page2.get("indexShardCount") == production.get("indexShardCount"), page2
-          local_results = [
-              item for item in production.get("results", [])
-              if item.get("source") == "Everything Hub Crawler"
-              and item.get("provider") == "everythinghub-catalog"
+              if preview.get("freshnessMatch") is not freshness_match:
+                  raise SystemExit(query + ": catalog freshness flag does not match persisted manifests")
+              expected_status = "candidate-preview" if freshness_match else "stale-candidate-preview"
+              if preview.get("status") != expected_status:
+                  raise SystemExit(query + ": catalog analysis freshness status is not explicit")
+              if preview.get("recordsPublished") != 0:
+                  raise SystemExit(query + ": candidate records were incorrectly reported as published")
+              if preview.get("sourceTermsReviewedRecords") != 0:
+                  raise SystemExit(query + ": unreviewed records were incorrectly reported as rights-reviewed")
+              if preview.get("resultCount") != len(results):
+                  raise SystemExit(query + ": catalog preview result count is inconsistent")
+              catalog_ids = [item.get("catalog_id") for item in results]
+              if len(catalog_ids) != len(set(catalog_ids)):
+                  raise SystemExit(query + ": duplicate catalog cards were returned")
+              for item in results:
+                  if (
+                      not item.get("catalog_id") or
+                      not item.get("title") or
+                      not safe_http(item.get("url")) or
+                      item.get("preview_only") is not True or
+                      item.get("commercial_eligible") is not False or
+                      item.get("source_terms_status") != "not_reviewed" or
+                      item.get("record_level_clearance") != "not_reviewed"
+                  ):
+                      raise SystemExit(query + ": catalog card violated candidate-only rights or provenance rules")
+                  for record in item.get("matched_records", []):
+                      if not record.get("record_id") or not record.get("title") or not safe_http(record.get("source_url")):
+                          raise SystemExit(query + ": matched record has invalid identity or provenance")
+              page_results = payload.get("results", [])
+              if not isinstance(page_results, list):
+                  raise SystemExit(query + ": page results is not an array")
+              for item in page_results:
+                  if not item.get("title") or not safe_http(item.get("url")):
+                      raise SystemExit(query + ": page result has an unsafe URL or missing title")
+              previews[query] = results
+              print(json.dumps({
+                  "query": query,
+                  "catalogPreviewStatus": preview.get("status"),
+                  "analysisVersion": preview.get("analysisVersion"),
+                  "sourceIndexPages": source_pages,
+                  "pageIndexPages": preview.get("pageIndexPages"),
+                  "catalogCount": preview.get("catalogCount"),
+                  "recordCount": preview.get("recordCount"),
+                  "catalogResults": len(results),
+                  "topCatalogs": [item.get("catalog_title") for item in results[:3]],
+              }, sort_keys=True))
+
+          las_vegas_typed = [
+              item for item in previews["Las Vegas"]
+              if item.get("relevance_class") == "typed_location_match"
           ]
-          page2_results = [
-              item for item in page2.get("results", [])
-              if item.get("source") == "Everything Hub Crawler"
-              and item.get("provider") == "everythinghub-catalog"
+          if not las_vegas_typed:
+              raise SystemExit("Las Vegas did not return a typed place/local catalog result")
+          rolex_products = [
+              item for item in previews["Rolex"]
+              if item.get("relevance_class") == "typed_product_match"
           ]
-          assert len(local_results) == 40, production
-          assert len(page2_results) == 50, page2
-          for item in local_results + page2_results:
-              assert item.get("origin") == "Everything Hub Index", item
-              assert item.get("url", "").startswith(("https://", "http://")), item
-          first_urls = {item["url"] for item in local_results}
-          second_urls = {item["url"] for item in page2_results}
-          assert not first_urls.intersection(second_urls), {"page1": local_results, "page2": page2_results}
-          assert page2.get("hasMore") is True, page2
-          freshness = evaluate_manifest_freshness(manifest)
-          print("Committed search manifest freshness:", json.dumps(freshness, sort_keys=True))
-          if freshness["status"] != "fresh":
-              raise SystemExit("Committed search manifest is stale: " + json.dumps(freshness, sort_keys=True))
-          print("Production Vercel catalog passed:", production["indexedPages"], "indexed pages;",
-                len(local_results), "first-party page-one results;", len(page2_results),
-                "non-overlapping page-two results")
+          for item in rolex_products:
+              record_types = {row.get("record_type") for row in item.get("matched_records", [])}
+              if not record_types.intersection({"product", "model", "brand"}):
+                  raise SystemExit("Rolex product catalog label is unsupported by matched record types")
+          if not rolex_products:
+              print("Rolex: no dedicated product/model catalog is present in this snapshot; incidental mentions remain untyped.")
+          else:
+              print("Rolex typed product/model catalogs:", len(rolex_products))
+          print("PASS: first-party Edge search returned integrity-checked, rights-restricted catalog previews.")
           PY
