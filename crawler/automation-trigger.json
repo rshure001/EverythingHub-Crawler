@@ -1,7 +1,10 @@
 {
   "version": 1,
   "updated_at": "2026-11-21T17:36:16.462Z",
-  "reason": "One bounded recovery crawl requested because the public-search manifest aged past the 15-minute freshness threshold after the catalog registry refresh. No queued or running crawler was found. Normal five-minute schedule remains unchanged; robots.txt, source terms, provider rate limits, bounded batches, and concurrency guards remain active.",
-  "manifest_before_pages": 157056,
-  "manifest_before_updated_at": "2026-11-21T17:19:30Z"
+  "reason": "Request one bounded recovery crawl because the public-search manifest is older than 15 minutes and no independent crawler or schedule-watchdog run has appeared since the 2026-11-21 17:46 UTC watchdog check. The last completed crawler run was 44930968313, which updated the manifest at 2026-11-21T17:44:33Z. Keep robots.txt, source terms, per-host pacing, provider rate limits, and GitHub API/file limits enforced.",
+  "manifest_before_pages": 157393,
+  "manifest_before_updated_at": "2026-11-21T17:44:33Z",
+  "requested_at": "2026-11-21T18:56:15Z",
+  "requested_by": "Everything Hub Build automation",
+  "previous_run_id": "44930968313"
 }
