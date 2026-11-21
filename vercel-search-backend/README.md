@@ -77,12 +77,12 @@ Relevance ranking: commerce catalogs with matching product/brand/model records a
 
 
 
-## Video search and media rights
+## Media search and rights
 
-- Video search uses the official Wikimedia Commons API at commons.wikimedia.org/w/api.php; it does not scrape YouTube HTML, use undocumented YouTube search feeds, or use Bing's undocumented video RSS endpoint.
-- The backend fetches metadata only and never downloads or re-hosts video/audio files.
-- It checks robots.txt for the Commons API host before querying, serializes requests per host, applies a minimum one-second interval, uses maxlag=5, and caches results for five minutes. Thumbnail files are loaded directly by the user's browser from the API-provided upload.wikimedia.org preview URL; the backend does not fetch those assets.
-- Only video files with CC0, public-domain, CC BY or CC BY-SA terms are displayed. Noncommercial, no-derivatives, unknown-license and uncredited CC BY/CC BY-SA items are excluded.
-- Video cards link to the original Commons file page and display the license plus creator/credit attribution. The license/reuse link is visible on every card.
-- NASA Image and Video Library was evaluated but disabled fail-closed because images-assets.nasa.gov returned HTTP 403 for robots.txt, so preview-asset access could not be verified.
-- The live preflight is node vercel-search-backend/test/videos-live-smoke.cjs; it checks the Commons robots policy and requires at least 15 usable, openly licensed NASA-matching video records before production browser acceptance.
+- Image and video search use the Internet Archive Advanced Search metadata API with separate `mediatype:image` and `mediatype:movies` queries.
+- The backend checks `archive.org/robots.txt` before each uncached query, serializes requests per host, applies a one-second minimum interval, enforces per-host request budgets, and caches results for five minutes.
+- Search requests return metadata only. Browser thumbnails load from `archive.org/services/img/{identifier}`; the backend never downloads or re-hosts original image or video files.
+- Results are shown only when the individual item declares CC0, Public Domain Mark, CC BY or CC BY-SA metadata. CC BY/CC BY-SA results require a creator. Noncommercial, no-derivatives, unknown-license and uncredited CC BY/CC BY-SA records are excluded.
+- Exact Creative Commons license URLs on the official host are normalized to HTTPS. Cards link to the original Internet Archive item and license and display creator/source attribution.
+- License metadata is not a guarantee of rights. The UI preserves the source link and makes no claim that a record is rights-cleared for redistribution.
+- Wikimedia Commons and Openverse API routes are not used because the relevant API paths fail robots policy checks. Legacy YouTube thumbnail fetching is disabled.
