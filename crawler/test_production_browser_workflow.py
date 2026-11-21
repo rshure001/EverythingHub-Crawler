@@ -28,6 +28,14 @@ class ProductionBrowserWorkflowContractTests(unittest.TestCase):
         self.assertNotIn('"public-search/**"', workflow)
         self.assertIn('vercel-homepage/**', workflow)
 
+    def test_free_fallback_search_exposes_candidate_catalog_previews(self):
+        workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+        self.assertIn('#results .eh-catalog-result', workflow)
+        self.assertIn('catalogPreview:{count:catalogCount', workflow)
+        self.assertIn('Record rights not cleared', workflow)
+        self.assertIn('Commercial use not cleared', workflow)
+        self.assertIn('timeout: 25000', workflow)
+
 
 if __name__ == "__main__":
     unittest.main()

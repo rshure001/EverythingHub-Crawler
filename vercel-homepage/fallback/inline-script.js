@@ -9,11 +9,61 @@ function makeHeading(q,label,countText){
   const count=document.createElement('p');count.textContent=countText;
   heading.append(h,count);resultsRoot.append(heading);
 }
+function renderCatalogResults(items,q){
+  const safeItems=(Array.isArray(items)?items:[]).filter(item=>
+    item&&item.preview_only===true&&item.commercial_eligible===false&&safeUrl(item.url)!=='#'
+  ).slice(0,5);
+  if(!safeItems.length)return 0;
+  makeHeading(q,'Catalog matches',safeItems.length.toLocaleString()+' candidate previews · preview only');
+  const list=document.createElement('div');list.className='catalog-preview-list';
+  for(const item of safeItems){
+    const card=document.createElement('article');card.className='eh-catalog-result';
+    card.dataset.catalogId=String(item.catalog_id||'');
+    card.dataset.relevanceClass=String(item.relevance_class||'');
+    card.dataset.previewOnly='true';
+    card.dataset.commercialEligible='false';
+    const meta=document.createElement('div');meta.className='catalog-meta';
+    const kind=document.createElement('span');kind.className='catalog-pill';
+    kind.textContent=String(item.catalog_type||item.record_type||'catalog').replace(/_/g,' ');
+    const relevance=document.createElement('span');relevance.className='catalog-relevance';
+    relevance.textContent=String(item.relevance_label||'Catalog record match');
+    meta.append(kind,relevance);
+    const link=document.createElement('a');link.href=safeUrl(item.url);link.target='_blank';link.rel='noopener noreferrer';
+    link.textContent=String(item.catalog_title||item.title||'Untitled catalog');
+    const snippet=document.createElement('p');snippet.textContent=String(item.snippet||item.description||'Candidate catalog preview.');
+    const counts=document.createElement('small');counts.className='catalog-counts';
+    const recordCount=Number.isSafeInteger(item.record_count)?item.record_count:0;
+    const pageCount=Number.isSafeInteger(item.source_page_count)?item.source_page_count:0;
+    counts.textContent=recordCount.toLocaleString()+' records · '+pageCount.toLocaleString()+' source pages';
+    const matched=document.createElement('small');matched.className='catalog-matched';
+    const matchedRecords=Array.isArray(item.matched_records)?item.matched_records.slice(0,3):[];
+    matched.textContent=matchedRecords.length
+      ?'Matched records: '+matchedRecords.map(record=>String(record.record_type||'record')+': '+String(record.title||'Untitled')).join(' · ')
+      :'Matched record titles are not available in this preview.';
+    const rights=document.createElement('p');rights.className='catalog-rights';
+    const terms=String(item.source_terms_status||'not_reviewed');
+    const clearance=String(item.record_level_clearance||'not_reviewed');
+    const termsText=terms==='not_reviewed'?'Source terms not reviewed':
+      terms==='reviewed_per_dataset'?'Source terms reviewed per dataset':
+      'Source policy status: '+terms.replace(/_/g,' ');
+    const rightsText=clearance==='not_reviewed'?'Record rights not cleared':
+      'Record rights: '+clearance.replace(/_/g,' ');
+    const redistribution=String(item.rights_status||'').includes('not_cleared_for_redistribution')
+      ?' · Redistribution not cleared':'';
+    rights.textContent='Candidate preview only · '+termsText+' · '+rightsText+
+      ' · Commercial use not cleared'+redistribution;
+    card.append(meta,link,snippet,counts,matched,rights);
+    list.append(card);
+  }
+  resultsRoot.append(list);
+  return safeItems.length;
+}
 function renderResults(data,q){
   resultsRoot.replaceChildren();
+  const catalogCount=renderCatalogResults(data.catalogResults,q);
   const visibleCount=Array.isArray(data.results)?data.results.length:(Number(data.count)||0);
   const indexedCount=Number(data.indexedPages)||0;
-  makeHeading(q,'Results for',visibleCount.toLocaleString()+' visible results'+(indexedCount?' · '+indexedCount.toLocaleString()+' indexed pages':''));
+  makeHeading(q,'Web results',visibleCount.toLocaleString()+' visible results'+(indexedCount?' · '+indexedCount.toLocaleString()+' indexed pages':''));
   const list=document.createElement('div');list.className='results-list';
   for(const item of (Array.isArray(data.results)?data.results:[])){
     const card=document.createElement('article');card.className='eh-result';
@@ -22,9 +72,13 @@ function renderResults(data,q){
     const source=document.createElement('small');source.textContent=(item.source||'Public web')+(item.origin?' · '+item.origin:'');
     card.append(link,snippet,source);list.append(card);
   }
-  if(!list.children.length){const empty=document.createElement('div');empty.className='results-empty';empty.textContent='No matching results came back. Try another search or category.';list.append(empty);}
+  if(!list.children.length){const empty=document.createElement('div');empty.className='results-empty';empty.textContent='No matching web results came back. Try another search or category.';list.append(empty);}
   resultsRoot.append(list);
-  if(data.catalogPreview&&data.catalogPreview.status!=='ready'){const note=document.createElement('p');note.className='results-note';note.textContent='Catalog entries are provisional until their source and reuse terms are verified.';resultsRoot.append(note);}
+  if(!catalogCount&&data.catalogPreview&&data.catalogPreview.status!=='ready'){
+    const note=document.createElement('p');note.className='results-note';
+    note.textContent='No matching candidate catalog records were found in the current preview. Candidate records remain provisional until source terms and record-level rights are reviewed.';
+    resultsRoot.append(note);
+  }
 }
 function cleanCommonsValue(value){
   return String(value||'').replace(/<[^>]*>/g,' ')
@@ -119,7 +173,7 @@ async function runSearch(){
     if(mode==='videos'){await runVideoSearch(q);return;}
     const u=new URL('https://everythinghub-search-backend.vercel.app/api/search');u.searchParams.set('q',q);u.searchParams.set('limit','20');u.searchParams.set('lane',mode);
     let data=null;
-    try{const response=await fetch(u,{headers:{accept:'application/json'},signal:AbortSignal.timeout(6000)});if(response.ok){const candidate=await response.json();if(Array.isArray(candidate.results)&&candidate.results.length)data=candidate;}}catch(error){}
+    try{const response=await fetch(u,{headers:{accept:'application/json'},signal:AbortSignal.timeout(15000)});if(response.ok){const candidate=await response.json();if(Array.isArray(candidate.results)&&candidate.results.length)data=candidate;}}catch(error){}
     if(!data){const fast=new URL('https://everythinghub-search-backend.vercel.app/api/search-fast');fast.searchParams.set('q',q);fast.searchParams.set('lane',mode);const response=await fetch(fast,{headers:{accept:'application/json'},signal:AbortSignal.timeout(12000)});if(!response.ok)throw new Error('Live web search returned HTTP '+response.status);data=await response.json();if(data.status!=='ok'||!Array.isArray(data.results)||!data.results.length)throw new Error(data.message||'No public results returned');}
     renderResults(data,q);const visibleCount=Array.isArray(data.results)?data.results.length:(Number(data.count)||0);status.textContent=visibleCount.toLocaleString()+' visible results from '+(data.providers||[]).join(' and ')+'.';
   }catch(error){status.textContent=mode==='images'?'Image search is temporarily unavailable.':mode==='videos'?'Video sources are temporarily unavailable.':'Search is temporarily unavailable. Please try again.';const message=document.createElement('div');message.className='results-empty';message.textContent=error.message||'The search service did not respond. Please try again.';resultsRoot.replaceChildren(message);}

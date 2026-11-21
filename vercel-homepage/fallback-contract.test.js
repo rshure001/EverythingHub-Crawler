@@ -41,3 +41,27 @@ test("keeps public search and video integrations", () => {
   assert.match(html, /everythinghub-search-backend\.vercel\.app\/api\/videos/);
   assert.match(html, /everythinghub-search-backend\.vercel\.app\/api\/video-thumbnail/);
 });
+
+test("renders candidate catalog previews separately and keeps rights restrictions visible", () => {
+  assert.match(html, /function renderCatalogResults\(items,q\)/);
+  assert.match(html, /data\.catalogResults/);
+  assert.match(html, /item\.preview_only===true/);
+  assert.match(html, /item\.commercial_eligible===false/);
+  assert.match(html, /className='eh-catalog-result'/);
+  assert.match(html, /Candidate preview only/);
+  assert.match(html, /Source terms not reviewed/);
+  assert.match(html, /Record rights not cleared/);
+  assert.match(html, /Commercial use not cleared/);
+  assert.match(html, /Matched records:/);
+});
+
+test("keeps the standalone script identical to the embedded deployment script", () => {
+  const standalone = fs.readFileSync(path.join(__dirname, "fallback", "inline-script.js"), "utf8").trim();
+  const embedded = html.match(/<script>([\s\S]*?)<\/script>/);
+  assert.ok(embedded);
+  assert.equal(standalone, embedded[1].trim());
+});
+
+test("uses a catalog-aware primary search timeout", () => {
+  assert.match(html, /signal:AbortSignal\.timeout\(15000\)/);
+});
