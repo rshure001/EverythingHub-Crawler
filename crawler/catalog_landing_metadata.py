@@ -18,7 +18,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlsplit
 
-from catalog_host_probe import _landing_policy_fingerprint, load_verified_registry
+from catalog_host_probe import _landing_policy_fingerprint
+from catalog_host_review_queue import load_verified_registry
 from catalog_model import stable_id
 from catalog_source_policy import SourcePolicyError, request_source_bytes
 
