@@ -21,6 +21,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_INDEX = ROOT / "data" / "index.json"
 DEFAULT_OUTPUT = ROOT / "data" / "host-catalog-candidates.json"
 DEFAULT_PAGE_OUTPUT = ROOT / "data" / "page-catalog-seeds.json.gz"
+DEFAULT_PAGE_ANALYSIS_DIR = ROOT / "data" / "page-derived-catalogs"
 
 HINTS = {
     "sitemap": re.compile(r"sitemap|site-map", re.I),
@@ -43,8 +44,42 @@ def host_key(url: str) -> str | None:
     except ValueError:
         return None
 
-def build_candidates(index: dict) -> dict:
+def _catalog_relationships(page_analysis: dict | None) -> dict[str, list[dict]]:
+    """Map each indexed page to real catalog candidates from the page analyzer."""
+    if not isinstance(page_analysis, dict):
+        return {}
+    catalog_by_key = {}
+    for catalog in page_analysis.get("catalogs", []):
+        if not isinstance(catalog, dict):
+            continue
+        key = catalog.get("source_key")
+        catalog_id = catalog.get("catalog_id")
+        if isinstance(key, str) and isinstance(catalog_id, str):
+            catalog_by_key[key] = {
+                "catalog_id": catalog_id,
+                "title": str(catalog.get("title") or "")[:240],
+                "source_page_count": len(catalog.get("source_page_ids") or []),
+                "record_count": len(catalog.get("record_ids") or []),
+                "catalog_status": catalog.get("catalog_status", catalog.get("status", "candidate")),
+            }
+    relationships = {}
+    for page in page_analysis.get("pages", []):
+        if not isinstance(page, dict) or not isinstance(page.get("url"), str):
+            continue
+        related = []
+        for key in page.get("catalog_group_keys", []):
+            catalog = catalog_by_key.get(key)
+            if catalog and catalog not in related:
+                related.append(catalog)
+        relationships[page["url"]] = sorted(
+            related, key=lambda item: (-item["source_page_count"], -item["record_count"], item["catalog_id"])
+        )
+    return relationships
+
+
+def build_candidates(index: dict, page_analysis: dict | None = None) -> dict:
     page_seeds = []
+    page_relationships = _catalog_relationships(page_analysis)
     grouped = defaultdict(lambda: {"source_pages": 0, "hint_pages": 0, "examples": [], "hint_counts": defaultdict(int), "lanes": defaultdict(int)})
     for page in index.get("pages", []):
         if not isinstance(page, dict):
@@ -144,9 +179,17 @@ def main() -> None:
     parser.add_argument("--index", type=Path, default=DEFAULT_INDEX)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--page-output", type=Path, default=DEFAULT_PAGE_OUTPUT)
+    parser.add_argument("--page-analysis-dir", type=Path, default=DEFAULT_PAGE_ANALYSIS_DIR)
     args = parser.parse_args()
     index = load_index(args.index)
-    result = build_candidates(index)
+    page_analysis = None
+    registry_path = args.page_analysis_dir / "registry.json.gz"
+    pages_path = args.page_analysis_dir / "pages.json.gz"
+    if registry_path.is_file() and pages_path.is_file():
+        registry = json.loads(gzip.decompress(registry_path.read_bytes()).decode("utf-8"))
+        pages_payload = json.loads(gzip.decompress(pages_path.read_bytes()).decode("utf-8"))
+        page_analysis = {"catalogs": registry.get("catalogs", []), "pages": pages_payload.get("pages", [])}
+    result = build_candidates(index, page_analysis=page_analysis)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     temp = args.output.with_suffix(args.output.suffix + ".tmp")
     host_result = dict(result)
@@ -157,7 +200,12 @@ def main() -> None:
         "schema_version": 1,
         "strategy": "one-persistent-page-catalog-profile-per-indexed-page",
         "source_index_pages": result["source_index_pages"],
-        "metrics": {key: value for key, value in result["metrics"].items() if key.startswith("pages_") or key in ("page_catalog_signal_references", "unique_catalog_candidates", "verified_page_catalogs")},
+        "metrics": {
+            key: value for key, value in result["metrics"].items()
+            if key.startswith("pages_") or key.startswith("profiles_")
+            or key.startswith("page_catalog_")
+            or key in ("unique_catalog_candidates", "verified_page_catalogs")
+        },
         "pages": result["page_catalog_seeds"],
     }
     args.page_output.parent.mkdir(parents=True, exist_ok=True)
