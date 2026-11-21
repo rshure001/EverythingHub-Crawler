@@ -1,6 +1,7 @@
 'use strict';
 const https = require('node:https');
 const { loadCatalog } = require('../lib/catalog');
+const { loadPageDerivedCatalogs, searchPageDerivedCatalogs } = require('../lib/page-derived-catalogs');
 const { searchCatalog, parseBingRss, buildResponse } = require('../lib/search-core');
 const MAX_QUERY_LENGTH = 160;
 const MAX_LIMIT = 50;
@@ -89,35 +90,59 @@ module.exports = async function handler(req, res) {
     return res.status(400).json({ error: 'pagination_out_of_range' });
   }
   const lane = String(params.get('tentacle') || params.get('lane') || '').trim().toLowerCase();
-  const [catalogResult, bingResult] = await Promise.allSettled([loadCatalog(), loadBing(query)]);
+  const [catalogResult, bingResult, pageDerivedResult] = await Promise.allSettled([
+    loadCatalog(), loadBing(query), loadPageDerivedCatalogs()
+  ]);
   const bingResults = bingResult.status === 'fulfilled' ? bingResult.value : [];
+  const pageDerivedNetwork = pageDerivedResult.status === 'fulfilled' ? pageDerivedResult.value : null;
+  const catalogResults = pageDerivedNetwork ? searchPageDerivedCatalogs(query, pageDerivedNetwork, 5) : [];
+  const catalogPreview = pageDerivedNetwork ? {
+    status: pageDerivedNetwork.stale ? 'stale-candidate-preview' : 'candidate-preview',
+    previewOnly: true,
+    analysisVersion: pageDerivedNetwork.analysisVersion,
+    generatedAt: pageDerivedNetwork.generatedAt,
+    sourceIndexPages: pageDerivedNetwork.sourceIndexPages,
+    catalogCount: pageDerivedNetwork.catalogCount,
+    recordCount: pageDerivedNetwork.recordCount,
+    recordsPublished: Number(pageDerivedNetwork.metrics.records_published) || 0,
+    sourceTermsReviewedRecords: Number(pageDerivedNetwork.metrics.source_terms_reviewed_records) || 0,
+    resultCount: catalogResults.length,
+    stale: Boolean(pageDerivedNetwork.stale)
+  } : {
+    status: 'unavailable',
+    previewOnly: true,
+    resultCount: 0,
+    error: safeCatalogError(pageDerivedResult.reason || 'page_catalog_unavailable')
+  };
+
   if (catalogResult.status !== 'fulfilled') {
     const catalogError = safeCatalogError(catalogResult.reason);
     console.warn('[catalog-load-failed]', catalogError);
-    if (!bingResults.length) {
+    const results = offset === 0 ? bingResults.slice(0, Math.min(10, limit)) : [];
+    const providers = [];
+    if (bingResults.length) providers.push('Bing Web Search');
+    if (catalogResults.length) providers.push('Everything Hub Catalog Preview');
+    if (!results.length && !catalogResults.length) {
       return res.status(503).json({
         error: 'search_temporarily_unavailable',
         indexStatus: 'catalog-unavailable',
         catalogError,
-        database_required: false
+        database_required: false,
+        catalogResults,
+        catalogPreview,
+        providers
       });
     }
     return res.status(200).json({
-      query,
-      count: 0,
-      totalMatches: 0,
+      query, count: 0, totalMatches: 0,
       page: Math.floor(offset / limit) + 1,
-      pageSize: limit,
-      offset,
-      hasMore: false,
-      indexedPages: 0,
-      indexStatus: 'catalog-unavailable',
-      catalogError,
-      results: offset === 0 ? bingResults.slice(0, Math.min(10, limit)) : [],
-      providers: ['Bing Web Search'],
-      fallback: true
+      pageSize: limit, offset, hasMore: false,
+      indexedPages: 0, indexStatus: 'catalog-unavailable',
+      catalogError, database_required: false,
+      results, catalogResults, catalogPreview, providers, fallback: true
     });
   }
+
   const catalog = catalogResult.value;
   const ranked = searchCatalog(catalog.pages, query, lane);
   const payload = buildResponse({
@@ -131,7 +156,9 @@ module.exports = async function handler(req, res) {
     indexTransport: catalog.transport,
     staleCatalog: catalog.stale
   });
-  if (bingResult.status !== 'fulfilled') payload.providers = ['Everything Hub Crawler'];
+  payload.catalogResults = catalogResults;
+  payload.catalogPreview = catalogPreview;
+  if (catalogResults.length) payload.providers.push('Everything Hub Catalog Preview');
   if (catalog.refreshError) payload.catalogRefreshError = safeCatalogError({ message: catalog.refreshError });
   res.setHeader('X-Index-Updated-At', String(catalog.updatedAt));
   return res.status(200).json(payload);
