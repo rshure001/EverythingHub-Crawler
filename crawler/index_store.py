@@ -16,10 +16,9 @@ SHARD_DIR_NAME = "index-shards"
 MAX_SHARD_COUNT = 256
 MAX_SHARD_UNCOMPRESSED_BYTES = 4_000_000
 MAX_SHARD_COMPRESSED_BYTES = 2_000_000
-# Keep the aggregate below 640 MB (about 62.5% of the 256 x 4 MB shard envelope).
-# This leaves headroom for the crawler's in-memory merge while avoiding a premature
-# hard stop as the canonical corpus grows beyond the current 512 MB boundary.
-MAX_TOTAL_UNCOMPRESSED_BYTES = 640_000_000
+# Keep the aggregate below 768 MB (75% of the 256 x 4 MB shard envelope).
+# This preserves 256 MB of headroom for the crawler's in-memory merge.
+MAX_TOTAL_UNCOMPRESSED_BYTES = 768_000_000
 _BUCKET_RE = re.compile(r"^[0-9a-f]{2}$")
 _SHA_RE = re.compile(r"^[0-9a-f]{64}$")
 
