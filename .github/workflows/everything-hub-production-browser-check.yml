@@ -5,6 +5,7 @@ on:
     paths:
       - ".github/workflows/everything-hub-production-browser-check.yml"
       - "src/**"
+      - "supabase/functions/everything-hub-site/**"
       - "vercel-homepage/**"
   workflow_dispatch:
   workflow_run:
