@@ -183,6 +183,7 @@ def build_review_queue(manifest: dict, registry: dict, policy_registry: dict) ->
             "rights_scope": policy.get("rights_scope"),
             "allowed_metadata_fields": policy.get("allowed_metadata_fields", []),
             "prohibited_content": policy.get("prohibited_content", []),
+            "max_response_bytes": int(policy.get("max_response_bytes") or 0),
             "min_interval_seconds": float(policy.get("min_interval_seconds", 1.0)),
             "max_requests_per_run": int(policy.get("max_requests_per_run", 1)),
             "policy_note": policy.get("policy_note"),
@@ -219,6 +220,7 @@ def build_review_queue(manifest: dict, registry: dict, policy_registry: dict) ->
             "rights_scope": sample.get("rights_scope"),
             "allowed_metadata_fields": sample.get("allowed_metadata_fields", []),
             "prohibited_content": sample.get("prohibited_content", []),
+            "max_response_bytes": min(int(row.get("max_response_bytes") or 0) for row in rows),
             "min_interval_seconds": max(float(row.get("min_interval_seconds", 1.0)) for row in rows),
             "max_requests_per_run": min(int(row.get("max_requests_per_run", 1)) for row in rows),
             "policy_note": sample.get("policy_note"),
@@ -239,6 +241,7 @@ def build_review_queue(manifest: dict, registry: dict, policy_registry: dict) ->
             "reviewed_at": sample.get("reviewed_at"),
             "source_access_modes": sorted({row["source_access_mode"] for row in rows if row.get("source_access_mode")}),
             "metadata_only": all(row.get("metadata_only") is True for row in rows),
+            "max_response_bytes": min(int(row.get("max_response_bytes") or 0) for row in rows),
             "per_dataset_rights_required": any(row["per_dataset_rights_required"] for row in rows),
             "min_interval_seconds": max(float(row.get("min_interval_seconds", 1.0)) for row in rows),
             "max_requests_per_run": min(int(row.get("max_requests_per_run", 1)) for row in rows),
@@ -337,10 +340,17 @@ def validate_review_queue(payload: dict, manifest: dict) -> dict:
     ):
         raise ValueError("policy-preapproved URLs must identify their exact access mode")
     if any(
-        row.get("source_access_mode") == "catalog_landing_page" and row.get("metadata_only") is not True
+        row.get("source_access_mode") == "catalog_landing_page"
+        and (
+            row.get("metadata_only") is not True
+            or not row.get("allowed_metadata_fields")
+            or not row.get("prohibited_content")
+            or not isinstance(row.get("max_response_bytes"), int)
+            or row.get("max_response_bytes") < 1
+        )
         for row in catalogs + urls
     ):
-        raise ValueError("catalog landing-page review must remain metadata-only")
+        raise ValueError("catalog landing-page review must define metadata-only fields, exclusions, and a response-size limit")
     if metrics.get("catalog_definition_candidates") != len(catalogs):
         raise ValueError("source review candidate count does not match its rows")
     if metrics.get("unique_source_urls") != len(urls):
