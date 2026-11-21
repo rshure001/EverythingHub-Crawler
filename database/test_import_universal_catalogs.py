@@ -64,7 +64,6 @@ class UniversalCatalogImporterTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             importer.build_record_rows(bad)
 
-
     def test_skips_records_without_explicit_source_rights_approval(self):
         restricted = {
             "catalogs": [{
@@ -81,6 +80,73 @@ class UniversalCatalogImporterTests(unittest.TestCase):
         }
         self.assertEqual(importer.build_record_rows(restricted), [])
         self.assertEqual(importer.build_catalog_rows(restricted)[0][11], 0)
+
+    def test_preflight_accepts_well_formed_approved_payload(self):
+        result = importer.validate_payload(self.payload)
+        self.assertEqual(result, {
+            "catalogs": 1, "records_total": 1,
+            "records_public_search_approved": 1,
+        })
+
+    def test_preflight_rejects_duplicate_catalog_ids_and_source_ids(self):
+        duplicate_id = {
+            "catalogs": [
+                self.payload["catalogs"][0],
+                {**self.payload["catalogs"][0], "source_id": "two"},
+            ],
+            "records": [],
+        }
+        with self.assertRaisesRegex(ValueError, "duplicate catalog_id"):
+            importer.validate_payload(duplicate_id)
+        duplicate_source = {
+            "catalogs": [
+                self.payload["catalogs"][0],
+                {**self.payload["catalogs"][0], "catalog_id": "catalog:two"},
+            ],
+            "records": [],
+        }
+        with self.assertRaisesRegex(ValueError, "duplicate source_id"):
+            importer.validate_payload(duplicate_source)
+
+    def test_preflight_rejects_duplicate_approved_record_keys(self):
+        duplicate_id = {
+            **self.payload,
+            "records": [
+                self.payload["records"][0],
+                {**self.payload["records"][0], "source_key": "dataset-two"},
+            ],
+        }
+        with self.assertRaisesRegex(ValueError, "duplicate approved record_id"):
+            importer.validate_payload(duplicate_id)
+        duplicate_source_key = {
+            **self.payload,
+            "records": [
+                self.payload["records"][0],
+                {**self.payload["records"][0], "record_id": "record:two"},
+            ],
+        }
+        with self.assertRaisesRegex(ValueError, "duplicate approved catalog/source_key"):
+            importer.validate_payload(duplicate_source_key)
+
+    def test_preflight_rejects_approved_records_with_unknown_catalog(self):
+        bad = {
+            "catalogs": self.payload["catalogs"],
+            "records": [{**self.payload["records"][0], "catalog_id": "catalog:missing"}],
+        }
+        with self.assertRaisesRegex(ValueError, "unknown catalog_id"):
+            importer.validate_payload(bad)
+
+    def test_preflight_ignores_duplicate_keys_for_restricted_records(self):
+        restricted = {
+            "catalogs": self.payload["catalogs"],
+            "records": [
+                {**self.payload["records"][0], "attributes": {"public_search_allowed": False}},
+                {**self.payload["records"][0], "attributes": {"public_search_allowed": False}},
+            ],
+        }
+        result = importer.validate_payload(restricted)
+        self.assertEqual(result["records_public_search_approved"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()
