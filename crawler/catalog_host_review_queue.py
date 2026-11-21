@@ -391,6 +391,7 @@ def validate_review_queue(payload: dict, manifest: dict) -> dict:
         "policy_preapproved_api_urls_needing_runtime_robots_check": metrics.get("policy_preapproved_api_urls_needing_runtime_robots_check", 0),
         "policy_preapproved_catalog_page_urls_needing_runtime_robots_check": metrics.get("policy_preapproved_catalog_page_urls_needing_runtime_robots_check", 0),
         "policy_review_required_urls": metrics.get("policy_review_required_urls", 0),
+        "path_not_allowlisted_urls": metrics.get("path_not_allowlisted_urls", 0),
         "fetch_authorized_urls": 0,
         "network_requests": 0,
     }
