@@ -1498,7 +1498,7 @@ def _write_gzip(path: Path, payload: dict) -> tuple[int, str]:
 def _search_tokens(value: object) -> set[str]:
     text = unicodedata.normalize("NFKC", str(value or "")).casefold()
     return {
-        token for token in re.findall(r"[^\\W_]+", text, flags=re.UNICODE)
+        token for token in re.findall(r"[^\W_]+", text, flags=re.UNICODE)
         if len(token) >= 2 and token not in STOP_TOKENS
     }
 
@@ -1825,7 +1825,7 @@ def validate_outputs(output_dir: Path) -> dict:
             search_parts = Path(entry["file"]).parts
             if (
                 len(search_parts) != 2
-                or not re.fullmatch(r"[0-9a-f]{2}\\.json\\.gz", search_parts[1])
+                or not re.fullmatch(r"[0-9a-f]{2}\.json\.gz", search_parts[1])
             ):
                 raise ValueError("search index shard path is invalid")
             prefix = search_parts[1][:2]
