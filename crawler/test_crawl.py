@@ -124,6 +124,18 @@ class CrawlerTests(unittest.TestCase):
             "https://example.com/a?id=7",
         )
 
+    def test_clean_percent_encodes_unicode_path_and_query(self):
+        self.assertEqual(
+            crawl.clean(
+                "https://openlibrary.org/books/OL123/Les_métamorphoses?q=café"
+            ),
+            "https://openlibrary.org/books/OL123/Les_m%C3%A9tamorphoses?q=caf%C3%A9",
+        )
+        self.assertEqual(
+            crawl.clean("https://example.com/a%20b"),
+            "https://example.com/a%20b",
+        )
+
     def test_clean_skips_non_html_assets_but_keeps_xml_sitemaps(self):
         for url in (
             "https://example.com/file.pdf",
