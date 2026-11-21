@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     env:
-      TARGET_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/storage/v1/object/public/everything-hub-publishing/index.html
+      TARGET_URL: https://everythinghub-search-engine-4x25f8.v2.appdeploy.ai/
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -35,74 +35,89 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Verify live AppDeploy homepage, search, categories, news, and mobile layout
         run: |
-          cat > production-check.cjs <<'JS'
+                    cat > production-check.cjs <<'JS'
           const { chromium } = require("playwright");
           const fs = require("fs");
           (async () => {
             const browser = await chromium.launch({ headless: true });
             const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
-            const errors = [];
-            page.on("pageerror", error => errors.push(error.message));
-            const report = { url: process.env.TARGET_URL, startedAt: new Date().toISOString() };
+            const pageErrors = [];
+            const consoleErrors = [];
+            page.on("pageerror", error => pageErrors.push(error.message));
+            page.on("console", message => { if (message.type() === "error") consoleErrors.push(message.text()); });
+            const report = { url: process.env.TARGET_URL, startedAt: new Date().toISOString(), artwork: null, divisions: [], searches: {}, publicFeeds: {}, mobile: null, pageErrors, consoleErrors, passed: false };
             try {
-              const response = await page.goto(report.url, { waitUntil: "domcontentloaded", timeout: 45000 });
-              await page.locator(".everythinghub-approved-home-art img.approved-master-image").waitFor({state:"visible",timeout:30000});
-              const artwork = page.locator(".everythinghub-approved-home-art img.approved-master-image").first();
+              const homeResponse = await page.goto(report.url, { waitUntil: "domcontentloaded", timeout: 45000 });
+              if (!homeResponse || !homeResponse.ok()) throw new Error("AppDeploy homepage did not return HTTP 200");
+              const art = page.locator(".everythinghub-approved-home-art img.approved-master-image").first();
+              await art.waitFor({ state: "visible", timeout: 30000 });
               await page.waitForFunction(() => {
                 const img = document.querySelector(".everythinghub-approved-home-art img.approved-master-image");
-                return !!img && img.complete && img.naturalWidth >= 100;
+                return !!img && img.complete && img.naturalWidth >= 800;
               }, null, { timeout: 30000 });
-              report.httpStatus = response?.status();
-              report.title = await page.title();
-              report.artwork = await artwork.evaluate(img => ({src:img.currentSrc,width:img.naturalWidth,height:img.naturalHeight}));
-              report.searchInputs = await page.locator('form.homepage-live-search:visible input[aria-label="Search EverythingHub"]').count();
-              const categoryButtons = page.locator("nav.hub-hero-divisions button");
-              report.categoryCount = await categoryButtons.count();
-              report.categoryNames = await categoryButtons.allTextContents();
-              if (!response?.ok() || !/(Everything\s*Hub)/i.test(report.title) || report.searchInputs < 1 || report.categoryCount !== 8 || report.artwork.width < 100) {
-                throw new Error("Live AppDeploy homepage structure check failed: " + JSON.stringify(report));
-              }
-              await page.screenshot({path:"everything-hub-homepage.png",fullPage:true});
-              report.searches = {};
-              for (const query of ["Rolex","Las Vegas","NASA"]) {
-                await page.goto(report.url,{waitUntil:"domcontentloaded",timeout:45000});
+              report.artwork = await art.evaluate(img => ({ src: img.currentSrc || img.src, width: img.naturalWidth, height: img.naturalHeight, complete: img.complete }));
+              if (!report.artwork.src.includes("everythinghub-approved-octopus.png")) throw new Error("Approved original octopus artwork is not being used");
+              const inputSelector = "form.homepage-live-search:visible input#hub-search";
+              await page.locator(inputSelector).first().waitFor({ state: "visible", timeout: 15000 });
+              const divisionButtons = page.locator("nav.hub-hero-divisions button");
+              report.divisions = await divisionButtons.evaluateAll(buttons => buttons.map(button => button.getAttribute("aria-label") || button.innerText.trim()));
+              if (report.divisions.length !== 8) throw new Error("Expected 8 clickable divisions; found " + report.divisions.length);
+              await divisionButtons.first().click();
+              await page.locator(".division-workspace").waitFor({ state: "visible", timeout: 15000 });
+              report.divisionInteraction = await page.locator(".division-workspace h2").innerText();
+              await page.locator(".workspace-close").click();
+              for (const query of ["Rolex", "Las Vegas", "NASA"]) {
+                await page.goto(report.url, { waitUntil: "domcontentloaded", timeout: 45000 });
                 const form = page.locator("form.homepage-live-search:visible").first();
-                const input = form.locator('input[aria-label="Search EverythingHub"]');
+                const input = form.locator("input#hub-search").first();
                 await input.fill(query);
-                await form.locator('button[type="submit"]').click();
-                await page.waitForFunction(() => document.querySelectorAll(".eh-result-card").length > 0 || /no results found|temporarily unavailable|search unavailable/i.test(document.body.innerText),null,{timeout:30000});
-                const cards = page.locator(".eh-result-card");
-                const count = await cards.count();
+                await input.press("Enter");
+                await page.waitForFunction(() => !!document.querySelector(".eh-result-card") || !!document.querySelector(".empty-state"), null, { timeout: 45000 });
+                const count = await page.locator(".eh-result-card").count();
+                const status = await page.locator(".status-line").first().innerText().catch(() => "");
                 const titles = await page.locator(".eh-result-title").allTextContents();
-                report.searches[query] = {count,titles:titles.slice(0,5),emptyOrError:count===0?((await page.locator("body").innerText()).match(/no results found|temporarily unavailable|search unavailable/i)?.[0]||"No visible results"):null};
-                await page.screenshot({path:"everything-hub-"+query.toLowerCase().replace(/\s+/g,"-")+".png",fullPage:true});
-                if (!count) report.searches[query].passed = false; else report.searches[query].passed = true;
+                report.searches[query] = { visibleCards: count, status, titles: titles.slice(0, 5) };
+                await page.screenshot({ path: "everythinghub-production-" + query.toLowerCase().replace(/\s+/g, "-") + ".png", fullPage: true });
+                if (!count) throw new Error(query + " returned no visible AppDeploy search results; status=" + status);
               }
-              await page.goto(report.url,{waitUntil:"domcontentloaded",timeout:45000});
-              const news = page.locator(".top-news:visible, [aria-label*='news' i]:visible").first();
-              report.liveNewsVisible = await news.count() > 0;
-              report.liveNewsText = report.liveNewsVisible ? (await news.innerText()).slice(0,1200) : "No visible Live News section";
-              report.liveNewsPassed = report.liveNewsVisible && /temporarily unavailable|stories|headlines|top stories|live news/i.test(report.liveNewsText);
-              await page.setViewportSize({width:390,height:844});
-              await page.goto(report.url,{waitUntil:"domcontentloaded",timeout:45000});
-              report.mobile = await page.evaluate(() => ({
-                viewportWidth:document.documentElement.clientWidth,
-                documentWidth:document.documentElement.scrollWidth,
-                artworkVisible:!!document.querySelector(".everythinghub-approved-home-art img.approved-master-image")?.getClientRects().length,
-                searchVisible:!!Array.from(document.querySelectorAll('form.homepage-live-search input[aria-label="Search EverythingHub"]')).some(el=>el.getClientRects().length),
-                categories:document.querySelectorAll("nav.hub-hero-divisions button").length
-              }));
-              await page.screenshot({path:"everything-hub-mobile.png",fullPage:true});
-              if (report.mobile.documentWidth > report.mobile.viewportWidth+2 || !report.mobile.artworkVisible || !report.mobile.searchVisible || report.mobile.categories!==8) {
-                throw new Error("Mobile layout failed: "+JSON.stringify(report.mobile));
-              }
-              report.pageErrors=errors;
-              report.passed=errors.length===0 && Object.values(report.searches).every(x=>x.passed) && report.liveNewsPassed && report.mobile.documentWidth <= report.mobile.viewportWidth+2;
-              if(!report.passed) throw new Error("Live acceptance checks failed: "+JSON.stringify({searches:report.searches,liveNewsVisible:report.liveNewsVisible,liveNewsPassed:report.liveNewsPassed,mobile:report.mobile,pageErrors:errors}));
-              fs.writeFileSync("production-report.json",JSON.stringify(report,null,2));
-              console.log(JSON.stringify(report,null,2));
-            } finally { await browser.close(); }
-          })().catch(error=>{console.error(error);process.exit(1);});
+              await page.goto(report.url, { waitUntil: "domcontentloaded", timeout: 45000 });
+              report.publicFeeds = await page.evaluate(async () => {
+                const get = async path => {
+                  try {
+                    const response = await fetch(path);
+                    const data = await response.json();
+                    return { ok: response.ok, count: Array.isArray(data.results) ? data.results.length : 0, providers: data.providers || [], message: data.message || "" };
+                  } catch (error) { return { ok: false, count: 0, message: String(error) }; }
+                };
+                const [news, images, videos] = await Promise.all([
+                  get("/api/search?q=latest%20world%20news&limit=10&vertical=news"),
+                  get("/api/images?q=dog"),
+                  get("/api/videos?q=NASA")
+                ]);
+                return { news, images, videos };
+              });
+              if (report.publicFeeds.news.count < 1 || report.publicFeeds.images.count < 1 || report.publicFeeds.videos.count < 1) throw new Error("One or more AppDeploy public feeds returned no results: " + JSON.stringify(report.publicFeeds));
+              await page.setViewportSize({ width: 390, height: 844 });
+              await page.goto(report.url, { waitUntil: "domcontentloaded", timeout: 45000 });
+              await page.locator(".everythinghub-approved-home-art img.approved-master-image").first().waitFor({ state: "visible", timeout: 30000 });
+              report.mobile = await page.evaluate(() => ({ viewportWidth: document.documentElement.clientWidth, documentWidth: document.documentElement.scrollWidth, artworkVisible: !!document.querySelector(".everythinghub-approved-home-art img.approved-master-image")?.getClientRects().length, searchVisible: !!Array.from(document.querySelectorAll("form.homepage-live-search input#hub-search")).some(el => el.getClientRects().length), categories: document.querySelectorAll("nav.hub-hero-divisions button").length }));
+              await page.screenshot({ path: "everythinghub-production-mobile.png", fullPage: true });
+              if (report.mobile.documentWidth > report.mobile.viewportWidth + 2 || !report.mobile.artworkVisible || !report.mobile.searchVisible || report.mobile.categories !== 8) throw new Error("AppDeploy mobile layout failed: " + JSON.stringify(report.mobile));
+              if (pageErrors.length) throw new Error("AppDeploy browser page errors: " + pageErrors.join("; "));
+              report.passed = true;
+            } catch (error) {
+              report.error = error instanceof Error ? error.message : String(error);
+              await page.screenshot({ path: "everythinghub-production-failure.png", fullPage: true }).catch(() => undefined);
+            } finally {
+              report.pageErrors = pageErrors;
+              report.consoleErrors = consoleErrors;
+              fs.writeFileSync("production-report.json", JSON.stringify(report, null, 2));
+              await browser.close();
+            }
+            if (!report.passed) process.exit(1);
+            console.log(JSON.stringify(report, null, 2));
+          })();
+          JS
           JS
           node production-check.cjs
       - name: Save production screenshots and report
