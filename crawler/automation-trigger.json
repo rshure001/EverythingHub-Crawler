@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "updated_at": "2026-11-21T10:57:37Z",
-  "reason": "One bounded recovery crawl because scheduled crawl delivery is stale (last confirmed scheduled crawl 2026-11-21T04:19:41Z; no newer scheduled crawl appears in the latest 100 workflow runs), the public manifest is 2083 seconds old, and no queued or running crawler was found. Latest observed crawler run 44893425006 (push) was created at 2026-11-21T10:14:58Z. Current manifest: 150508 source pages, updated 2026-11-21T10:22:54.000Z.",
-  "manifest_before_pages": 150508,
-  "manifest_before_updated_at": "2026-11-21T10:22:54.000Z"
+  "updated_at": "2026-11-21T12:01:49Z",
+  "reason": "One bounded recovery crawl after a fresh preflight: latest scheduled crawler 2026-11-21T04:19:41Z (27728s old), public index 2026-11-21T11:13:01.000Z (2928s old), and no queued/running crawler or watchdog. Last scheduled run 44865556005 concluded success; a later push crawler completed, but scheduled delivery remains stale.",
+  "manifest_before_pages": 150930,
+  "manifest_before_updated_at": "2026-11-21T11:13:01.000Z"
 }
