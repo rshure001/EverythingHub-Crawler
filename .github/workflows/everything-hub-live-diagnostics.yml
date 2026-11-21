@@ -35,7 +35,7 @@ jobs:
         env:
           BASE: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1
           KEY: sb_publishable_XlIsACWhtVS1jVODWYGTpg_GMs8v3vJ
-          APPDEPLOY_BASE: https://everythinghub-search-engine-4x25f8.v2.appdeploy.ai
+          PUBLISHER_BASE: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-publish-static
         run: |
           set -euo pipefail
           echo "=== HOMEPAGE ==="
@@ -53,19 +53,24 @@ jobs:
           node <<'NODE'
           const fs = require("fs");
           (async () => {
-            const base = process.env.APPDEPLOY_BASE.replace(/\/$/, "");
-            const homeResponse = await fetch(base + "/", { signal: AbortSignal.timeout(20000) });
-            if (!homeResponse.ok) throw new Error("In-house published homepage HTTP " + homeResponse.status);
+            const base = process.env.PUBLISHER_BASE.replace(/\/$/, "");
+            const homeResponse = await fetch(base, { signal: AbortSignal.timeout(20000), headers: { Accept: "text/html" } });
             const html = await homeResponse.text();
-            const shell = html.includes('id="root"') && /<title>[^<]*EverythingHub[^<]*<\/title>/i.test(html);
-            if (!shell) throw new Error("In-house published app shell is missing its root mount or EverythingHub title");
+            const contentType = homeResponse.headers.get("content-type") || "";
+            const categoryCount = (html.match(/class=["']hotspot\s+[^"']+["']\s+data-mode=/g) || []).length;
+            const hasArtwork = html.includes("assets/everythinghub-approved.png");
+            const hasSearch = html.includes('id="searchForm"') && html.includes('id="q"');
+            const isHtml = contentType.toLowerCase().startsWith("text/html");
+            if (!homeResponse.ok || !isHtml || categoryCount !== 8 || !hasArtwork || !hasSearch || !html.includes("Everything Hub")) {
+              throw new Error("First-party publisher check failed: " + JSON.stringify({status:homeResponse.status,contentType,categoryCount,hasArtwork,hasSearch}));
+            }
             const summary = [
-              "- In-house published homepage shell: PASS (HTTP " + homeResponse.status + ")",
-              "- Interactive octopus artwork, eight divisions, and live search: checked by the production browser test",
-              "- Search API: served through the Supabase Edge Function and verified by the independent checks below"
+              "- First-party published homepage: PASS (HTTP " + homeResponse.status + ", " + contentType + ")",
+              "- Approved octopus artwork and all eight search categories: PASS",
+              "- Search form: PASS; search and media endpoints are verified by the independent checks below"
             ].join(String.fromCharCode(10)) + String.fromCharCode(10);
             fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary);
-            console.log(JSON.stringify({homepageStatus:homeResponse.status,shell,rootMount:html.includes('id="root"'),title:html.match(/<title>([^<]+)<\/title>/i)?.[1]||null},null,2));
+            console.log(JSON.stringify({homepageStatus:homeResponse.status,contentType,categoryCount,hasArtwork,hasSearch,title:html.match(/<title>([^<]+)<\/title>/i)?.[1]||null},null,2));
           })().catch(error => { console.error(error); process.exit(1); });
           NODE
           echo "=== CUSTOM DOMAIN CHECK ==="
