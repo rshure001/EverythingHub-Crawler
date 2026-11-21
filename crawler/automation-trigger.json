@@ -1,10 +1,7 @@
 {
   "version": 1,
-  "updated_at": "2026-11-21T01:24:25Z",
-  "reason": "scheduled_crawl_delivery_stale_no_active_crawler_manifest_stale",
-  "manifest_before_pages": 138195,
-  "manifest_before_updated_at": "2026-11-21T01:09:28Z",
-  "triggered_at": "2026-11-21T01:24:25Z",
-  "baseline_total_pages": 138195,
-  "baseline_manifest_updated_at": 1795223368
+  "updated_at": "2026-11-21T02:48:12.135Z",
+  "reason": "Push-triggered fallback after scheduled crawl delivery was 10931s old (>25 minutes); no queued or running crawler; public manifest was 4405s old (>10 minutes). One bounded recovery crawl; normal schedule unchanged.",
+  "manifest_before_pages": 139623,
+  "manifest_before_updated_at": "2026-11-21T01:34:47Z"
 }
