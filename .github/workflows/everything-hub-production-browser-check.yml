@@ -2,7 +2,7 @@
 name: Everything Hub browser verification
 on:
   push:
-    branches: [main]
+    branches: [main, 'eh/fallback-attribution-2026-11-21']
     paths:
       - '.github/workflows/everything-hub-production-browser-check.yml'
       - 'vercel-homepage/**'
@@ -18,7 +18,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   production-browser-check:
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    if: ${{ vars.APPDEPLOY_ACCEPTANCE_ENABLED == 'true' && (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success') }}
     runs-on: ubuntu-latest
     timeout-minutes: 8
     env:
@@ -133,113 +133,331 @@ jobs:
             everything-hub-failure.png
             production-report.json
           if-no-files-found: warn
-          retention-days: 3
+          retention-days: 30
 
   free-fallback-browser-check:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 12
     env:
-      TARGET_URL: https://everythinghub-homepage-fixed-rshure001-8053.vercel.app/
+      TARGET_URL: ${{ github.ref == 'refs/heads/main' && 'https://everythinghub-homepage-fixed.vercel.app/' || 'https://everythinghub-homepage-fixed-rshure001-8053.vercel.app/src/index.html' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+      - name: Verify fallback source contract
+        run: node --test vercel-homepage/fallback-contract.test.js
       - name: Install Playwright
         run: |
           npm init -y
           npm install --no-save playwright
           npx playwright install --with-deps chromium
-      - name: Verify free Vercel fallback, live search, and mobile layout
+      - name: Verify live fallback at desktop and mobile widths
         run: |
           cat > fallback-check.cjs <<'JS'
           const { chromium } = require("playwright");
           const fs = require("fs");
+          const expectedArtwork = "https://everythinghub-search-engine-4x25f8.v2.appdeploy.ai/resources/everythinghub-approved-octopus.png";
           (async () => {
-            const browser = await chromium.launch({headless:true});
-            const page = await browser.newPage({viewport:{width:1440,height:1000}});
-            const errors=[];
-            page.on("pageerror",e=>errors.push(e.message));
-              page.on("console",m=>{if(m.type()==="error")errors.push("console: "+m.text());});
-            const report={url:process.env.TARGET_URL,startedAt:new Date().toISOString(),searches:{}};
+            const browser = await chromium.launch({ headless: true });
+            const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+            page.setDefaultTimeout(30000);
+            const pageErrors = [];
+            const consoleErrors = [];
+            page.on("pageerror", error => pageErrors.push(error.message));
+            page.on("console", message => { if (message.type() === "error") consoleErrors.push(message.text()); });
+            const report = { url: process.env.TARGET_URL, startedAt: new Date().toISOString(), searches: {}, categorySearches: {}, newsCategories: {}, coreLinks: {} };
+            async function goHome() {
+              const response = await page.goto(report.url, { waitUntil: "domcontentloaded", timeout: 45000 });
+              if (!response || !response.ok()) throw new Error("Homepage HTTP status: " + (response && response.status()));
+              await page.locator(".art img").waitFor({ state: "visible", timeout: 20000 });
+              await page.waitForFunction(() => {
+                const image = document.querySelector(".art img");
+                return !!image && image.complete && image.naturalWidth >= 100;
+              }, null, { timeout: 20000 });
+              return response;
+            }
+            async function readResultCards() {
+              const count = await page.locator("#results .eh-result").count();
+              const titles = (await page.locator("#results .eh-result a").allTextContents()).map(value => value.trim()).filter(Boolean);
+              return { count, titles: titles.slice(0, 8), status: await page.locator("#status").innerText() };
+            }
+            async function categorySearch(mode, query, selector, expectedPattern) {
+              await goHome();
+              await page.locator('.hotspots [data-mode="' + mode + '"]').click();
+              const selected = await page.locator("#status").innerText();
+              if (!selected.toLowerCase().includes("selected")) throw new Error("Category did not activate: " + mode);
+              await page.locator("#query").fill(query);
+              await page.locator("#searchForm button[type=submit]").click();
+              await page.locator(selector).first().waitFor({ state: "visible", timeout: 60000 });
+              const count = await page.locator(selector).count();
+              const titles = (await page.locator(selector + " a").allTextContents()).map(value => value.trim()).filter(Boolean);
+              const status = await page.locator("#status").innerText();
+              if (!count) throw new Error("Category returned no visible results: " + mode + " / " + query);
+              if (expectedPattern && !titles.some(title => expectedPattern.test(title))) throw new Error("Category results were not relevant: " + mode + " / " + titles.slice(0, 5).join(" | "));
+              return { count, titles: titles.slice(0, 8), status };
+            }
             try {
-              const response=await page.goto(report.url,{waitUntil:"domcontentloaded",timeout:45000});
-              const image=page.locator(".art img").first();
-              await image.waitFor({state:"visible",timeout:20000});
-              await page.waitForFunction(()=>{const i=document.querySelector(".art img");return !!i&&i.complete&&i.naturalWidth>=100;},null,{timeout:20000});
-              report.httpStatus=response?.status();
-              report.title=await page.title();
-              report.artwork=await image.evaluate(i=>({src:i.currentSrc,width:i.naturalWidth,height:i.naturalHeight,renderedWidth:i.getBoundingClientRect().width}));
-              if(!report.artwork.src.includes("everythinghub-approved-octopus.png"))throw new Error("Approved master artwork is not being used: "+report.artwork.src);
-              report.desktopLayout=await page.evaluate(()=>{const a=document.querySelector(".art").getBoundingClientRect(),r=document.querySelector("#results").getBoundingClientRect();return {mainDirection:getComputedStyle(document.querySelector("main")).flexDirection,artRight:a.right,artBottom:a.bottom,resultsTop:r.top,viewportWidth:document.documentElement.clientWidth}});
-              report.searchInputCount=await page.locator("#query").count();
-              report.categoryCount=await page.locator(".hotspots [data-mode]").count();
-              report.categoryModes=await page.locator(".hotspots [data-mode]").evaluateAll(xs=>xs.map(x=>x.dataset.mode));
-              if(!response?.ok()||!report.title.includes("Everything Hub")||report.searchInputCount!==1||report.categoryCount!==8||report.artwork.renderedWidth<700||report.desktopLayout.mainDirection!=="column"||report.desktopLayout.resultsTop<report.desktopLayout.artBottom)throw new Error("Fallback homepage structure failed: "+JSON.stringify(report));
-              await page.screenshot({path:"everythinghub-fallback-home.png",fullPage:true});
-              for(const mode of report.categoryModes){
-                await page.locator(".hotspots [data-mode=\""+mode+"\"]").click();
-                const selected=await page.locator("#status").innerText();
-                if(!selected.toLowerCase().includes("selected"))throw new Error("Category did not activate: "+mode+" / "+selected);
-              }
-              for(const query of ["Rolex","Las Vegas","NASA"]){
-                await page.goto(report.url,{waitUntil:"domcontentloaded",timeout:45000});
+              const response = await goHome();
+              report.httpStatus = response.status();
+              report.title = await page.title();
+              report.artwork = await page.locator(".art img").evaluate(image => ({
+                src: image.currentSrc,
+                naturalWidth: image.naturalWidth,
+                naturalHeight: image.naturalHeight,
+                renderedWidth: image.getBoundingClientRect().width
+              }));
+              report.desktopLayout = await page.evaluate(() => {
+                const art = document.querySelector(".art").getBoundingClientRect();
+                const results = document.querySelector("#results").getBoundingClientRect();
+                return {
+                  viewportWidth: document.documentElement.clientWidth,
+                  documentWidth: document.documentElement.scrollWidth,
+                  artRight: art.right,
+                  artBottom: art.bottom,
+                  resultsTop: results.top,
+                  mainDirection: getComputedStyle(document.querySelector("main")).flexDirection
+                };
+              });
+              report.searchInputCount = await page.locator("#query").count();
+              report.categoryModes = await page.locator(".hotspots [data-mode]").evaluateAll(items => items.map(item => item.dataset.mode));
+              if (report.artwork.src !== expectedArtwork || report.artwork.naturalWidth < 1000 || report.artwork.naturalHeight < 1000) throw new Error("Approved artwork source or dimensions changed: " + JSON.stringify(report.artwork));
+              if (!report.title.includes("Everything Hub") || report.searchInputCount !== 1 || report.categoryModes.length !== 8) throw new Error("Homepage branding/search/category contract failed.");
+              if (report.desktopLayout.documentWidth > report.desktopLayout.viewportWidth + 2 || report.desktopLayout.resultsTop < report.desktopLayout.artBottom - 2) throw new Error("Desktop layout overflow or overlap: " + JSON.stringify(report.desktopLayout));
+              await page.screenshot({ path: "everythinghub-fallback-home.png", fullPage: true });
+
+              for (const query of ["Rolex", "Las Vegas", "NASA"]) {
+                await goHome();
                 await page.locator("#query").fill(query);
                 await page.locator("#searchForm button[type=submit]").click();
-                await page.waitForFunction(()=>!!document.querySelector("#results .eh-result")||!!document.querySelector("#results .results-empty"),null,{timeout:60000});
-                const count=await page.locator("#results .eh-result").count();
-                const titles=await page.locator("#results .eh-result a").allTextContents();
-                const statusText=await page.locator("#status").innerText();
-                const emptyText=await page.locator("#results .results-empty").first().textContent().catch(()=> "");
-                report.searches[query]={visibleCards:count,titles:titles.slice(0,5),status:statusText,emptyMessage:emptyText};
-                if(!count){await page.screenshot({path:"everythinghub-fallback-"+query.toLowerCase().replace(/\s+/g,"-")+"-failure.png",fullPage:true});throw new Error(query+" returned no visible results; status="+statusText+"; detail="+emptyText+"; pageErrors="+errors.join("; "));}
-                await page.screenshot({path:"everythinghub-fallback-"+query.toLowerCase().replace(/\s+/g,"-")+".png",fullPage:true});
+                await page.locator("#results .eh-result").first().waitFor({ state: "visible", timeout: 60000 });
+                const result = await readResultCards();
+                const pattern = query === "Rolex" ? /rolex/i : query === "Las Vegas" ? /las vegas|vegas/i : /nasa/i;
+                if (!result.count || !result.titles.some(title => pattern.test(title))) throw new Error(query + " did not return relevant visible results: " + JSON.stringify(result));
+                report.searches[query] = result;
+                await page.screenshot({ path: "everythinghub-fallback-" + query.toLowerCase().replace(/\s+/g, "-") + ".png", fullPage: true });
               }
-              await page.goto(report.url,{waitUntil:"domcontentloaded",timeout:45000});
-              await page.locator("#news-items .news-item").first().waitFor({state:"visible",timeout:30000});
-              report.news={topStories:await page.locator("#news-items .news-item").count(),status:await page.locator("#news-status").innerText()};
-              const newsTitles=await page.locator("#news-items .news-item a").allTextContents();
-              report.news.uniqueTitles=new Set(newsTitles.map(x=>x.trim().toLowerCase())).size;
-              report.newsCategories={};
-              for(const category of ["world","technology","business","science"]){
-                await page.locator('[data-news="'+category+'"]').click();
-                await page.locator("#news-items .news-item").first().waitFor({state:"visible",timeout:20000});
-                report.newsCategories[category]=await page.locator("#news-items .news-item").count();
+
+              const nasaLink = await page.locator("#results .eh-result a").first().evaluate(anchor => ({
+                href: anchor.href, target: anchor.target, rel: anchor.rel
+              }));
+              if (!/^https?:\/\//i.test(nasaLink.href) || nasaLink.target !== "_blank" || !nasaLink.rel.includes("noopener")) throw new Error("Search result link contract failed: " + JSON.stringify(nasaLink));
+              const popupPromise = page.waitForEvent("popup", { timeout: 10000 });
+              await page.locator("#results .eh-result a").first().click();
+              const popup = await popupPromise;
+              await popup.waitForLoadState("domcontentloaded", { timeout: 15000 }).catch(() => undefined);
+              report.coreLinks.searchResult = { ...nasaLink, openedUrl: popup.url() };
+              await popup.close().catch(() => undefined);
+
+              const categoryCases = [
+                { mode: "web", query: "NASA", pattern: /nasa/i },
+                { mode: "news", query: "NASA", pattern: /nasa|space|mars/i },
+                { mode: "shopping", query: "Rolex", pattern: /rolex/i },
+                { mode: "places", query: "Las Vegas", pattern: /las vegas|vegas/i },
+                { mode: "business", query: "Las Vegas", pattern: /las vegas|vegas/i },
+                { mode: "research", query: "NASA", pattern: /nasa/i }
+              ];
+              for (const item of categoryCases) {
+                report.categorySearches[item.mode] = await categorySearch(item.mode, item.query, "#results .eh-result", item.pattern);
               }
+
+              await goHome();
+              await page.locator("#news-items .news-item").first().waitFor({ state: "visible", timeout: 30000 });
+              const newsApi = await page.evaluate(async () => {
+                const response = await fetch("https://everythinghub-search-backend.vercel.app/api/news?category=for-you");
+                return { http: response.status, data: await response.json() };
+              });
+              const newsData = newsApi.data;
+              const newsTitles = (await page.locator("#news-items .news-item a").allTextContents()).map(value => value.trim().toLowerCase());
+              const latestPublished = (newsData.items || []).map(item => Date.parse(item.publishedAt || "")).filter(Number.isFinite).sort((a, b) => b - a)[0] || null;
+              report.news = {
+                topStories: await page.locator("#news-items .news-item").count(),
+                uniqueTitles: new Set(newsTitles).size,
+                status: await page.locator("#news-status").innerText(),
+                apiHttp: newsApi.http,
+                updatedAt: newsData.updatedAt,
+                updateAgeMinutes: (Date.now() - Date.parse(newsData.updatedAt)) / 60000,
+                latestPublishedAt: latestPublished ? new Date(latestPublished).toISOString() : null,
+                latestPublishedAgeHours: latestPublished ? (Date.now() - latestPublished) / 3600000 : null
+              };
+              if (report.news.topStories < 5 || report.news.uniqueTitles !== report.news.topStories || newsApi.http !== 200 || newsData.status !== "ok" || report.news.updateAgeMinutes > 30 || !latestPublished || report.news.latestPublishedAgeHours > 24) throw new Error("Top Stories freshness or uniqueness failed: " + JSON.stringify(report.news));
+              for (const category of ["world", "technology", "business", "science"]) {
+                const responsePromise = page.waitForResponse(response => {
+                  try {
+                    const url = new URL(response.url());
+                    return url.pathname === "/api/news" && url.searchParams.get("category") === category && response.ok();
+                  } catch { return false; }
+                }, { timeout: 30000 });
+                await page.locator('[data-news="' + category + '"]').click();
+                const categoryResponse = await responsePromise;
+                const categoryData = await categoryResponse.json();
+                await page.locator("#news-items .news-item").first().waitFor({ state: "visible", timeout: 20000 });
+                const active = await page.locator('[data-news="' + category + '"]').evaluate(button => button.classList.contains("active"));
+                const count = await page.locator("#news-items .news-item").count();
+                if (!active || count < 1 || categoryData.status !== "ok") throw new Error("News tab failed: " + category);
+                report.newsCategories[category] = { count, updatedAt: categoryData.updatedAt, firstTitle: categoryData.items?.[0]?.title || "" };
+              }
+              const refreshPromise = page.waitForResponse(response => {
+                try {
+                  const url = new URL(response.url());
+                  return url.pathname === "/api/news" && url.searchParams.get("category") === "science" && response.ok();
+                } catch { return false; }
+              }, { timeout: 30000 });
               await page.locator("#news-refresh").click();
-              await page.locator("#news-items .news-item").first().waitFor({state:"visible",timeout:20000});
-              await page.screenshot({path:"everythinghub-fallback-news.png",fullPage:true});
-              await page.goto(report.url,{waitUntil:"domcontentloaded",timeout:45000});
+              const refreshResponse = await refreshPromise;
+              const refreshData = await refreshResponse.json();
+              report.newsRefresh = { http: refreshResponse.status(), count: refreshData.count, updatedAt: refreshData.updatedAt };
+              if (refreshData.status !== "ok" || refreshData.count < 1) throw new Error("Top Stories Refresh failed.");
+              const newsLink = await page.locator("#news-items .news-item a").first().evaluate(anchor => ({ href: anchor.href, target: anchor.target, rel: anchor.rel }));
+              if (!/^https?:\/\//i.test(newsLink.href) || newsLink.target !== "_blank" || !newsLink.rel.includes("noopener")) throw new Error("News article link contract failed.");
+              report.coreLinks.news = newsLink;
+              await page.screenshot({ path: "everythinghub-fallback-news.png", fullPage: true });
+
+              await goHome();
               await page.locator('.hotspots [data-mode="images"]').click();
-              await page.locator("#query").fill("dog");
+              await page.locator("#query").fill("NASA");
               await page.locator("#searchForm button[type=submit]").click();
-              await page.locator("#results .media-card img").first().waitFor({state:"visible",timeout:30000});
-              await page.locator("#results .media-card img").first().scrollIntoViewIfNeeded();
-              await page.locator("#results .media-card img").first().evaluate(img=>img.decode());
-              report.imageSearch={cards:await page.locator("#results .media-card").count(),loadedThumbnails:await page.locator("#results .media-card img").evaluateAll(imgs=>imgs.filter(i=>i.complete&&i.naturalWidth>0).length),title:(await page.locator("#results .results-heading h2").innerText())};
-              await page.screenshot({path:"everythinghub-fallback-images.png",fullPage:true});
-              await page.goto(report.url,{waitUntil:"domcontentloaded",timeout:45000});
+              await page.locator("#results .media-card").first().waitFor({ state: "visible", timeout: 45000 });
+              const imageCards = page.locator("#results .media-card");
+              const imageCardCount = await imageCards.count();
+              for (let index = 0; index < imageCardCount; index++) {
+                const image = imageCards.nth(index).locator("img");
+                if (await image.count()) {
+                  await image.scrollIntoViewIfNeeded();
+                  await image.evaluate(node => Promise.race([
+                    node.decode().then(() => true).catch(() => false),
+                    new Promise(resolve => setTimeout(() => resolve(false), 8000))
+                  ])).catch(() => false);
+                }
+              }
+              report.imageSearch = await imageCards.evaluateAll(cards => {
+                const ccBy = license => /^cc by(-sa)?\s+/i.test(String(license || ""));
+                const badAttribution = cards.filter(card => {
+                  const license = card.dataset.license || "";
+                  const creator = card.dataset.creator || "";
+                  const small = card.querySelector("small");
+                  const text = small?.textContent || "";
+                  return !license || !text.includes("Wikimedia Commons") || !text.includes(license) ||
+                    (ccBy(license) && (!creator || !small?.querySelector("a")));
+                }).length;
+                const ccByCards = cards.filter(card => ccBy(card.dataset.license)).length;
+                const ccByCardsWithLinks = cards.filter(card => ccBy(card.dataset.license) && !!card.querySelector("small a")).length;
+                return {
+                  cards: cards.length,
+                  loadedThumbnails: cards.filter(card => {
+                    const image = card.querySelector("img");
+                    return !!image && image.complete && image.naturalWidth > 0;
+                  }).length,
+                  placeholders: cards.filter(card => !!card.querySelector(".image-placeholder")).length,
+                  attributionCards: cards.filter(card => (card.querySelector("small")?.textContent || "").includes("Wikimedia Commons")).length,
+                  badAttribution,
+                  ccByCards,
+                  ccByCardsWithLinks,
+                  sampleAttributions: cards.slice(0, 4).map(card => card.querySelector("small")?.textContent || "")
+                };
+              });
+              const imageSourceLink = await page.locator("#results .media-card > a").first().evaluate(anchor => ({ href: anchor.href, target: anchor.target, rel: anchor.rel }));
+              if (report.imageSearch.cards < 8 || report.imageSearch.loadedThumbnails < 8 || report.imageSearch.placeholders !== 0 ||
+                  report.imageSearch.attributionCards !== report.imageSearch.cards || report.imageSearch.badAttribution !== 0 ||
+                  report.imageSearch.ccByCardsWithLinks !== report.imageSearch.ccByCards ||
+                  !/^https:\/\/commons\.wikimedia\.org\//i.test(imageSourceLink.href)) throw new Error("Licensed image thumbnails or attribution failed: " + JSON.stringify(report.imageSearch));
+              report.categorySearches.images = { cards: report.imageSearch.cards, loadedThumbnails: report.imageSearch.loadedThumbnails };
+              report.coreLinks.images = imageSourceLink;
+              await page.screenshot({ path: "everythinghub-fallback-images.png", fullPage: true });
+
+              await goHome();
               await page.locator('.hotspots [data-mode="videos"]').click();
               await page.locator("#query").fill("NASA");
               await page.locator("#searchForm button[type=submit]").click();
-              await page.locator("#results .video-card img").first().waitFor({state:"visible",timeout:30000});
-              await page.locator("#results .video-card img").first().scrollIntoViewIfNeeded();
-              await page.locator("#results .video-card img").first().evaluate(img=>img.decode());
-              report.videoSearch={cards:await page.locator("#results .video-card").count(),loadedThumbnails:await page.locator("#results .video-card img").evaluateAll(imgs=>imgs.filter(i=>i.complete&&i.naturalWidth>0).length),fallbacks:await page.locator("#results .video-placeholder").count(),title:(await page.locator("#results .results-heading h2").innerText())};
-              await page.screenshot({path:"everythinghub-fallback-videos.png",fullPage:true});
-              if(report.news.topStories<1||report.news.uniqueTitles!==report.news.topStories||Object.values(report.newsCategories).some(x=>x<1)||report.imageSearch.cards<1||report.imageSearch.loadedThumbnails<1||report.videoSearch.cards<1||report.videoSearch.cards<15||report.videoSearch.loadedThumbnails<15)throw new Error("News, image, or video acceptance failed: "+JSON.stringify({news:report.news,newsCategories:report.newsCategories,imageSearch:report.imageSearch,videoSearch:report.videoSearch}));
-              await page.setViewportSize({width:390,height:844});
-              await page.goto(report.url,{waitUntil:"domcontentloaded",timeout:45000});
-              report.mobile=await page.evaluate(()=>({viewportWidth:document.documentElement.clientWidth,documentWidth:document.documentElement.scrollWidth,artworkVisible:!!document.querySelector(".art img")?.getClientRects().length,searchVisible:!!document.querySelector("#query")?.getClientRects().length,categories:document.querySelectorAll(".hotspots [data-mode]").length,artworkWidth:document.querySelector(".art").getBoundingClientRect().width,resultsTop:document.querySelector("#results").getBoundingClientRect().top,artworkBottom:document.querySelector(".art").getBoundingClientRect().bottom}));
-              await page.screenshot({path:"everythinghub-fallback-mobile.png",fullPage:true});
-              if(report.mobile.documentWidth>report.mobile.viewportWidth+2||!report.mobile.artworkVisible||!report.mobile.searchVisible||report.mobile.categories!==8||report.mobile.artworkWidth<report.mobile.viewportWidth-4||report.mobile.resultsTop<report.mobile.artworkBottom)throw new Error("Fallback mobile layout failed: "+JSON.stringify(report.mobile));
-              report.pageErrors=errors;
-              report.passed=errors.length===0 && Object.keys(report.searches).length===3 && report.news?.topStories>0 && Object.values(report.newsCategories||{}).every(x=>x>0) && report.imageSearch?.cards>0 && report.videoSearch?.cards>0 && report.mobile.documentWidth<=report.mobile.viewportWidth+2;
-              if(errors.length)throw new Error("Fallback page errors: "+errors.join("; "));
-              fs.writeFileSync("fallback-report.json",JSON.stringify(report,null,2));
-              console.log(JSON.stringify(report,null,2));
-            }finally{await browser.close();}
-          })().catch(e=>{console.error(e);process.exit(1);});
+              await page.locator("#results .video-card").first().waitFor({ state: "visible", timeout: 45000 });
+              const videoCards = page.locator("#results .video-card");
+              const videoCardCount = await videoCards.count();
+              for (let index = 0; index < videoCardCount; index++) {
+                const image = videoCards.nth(index).locator("img");
+                if (await image.count()) {
+                  await image.scrollIntoViewIfNeeded();
+                  await image.evaluate(node => Promise.race([
+                    node.decode().then(() => true).catch(() => false),
+                    new Promise(resolve => setTimeout(() => resolve(false), 8000))
+                  ])).catch(() => false);
+                }
+              }
+              report.videoSearch = await videoCards.evaluateAll(cards => ({
+                cards: cards.length,
+                loadedThumbnails: cards.filter(card => {
+                  const image = card.querySelector("img");
+                  return !!image && image.complete && image.naturalWidth > 0;
+                }).length,
+                fallbacks: cards.filter(card => !!card.querySelector(".video-placeholder")).length,
+                sampleTitles: cards.slice(0, 5).map(card => card.querySelector("a")?.textContent || "")
+              }));
+              const videoLink = await page.locator("#results .video-card > a").first().evaluate(anchor => ({ href: anchor.href, target: anchor.target, rel: anchor.rel }));
+              if (report.videoSearch.cards < 15 || report.videoSearch.loadedThumbnails < 15 || report.videoSearch.fallbacks !== 0 ||
+                  !/^https:\/\/www\.youtube\.com\/watch\?/i.test(videoLink.href)) throw new Error("Video cards or thumbnails failed: " + JSON.stringify(report.videoSearch));
+              report.categorySearches.videos = { cards: report.videoSearch.cards, loadedThumbnails: report.videoSearch.loadedThumbnails };
+              report.coreLinks.videos = videoLink;
+              await page.screenshot({ path: "everythinghub-fallback-videos.png", fullPage: true });
+
+              await page.setViewportSize({ width: 390, height: 844 });
+              await goHome();
+              report.mobile = await page.evaluate(() => {
+                const art = document.querySelector(".art").getBoundingClientRect();
+                const search = document.querySelector("#searchForm").getBoundingClientRect();
+                const input = document.querySelector("#query").getBoundingClientRect();
+                const categories = document.querySelector(".hotspots").getBoundingClientRect();
+                const stories = document.querySelector("#top-stories").getBoundingClientRect();
+                const results = document.querySelector("#results").getBoundingClientRect();
+                return {
+                  viewportWidth: document.documentElement.clientWidth,
+                  documentWidth: document.documentElement.scrollWidth,
+                  artworkVisible: !!document.querySelector(".art img")?.getClientRects().length,
+                  searchVisible: !!document.querySelector("#query")?.getClientRects().length,
+                  categories: document.querySelectorAll(".hotspots [data-mode]").length,
+                  artworkWidth: art.width,
+                  artworkBottom: art.bottom,
+                  searchBottom: Math.max(search.bottom, input.bottom),
+                  categoriesTop: categories.top,
+                  categoriesBottom: categories.bottom,
+                  storiesLeft: stories.left,
+                  storiesRight: stories.right,
+                  resultsTop: results.top,
+                  brokenImages: [...document.images].filter(image => image.complete && image.naturalWidth === 0).length
+                };
+              });
+              await page.screenshot({ path: "everythinghub-fallback-mobile.png", fullPage: true });
+              if (report.mobile.documentWidth > report.mobile.viewportWidth + 2 ||
+                  !report.mobile.artworkVisible || !report.mobile.searchVisible || report.mobile.categories !== 8 ||
+                  report.mobile.artworkWidth < report.mobile.viewportWidth - 4 ||
+                  report.mobile.searchBottom > report.mobile.categoriesTop + 2 ||
+                  report.mobile.categoriesBottom > report.mobile.artworkBottom + 2 ||
+                  report.mobile.storiesLeft < -2 || report.mobile.storiesRight > report.mobile.viewportWidth + 2 ||
+                  report.mobile.resultsTop < report.mobile.artworkBottom - 2 || report.mobile.brokenImages !== 0) {
+                throw new Error("Mobile layout, overlap, or image check failed: " + JSON.stringify(report.mobile));
+              }
+
+              report.browserErrors = { pageErrors, consoleErrors };
+              report.categorySearchCount = Object.keys(report.categorySearches).length;
+              report.finishedAt = new Date().toISOString();
+              report.passed = report.httpStatus === 200 && report.searchInputCount === 1 &&
+                report.categorySearchCount === 8 && report.news.topStories >= 5 &&
+                Object.values(report.newsCategories).every(value => value.count > 0) &&
+                report.newsRefresh.http === 200 && report.imageSearch.loadedThumbnails >= 8 &&
+                report.imageSearch.badAttribution === 0 && report.videoSearch.loadedThumbnails >= 15 &&
+                report.mobile.documentWidth <= report.mobile.viewportWidth + 2 &&
+                pageErrors.length === 0 && consoleErrors.length === 0;
+              if (!report.passed) throw new Error("One or more live fallback acceptance gates failed.");
+            } catch (error) {
+              report.error = error instanceof Error ? error.message : String(error);
+              report.finishedAt = new Date().toISOString();
+              await page.screenshot({ path: "everythinghub-fallback-failure.png", fullPage: true }).catch(() => undefined);
+            } finally {
+              report.browserErrors = { pageErrors, consoleErrors };
+              fs.writeFileSync("fallback-report.json", JSON.stringify(report, null, 2));
+              await browser.close();
+            }
+            if (!report.passed) process.exit(1);
+            console.log(JSON.stringify(report, null, 2));
+          })().catch(error => { console.error(error); process.exit(1); });
           JS
           node fallback-check.cjs
       - name: Save free fallback screenshots and report
@@ -256,6 +474,7 @@ jobs:
             everythinghub-fallback-news.png
             everythinghub-fallback-images.png
             everythinghub-fallback-videos.png
+            everythinghub-fallback-failure.png
             fallback-report.json
           if-no-files-found: warn
-          retention-days: 3
+          retention-days: 30
