@@ -108,6 +108,46 @@
         "/journals/*/sections/*",
         "/journals/*/sections/*/articles"
       ]
+    },
+    "images-api.nasa.gov": {
+      "terms_url": "https://www.nasa.gov/nasa-brand-center/images-and-media/",
+      "terms_status": "reviewed_per_dataset",
+      "reviewed_at": "2026-11-21",
+      "discovery_allowed": true,
+      "metadata_only": true,
+      "per_dataset_rights_required": true,
+      "attribution_required": "per_item",
+      "allowed_api_paths": [
+        "/search"
+      ],
+      "allowed_probe_paths": [
+        "/search"
+      ],
+      "min_interval_seconds": 2,
+      "max_requests_per_run": 10,
+      "max_response_bytes": 4194304,
+      "allowed_metadata_fields": [
+        "nasa_id",
+        "title",
+        "description",
+        "date_created",
+        "media_type",
+        "keywords",
+        "center",
+        "photographer",
+        "secondary_creator",
+        "copyright",
+        "links.preview"
+      ],
+      "prohibited_content": [
+        "video_files",
+        "audio_files",
+        "full_resolution_assets",
+        "third_party_copyrighted_items",
+        "unattributed_thumbnails"
+      ],
+      "commercial_eligible": false,
+      "policy_note": "Official NASA Image and Video Library search API. Use metadata only; do not download or re-host video or audio files. Display only API-provided HTTPS preview thumbnails after checking robots.txt for the asset host. Exclude items with explicit third-party copyright metadata, display NASA and listed creator/center credit, link to NASA media guidelines, and do not imply NASA endorsement. Per-item rights review remains required."
     }
   }
 }
