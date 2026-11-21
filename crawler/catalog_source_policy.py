@@ -63,7 +63,12 @@ def _catalog_path_pattern_allowed(path: str, patterns: object) -> bool:
     """Match exact path shapes; '*' matches one segment and never crosses '/'. """
     if not isinstance(patterns, list):
         return False
+    decoded_path = urllib.parse.unquote(path)
+    if decoded_path.count("/") != path.count("/") or "\\" in decoded_path:
+        return False
     path_segments = [segment for segment in path.split("/") if segment]
+    if any(segment in {".", ".."} for segment in path_segments):
+        return False
     for pattern in patterns:
         if not isinstance(pattern, str) or not pattern.startswith("/"):
             continue
