@@ -218,6 +218,8 @@ test("query-scoped catalog search fetches only matching per-catalog indexes", as
   assert.equal(rolex[0].catalog_id, "catalog:rolex-models");
   assert.equal(rolex[0].relevance_class, "typed_product_match");
   assert.equal(rolex[0].matched_records[0].record_id, "record:rolex-submariner");
+  const rolexWithStopword = await searchPageDerivedCatalogPreview("The Rolex", network, 5, fixture.fetchImpl);
+  assert.equal(rolexWithStopword[0].catalog_id, "catalog:rolex-models");
 
   const vegas = await searchPageDerivedCatalogPreview("Las Vegas", network, 5, fixture.fetchImpl);
   assert.equal(vegas.length, 1);
