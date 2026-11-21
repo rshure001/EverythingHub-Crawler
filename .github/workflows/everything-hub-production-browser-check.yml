@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     env:
-      TARGET_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-publish-static
+      TARGET_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-site
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
