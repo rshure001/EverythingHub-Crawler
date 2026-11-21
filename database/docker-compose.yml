@@ -6,12 +6,16 @@ services:
     environment:
       POSTGRES_DB: everythinghub
       POSTGRES_USER: everythinghub
-      POSTGRES_PASSWORD: ${EH_DB_PASSWORD:?Set EH_DB_PASSWORD in your environment}
+      POSTGRES_PASSWORD: ${EH_DB_PASSWORD:?Set EH_DB_PASSWORD in .env}
     ports:
       - "127.0.0.1:55432:5432"
     volumes:
       - everythinghub_pgdata:/var/lib/postgresql/data
-      - ./001_everythinghub_core.sql:/docker-entrypoint-initdb.d/001_everythinghub_core.sql:ro
+      - ./000_create_service_role.sql:/docker-entrypoint-initdb.d/000_create_service_role.sql:ro
+      - ./002_eh_quad_schema.sql:/docker-entrypoint-initdb.d/002_eh_quad_schema.sql:ro
+      - ./003_eh_quad_intelligence.sql:/docker-entrypoint-initdb.d/003_eh_quad_intelligence.sql:ro
+      - ./004_eh_quad_feedback_cursor.sql:/docker-entrypoint-initdb.d/004_eh_quad_feedback_cursor.sql:ro
+      - ./005_eh_quad_catalogs.sql:/docker-entrypoint-initdb.d/005_eh_quad_catalogs.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U everythinghub -d everythinghub"]
       interval: 10s
@@ -31,7 +35,8 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql://everythinghub:${EH_DB_PASSWORD}@everythinghub-db:5432/everythinghub
-      EH_SEARCH_API_TOKEN: ${EH_SEARCH_API_TOKEN:?Set EH_SEARCH_API_TOKEN in your environment}
+      EH_DB_SCHEMA: eh_quad
+      EH_SEARCH_API_TOKEN: ${EH_SEARCH_API_TOKEN:?Set EH_SEARCH_API_TOKEN in .env}
       EH_SEARCH_HOST: 0.0.0.0
       EH_SEARCH_PORT: "8080"
     ports:
