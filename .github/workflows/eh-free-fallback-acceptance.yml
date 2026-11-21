@@ -38,10 +38,19 @@ jobs:
             const isFirstPartyUrl = value => /everythinghub-search-backend\.vercel\.app|everythinghub-homepage-fixed/.test(value);
             page.on("pageerror", error => pageErrors.push(error.message));
             page.on("console", message => { if (message.type() === "error") consoleErrors.push(message.text()); });
+            const mediaResponses = [];
             page.on("response", response => {
-              if (response.status() >= 400 && isFirstPartyUrl(response.url())) {
-                httpErrors.push({ status: response.status(), url: response.url() });
+              const url = response.url();
+              if (response.status() >= 400 && isFirstPartyUrl(url)) {
+                httpErrors.push({ status: response.status(), url });
               }
+              try {
+                const parsed = new URL(url);
+                if (parsed.hostname === "archive.org" || parsed.hostname.endsWith(".archive.org")) {
+                  const headers = response.headers();
+                  mediaResponses.push({ status: response.status(), url, contentType: headers["content-type"] || "" });
+                }
+              } catch {}
             });
             page.on("requestfailed", request => {
               if (isFirstPartyUrl(request.url())) requestFailures.push({ url: request.url(), failure: request.failure()?.errorText || "" });
@@ -63,7 +72,7 @@ jobs:
                 return originalFetch(...args);
               };
             });
-            const report = { url: process.env.TARGET_URL, checks: {}, pageErrors, consoleErrors, httpErrors, requestFailures };
+            const report = { url: process.env.TARGET_URL, checks: {}, pageErrors, consoleErrors, httpErrors, requestFailures, mediaResponses };
             const shot = async name => page.screenshot({ path: name, fullPage: true });
             const goHome = async () => {
               await page.goto(process.env.TARGET_URL, { waitUntil: "domcontentloaded", timeout: 45000 });
@@ -255,18 +264,21 @@ jobs:
                 providers: cards.map(card => card.querySelector("small")?.textContent || ""),
                 licenses: cards.map(card => card.dataset.license || ""),
                 creators: cards.map(card => card.dataset.creator || ""),
-                attributions: cards.map(card => card.querySelector("small")?.textContent || "")
+                attributions: cards.map(card => card.querySelector("small")?.textContent || ""),
+                itemLinks: cards.map(card => card.querySelector("a")?.href || ""),
+                thumbnailUrls: cards.map(card => card.querySelector("img")?.src || "")
               }));
+              report.checks.images = { ...imageStats, mediaResponses };
               if (imageStats.loaded < 8 || imageStats.providers.some(x => !x.includes("Internet Archive")) ||
                   imageStats.licenses.some(x => !x) || imageStats.creators.some(x => !x) ||
                   imageStats.attributions.some(x => !/Source:\s*Internet Archive/i.test(x))) {
-                throw new Error("Image thumbnails or attribution failed: " + JSON.stringify(imageStats));
+                throw new Error("Image thumbnails or attribution failed: " + JSON.stringify({ ...imageStats, mediaResponses }));
               }
               const imageLink = await page.locator("#results .media-card > a").first().evaluate(anchor => ({ href: anchor.href, target: anchor.target, rel: anchor.rel }));
               if (!/^https:\/\/archive\.org\/details\//i.test(imageLink.href) || imageLink.target !== "_blank" || !imageLink.rel.includes("noopener")) {
                 throw new Error("Image source link contract failed: " + JSON.stringify(imageLink));
               }
-              report.checks.images = imageStats;
+              report.checks.images = { ...imageStats, mediaResponses };
               report.checks.coreLinks.images = imageLink;
               await shot("everythinghub-images.png");
               await goHome();
