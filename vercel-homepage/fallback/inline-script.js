@@ -19,6 +19,8 @@ function renderCatalogResults(items,q){
   for(const item of safeItems){
     const card=document.createElement('article');card.className='eh-catalog-result';
     card.dataset.catalogId=String(item.catalog_id||'');
+    card.dataset.sourceKind=String(item.source_kind||'page-derived');
+    card.dataset.rightsStatus=String(item.rights_status||'not_cleared');
     card.dataset.relevanceClass=String(item.relevance_class||'');
     card.dataset.previewOnly='true';
     card.dataset.commercialEligible='false';
@@ -63,7 +65,7 @@ function renderResults(data,q){
   const catalogCount=renderCatalogResults(data.catalogResults,q);
   const visibleCount=Array.isArray(data.results)?data.results.length:(Number(data.count)||0);
   const indexedCount=Number(data.indexedPages)||0;
-  makeHeading(q,'Web results',visibleCount.toLocaleString()+' visible results'+(indexedCount?' · '+indexedCount.toLocaleString()+' indexed pages':''));
+  makeHeading(q,'Web results',visibleCount.toLocaleString()+' web results · '+catalogCount.toLocaleString()+' catalog previews'+(indexedCount?' · '+indexedCount.toLocaleString()+' indexed pages':''));
   const list=document.createElement('div');list.className='results-list';
   for(const item of (Array.isArray(data.results)?data.results:[])){
     const card=document.createElement('article');card.className='eh-result';
@@ -72,7 +74,7 @@ function renderResults(data,q){
     const source=document.createElement('small');source.textContent=(item.source||'Public web')+(item.origin?' · '+item.origin:'');
     card.append(link,snippet,source);list.append(card);
   }
-  if(!list.children.length){const empty=document.createElement('div');empty.className='results-empty';empty.textContent='No matching web results came back. Try another search or category.';list.append(empty);}
+  if(!list.children.length&&!catalogCount){const empty=document.createElement('div');empty.className='results-empty';empty.textContent='No matching web results came back. Try another search or category.';list.append(empty);}
   resultsRoot.append(list);
   if(!catalogCount&&data.catalogPreview&&data.catalogPreview.status!=='ready'){
     const note=document.createElement('p');note.className='results-note';
@@ -80,82 +82,59 @@ function renderResults(data,q){
     resultsRoot.append(note);
   }
 }
-function cleanCommonsValue(value){
-  return String(value||'').replace(/<[^>]*>/g,' ')
-    .replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>')
-    .replace(/&quot;/g,'"').replace(/&apos;/g,"'")
-    .replace(/&#(\d+);/g,(_,n)=>String.fromCodePoint(Number(n)))
-    .replace(/&#x([0-9a-f]+);/gi,(_,n)=>String.fromCodePoint(parseInt(n,16)))
-    .replace(/\s+/g,' ').trim();
-}
-function mediaPreviewMetadata(meta){
-  const license=cleanCommonsValue(meta.LicenseShortName?.value);
-  const licenseUrl=cleanCommonsValue(meta.LicenseUrl?.value);
-  const creator=cleanCommonsValue(meta.Artist?.value||meta.Credit?.value||'');
-  const raw=cleanCommonsValue(meta.AttributionRequired?.value).toLowerCase();
-  const attributionRequired=raw==='true'?true:raw==='false'?false:null;
-  const publicDomain=license.toLowerCase().startsWith('public domain');
-  const cc0=/^cc0(?:\s|$)/i.test(license);
-  const ccByMatch=license.match(/^cc by(-sa)?\s+(1\.0|2\.0|2\.5|3\.0|4\.0)$/i);
-  let ccByLicenseUrlValid=false;
-  if(ccByMatch){try{
-    const url=new URL(licenseUrl),kind=ccByMatch[1]?'by-sa':'by';
-    const expected='/licenses/'+kind+'/'+ccByMatch[2]+'/';
-    ccByLicenseUrlValid=url.protocol==='https:'&&url.hostname==='creativecommons.org'&&url.pathname.replace(/\/+$/,'/')===expected;
-  }catch{}}
-  const licenseValid=publicDomain||cc0||(ccByMatch!==null&&ccByLicenseUrlValid);
-  const attributionValid=ccByMatch?creator.length>0:(attributionRequired===false||(attributionRequired===true&&creator.length>0));
-  return {allowed:licenseValid&&attributionValid,license,licenseUrl,creator,attributionRequired};
-}
 function renderImages(data,q){
   resultsRoot.replaceChildren();
-  const candidates=Object.values(data.query?.pages||{}).filter(p=>p.imageinfo&&p.imageinfo[0]?.thumburl);
-  const pages=candidates.map(page=>({page,preview:mediaPreviewMetadata(page.imageinfo[0].extmetadata||{})}))
-    .filter(entry=>entry.preview.allowed).slice(0,24);
-  makeHeading(q,'Image results',pages.length.toLocaleString()+' licensed Wikimedia Commons images');
-  const grid=document.createElement('div');grid.className='media-grid';
-  for(let index=0;index<pages.length;index++){
-    const p=pages[index].page,info=p.imageinfo[0],preview=pages[index].preview;
-    const card=document.createElement('article');card.className='media-card';
-    card.dataset.license=preview.license;card.dataset.creator=preview.creator;
-    const link=document.createElement('a');link.href=safeUrl(info.descriptionurl);link.target='_blank';link.rel='noopener noreferrer';
-    const img=document.createElement('img');img.src=safeUrl(info.thumburl);img.alt=p.title||q;
-    img.loading=index<8?'eager':'lazy';img.decoding='async';img.referrerPolicy='no-referrer';
-    img.onerror=()=>{const placeholder=document.createElement('div');placeholder.className='image-placeholder';placeholder.textContent='Preview unavailable';img.replaceWith(placeholder);};
-    const title=document.createElement('a');title.href=safeUrl(info.descriptionurl);title.target='_blank';title.rel='noopener noreferrer';title.textContent=(p.title||'Image').replace(/^File:/,'');
-    const small=document.createElement('small');small.append(document.createTextNode('Wikimedia Commons · '));
-    if(preview.creator)small.append(document.createTextNode(preview.creator+' · '));
-    if(preview.licenseUrl&&safeUrl(preview.licenseUrl)!=='#'){
-      const licenseLink=document.createElement('a');licenseLink.href=safeUrl(preview.licenseUrl);licenseLink.target='_blank';licenseLink.rel='noopener noreferrer';licenseLink.textContent=preview.license||'License';small.append(licenseLink);
-    }else small.append(document.createTextNode(preview.license||'Public domain'));
-    link.append(img);card.append(link,title,small);grid.append(card);
+  const items=Array.isArray(data.items)?data.items:[];
+  makeHeading(q,"Image results",items.length.toLocaleString()+" openly licensed images · Internet Archive");
+  const grid=document.createElement("div");grid.className="media-grid";
+  for(let index=0;index<items.length;index++){
+    const item=items[index],card=document.createElement("article");card.className="media-card";
+    card.dataset.license=String(item.license||"");card.dataset.creator=String(item.creator||"");
+    const link=document.createElement("a");link.href=safeUrl(item.url);link.target="_blank";link.rel="noopener noreferrer";
+    const img=document.createElement("img");img.src=safeUrl(item.thumbnail);img.alt=item.title||q;img.loading=index<8?"eager":"lazy";img.decoding="async";img.referrerPolicy="no-referrer";
+    img.onerror=()=>{const placeholder=document.createElement("div");placeholder.className="image-placeholder";placeholder.textContent="Preview unavailable";img.replaceWith(placeholder);};
+    link.append(img);
+    const title=document.createElement("a");title.className="video-title";title.href=safeUrl(item.url);title.target="_blank";title.rel="noopener noreferrer";title.textContent=item.title||"Image";
+    const small=document.createElement("small");small.append(document.createTextNode("Source: "+String(item.source||"Internet Archive")));
+    if(item.creator){
+      if(safeUrl(item.creatorUrl)!=="#"){const creatorLink=document.createElement("a");creatorLink.href=safeUrl(item.creatorUrl);creatorLink.target="_blank";creatorLink.rel="noopener noreferrer";creatorLink.textContent=item.creator;small.append(creatorLink);}
+      else small.append(document.createTextNode(item.creator));
+      small.append(document.createTextNode(" · Creator: "+item.creator));
+    }
+    small.append(document.createTextNode(" · "));
+    const licenseLink=document.createElement("a");licenseLink.href=safeUrl(item.licenseUrl);licenseLink.target="_blank";licenseLink.rel="noopener noreferrer";licenseLink.textContent=item.license||"License";small.append(licenseLink);
+    card.append(link,title,small);grid.append(card);
   }
-  if(!pages.length){const empty=document.createElement('div');empty.className='results-empty';empty.textContent='No matching Commons images with a verified reusable license and attribution were found. Try another search.';resultsRoot.append(empty);return;}
+  if(!items.length){const empty=document.createElement("div");empty.className="results-empty";empty.textContent="No matching Internet Archive images with an approved license and required attribution were found. Try another search.";resultsRoot.append(empty);return;}
   resultsRoot.append(grid);
 }
 function renderVideos(data,q){
   resultsRoot.replaceChildren();
   const items=Array.isArray(data.items)?data.items:[];
-  makeHeading(q,'Video results',items.length.toLocaleString()+' videos · '+(data.provider||'public video search'));
-  const grid=document.createElement('div');grid.className='video-grid';
+  makeHeading(q,"Video results",items.length.toLocaleString()+" videos · "+(data.provider||"Internet Archive"));
+  const grid=document.createElement("div");grid.className="video-grid";
   for(const item of items){
-    const card=document.createElement('article');card.className='video-card';
-    const link=document.createElement('a');link.href=safeUrl(item.url);link.target='_blank';link.rel='noopener noreferrer';
-    if(item.thumbnail){const img=document.createElement('img');img.src=item.videoId?'https://everythinghub-search-backend.vercel.app/api/video-thumbnail?id='+encodeURIComponent(item.videoId):safeUrl(item.thumbnail);img.alt=item.title||q;img.loading='eager';img.referrerPolicy='no-referrer';img.onerror=()=>{if(item.thumbnail&&img.src!==safeUrl(item.thumbnail)){img.src=safeUrl(item.thumbnail);img.onerror=()=>{const p=document.createElement('div');p.className='video-placeholder';p.textContent='▶ Watch video';img.replaceWith(p);};}else{const p=document.createElement('div');p.className='video-placeholder';p.textContent='▶ Watch video';img.replaceWith(p);}};link.append(img);}else{const placeholder=document.createElement('div');placeholder.className='results-empty';placeholder.textContent='▶ Video';link.append(placeholder);}
-    const title=document.createElement('a');title.href=safeUrl(item.url);title.target='_blank';title.rel='noopener noreferrer';title.textContent=item.title||'Video';
-    const small=document.createElement('small');small.textContent=(item.source||'Video source')+(item.duration?' · '+item.duration:'')+(item.views?' · '+item.views:'');
-    card.append(link,title,small);grid.append(card);
+    const card=document.createElement("article");card.className="video-card";
+    const link=document.createElement("a");link.href=safeUrl(item.url);link.target="_blank";link.rel="noopener noreferrer";
+    if(item.thumbnail){
+      const img=document.createElement("img");img.src=safeUrl(item.thumbnail);img.alt=item.title||q;img.loading="eager";img.referrerPolicy="no-referrer";img.decoding="async";
+      img.onerror=()=>{const placeholder=document.createElement("div");placeholder.className="video-placeholder";placeholder.textContent="▶ Watch video";img.replaceWith(placeholder);};
+      link.append(img);
+    }else{const placeholder=document.createElement("div");placeholder.className="video-placeholder";placeholder.textContent="▶ Watch video";link.append(placeholder);}
+    const title=document.createElement("a");title.href=safeUrl(item.url);title.target="_blank";title.rel="noopener noreferrer";title.textContent=item.title||"Video";
+    const small=document.createElement("small");small.append(document.createTextNode((item.source||"Video source")+" · "+(item.license||"License unavailable")+" · "+(item.creator||item.credit||"Creator not listed")+" · "));
+    const policyLink=document.createElement("a");policyLink.href=safeUrl(item.licenseUrl||"https://creativecommons.org/");policyLink.target="_blank";policyLink.rel="noopener noreferrer";policyLink.textContent="license and reuse terms";
+    small.append(policyLink);card.append(link,title,small);grid.append(card);
   }
-  if(!items.length){const empty=document.createElement('div');empty.className='results-empty';empty.textContent='No videos were returned for this search.';resultsRoot.append(empty);return;}
+  if(!items.length){const empty=document.createElement("div");empty.className="results-empty";empty.textContent="No videos with an approved item-level license and attribution were returned for this search.";resultsRoot.append(empty);return;}
   resultsRoot.append(grid);
 }
 async function runImageSearch(q){
-  status.textContent='Searching public image collections…';
-  const u=new URL('https://commons.wikimedia.org/w/api.php');
-  for(const [k,v] of Object.entries({action:'query',generator:'search',gsrsearch:q,gsrnamespace:'6',gsrlimit:'50',prop:'imageinfo',iiprop:'url|extmetadata',iiurlwidth:'600',format:'json',origin:'*'}))u.searchParams.set(k,v);
-  const response=await fetch(u,{signal:AbortSignal.timeout(20000)});if(!response.ok)throw new Error('Image provider HTTP '+response.status);
-  const data=await response.json();renderImages(data,q);
-  const n=document.querySelectorAll('#results .media-card').length;status.textContent=n.toLocaleString()+' licensed public images from Wikimedia Commons.';
+  status.textContent="Searching open-license image collections…";
+  const u=new URL("https://everythinghub-search-backend.vercel.app/api/images");u.searchParams.set("q",q);
+  const response=await fetch(u,{signal:AbortSignal.timeout(25000)});const data=await response.json();
+  if(!response.ok||data.status!=="ok")throw new Error(data.message||"Image search unavailable");
+  renderImages(data,q);status.textContent=data.count.toLocaleString()+" openly licensed images from Internet Archive.";
 }
 async function runVideoSearch(q){
   status.textContent='Searching public video sources…';
@@ -173,9 +152,10 @@ async function runSearch(){
     if(mode==='videos'){await runVideoSearch(q);return;}
     const u=new URL('https://everythinghub-search-backend.vercel.app/api/search');u.searchParams.set('q',q);u.searchParams.set('limit','20');u.searchParams.set('lane',mode);
     let data=null;
-    try{const response=await fetch(u,{headers:{accept:'application/json'},signal:AbortSignal.timeout(15000)});if(response.ok){const candidate=await response.json();if(Array.isArray(candidate.results)&&candidate.results.length)data=candidate;}}catch(error){}
+    try{const response=await fetch(u,{headers:{accept:'application/json'},signal:AbortSignal.timeout(15000)});if(response.ok){const candidate=await response.json();if((Array.isArray(candidate.results)&&candidate.results.length)||(Array.isArray(candidate.catalogResults)&&candidate.catalogResults.length))data=candidate;}}catch(error){}
     if(!data){const fast=new URL('https://everythinghub-search-backend.vercel.app/api/search-fast');fast.searchParams.set('q',q);fast.searchParams.set('lane',mode);const response=await fetch(fast,{headers:{accept:'application/json'},signal:AbortSignal.timeout(12000)});if(!response.ok)throw new Error('Live web search returned HTTP '+response.status);data=await response.json();if(data.status!=='ok'||!Array.isArray(data.results)||!data.results.length)throw new Error(data.message||'No public results returned');}
-    renderResults(data,q);const visibleCount=Array.isArray(data.results)?data.results.length:(Number(data.count)||0);status.textContent=visibleCount.toLocaleString()+' visible results from '+(data.providers||[]).join(' and ')+'.';
+    if(data&&(!Array.isArray(data.results)||!data.results.length)&&Array.isArray(data.catalogResults)&&data.catalogResults.length){try{const fast=new URL('https://everythinghub-search-backend.vercel.app/api/search-fast');fast.searchParams.set('q',q);fast.searchParams.set('lane',mode);const response=await fetch(fast,{headers:{accept:'application/json'},signal:AbortSignal.timeout(12000)});if(response.ok){const fastData=await response.json();if(fastData.status==='ok'&&Array.isArray(fastData.results)&&fastData.results.length){data={...data,results:fastData.results,count:fastData.count||fastData.results.length,totalMatches:fastData.totalMatches||fastData.count||fastData.results.length,providers:Array.from(new Set([...(data.providers||[]),...(fastData.providers||[])])),fallback:fastData.fallback||data.fallback};}}}catch(error){}}
+    renderResults(data,q);const pageCount=Array.isArray(data.results)?data.results.length:(Number(data.count)||0);const catalogCount=Array.isArray(data.catalogResults)?data.catalogResults.length:0;status.textContent=pageCount.toLocaleString()+' web results and '+catalogCount.toLocaleString()+' catalog previews from '+(data.providers||[]).join(' and ')+'.';
   }catch(error){status.textContent=mode==='images'?'Image search is temporarily unavailable.':mode==='videos'?'Video sources are temporarily unavailable.':'Search is temporarily unavailable. Please try again.';const message=document.createElement('div');message.className='results-empty';message.textContent=error.message||'The search service did not respond. Please try again.';resultsRoot.replaceChildren(message);}
 }
 const newsItems=document.getElementById('news-items'),newsStatus=document.getElementById('news-status');

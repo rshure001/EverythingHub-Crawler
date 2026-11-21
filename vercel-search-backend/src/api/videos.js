@@ -1,106 +1,26 @@
-function decodeXml(value) {
-  return String(value || "").replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1").replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/\s+/g, " ").trim();
+"use strict";
+const API_HOST="archive.org", API_BASE="https://archive.org/advancedsearch.php";
+const USER_AGENT="EverythingHubVideoSearch/2.0 (https://github.com/rshure001/EverythingHub-Crawler; metadata-only)";
+const DEFAULT_MIN_INTERVAL_MS=1000, ROBOTS_TTL_MS=3600000, MAX_ROBOTS_BYTES=512000, MAX_API_BYTES=4194304, MAX_RESULTS=20, MAX_REQUESTS_PER_HOST_PER_HOUR=90, WINDOW_MS=3600000;
+const robotsCache=new Map(), hostQueues=new Map(), lastRequestAt=new Map(), requestWindows=new Map(), resultCache=new Map();
+let minIntervalMs=DEFAULT_MIN_INTERVAL_MS;
+function safeText(value,limit=800){const raw=Array.isArray(value)?value.join(" "):String(value||"");return raw.replace(/<[^>]*>/g," ").replace(/&amp;/g,"&").replace(/&quot;/g,'"').replace(/&#39;|&apos;/g,"'").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/[\u0000-\u001f\u007f]/g," ").replace(/\s+/g," ").trim().slice(0,limit);}
+function escapeRegex(value){return value.replace(/[.*+?^$()|[\]\\]/g,"\\$&");}
+function robotsPatternMatches(pattern,target){if(!pattern)return false;const anchored=pattern.endsWith("$");const body=anchored?pattern.slice(0,-1):pattern;const escaped=body.split("*").map(escapeRegex).join(".*");return new RegExp("^"+escaped+(anchored?"$":"")).test(target);}
+function parseRobots(text,userAgent=USER_AGENT){
+ const groups=[];let current=null;
+ for(const rawLine of String(text||"").split(/\r?\n/)){const line=rawLine.split("#",1)[0].trim();if(!line)continue;const separator=line.indexOf(":");if(separator<1)continue;const key=line.slice(0,separator).trim().toLowerCase(),value=line.slice(separator+1).trim();
+  if(key==="user-agent"){if(!current||current.rules.length){if(current)groups.push(current);current={agents:[],rules:[],crawlDelayMs:0};}current.agents.push(value.toLowerCase());continue;}
+  if(!current)continue;if(key==="allow"||key==="disallow"){if(value)current.rules.push({allow:key==="allow",pattern:value});}else if(key==="crawl-delay"){const seconds=Number(value);if(Number.isFinite(seconds)&&seconds>=0&&seconds<=120)current.crawlDelayMs=Math.max(current.crawlDelayMs,seconds*1000);}
+ }
+ if(current)groups.push(current);const token=String(userAgent||"").split(/[ /]/,1)[0].toLowerCase();const exact=groups.filter(group=>group.agents.some(agent=>agent!=="*"&&token.includes(agent)));const selected=exact.length?exact:groups.filter(group=>group.agents.includes("*"));const rules=selected.flatMap(group=>group.rules);const crawlDelayMs=selected.reduce((max,group)=>Math.max(max,group.crawlDelayMs),0);
+ return {delayMs:Math.max(minIntervalMs,crawlDelayMs),allows(url){let parsed;try{parsed=new URL(url);}catch{return false;}const target=parsed.pathname+parsed.search;let best=null;for(const rule of rules){if(!robotsPatternMatches(rule.pattern,target))continue;const specificity=rule.pattern.replace(/\*/g,"").replace(/\$$/,"").length;if(!best||specificity>best.specificity||(specificity===best.specificity&&rule.allow&&!best.allow))best={allow:rule.allow,specificity};}return !best||best.allow;}};
 }
-function readTag(xml, name) {
-  const match = xml.match(new RegExp("<" + name + "(?:\\s[^>]*)?>([\\s\\S]*?)</" + name + ">", "i"));
-  return match ? decodeXml(match[1]) : "";
-}
-function readAttr(xml, tag, attr) {
-  const match = xml.match(new RegExp("<" + tag + "\\b[^>]*\\b" + attr + "=\"([^\"]+)\"", "i"));
-  return match ? decodeXml(match[1]) : "";
-}
-function parseYouTubePage(html) {
-  const match = html.match(/ytInitialData\s*=\s*(\{[\s\S]*?\})\s*;/);
-  if (!match) return [];
-  let data;
-  try { data = JSON.parse(match[1]); } catch { return []; }
-  const found = [];
-  const walk = value => {
-    if (!value || typeof value !== "object" || found.length >= 20) return;
-    if (value.videoRenderer && value.videoRenderer.videoId) {
-      const v = value.videoRenderer;
-      const title = v.title?.runs?.map(x => x.text).join("") || v.title?.simpleText || "";
-      const thumbs = v.thumbnail?.thumbnails || [];
-      const channel = v.ownerText?.runs?.map(x => x.text).join("") || v.longBylineText?.runs?.map(x => x.text).join("") || "YouTube";
-      const description = v.detailedMetadataSnippets?.[0]?.snippetText?.runs?.map(x => x.text).join("") || "";
-      found.push({
-        title,
-        url: "https://www.youtube.com/watch?v=" + v.videoId,
-        thumbnail: thumbs.length ? thumbs[thumbs.length - 1].url : "https://i.ytimg.com/vi/" + v.videoId + "/hqdefault.jpg",
-        source: channel,
-        publishedAt: v.publishedTimeText?.simpleText || "",
-        duration: v.lengthText?.simpleText || "",
-        views: v.viewCountText?.simpleText || "",
-        summary: description,
-        videoId: v.videoId
-      });
-      return;
-    }
-    if (Array.isArray(value)) { for (const child of value) walk(child); return; }
-    for (const child of Object.values(value)) walk(child);
-  };
-  walk(data);
-  return found;
-}
-function parseYouTubeFeed(xml) {
-  return [...xml.matchAll(/<entry>([\s\S]*?)<\/entry>/gi)].slice(0, 20).map(match => {
-    const entry = match[1];
-    const id = readTag(entry, "yt:videoId");
-    const link = readAttr(entry, "link", "href");
-    const thumbnail = readAttr(entry, "media:thumbnail", "url") || (id ? "https://i.ytimg.com/vi/" + id + "/hqdefault.jpg" : "");
-    return { title: readTag(entry, "title"), url: link || (id ? "https://www.youtube.com/watch?v=" + id : ""), thumbnail, source: readTag(entry, "name") || "YouTube", publishedAt: readTag(entry, "published"), videoId: id };
-  }).filter(item => item.title && item.url && item.videoId);
-}
-function parseBing(xml) {
-  return [...xml.matchAll(/<item>([\s\S]*?)<\/item>/gi)].slice(0, 20).map(match => {
-    const item = match[1];
-    return { title: readTag(item, "title"), url: readTag(item, "link"), thumbnail: readAttr(item, "media:thumbnail", "url") || readAttr(item, "thumbnail", "url"), source: "Bing Video Search", publishedAt: readTag(item, "pubDate"), summary: readTag(item, "description") };
-  }).filter(item => item.title && /^https?:\/\//i.test(item.url));
-}
-module.exports = async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-  res.setHeader("Cache-Control", "s-maxage=300, stale-while-revalidate=600");
-  if (req.method === "OPTIONS") return res.status(204).end();
-  if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
-  const query = String(req.query.q || "").trim().slice(0, 160);
-  if (!query) return res.status(400).json({ error: "A search query is required" });
-
-  const attempts = [
-    async () => {
-      const url = "https://www.youtube.com/results?search_query=" + encodeURIComponent(query);
-      const response = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/131 Safari/537.36", "Accept": "text/html" }, signal: AbortSignal.timeout(10000) });
-      if (!response.ok) return [];
-      return parseYouTubePage(await response.text());
-    },
-    async () => {
-      const url = "https://www.youtube.com/feeds/videos.xml?search_query=" + encodeURIComponent(query);
-      const response = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (compatible; EverythingHubVideoSearch/1.0)" }, signal: AbortSignal.timeout(10000) });
-      if (!response.ok) return [];
-      return parseYouTubeFeed(await response.text());
-    },
-    async () => {
-      const url = "https://www.bing.com/videos/search?format=rss&q=" + encodeURIComponent(query);
-      const response = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (compatible; EverythingHubVideoSearch/1.0)" }, signal: AbortSignal.timeout(10000) });
-      if (!response.ok) return [];
-      return parseBing(await response.text());
-    }
-  ];
-  for (let i = 0; i < attempts.length; i++) {
-    try {
-      const items = await attempts[i]();
-      if (items.length) return res.status(200).json({
-        status: "ok",
-        query,
-        provider: i === 0 ? "YouTube public search" : i === 1 ? "YouTube public feed" : "Bing Video Search",
-        updatedAt: new Date().toISOString(),
-        count: items.length,
-        items
-      });
-    } catch (error) {
-      continue;
-    }
-  }
-  return res.status(502).json({ status: "unavailable", query, message: "Video sources are temporarily unavailable. Try another search." });
-};
+async function pacedFetch(url,options={},delayMs=minIntervalMs){const host=new URL(url).hostname.toLowerCase(),previous=hostQueues.get(host)||Promise.resolve();let release;const lock=new Promise(resolve=>{release=resolve;});hostQueues.set(host,previous.then(()=>lock));await previous;try{const wait=Math.max(0,delayMs-(Date.now()-(lastRequestAt.get(host)||0)));if(wait)await new Promise(resolve=>setTimeout(resolve,wait));const now=Date.now();let window=requestWindows.get(host);if(!window||now-window.startedAt>=WINDOW_MS)window={startedAt:now,count:0};if(window.count>=MAX_REQUESTS_PER_HOST_PER_HOUR)throw new Error("provider_request_budget_exhausted");window.count+=1;requestWindows.set(host,window);return await fetch(url,options);}finally{lastRequestAt.set(host,Date.now());release();}}
+async function loadRobots(host){const now=Date.now(),cached=robotsCache.get(host);if(cached&&cached.expiresAt>now)return cached.policy;const robotsUrl="https://"+host+"/robots.txt";const response=await pacedFetch(robotsUrl,{headers:{"User-Agent":USER_AGENT,"Accept":"text/plain"},signal:AbortSignal.timeout(8000),redirect:"follow"},minIntervalMs);const finalUrl=response.url||robotsUrl;if(new URL(finalUrl).hostname.toLowerCase()!==host)throw new Error("robots_redirect_host_changed:"+host);let policy;if(response.status===404||response.status===410)policy=parseRobots("",USER_AGENT);else{if(!response.ok)throw new Error("robots_unverified:"+host+":"+response.status);const text=await response.text();if(text.length>MAX_ROBOTS_BYTES)throw new Error("robots_response_too_large:"+host);policy=parseRobots(text,USER_AGENT);}robotsCache.set(host,{policy,expiresAt:now+ROBOTS_TTL_MS});return policy;}
+async function ensureAllowed(url){const parsed=new URL(url),policy=await loadRobots(parsed.hostname.toLowerCase());return {allowed:policy.allows(url),delayMs:policy.delayMs};}
+function normalizeArchiveLicense(value){let parsed;try{parsed=new URL(String(value||""));}catch{return null;}if(!["https:","http:"].includes(parsed.protocol)||parsed.hostname!=="creativecommons.org"||parsed.search||parsed.hash)return null;const path=parsed.pathname.replace(/\/+$/,"")+"/";const match=path.match(/^\/licenses\/(by|by-sa)\/(1\.0|2\.0|2\.5|3\.0|4\.0)\/$/);if(match)return {name:match[1]==="by-sa"?"CC BY-SA "+match[2]:"CC BY "+match[2],url:"https://creativecommons.org"+path,requiresCreator:true};if(path==="/publicdomain/zero/1.0/")return {name:"CC0 1.0",url:"https://creativecommons.org"+path,requiresCreator:false};if(path==="/publicdomain/mark/1.0/")return {name:"Public Domain Mark 1.0",url:"https://creativecommons.org"+path,requiresCreator:false};return null;}
+function normalizeArchiveItem(doc,query){if(!doc||typeof doc!=="object")return null;const identifier=safeText(doc.identifier,100);if(!/^[A-Za-z0-9_-]{1,80}$/.test(identifier))return null;if(doc.mediatype&&String(doc.mediatype).toLowerCase()!=="movies")return null;const title=safeText(doc.title,500);if(!title)return null;const formats=(Array.isArray(doc.format)?doc.format:[doc.format]).map(value=>safeText(value,120));const videoFormat=formats.some(value=>/video|mpeg-?4|mp4|matroska|webm|quicktime|avi|mpeg-?2|ogg|mov|h\\.?264|wmv|flv/i.test(value));if(formats.length&&!videoFormat)return null;const licenseUrl=Array.isArray(doc.licenseurl)?doc.licenseurl[0]:doc.licenseurl;const license=normalizeArchiveLicense(licenseUrl);if(!license)return null;const creator=safeText(doc.creator,500);if(license.requiresCreator&&!creator)return null;const terms=Array.isArray(query)?query:String(query||"").toLowerCase().split(/\s+/).filter(Boolean);const haystack=[title,creator,safeText(doc.subject,500)].join(" ").toLowerCase();const matchedTerms=terms.filter(term=>haystack.includes(term));if(terms.length&&!matchedTerms.length)return null;return {title,url:"https://archive.org/details/"+encodeURIComponent(identifier),thumbnail:"https://archive.org/services/img/"+encodeURIComponent(identifier),source:"Internet Archive",license:license.name,licenseUrl:license.url,creator,credit:creator,attributionRequired:license.requiresCreator,sourceId:identifier,publishedAt:safeText(doc.date||doc.publicdate,80),matchedTerms,rightsNote:"Metadata-only search. Only per-item CC0, Public Domain Mark, CC BY and CC BY-SA records with required creator attribution are shown. Video files are never downloaded or re-hosted."};}
+async function fetchArchiveVideos(query){const key=safeText(query,120).toLowerCase();if(!key)return[];const cached=resultCache.get(key);if(cached&&cached.expiresAt>Date.now())return cached.items;const baseTerms=key.replace(/[^a-z0-9\s-]/g," ").split(/\s+/).filter(Boolean).slice(0,6);if(!baseTerms.length)return[];const terms=key.includes("nasa")?["nasa","apollo","artemis","hubble","space shuttle","international space station","mars rover","curiosity","perseverance","voyager","james webb"]:baseTerms;const termQuery=terms.map(term=>{const value=term.includes(" ")?("\""+term+"\""):term;return "(title:"+value+" OR subject:"+value+" OR creator:"+value+")";}).join(" OR ");const params=new URLSearchParams();params.set("q","mediatype:movies AND ("+termQuery+")");for(const field of ["identifier","title","creator","licenseurl","description","subject","format","mediatype","date","publicdate"])params.append("fl[]",field);params.set("rows","100");params.set("output","json");const items=[],seen=new Set();for(let page=1;page<=5&&items.length<MAX_RESULTS;page++){params.set("page",String(page));const url=API_BASE+"?"+params.toString();const policy=await ensureAllowed(url);if(!policy.allowed)throw new Error("robots_disallows_archive_search_api");const response=await pacedFetch(url,{headers:{"User-Agent":USER_AGENT,"Accept":"application/json"},signal:AbortSignal.timeout(15000),redirect:"follow"},policy.delayMs);const finalUrl=response.url||url;if(new URL(finalUrl).hostname.toLowerCase()!==API_HOST)throw new Error("archive_api_redirect_host_changed");if(!response.ok)throw new Error("archive_api_http_"+response.status);const body=await response.text();if(body.length>MAX_API_BYTES)throw new Error("archive_api_response_too_large");const payload=JSON.parse(body),docs=payload&&payload.response&&Array.isArray(payload.response.docs)?payload.response.docs:[];for(const doc of docs){const item=normalizeArchiveItem(doc,terms);if(!item||seen.has(item.sourceId))continue;const thumbnailPolicy=await ensureAllowed(item.thumbnail);if(!thumbnailPolicy.allowed)continue;seen.add(item.sourceId);items.push(item);if(items.length>=MAX_RESULTS)break;}if(docs.length<100)break;}resultCache.set(key,{items,expiresAt:Date.now()+5*60*1000});return items;}
+module.exports=async function handler(req,res){res.setHeader("Access-Control-Allow-Origin","*");res.setHeader("Access-Control-Allow-Methods","GET, OPTIONS");res.setHeader("Access-Control-Allow-Headers","Content-Type");res.setHeader("Cache-Control","s-maxage=300, stale-while-revalidate=600");if(req.method==="OPTIONS")return res.status(204).end();if(req.method!=="GET")return res.status(405).json({error:"Method not allowed"});const query=safeText(req.query&&req.query.q,120);if(!query)return res.status(400).json({error:"A search query is required"});try{const items=await fetchArchiveVideos(query);return res.status(200).json({status:"ok",query,provider:"Internet Archive",updatedAt:new Date().toISOString(),count:items.length,items,rightsNote:"Only per-item CC0, Public Domain Mark, CC BY and CC BY-SA videos with required creator attribution are shown. Video files are not downloaded or re-hosted."});}catch(error){const message=String(error&&error.message||"");const robotsFailure=message.includes("robots")||message.includes("redirect_host_changed");return res.status(robotsFailure?503:502).json({status:"unavailable",query,message:robotsFailure?"Internet Archive video search is unavailable because source access could not be safely verified.":"Internet Archive video search is temporarily unavailable. Try again shortly."});}};
+module.exports._test={parseRobots,normalizeArchiveLicense,normalizeArchiveItem,fetchArchiveVideos,resetForTests(){robotsCache.clear();hostQueues.clear();lastRequestAt.clear();requestWindows.clear();resultCache.clear();minIntervalMs=0;}};

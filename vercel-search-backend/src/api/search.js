@@ -2,6 +2,7 @@
 const https = require('node:https');
 const { loadCatalog } = require('../lib/catalog');
 const { loadPageDerivedCatalogs, searchPageDerivedCatalogs, matchesPageIndexSnapshot } = require('../lib/page-derived-catalogs');
+const { searchExternalCatalogs, getExternalCatalogStats } = require('../lib/external-catalogs');
 const { searchCatalog, parseBingRss, buildResponse } = require('../lib/search-core');
 const MAX_QUERY_LENGTH = 160;
 const MAX_LIMIT = 50;
@@ -90,12 +91,50 @@ module.exports = async function handler(req, res) {
     return res.status(400).json({ error: 'pagination_out_of_range' });
   }
   const lane = String(params.get('tentacle') || params.get('lane') || '').trim().toLowerCase();
+  const earlyExternalCatalogResults = searchExternalCatalogs(query);
+  if (earlyExternalCatalogResults.length) {
+    const externalStats = getExternalCatalogStats();
+    return res.status(200).json({
+      status: 'ok',
+      query,
+      lane,
+      count: 0,
+      totalMatches: 0,
+      page: Math.floor(offset / limit) + 1,
+      pageSize: limit,
+      offset,
+      hasMore: false,
+      indexedPages: 0,
+      indexStatus: 'external-link-only',
+      database_required: false,
+      results: [],
+      catalogResults: earlyExternalCatalogResults,
+      externalCatalogResults: earlyExternalCatalogResults,
+      catalogPreview: {
+        status: 'external-link-only',
+        previewOnly: true,
+        resultCount: 0,
+        catalogCount: 0,
+        recordCount: 0,
+        externalCatalogCount: externalStats.catalogCount,
+        externalCatalogRecordCount: externalStats.recordCount,
+        externalCatalogResults: earlyExternalCatalogResults.length,
+        sourcePageCount: 0,
+        rightsClearedRecords: 0,
+        commerciallyEligibleRecords: 0
+      },
+      providers: ['Everything Hub External Catalogs']
+    });
+  }
   const [catalogResult, bingResult, pageDerivedResult] = await Promise.allSettled([
     loadCatalog(), loadBing(query), loadPageDerivedCatalogs()
   ]);
   const bingResults = bingResult.status === 'fulfilled' ? bingResult.value : [];
   const pageDerivedNetwork = pageDerivedResult.status === 'fulfilled' ? pageDerivedResult.value : null;
-  let catalogResults = pageDerivedNetwork ? searchPageDerivedCatalogs(query, pageDerivedNetwork, 5) : [];
+  const externalCatalogResults = searchExternalCatalogs(query);
+  const externalCatalogStats = getExternalCatalogStats();
+  let pageDerivedCatalogResults = pageDerivedNetwork ? searchPageDerivedCatalogs(query, pageDerivedNetwork, 5) : [];
+  let catalogResults = [...externalCatalogResults, ...pageDerivedCatalogResults].slice(0, 5);
   const catalogPreview = pageDerivedNetwork ? {
     status: 'freshness-unverified',
     previewOnly: true,
@@ -108,7 +147,7 @@ module.exports = async function handler(req, res) {
     recordCount: pageDerivedNetwork.recordCount,
     recordsPublished: Number(pageDerivedNetwork.metrics.records_published) || 0,
     sourceTermsReviewedRecords: Number(pageDerivedNetwork.metrics.source_terms_reviewed_records) || 0,
-    resultCount: catalogResults.length,
+    resultCount: pageDerivedCatalogResults.length,
     stale: Boolean(pageDerivedNetwork.stale)
   } : {
     status: 'unavailable',
@@ -117,11 +156,16 @@ module.exports = async function handler(req, res) {
     error: safeCatalogError(pageDerivedResult.reason || 'page_catalog_unavailable')
   };
 
+  catalogPreview.externalCatalogCount = externalCatalogStats.catalogCount;
+  catalogPreview.externalCatalogRecordCount = externalCatalogStats.recordCount;
+  catalogPreview.externalCatalogResults = externalCatalogResults.length;
+
   if (catalogResult.status !== 'fulfilled') {
     if (pageDerivedNetwork) {
       catalogPreview.status = 'stale-candidate-preview';
       catalogPreview.freshnessMatch = false;
-      catalogResults = catalogResults.map(item => ({ ...item, snippet: item.snippet + ' Current page-index freshness could not be verified.', description: item.snippet + ' Current page-index freshness could not be verified.' }));
+      pageDerivedCatalogResults = pageDerivedCatalogResults.map(item => ({ ...item, snippet: item.snippet + ' Current page-index freshness could not be verified.', description: item.snippet + ' Current page-index freshness could not be verified.' }));
+      catalogResults = [...externalCatalogResults, ...pageDerivedCatalogResults].slice(0, 5);
     }
     const catalogError = safeCatalogError(catalogResult.reason);
     console.warn('[catalog-load-failed]', catalogError);
@@ -161,7 +205,8 @@ module.exports = async function handler(req, res) {
       ? 'stale-candidate-preview' : 'candidate-preview';
     if (pageDerivedNetwork.stale || !sourceIndexMatches) {
       const warning = !sourceIndexMatches ? ' Catalog analysis is behind the current page index.' : ' Catalog preview is using a cached snapshot.';
-      catalogResults = catalogResults.map(item => ({ ...item, snippet: item.snippet + warning, description: item.snippet + warning }));
+      pageDerivedCatalogResults = pageDerivedCatalogResults.map(item => ({ ...item, snippet: item.snippet + warning, description: item.snippet + warning }));
+      catalogResults = [...externalCatalogResults, ...pageDerivedCatalogResults].slice(0, 5);
     }
   }
   const ranked = searchCatalog(catalog.pages, query, lane);
@@ -177,6 +222,7 @@ module.exports = async function handler(req, res) {
     staleCatalog: catalog.stale
   });
   payload.catalogResults = catalogResults;
+  payload.externalCatalogResults = externalCatalogResults;
   payload.catalogPreview = catalogPreview;
   if (catalogResults.length) payload.providers.push('Everything Hub Catalog Preview');
   if (bingResult.status !== 'fulfilled') payload.providers = payload.providers.filter(x => x !== 'Bing Web Search');

@@ -73,3 +73,23 @@ Freshness guard: candidate previews are marked current only when the source-inde
 
 
 Relevance ranking: commerce catalogs with matching product/brand/model records and geographic catalogs with matching place records receive type-aware boosts. Article/resource/media catalogs receive a smaller title-only catalog bonus unless the query explicitly asks for content, reducing incidental mentions in Rolex and Las Vegas searches.
+
+
+
+
+## Media search and rights
+
+- Image and video search use the Internet Archive Advanced Search metadata API with separate `mediatype:image` and `mediatype:movies` queries.
+- The backend checks `archive.org/robots.txt` before each uncached query, serializes requests per host, applies a one-second minimum interval, enforces per-host request budgets, and caches results for five minutes.
+- Search requests return metadata only. Browser thumbnails load from `archive.org/services/img/{identifier}`; the backend never downloads or re-hosts original image or video files.
+- Results are shown only when the individual item declares CC0, Public Domain Mark, CC BY or CC BY-SA metadata. CC BY/CC BY-SA results require a creator. Noncommercial, no-derivatives, unknown-license and uncredited CC BY/CC BY-SA records are excluded.
+- Exact Creative Commons license URLs on the official host are normalized to HTTPS. Cards link to the original Internet Archive item and license and display creator/source attribution.
+- License metadata is not a guarantee of rights. The UI preserves the source link and makes no claim that a record is rights-cleared for redistribution.
+- Wikimedia Commons and Openverse API routes are not used because the relevant API paths fail robots policy checks. Legacy YouTube thumbnail fetching is disabled.
+
+## External link catalogs
+
+- Curated external link-only catalogs are stored separately from page-derived catalog artifacts. The current Rolex collection directory source of truth is `data/external-catalogs/registry.json`; the Vercel runtime snapshot is `src/data/external-catalogs.json`.
+- The search route combines validated external link directories with page-derived catalog previews, while returning separate external catalog and record counts.
+- The Rolex directory contains six official collection-family links only. No Rolex pages, descriptions, specifications, images or videos were fetched or copied. Source terms are not reviewed, record-level rights are not cleared, redistribution is not cleared, and commercial eligibility is false.
+- Do not expand this directory by crawling Rolex pages without a separate source-policy review and authorization.

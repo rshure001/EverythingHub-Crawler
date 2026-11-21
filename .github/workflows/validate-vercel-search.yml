@@ -122,3 +122,18 @@ jobs:
             catalogSha256: first.indexSha256
           }, null, 2));
           NODE
+
+  video-source-live-smoke:
+    # One bounded, robots-checked request validates the public NASA video source before code can be merged.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+      - name: Verify Internet Archive image and video robots policy, licenses and thumbnails
+        run: |
+          node vercel-search-backend/test/images-live-smoke.cjs
+          node vercel-search-backend/test/videos-live-smoke.cjs
