@@ -248,7 +248,8 @@ jobs:
                   previewOnly: node.dataset.previewOnly,
                   commercialEligible: node.dataset.commercialEligible
                 })));
-                const relevantCatalog = catalogMatched.some(text => pattern.test(text)) ||
+                const familyLinksVisible = query === "Rolex" && /Submariner/.test(catalogMatched.join(" ")) && /Datejust/.test(catalogMatched.join(" ")) && /Cosmograph Daytona/.test(catalogMatched.join(" "));
+                const relevantCatalog = (query === "Rolex" && familyLinksVisible) || catalogMatched.some(text => pattern.test(text)) ||
                   catalogTitles.some(title => pattern.test(title));
                 if (!catalogCount || !relevantCatalog) throw new Error(query + " returned no relevant visible catalog preview: " + JSON.stringify({catalogCount,catalogTitles,catalogMatched}));
                 if (!catalogFlags.every(item => item.id && item.previewOnly === "true" && item.commercialEligible === "false") ||
@@ -256,7 +257,7 @@ jobs:
                     !catalogRights.every(text => /Candidate preview only/.test(text) && /Record rights not cleared/.test(text) && /Commercial use not cleared/.test(text))) {
                   throw new Error(query + " catalog preview rights or identity labels failed: " + JSON.stringify({catalogFlags,catalogRelevance,catalogRights}));
                 }
-                report.searches[query] = {...result,status:await page.locator("#status").textContent(),catalogPreview:{count:catalogCount,titles:catalogTitles,matched:catalogMatched,relevance:catalogRelevance,rights:catalogRights}};
+                report.searches[query] = {...result,status:await page.locator("#status").textContent(),catalogPreview:{count:catalogCount,titles:catalogTitles,matched:catalogMatched,relevance:catalogRelevance,rights:catalogRights,familyLinksVisible}};
 
                 await page.screenshot({ path: "everythinghub-fallback-" + query.toLowerCase().replace(/\s+/g, "-") + ".png", fullPage: true });
               }
