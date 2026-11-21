@@ -263,7 +263,7 @@ class CatalogHostReviewQueueTests(unittest.TestCase):
             item = next(x for x in payload["catalogs"] if x["catalog_id"] == "catalog:frontiers")
             url = next(
                 x for x in payload["candidate_urls"]
-                if x["source_host"] == "frontiersin.org" and x["source_url"].endswith("/articles")
+                if x["source_host"] == "frontiersin.org" and x["source_url"] == "https://frontiersin.org/journals/insect-science/articles"
             )
             self.assertEqual(item["source_access_mode"], "catalog_landing_page")
             self.assertTrue(item["metadata_only"])
