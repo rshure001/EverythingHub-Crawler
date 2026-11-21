@@ -95,13 +95,15 @@ module.exports = async function handler(req, res) {
   ]);
   const bingResults = bingResult.status === 'fulfilled' ? bingResult.value : [];
   const pageDerivedNetwork = pageDerivedResult.status === 'fulfilled' ? pageDerivedResult.value : null;
-  const catalogResults = pageDerivedNetwork ? searchPageDerivedCatalogs(query, pageDerivedNetwork, 5) : [];
+  let catalogResults = pageDerivedNetwork ? searchPageDerivedCatalogs(query, pageDerivedNetwork, 5) : [];
   const catalogPreview = pageDerivedNetwork ? {
-    status: pageDerivedNetwork.stale ? 'stale-candidate-preview' : 'candidate-preview',
+    status: 'freshness-unverified',
     previewOnly: true,
     analysisVersion: pageDerivedNetwork.analysisVersion,
     generatedAt: pageDerivedNetwork.generatedAt,
     sourceIndexPages: pageDerivedNetwork.sourceIndexPages,
+    sourceIndexUpdatedAt: pageDerivedNetwork.sourceIndexUpdatedAt,
+    sourceIndexSha256: pageDerivedNetwork.sourceIndexSha256,
     catalogCount: pageDerivedNetwork.catalogCount,
     recordCount: pageDerivedNetwork.recordCount,
     recordsPublished: Number(pageDerivedNetwork.metrics.records_published) || 0,
@@ -116,6 +118,11 @@ module.exports = async function handler(req, res) {
   };
 
   if (catalogResult.status !== 'fulfilled') {
+    if (pageDerivedNetwork) {
+      catalogPreview.status = 'stale-candidate-preview';
+      catalogPreview.freshnessMatch = false;
+      catalogResults = catalogResults.map(item => ({ ...item, snippet: item.snippet + ' Current page-index freshness could not be verified.', description: item.snippet + ' Current page-index freshness could not be verified.' }));
+    }
     const catalogError = safeCatalogError(catalogResult.reason);
     console.warn('[catalog-load-failed]', catalogError);
     const results = offset === 0 ? bingResults.slice(0, Math.min(10, limit)) : [];
@@ -144,6 +151,18 @@ module.exports = async function handler(req, res) {
   }
 
   const catalog = catalogResult.value;
+  if (pageDerivedNetwork) {
+    const sourceIndexMatches = pageDerivedNetwork.sourceIndexPages === catalog.indexedPages &&
+      pageDerivedNetwork.sourceIndexSha256 === catalog.sha256;
+    catalogPreview.freshnessMatch = sourceIndexMatches;
+    catalogPreview.pageIndexPages = catalog.indexedPages;
+    catalogPreview.pageIndexSha256 = catalog.sha256;
+    catalogPreview.status = pageDerivedNetwork.stale || !sourceIndexMatches
+      ? 'stale-candidate-preview' : 'candidate-preview';
+    if (!sourceIndexMatches) {
+      catalogResults = catalogResults.map(item => ({ ...item, snippet: item.snippet + ' Catalog analysis is behind the current page index.', description: item.snippet + ' Catalog analysis is behind the current page index.' }));
+    }
+  }
   const ranked = searchCatalog(catalog.pages, query, lane);
   const payload = buildResponse({
     query, limit, offset, ranked, bingResults,
