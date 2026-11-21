@@ -5,7 +5,8 @@ This directory contains the exact static homepage source used by the existing fr
 ## Deployment mapping
 
 - Repository source: `vercel-homepage/fallback/index.html`
-- Vercel deployment file: `src/index.html`
+- Vercel production root file: `index.html`
+- Vercel compatibility file: `src/index.html` (also used by the staging browser check)
 - Preview/staging URL: `https://everythinghub-homepage-fixed-rshure001-8053.vercel.app/src/index.html`
 - Production project URL: `https://everythinghub-homepage-fixed.vercel.app/`
 - Search backend: `https://everythinghub-search-backend.vercel.app`
