@@ -25,6 +25,9 @@ class CatalogSourcePolicyTests(unittest.TestCase):
         self.assertEqual(frontiers["allowed_api_paths"], [])
         self.assertEqual(frontiers["allowed_catalog_paths"], ["/journals", "/articles"])
         self.assertEqual(frontiers["min_interval_seconds"], 3)
+        self.assertEqual(frontiers["max_response_bytes"], 1500000)
+        self.assertIn("doi", frontiers["allowed_metadata_fields"])
+        self.assertIn("full_text", frontiers["prohibited_content"])
 
     def test_unreviewed_host_is_rejected_before_robots_fetch(self):
         with patch.object(policy, "load_robots_policy") as load_robots:
@@ -98,6 +101,57 @@ class CatalogSourcePolicyTests(unittest.TestCase):
                 policy.authorize_source_url(
                     "https://frontiersin.org/journals/testfieldhumanities/articles",
                     purpose="landing_page",
+                )
+
+
+    def test_frontiers_landing_page_policy_requires_metadata_schema_before_robots(self):
+        source = policy.policy_for_host("frontiersin.org")
+        source.pop("allowed_metadata_fields")
+        with patch.object(policy, "policy_for_host", return_value=source), \
+             patch.object(policy, "load_robots_policy") as load_robots:
+            with self.assertRaises(policy.SourcePolicyError):
+                policy.authorize_source_url(
+                    "https://frontiersin.org/journals/insect-science/articles",
+                    purpose="landing_page",
+                )
+            load_robots.assert_not_called()
+
+    def test_landing_page_request_requires_html_and_uses_policy_size_limit(self):
+        class Response:
+            status = 200
+            headers = {"Content-Type": "text/html"}
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def geturl(self):
+                return "https://frontiersin.org/journals/insect-science/articles"
+
+            def read(self, amount):
+                return b"x" * amount
+
+        class Opener:
+            def open(self, request, timeout):
+                return Response()
+
+        source = policy.policy_for_host("frontiersin.org")
+        parser = object()
+        with patch.object(policy, "authorize_source_url", return_value=(source, parser, 0.0, ["/journals"])), \
+             patch.object(policy, "build_pinned_opener", return_value=Opener()):
+            with self.assertRaises(policy.SourcePolicyError):
+                policy.request_source_bytes(
+                    "https://frontiersin.org/journals/insect-science/articles",
+                    purpose="landing_page",
+                    accept="application/json",
+                )
+            with self.assertRaises(policy.SourcePolicyError):
+                policy.request_source_bytes(
+                    "https://frontiersin.org/journals/insect-science/articles",
+                    purpose="landing_page",
+                    accept="text/html",
                 )
 
     def test_openlibrary_is_not_an_api_discovery_source(self):
