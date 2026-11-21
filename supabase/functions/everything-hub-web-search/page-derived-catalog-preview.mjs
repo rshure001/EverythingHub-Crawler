@@ -9,6 +9,13 @@ const MAX_REGISTRY_GZIP_BYTES = 5_000_000;
 const MAX_RECORDS_GZIP_BYTES = 16_000_000;
 const MAX_REGISTRY_JSON_BYTES = 32_000_000;
 const MAX_RECORDS_JSON_BYTES = 96_000_000;
+const MAX_SEARCH_INDEX_SHARD_BYTES = 2_000_000;
+const MAX_SEARCH_INDEX_JSON_BYTES = 8_000_000;
+const MAX_CATALOG_INDEX_GZIP_BYTES = 1_000_000;
+const MAX_CATALOG_INDEX_JSON_BYTES = 4_000_000;
+const MAX_CATALOG_INDEX_FETCHES = 12;
+const MAX_SEARCH_CACHE_ENTRIES = 64;
+const MAX_CATALOG_CACHE_ENTRIES = 64;
 const MAX_SOURCE_PAGES = 150_000;
 const MAX_CATALOGS = 10_000;
 const MAX_RECORDS = 250_000;
@@ -22,9 +29,17 @@ const CONTENT_INTENT = new Set([
 ]);
 const ATTRIBUTE_KEYS = new Set(["brand", "model", "sku", "mpn", "gtin", "manufacturer", "category"]);
 const PRODUCT_TYPES = new Set(["product", "brand", "model"]);
+const SEARCH_STOP_TOKENS = new Set([
+  "the", "and", "for", "with", "from", "our", "your", "all", "new", "home", "page",
+  "official", "welcome", "lock", "menu", "search", "skip", "content", "login", "sign",
+  "subscribe", "close", "cookie", "accept", "privacy", "terms", "policy", "back", "next",
+  "previous", "print", "share",
+]);
 const CONTENT_TYPES = new Set(["article", "resource", "media", "subject"]);
 let cache = null;
 let pending = null;
+const searchIndexCache = new Map();
+const catalogIndexCache = new Map();
 
 function safeUrl(value) {
   try {
@@ -115,6 +130,8 @@ async function decodeGzip(bytes, maxBytes, label) {
 }
 
 function validateManifest(manifest) {
+  const analysisVersion = Number(manifest && manifest.analysis_version || 0);
+  const legacy = analysisVersion < 10;
   if (!manifest || manifest.version !== 1 || manifest.integrity !== "sha256") {
     throw new Error("page_catalog_manifest_schema_invalid");
   }
@@ -133,7 +150,7 @@ function validateManifest(manifest) {
       !Number.isFinite(Date.parse(manifest.source_index_updated_at)) ||
       typeof manifest.source_index_sha256 !== "string" ||
       !/^[a-f0-9]{64}$/i.test(manifest.source_index_sha256) ||
-      !Array.isArray(manifest.files) || manifest.files.length < 2 || manifest.files.length > 20_000) {
+      !Array.isArray(manifest.files) || manifest.files.length < (legacy ? 2 : 3) || manifest.files.length > 20_000) {
     throw new Error("page_catalog_manifest_invalid");
   }
   const files = new Map();
@@ -141,6 +158,7 @@ function validateManifest(manifest) {
     if (!file || typeof file.file !== "string" || file.file.startsWith("/") ||
         file.file.includes("\\") || file.file.split("/").some((part) => !part || part === "." || part === "..") ||
         !Number.isSafeInteger(file.bytes) || file.bytes < 1 ||
+        !Number.isSafeInteger(file.items) || file.items < 0 ||
         typeof file.sha256 !== "string" || !/^[a-f0-9]{64}$/i.test(file.sha256)) {
       throw new Error("page_catalog_file_entry_invalid");
     }
@@ -149,18 +167,27 @@ function validateManifest(manifest) {
   }
   const registry = files.get("registry.json.gz");
   const records = files.get("records.json.gz");
-  if (!registry || !records) throw new Error("page_catalog_artifacts_missing");
-  if (registry.bytes > MAX_REGISTRY_GZIP_BYTES || records.bytes > MAX_RECORDS_GZIP_BYTES) {
+  const searchIndexFiles = Array.from(files.values()).filter((file) => file.file.startsWith("search-index/"));
+  if (!registry || !records || (!legacy && !searchIndexFiles.length)) {
+    throw new Error("page_catalog_artifacts_missing");
+  }
+  if (registry.bytes > MAX_REGISTRY_GZIP_BYTES || records.bytes > MAX_RECORDS_GZIP_BYTES ||
+      searchIndexFiles.some((file) => file.bytes > MAX_SEARCH_INDEX_SHARD_BYTES)) {
     throw new Error("page_catalog_compressed_limit");
   }
   if (registry.items !== manifest.catalog_count || records.items !== manifest.record_count) {
     throw new Error("page_catalog_artifact_item_count_invalid");
   }
+  for (const file of searchIndexFiles) {
+    if (!/^search-index\/[0-9a-f]{2}\.json\.gz$/.test(file.file)) {
+      throw new Error("page_catalog_search_index_path_invalid");
+    }
+  }
   if (Number(manifest.metrics && manifest.metrics.records_published || 0) !== 0 ||
       Number(manifest.catalogs_verified || 0) !== 0) {
     throw new Error("page_catalog_candidate_only_contract_invalid");
   }
-  return { registry, records };
+  return { registry, records, searchIndexFiles, files, legacy };
 }
 
 function validatePolicyAnnotation(item, policyReview) {
@@ -185,7 +212,73 @@ function validatePolicyAnnotation(item, policyReview) {
   }
 }
 
-function validateNetwork(manifest, registry, payload) {
+function validateRegistry(manifest, registry, metadata) {
+  if (!registry || registry.version !== 1 ||
+      registry.status !== "candidate_staging_not_production" ||
+      !Array.isArray(registry.catalogs) || registry.catalogs.length !== manifest.catalog_count) {
+    throw new Error("page_catalog_registry_schema_invalid");
+  }
+  const policyReview = registry.source_policy_review || manifest.source_policy_review || null;
+  if (policyReview) {
+    if (manifest.source_policy_review && registry.source_policy_review &&
+        manifest.source_policy_review.register_sha256 !== registry.source_policy_review.register_sha256) {
+      throw new Error("page_catalog_policy_review_digest_mismatch");
+    }
+    if (policyReview.schema_version !== 1 ||
+        typeof policyReview.register_sha256 !== "string" ||
+        !/^[a-f0-9]{64}$/i.test(policyReview.register_sha256) ||
+        policyReview.scope !== "source-level-only" ||
+        policyReview.record_level_clearance !== "not_reviewed" ||
+        policyReview.commercial_eligibility !== false ||
+        policyReview.republication !== "not_cleared") {
+      throw new Error("page_catalog_policy_review_invalid");
+    }
+  }
+
+  const filesByPath = metadata.files;
+  const catalogsById = new Map();
+  for (const catalog of registry.catalogs) {
+    if (!catalog || typeof catalog.catalog_id !== "string" || !catalog.catalog_id ||
+        catalogsById.has(catalog.catalog_id) || !Array.isArray(catalog.record_ids) ||
+        catalog.record_count !== catalog.record_ids.length ||
+        new Set(catalog.record_ids).size !== catalog.record_ids.length ||
+        !Array.isArray(catalog.source_page_ids) ||
+        catalog.source_page_count !== catalog.source_page_ids.length ||
+        catalog.commercial_eligible !== false ||
+        typeof catalog.index_file !== "string" ||
+        !/^indexes\/[0-9a-f]{2}\/[0-9a-f]{24}\.json\.gz$/.test(catalog.index_file)) {
+      throw new Error("page_catalog_identity_or_membership_invalid");
+    }
+    const indexEntry = filesByPath.get(catalog.index_file);
+    if (!indexEntry || indexEntry.items !== catalog.record_count ||
+        indexEntry.bytes > MAX_CATALOG_INDEX_GZIP_BYTES) {
+      throw new Error("page_catalog_index_manifest_entry_invalid");
+    }
+    if (catalog.source_url && !safeUrl(catalog.source_url)) {
+      throw new Error("page_catalog_source_url_invalid");
+    }
+    validatePolicyAnnotation(catalog, policyReview);
+    catalogsById.set(catalog.catalog_id, catalog);
+  }
+
+  return {
+    catalogs: registry.catalogs,
+    catalogsById,
+    filesByPath,
+    generatedAt: manifest.generated_at,
+    analysisVersion: manifest.analysis_version,
+    sourceIndexPages: manifest.source_index_pages,
+    sourceIndexUpdatedAt: manifest.source_index_updated_at,
+    sourceIndexSha256: manifest.source_index_sha256,
+    catalogCount: manifest.catalog_count,
+    recordCount: manifest.record_count,
+    metrics: manifest.metrics || {},
+    sourcePolicyReview: policyReview,
+  };
+}
+
+
+function validateLegacyNetwork(manifest, registry, payload) {
   if (!registry || registry.version !== 1 ||
       registry.status !== "candidate_staging_not_production" ||
       !Array.isArray(registry.catalogs) || registry.catalogs.length !== manifest.catalog_count) {
@@ -264,6 +357,7 @@ function validateNetwork(manifest, registry, payload) {
     recordCount: manifest.record_count,
     metrics: manifest.metrics || {},
     sourcePolicyReview: policyReview,
+    legacySnapshot: true,
   };
 }
 
@@ -288,30 +382,40 @@ async function loadSnapshot(fetchImpl) {
     throw new Error("public_search_manifest_invalid");
   }
 
-  const [registryBytes, recordsBytes] = await Promise.all([
-    fetchBytes(base + "data/page-derived-catalogs/registry.json.gz", MAX_REGISTRY_GZIP_BYTES, fetchImpl),
-    fetchBytes(base + "data/page-derived-catalogs/records.json.gz", MAX_RECORDS_GZIP_BYTES, fetchImpl),
-  ]);
-  if (registryBytes.byteLength !== metadata.registry.bytes ||
-      recordsBytes.byteLength !== metadata.records.bytes) {
-    throw new Error("page_catalog_artifact_size_mismatch");
+  const registryUrl = base + "data/page-derived-catalogs/registry.json.gz";
+  const registryBytes = await fetchBytes(registryUrl, MAX_REGISTRY_GZIP_BYTES, fetchImpl);
+  if (registryBytes.byteLength !== metadata.registry.bytes) {
+    throw new Error("page_catalog_registry_size_mismatch");
   }
-  const [registryDigest, recordsDigest] = await Promise.all([
-    sha256(registryBytes),
-    sha256(recordsBytes),
-  ]);
+  const registryDigest = await sha256(registryBytes);
   if (registryDigest.toLowerCase() !== metadata.registry.sha256.toLowerCase()) {
     throw new Error("page_catalog_registry_sha256_mismatch");
   }
-  if (recordsDigest.toLowerCase() !== metadata.records.sha256.toLowerCase()) {
-    throw new Error("page_catalog_records_sha256_mismatch");
+  const registry = await decodeGzip(registryBytes, MAX_REGISTRY_JSON_BYTES, "page_catalog_registry");
+
+  let network;
+  if (metadata.legacy) {
+    const recordsBytes = await fetchBytes(
+      base + "data/page-derived-catalogs/records.json.gz",
+      MAX_RECORDS_GZIP_BYTES,
+      fetchImpl,
+    );
+    if (recordsBytes.byteLength !== metadata.records.bytes) {
+      throw new Error("page_catalog_records_size_mismatch");
+    }
+    const recordsDigest = await sha256(recordsBytes);
+    if (recordsDigest.toLowerCase() !== metadata.records.sha256.toLowerCase()) {
+      throw new Error("page_catalog_records_sha256_mismatch");
+    }
+    const recordsPayload = await decodeGzip(recordsBytes, MAX_RECORDS_JSON_BYTES, "page_catalog_records");
+    network = validateLegacyNetwork(manifest, registry, recordsPayload);
+  } else {
+    network = validateRegistry(manifest, registry, metadata);
+    network.filesByPath = metadata.files;
+    network.baseUrl = base + "data/page-derived-catalogs/";
+    network.legacySnapshot = false;
   }
 
-  const [registry, recordsPayload] = await Promise.all([
-    decodeGzip(registryBytes, MAX_REGISTRY_JSON_BYTES, "page_catalog_registry"),
-    decodeGzip(recordsBytes, MAX_RECORDS_JSON_BYTES, "page_catalog_records"),
-  ]);
-  const network = validateNetwork(manifest, registry, recordsPayload);
   const publicUpdatedAt = publicManifest.updated_at * 1000;
   const sourceUpdatedAt = Date.parse(network.sourceIndexUpdatedAt);
   network.pageIndexPages = publicManifest.total_pages;
@@ -320,6 +424,86 @@ async function loadSnapshot(fetchImpl) {
     Number.isFinite(sourceUpdatedAt) && Math.abs(sourceUpdatedAt - publicUpdatedAt) <= 60_000;
   network.gitCommit = sha;
   return network;
+}
+
+async function loadVerifiedGzipArtifact(network, file, fetchImpl, maxCompressedBytes, maxJsonBytes, label) {
+  if (!file || typeof file.file !== "string") throw new Error(label + "_manifest_entry_missing");
+  const bytes = await fetchBytes(network.baseUrl + file.file, maxCompressedBytes, fetchImpl);
+  if (bytes.byteLength !== file.bytes) throw new Error(label + "_byte_length_mismatch");
+  const digest = await sha256(bytes);
+  if (digest.toLowerCase() !== file.sha256.toLowerCase()) throw new Error(label + "_sha256_mismatch");
+  return decodeGzip(bytes, maxJsonBytes, label);
+}
+
+async function loadSearchIndexShard(network, prefix, fetchImpl) {
+  const path = "search-index/" + prefix + ".json.gz";
+  const file = network.filesByPath.get(path);
+  if (!file) return { version: 1, prefix, tokens: {} };
+  const cacheKey = network.gitCommit + ":" + path;
+  if (searchIndexCache.has(cacheKey)) return searchIndexCache.get(cacheKey);
+  const payload = await loadVerifiedGzipArtifact(
+    network, file, fetchImpl, MAX_SEARCH_INDEX_SHARD_BYTES, MAX_SEARCH_INDEX_JSON_BYTES,
+    "page_catalog_search_index",
+  );
+  if (payload.version !== 1 || payload.prefix !== prefix ||
+      !payload.tokens || typeof payload.tokens !== "object" || Array.isArray(payload.tokens) ||
+      Object.keys(payload.tokens).length !== file.items) {
+    throw new Error("page_catalog_search_index_schema_invalid");
+  }
+  for (const [token, catalogIds] of Object.entries(payload.tokens)) {
+    if (!token || token.length < 2 || !Array.isArray(catalogIds) || !catalogIds.length ||
+        new Set(catalogIds).size !== catalogIds.length || catalogIds.some((id) => !network.catalogsById.has(id))) {
+      throw new Error("page_catalog_search_index_postings_invalid");
+    }
+  }
+  searchIndexCache.set(cacheKey, payload);
+  while (searchIndexCache.size > MAX_SEARCH_CACHE_ENTRIES) {
+    searchIndexCache.delete(searchIndexCache.keys().next().value);
+  }
+  return payload;
+}
+
+async function loadCatalogIndex(network, catalog, fetchImpl) {
+  const path = catalog.index_file;
+  const file = network.filesByPath.get(path);
+  if (!file) throw new Error("page_catalog_index_manifest_entry_missing");
+  const cacheKey = network.gitCommit + ":" + path;
+  if (catalogIndexCache.has(cacheKey)) return catalogIndexCache.get(cacheKey);
+  const payload = await loadVerifiedGzipArtifact(
+    network, file, fetchImpl, MAX_CATALOG_INDEX_GZIP_BYTES, MAX_CATALOG_INDEX_JSON_BYTES,
+    "page_catalog_index",
+  );
+  if (payload.version !== 1 || payload.catalog_id !== catalog.catalog_id ||
+      !Array.isArray(payload.records) || payload.records.length !== file.items ||
+      payload.records.length !== catalog.record_count) {
+    throw new Error("page_catalog_index_schema_invalid");
+  }
+  const expectedIds = new Set(catalog.record_ids);
+  const seenIds = new Set();
+  for (const record of payload.records) {
+    if (!record || typeof record.record_id !== "string" || !record.record_id ||
+        seenIds.has(record.record_id) || !expectedIds.has(record.record_id) ||
+        typeof record.entity_id !== "string" || !record.entity_id ||
+        typeof record.record_type !== "string" || !record.record_type ||
+        !Array.isArray(record.catalog_ids) || !record.catalog_ids.includes(catalog.catalog_id) ||
+        new Set(record.catalog_ids).size !== record.catalog_ids.length ||
+        record.catalog_ids.some((id) => !network.catalogsById.has(id)) ||
+        !Array.isArray(record.source_urls) || !record.source_urls.length ||
+        record.source_urls.some((url) => !safeUrl(url)) ||
+        record.commercial_eligible !== false) {
+      throw new Error("page_catalog_index_record_invalid");
+    }
+    validatePolicyAnnotation(record, network.sourcePolicyReview);
+    seenIds.add(record.record_id);
+  }
+  if (seenIds.size !== expectedIds.size || Array.from(expectedIds).some((id) => !seenIds.has(id))) {
+    throw new Error("page_catalog_index_membership_mismatch");
+  }
+  catalogIndexCache.set(cacheKey, payload.records);
+  while (catalogIndexCache.size > MAX_CATALOG_CACHE_ENTRIES) {
+    catalogIndexCache.delete(catalogIndexCache.keys().next().value);
+  }
+  return payload.records;
 }
 
 export async function loadPageDerivedCatalogPreview({ fetchImpl = fetch } = {}) {
@@ -351,8 +535,28 @@ export async function loadPageDerivedCatalogPreview({ fetchImpl = fetch } = {}) 
   }
 }
 
+function singularSearchToken(token) {
+  if (["news", "series", "species", "politics", "physics", "mathematics", "economics", "ethics"].includes(token)) return "";
+  if (token.endsWith("ies") && token.length > 4) return token.slice(0, -3) + "y";
+  if (["ches", "shes", "sses", "xes", "zes", "oes"].some((suffix) => token.endsWith(suffix)) && token.length > 4) {
+    return token.slice(0, -2);
+  }
+  if (token.endsWith("s") && token.length > 3 &&
+      !["ss", "us", "is", "as", "os", "ws", "ics"].some((suffix) => token.endsWith(suffix))) {
+    return token.slice(0, -1);
+  }
+  return "";
+}
+
 function tokenize(value) {
-  return String(value || "").normalize("NFKC").toLowerCase().match(/[\p{L}\p{N}]+/gu) || [];
+  const raw = (String(value || "").normalize("NFKC").toLowerCase().match(/[\p{L}\p{N}]+/gu) || [])
+    .filter((token) => !SEARCH_STOP_TOKENS.has(token));
+  const tokens = new Set(raw);
+  for (const token of raw) {
+    const singular = singularSearchToken(token);
+    if (singular) tokens.add(singular);
+  }
+  return Array.from(tokens);
 }
 
 function recordTokens(record) {
@@ -371,7 +575,103 @@ function allTermsPresent(terms, tokens) {
   return terms.every((term) => tokens.has(term));
 }
 
-export function searchPageDerivedCatalogPreview(query, network, limit = 5) {
+export function searchPageDerivedCatalogPreview(query, network, limit = 5, fetchImpl = fetch) {
+  if (network && Array.isArray(network.records)) {
+    return searchCatalogRecords(query, network, limit);
+  }
+  return searchPageDerivedCatalogPreviewIndexed(query, network, limit, fetchImpl);
+}
+
+async function searchPageDerivedCatalogPreviewIndexed(query, network, limit = 5, fetchImpl = fetch) {
+  const text = String(query || "").trim();
+  if (!text || text.length > 160 || !network || !Array.isArray(network.catalogs) ||
+      !network.catalogsById || !network.filesByPath || typeof fetchImpl !== "function") return [];
+  const terms = Array.from(new Set(tokenize(text))).slice(0, 12);
+  if (!terms.length) return [];
+
+  const prefixes = new Set();
+  for (const term of terms) {
+    const digest = await sha256(new TextEncoder().encode(term));
+    prefixes.add(digest.slice(0, 2));
+  }
+  const shards = await Promise.all(
+    Array.from(prefixes).map((prefix) => loadSearchIndexShard(network, prefix, fetchImpl)),
+  );
+  const tokenCatalogs = new Map();
+  for (const shard of shards) {
+    for (const [token, ids] of Object.entries(shard.tokens)) tokenCatalogs.set(token, ids);
+  }
+  const postings = terms.map((term) => new Set(tokenCatalogs.get(term) || []));
+  if (postings.some((set) => set.size === 0)) return [];
+  const candidateIds = Array.from(postings[0]).filter((id) => postings.every((set) => set.has(id)));
+  if (!candidateIds.length) return [];
+
+  const contentIntent = terms.some((term) => CONTENT_INTENT.has(term));
+  const productTerms = new Set(["product", "products", "model", "models", "watch", "watches", "buy", "retailer", "retailers", "price", "prices", "reference", "references"]);
+  const businessTerms = new Set(["business", "businesses", "restaurant", "restaurants", "hotel", "hotels", "store", "stores", "shop", "shops", "venue", "venues", "dealer", "dealers"]);
+  const eventTerms = new Set(["event", "events", "concert", "concerts", "festival", "festivals", "calendar", "schedule", "schedules", "grand", "prix"]);
+  const productTermIntent = terms.some((term) => productTerms.has(term));
+  const businessIntent = terms.some((term) => businessTerms.has(term));
+  const eventIntent = terms.some((term) => eventTerms.has(term));
+  const candidateCatalogs = candidateIds
+    .map((id) => network.catalogsById.get(id))
+    .filter((catalog) => catalog && catalog.record_count > 0);
+  const hasProductCatalog = candidateCatalogs.some((catalog) =>
+    catalog.catalog_type === "commerce" || PRODUCT_TYPES.has(String(catalog.record_type || "").toLowerCase())
+  );
+  const hasPlaceCatalog = candidateCatalogs.some((catalog) =>
+    catalog.catalog_type === "geographic" || String(catalog.record_type || "").toLowerCase() === "place"
+  );
+  const geoIntent = terms.length >= 2 && hasPlaceCatalog && !contentIntent && !eventIntent && !businessIntent;
+  const productIntent = !geoIntent && !eventIntent && !contentIntent && !businessIntent &&
+    (productTermIntent || hasProductCatalog);
+  const locationBusinessIntent = businessIntent && !contentIntent;
+
+  const preScore = (catalog) => {
+    const catalogTokens = new Set(tokenize([catalog.title, catalog.subject, catalog.source_host].join(" ")));
+    const titleTokens = new Set(tokenize(catalog.title));
+    let score = terms.filter((term) => catalogTokens.has(term)).length * 12;
+    if (allTermsPresent(terms, titleTokens)) score += 100;
+    else if (allTermsPresent(terms, catalogTokens)) score += 70;
+    if (productIntent) {
+      if (catalog.catalog_type === "commerce" || PRODUCT_TYPES.has(String(catalog.record_type || "").toLowerCase())) score += 240;
+      else if (CONTENT_TYPES.has(String(catalog.record_type || "").toLowerCase())) score -= 100;
+    } else if (geoIntent) {
+      if (catalog.catalog_type === "geographic" && String(catalog.record_type || "").toLowerCase() === "place") score += 240;
+      else if (catalog.catalog_type === "business_directory") score += 180;
+      else if (catalog.catalog_type === "service_directory") score += 150;
+      else if (CONTENT_TYPES.has(String(catalog.record_type || "").toLowerCase())) score -= 100;
+    } else if (locationBusinessIntent) {
+      if (catalog.catalog_type === "business_directory") score += 240;
+      else if (catalog.catalog_type === "service_directory") score += 200;
+      else if (catalog.catalog_type === "geographic") score += 100;
+    } else if (eventIntent) {
+      if (catalog.catalog_type === "events") score += 240;
+      else if (CONTENT_TYPES.has(String(catalog.record_type || "").toLowerCase())) score -= 80;
+    }
+    if (catalog.is_source_declared_catalog) score += 8;
+    if (catalog.evidence_strength === "high") score += 4;
+    return score;
+  };
+  candidateCatalogs.sort((a, b) => preScore(b) - preScore(a) ||
+    String(a.title || "").localeCompare(String(b.title || "")));
+  const selectedCatalogs = candidateCatalogs.slice(0, MAX_CATALOG_INDEX_FETCHES);
+  const recordsById = new Map();
+  for (let offset = 0; offset < selectedCatalogs.length; offset += 4) {
+    const batch = selectedCatalogs.slice(offset, offset + 4);
+    const payloads = await Promise.all(batch.map((catalog) => loadCatalogIndex(network, catalog, fetchImpl)));
+    for (const records of payloads) {
+      for (const record of records) recordsById.set(record.record_id, record);
+    }
+  }
+  return searchCatalogRecords(query, {
+    ...network,
+    catalogs: selectedCatalogs,
+    records: Array.from(recordsById.values()),
+  }, limit);
+}
+
+function searchCatalogRecords(query, network, limit = 5) {
   const text = String(query || "").trim();
   if (!text || text.length > 160 || !network ||
       !Array.isArray(network.catalogs) || !Array.isArray(network.records)) return [];
@@ -398,8 +698,9 @@ export function searchPageDerivedCatalogPreview(query, network, limit = 5) {
     if (!globalPlaceMatch && type === "place" && allTermsPresent(terms, all)) globalPlaceMatch = true;
     if (globalProductMatch && globalPlaceMatch) break;
   }
-  const productIntent = !contentIntent && !businessIntent && (productTermIntent || globalProductMatch);
   const geoIntent = terms.length >= 2 && globalPlaceMatch && !contentIntent && !eventIntent && !businessIntent;
+  const productIntent = !geoIntent && !eventIntent && !contentIntent && !businessIntent &&
+    (productTermIntent || globalProductMatch);
   const locationBusinessIntent = businessIntent && !contentIntent;
   const catalogsById = new Map(network.catalogs.map((catalog) => [catalog.catalog_id, catalog]));
   const groups = new Map();
@@ -570,4 +871,6 @@ export function searchPageDerivedCatalogPreview(query, network, limit = 5) {
 export function clearPageDerivedCatalogPreviewCache() {
   cache = null;
   pending = null;
+  searchIndexCache.clear();
+  catalogIndexCache.clear();
 }

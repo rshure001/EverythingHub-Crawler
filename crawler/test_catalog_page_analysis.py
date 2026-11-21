@@ -115,6 +115,18 @@ class PageDerivedCatalogAnalysisTests(unittest.TestCase):
             self.assertEqual(manifest["catalog_count"], 1)
             self.assertEqual(verified["pages_analyzed"], 2)
             self.assertEqual(len(registry["catalogs"]), 1)
+            self.assertGreater(manifest["metrics"]["search_index_tokens"], 0)
+            self.assertGreater(manifest["metrics"]["search_index_shards"], 0)
+            self.assertGreater(verified["search_index_tokens_validated"], 0)
+            search_files = [item for item in manifest["files"] if item["file"].startswith("search-index/")]
+            self.assertTrue(search_files)
+            search_tokens = {}
+            for search_file in search_files:
+                search_payload = json.loads(gzip.decompress((output / search_file["file"]).read_bytes()))
+                self.assertEqual(search_payload["version"], 1)
+                search_tokens.update(search_payload["tokens"])
+            self.assertIn("product", search_tokens)
+            self.assertIn(registry["catalogs"][0]["catalog_id"], search_tokens["product"])
             index_file = registry["catalogs"][0]["index_file"]
             self.assertTrue((output / index_file).exists())
             self.assertEqual(registry["catalogs"][0]["record_count"], 2)

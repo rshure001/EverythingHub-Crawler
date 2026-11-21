@@ -135,7 +135,7 @@ function fixture() {
   const manifest = {
     version: 1,
     integrity: "sha256",
-    analysis_version: 10,
+    analysis_version: 9,
     generated_at: "2026-11-21T02:50:00Z",
     source_index_pages: 100,
     source_index_updated_at: new Date(updatedAt * 1000).toISOString(),
