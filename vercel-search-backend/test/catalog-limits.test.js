@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 
 const {
+  MAX_MANIFEST_BYTES,
   MAX_CATALOG_GZIP_BYTES,
   MAX_INDEXED_PAGES,
   MAX_SHARD_COUNT,
@@ -13,6 +14,11 @@ const {
   MAX_SHARD_CONCURRENCY,
   validateShardManifest
 } = require("../src/lib/catalog");
+
+test("Vercel catalog loader accepts the current expanded search manifest", () => {
+  assert.equal(MAX_MANIFEST_BYTES, 256_000);
+  assert.ok(MAX_MANIFEST_BYTES >= 129_293);
+});
 
 test("Vercel catalog loader accepts the current 14,112,415-byte compressed catalog with headroom", () => {
   assert.equal(MAX_CATALOG_GZIP_BYTES, 16_000_000);
