@@ -33,6 +33,17 @@ class CatalogDiscoveryTests(unittest.TestCase):
         self.assertEqual(item["resources"][0]["rights"], "Open use. Must provide the source")
         self.assertTrue(item["landing_url"].startswith("https://open.canada.ca/data/en/dataset/"))
 
+
+    def test_private_or_inactive_dataset_is_skipped(self):
+        private_item = normalize_dataset({
+            "name": "private-data", "title": "Private Data", "private": True, "state": "active"
+        }, SOURCES[0])
+        inactive_item = normalize_dataset({
+            "name": "draft-data", "title": "Draft Data", "private": False, "state": "draft"
+        }, SOURCES[0])
+        self.assertIsNone(private_item)
+        self.assertIsNone(inactive_item)
+
     def test_missing_dataset_identifier_is_skipped(self):
         self.assertIsNone(normalize_dataset({"title": "No ID"}, SOURCES[0]))
 
