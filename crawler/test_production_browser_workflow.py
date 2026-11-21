@@ -25,7 +25,7 @@ class ProductionBrowserWorkflowContractTests(unittest.TestCase):
     def test_catalog_updates_use_publisher_completion_trigger(self):
         workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
         self.assertNotIn('"public-search/**"', workflow)
-        self.assertIn('"vercel-homepage/**"', workflow)
+        self.assertIn('vercel-homepage/**', workflow)
 
 
 if __name__ == "__main__":
