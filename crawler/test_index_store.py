@@ -31,6 +31,24 @@ class CanonicalIndexStoreTests(unittest.TestCase):
             for number in range(count)
         ]
 
+    @staticmethod
+    def pages_in_distinct_buckets(count=2, text_size=220):
+        pages = []
+        buckets = set()
+        candidate = 0
+        while len(pages) < count:
+            url = f"https://example.test/aggregate/{candidate}"
+            bucket = index_store.bucket_for_url(url)
+            if bucket not in buckets:
+                pages.append({
+                    "url": url,
+                    "title": "Aggregate limit test",
+                    "text": "x" * text_size,
+                })
+                buckets.add(bucket)
+            candidate += 1
+        return pages
+
     def test_legacy_monolithic_index_remains_readable(self):
         payload = {
             "version": 1,
@@ -185,6 +203,42 @@ class CanonicalIndexStoreTests(unittest.TestCase):
             decoded = gzip.decompress(raw)
             self.assertEqual(len(decoded), entry["uncompressed_bytes"])
             self.assertEqual(len(json.loads(decoded)["pages"]), entry["pages"])
+
+
+    def test_aggregate_uncompressed_limit_rejects_save_without_replacing_manifest(self):
+        old_page = {"url": "https://example.test/previous", "title": "previous"}
+        index_store.save_index(
+            self.path,
+            {"version": 1, "updated_at": 1700000000, "pages": [old_page]},
+        )
+        old_manifest = json.loads(self.path.read_text(encoding="utf-8"))
+
+        with patch.object(index_store, "MAX_TOTAL_UNCOMPRESSED_BYTES", 500):
+            with self.assertRaisesRegex(ValueError, "aggregate uncompressed limit"):
+                index_store.save_index(
+                    self.path,
+                    {
+                        "version": 1,
+                        "updated_at": 1700000001,
+                        "pages": self.pages_in_distinct_buckets(),
+                    },
+                )
+
+        self.assertEqual(json.loads(self.path.read_text(encoding="utf-8")), old_manifest)
+        self.assertEqual(index_store.load_index(self.path)["pages"], [old_page])
+
+    def test_aggregate_decompression_limit_rejects_load(self):
+        index_store.save_index(
+            self.path,
+            {
+                "version": 1,
+                "updated_at": 1700000000,
+                "pages": self.pages_in_distinct_buckets(),
+            },
+        )
+        with patch.object(index_store, "MAX_TOTAL_UNCOMPRESSED_BYTES", 500):
+            with self.assertRaisesRegex(ValueError, "aggregate decompression limit"):
+                index_store.load_index(self.path)
 
 
 if __name__ == "__main__":
