@@ -39,6 +39,98 @@ class CumulativeProbeTests(unittest.TestCase):
                              {"a.example", "b.example"})
 
 
+    def _landing_candidate(self, url="https://frontiersin.org/journals/example/articles", status="policy_preapproved_robots_recheck_required"):
+        return {
+            "source_url": url,
+            "source_host": "frontiersin.org",
+            "catalog_ids": ["catalog:frontiers"],
+            "catalog_count": 1,
+            "review_status": status,
+            "source_access_mode": "catalog_landing_page",
+            "policy_preapproved": True,
+            "metadata_only": True,
+            "robots_recheck_required": True,
+            "fetch_authorized": False,
+            "terms_url": "https://www.frontiersin.org/legal/terms-and-conditions",
+            "terms_status": "reviewed_per_dataset",
+            "reviewed_at": "2026-11-21",
+            "allowed_catalog_path_patterns": ["/articles", "/journals/*/articles"],
+            "allowed_metadata_fields": ["title", "authors", "doi", "license"],
+            "prohibited_content": ["full_text", "images", "supplementary_files", "bulk_assets"],
+            "max_response_bytes": 1_500_000,
+            "min_interval_seconds": 3.0,
+            "max_requests_per_run": 40,
+        }
+
+    def test_catalog_landing_page_robots_preflight_never_fetches_page_content(self):
+        item = self._landing_candidate()
+        policy = {"max_requests_per_run": 40}
+        with patch.object(catalog_host_probe, "authorize_source_url", return_value=(policy, object(), 3.0, [])) as authorize, \\
+             patch.object(catalog_host_probe, "request_source_bytes") as request:
+            result = catalog_host_probe.probe_catalog_landing_page_robots(item)
+        authorize.assert_called_once_with(item["source_url"], purpose="landing_page")
+        request.assert_not_called()
+        self.assertEqual(result["status"], "robots_allowed")
+        self.assertTrue(result["robots_allowed"])
+        self.assertFalse(result["fetch_authorized"])
+        self.assertFalse(result["page_content_fetched"])
+        self.assertEqual(result["page_requests"], 0)
+
+    def test_catalog_landing_page_robots_denial_fails_closed(self):
+        from catalog_source_policy import SourcePolicyError
+        item = self._landing_candidate()
+        with patch.object(catalog_host_probe, "authorize_source_url", side_effect=SourcePolicyError("robots.txt disallows /journals/example/articles on frontiersin.org")), \\
+             patch.object(catalog_host_probe, "request_source_bytes") as request:
+            result = catalog_host_probe.probe_catalog_landing_page_robots(item)
+        request.assert_not_called()
+        self.assertEqual(result["status"], "robots_denied")
+        self.assertFalse(result["robots_allowed"])
+        self.assertFalse(result["fetch_authorized"])
+
+    def test_landing_robots_batch_is_bounded_cumulative_and_skips_unapproved(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            queue_path = root / "source-host-review-queue.json"
+            output_path = root / "robots.json"
+            candidates = [self._landing_candidate(f"https://frontiersin.org/journals/j{i}/articles") for i in range(35)]
+            candidates.append(self._landing_candidate("https://frontiersin.org/journals/not-allowed/articles", "path_not_allowlisted"))
+            queue_path.write_text(json.dumps({
+                "status": "source_review_backlog_not_a_fetch_queue",
+                "analysis_version": 12,
+                "source_index_pages": 100,
+                "source_index_updated_at": "2026-11-21T00:00:00Z",
+                "source_index_sha256": "source-index-sha",
+                "metrics": {"robots_checks_performed": 0, "network_requests": 0, "fetch_authorized_urls": 0, "records_published": 0},
+                "candidate_urls": candidates,
+            }), encoding="utf-8")
+            with patch.object(catalog_host_probe, "authorize_source_url", return_value=({"max_requests_per_run": 40}, object(), 3.0, [])) as authorize:
+                first = catalog_host_probe.run_landing_page_robots(queue_path, output_path, limit=30, recheck_seconds=86_400)
+                self.assertEqual(first["last_batch_urls_checked"], 30)
+                self.assertEqual(first["urls_checked"], 30)
+                self.assertEqual(first["fetch_authorized_urls"], 0)
+                self.assertEqual(first["page_content_fetched_urls"], 0)
+                second = catalog_host_probe.run_landing_page_robots(queue_path, output_path, limit=30, recheck_seconds=86_400)
+            self.assertEqual(second["last_batch_urls_checked"], 5)
+            self.assertEqual(second["urls_checked"], 35)
+            self.assertEqual(second["robots_allowed"], 35)
+            self.assertEqual(second["fetch_authorized_urls"], 0)
+            self.assertEqual(second["page_requests"], 0)
+            self.assertEqual(authorize.call_count, 35)
+
+    def test_landing_robots_queue_rejects_fetch_authorized_backlog(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            queue_path = root / "queue.json"
+            output_path = root / "robots.json"
+            queue_path.write_text(json.dumps({
+                "status": "source_review_backlog_not_a_fetch_queue",
+                "metrics": {"robots_checks_performed": 0, "network_requests": 1, "fetch_authorized_urls": 0, "records_published": 0},
+                "candidate_urls": [],
+            }), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "non-fetch queue"):
+                catalog_host_probe.run_landing_page_robots(queue_path, output_path)
+
+
     def test_unreviewed_host_is_not_requested(self):
         with patch.object(catalog_host_probe, "policy_for_host", return_value=None), \
              patch.object(catalog_host_probe, "request_source_bytes") as request:
