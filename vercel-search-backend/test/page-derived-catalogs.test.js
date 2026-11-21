@@ -62,7 +62,8 @@ test('Las Vegas prioritizes place and local directory catalogs over a large arti
  const catalogs=[
   {catalog_id:'articles',title:'National Geographic Articles',catalog_type:'knowledge_base',record_type:'article',source_url:'https://example.org/articles',record_count:1000,source_page_count:1000},
   {catalog_id:'places',title:'BLM Places',catalog_type:'geographic',record_type:'place',source_url:'https://example.gov/places',record_count:26,source_page_count:8},
-  {catalog_id:'organizations',title:'BLM Organizations',catalog_type:'organization_directory',record_type:'organization',source_url:'https://example.gov/offices',record_count:131,source_page_count:137}
+  {catalog_id:'organizations',title:'BLM Organizations',catalog_type:'organization_directory',record_type:'organization',source_url:'https://example.gov/offices',record_count:131,source_page_count:137},
+  {catalog_id:'events',title:'DOE Events',catalog_type:'events',record_type:'event',source_url:'https://example.gov/events',record_count:3,source_page_count:2}
  ];
  const records=[
   ...['Best places to stay in Las Vegas','Las Vegas in Photos','Las Vegas Must-Dos','A guide to Las Vegas','Las Vegas resorts'].map((title,i)=>({
@@ -72,13 +73,16 @@ test('Las Vegas prioritizes place and local directory catalogs over a large arti
   {record_id:'place',record_type:'place',title:'Las Vegas Strip',description:'A destination in Las Vegas.',
    source_urls:['https://example.gov/las-vegas-strip'],catalog_ids:['places'],attributes:{}},
   {record_id:'office',record_type:'organization',title:'Las Vegas Field Office',description:'Local public office.',
-   source_urls:['https://example.gov/las-vegas-office'],catalog_ids:['organizations'],attributes:{}}
+   source_urls:['https://example.gov/las-vegas-office'],catalog_ids:['organizations'],attributes:{}},
+  {record_id:'event',record_type:'event',title:'Las Vegas Grand Prix',description:'A major Las Vegas event.',
+   source_urls:['https://example.gov/las-vegas-grand-prix'],catalog_ids:['events'],attributes:{}}
  ];
  const results=searchPageDerivedCatalogs('Las Vegas',{catalogs,records},5);
- assert.deepEqual(results.slice(0,3).map(x=>x.catalog_id),['places','organizations','articles']);
+ assert.deepEqual(results.slice(0,4).map(x=>x.catalog_id),['places','organizations','events','articles']);
  assert.equal(results[0].relevance_class,'typed_location_match');
  assert.equal(results[1].relevance_class,'typed_location_match');
- assert.equal(results[2].relevance_class,'related_mention');
+ assert.equal(results[2].relevance_class,'related_event_match');
+ assert.equal(results[3].relevance_class,'related_mention');
 });
 test('Rolex article or subject hits are labeled as related mentions when no product record exists',()=>{
  const results=searchPageDerivedCatalogs('Rolex',{
