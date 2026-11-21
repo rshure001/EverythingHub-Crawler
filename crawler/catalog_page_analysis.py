@@ -484,7 +484,7 @@ def _add_global_subject_catalogs(pages: list[dict], page_rows: list[dict], recor
     topic_pages: dict[str, dict[str, dict]] = defaultdict(dict)
     topic_hosts: dict[str, set[str]] = defaultdict(set)
     excluded = {
-        "about", "best", "complete", "facts", "free", "guide", "guides", "history",
+        "about", "best", "complete", "facts", "free", "guide", "guides", "history", "product", "products", "item", "items", "model", "models", "watch", "watches",
         "home", "information", "latest", "learn", "news", "official", "online",
         "page", "pages", "photos", "picture", "pictures", "search", "site",
         "website", "welcome", "what", "when", "where", "with", "your",
