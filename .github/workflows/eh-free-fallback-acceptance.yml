@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 12
     env:
-      TARGET_URL: https://everythinghub-homepage-fixed-5ejp93con-rshure001-8053.vercel.app/
+      TARGET_URL: https://everythinghub-homepage-fixed.vercel.app/
     steps:
       - uses: actions/setup-node@v4
         with:
@@ -64,8 +64,11 @@ jobs:
               if (requireCatalog) await page.locator("#results .eh-catalog-result").first().waitFor({ state: "visible", timeout: 30000 });
               const count = await page.locator(resultSelector).count();
               const catalogs = await page.locator("#results .eh-catalog-result").evaluateAll(nodes => nodes.map(node => ({
-                title: node.querySelector("h3")?.textContent?.trim() || "",
+                title: node.querySelector("a")?.textContent?.trim() || "",
                 text: node.textContent?.trim() || "",
+                sourceKind: node.dataset.sourceKind || "page-derived",
+                relevanceClass: node.dataset.relevanceClass || "",
+                catalogId: node.dataset.catalogId || "",
                 visible: node.getBoundingClientRect().width > 0 && node.getBoundingClientRect().height > 0
               })));
               if (count < minCount) throw new Error(mode + " returned only " + count + " results for " + query);
@@ -87,20 +90,31 @@ jobs:
               report.checks.home = { http: response.status(), title: await page.title(), artwork: art, modes };
               await shot("everythinghub-home.png");
               const rolex = await search("web", "Rolex", "#results .eh-result", 1, true);
-              if (!rolex.catalogs.some(card => /Rolex/i.test(card.title + " " + card.text))) throw new Error("Rolex search has no visible relevant catalog directory: " + JSON.stringify(rolex.catalogs));
-              report.checks.rolex = { results: rolex.count, catalogs: rolex.catalogs.length, catalogTitles: rolex.catalogs.map(card => card.title) };
+              const rolexPageDerived = rolex.catalogs.some(card => card.sourceKind !== "external_link_only" && card.relevanceClass === "typed_product_match" && /Rolex/i.test(card.title + " " + card.text));
+              const rolexExternal = rolex.catalogs.some(card => card.sourceKind === "external_link_only" && /Rolex/i.test(card.title + " " + card.text));
+              if (!rolexPageDerived && !rolexExternal) throw new Error("Rolex search has no visible typed product catalog or official link-only directory: " + JSON.stringify(rolex.catalogs));
+              report.checks.rolex = { results: rolex.count, catalogs: rolex.catalogs.length, pageDerived: rolexPageDerived, externalDirectory: rolexExternal, catalogTitles: rolex.catalogs.map(card => card.title) };
               await shot("everythinghub-rolex.png");
               await goHome();
               const vegas = await search("web", "Las Vegas", "#results .eh-result", 1, true);
-              if (!vegas.catalogs.some(card => /Las Vegas/i.test(card.title + " " + card.text))) throw new Error("Las Vegas search has no visible relevant catalog directory: " + JSON.stringify(vegas.catalogs));
+              const vegasTyped = vegas.catalogs.some(card => card.sourceKind !== "external_link_only" && card.relevanceClass === "typed_location_match" && /Las Vegas/i.test(card.title + " " + card.text));
+              if (!vegasTyped) throw new Error("Las Vegas search has no visible page-derived typed location catalog: " + JSON.stringify(vegas.catalogs));
               if (vegas.catalogs.some(card => /Homeland Security Events/i.test(card.title + " " + card.text))) throw new Error("Las Vegas search displayed an unrelated event catalog");
-              report.checks.lasVegas = { results: vegas.count, catalogs: vegas.catalogs.length, catalogTitles: vegas.catalogs.map(card => card.title) };
+              report.checks.lasVegas = { results: vegas.count, catalogs: vegas.catalogs.length, pageDerivedTypedLocation: vegasTyped, catalogTitles: vegas.catalogs.map(card => card.title) };
               await shot("everythinghub-las-vegas.png");
               await goHome();
               const nasa = await search("web", "NASA", "#results .eh-result", 1, true);
-              if (!nasa.catalogs.some(card => /NASA/i.test(card.title + " " + card.text))) throw new Error("NASA search has no visible relevant catalog directory: " + JSON.stringify(nasa.catalogs));
-              report.checks.nasa = { results: nasa.count, catalogs: nasa.catalogs.length, catalogTitles: nasa.catalogs.map(card => card.title) };
+              const nasaPageDerived = nasa.catalogs.some(card => card.sourceKind !== "external_link_only" && card.relevanceClass === "typed_organization_match" && /NASA/i.test(card.title + " " + card.text));
+              const nasaExternal = nasa.catalogs.some(card => card.sourceKind === "external_link_only" && /NASA/i.test(card.title + " " + card.text));
+              if (!nasaPageDerived && !nasaExternal) throw new Error("NASA search has no visible organization catalog or official link-only directory: " + JSON.stringify(nasa.catalogs));
+              report.checks.nasa = { results: nasa.count, catalogs: nasa.catalogs.length, pageDerivedOrganization: nasaPageDerived, externalDirectory: nasaExternal, catalogTitles: nasa.catalogs.map(card => card.title) };
               await shot("everythinghub-nasa.png");
+              const categoryChecks = {};
+              for (const [category, query] of [["news", "NASA"], ["shopping", "Rolex"], ["places", "Las Vegas"], ["business", "Las Vegas hotels"], ["research", "NASA climate data"]]) {
+                const result = await search(category, query, "#results .eh-result, #results .eh-catalog-result", 1, false);
+                categoryChecks[category] = { query, visibleResults: result.count, catalogCards: result.catalogs.length };
+              }
+              report.checks.additionalCategories = categoryChecks;
               await goHome();
               await page.locator("#news-items .news-item").first().waitFor({ state: "visible", timeout: 45000 });
               report.checks.news = { count: await page.locator("#news-items .news-item").count(), status: await page.locator("#news-status").innerText() };
