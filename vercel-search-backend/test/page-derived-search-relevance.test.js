@@ -36,6 +36,7 @@ function fixture() {
       catalog("catalog:vegas-articles", "National Geographic Articles", "knowledge_base", "article", "Travel"),
       catalog("catalog:vegas-places", "Las Vegas Places", "geographic", "place", "Las Vegas"),
       catalog("catalog:vegas-events", "Homeland Security Events", "events", "event", ""),
+      catalog("catalog:vegas-event-subject", "Homeland Security Events", "knowledge_base", "subject", "Homeland Security Events"),
       
     ],
     records: [
@@ -46,6 +47,7 @@ function fixture() {
       record("r-vegas-article", "Chandelier bars and old-school kitsch: the best places to stay in Las Vegas", "article", ["catalog:vegas-articles"]),
       record("r-vegas-place", "Las Vegas Strip", "place", ["catalog:vegas-places"]),
       record("r-vegas-event", "Las Vegas Events Calendar", "event", ["catalog:vegas-events"]),
+      record("r-vegas-event-subject", "Las Vegas", "subject", ["catalog:vegas-event-subject"]),
       record("r-nasa-news", "NASA Announces New Mission", "article", ["catalog:vegas-articles"], "Latest NASA news and mission updates")
     ]
   };
