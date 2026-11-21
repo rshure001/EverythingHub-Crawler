@@ -1160,7 +1160,7 @@ class CatalogInventoryTriggerTests(unittest.TestCase):
         publish = workflow.split("Publish validated catalog analysis on main", 1)[1]
         self.assertIn("git merge-base --is-ancestor", publish)
         self.assertIn("git reset --hard origin/main", publish)
-        self.assertIn('python crawler/catalog_page_analysis.py --query Rolex --query "Las Vegas"', publish)
+        self.assertIn('python crawler/catalog_page_analysis.py --index public-search/manifest.json --query Rolex --query "Las Vegas"', publish)
         self.assertIn("python crawler/catalog_page_analysis.py --validate-only", publish)
         self.assertNotIn("git rebase origin/main", publish)
         self.assertNotIn("git push --force", publish)
