@@ -125,6 +125,14 @@ module.exports = async function handler(req, res) {
   const bingResults = bingResult.status === 'fulfilled' ? bingResult.value : [];
   const pageDerivedNetwork = pageDerivedResult.status === 'fulfilled' ? pageDerivedResult.value : null;
   let pageDerivedCatalogResults = pageDerivedNetwork ? searchPageDerivedCatalogs(query, pageDerivedNetwork, 5) : [];
+  const externalProductDirectory = externalCatalogResults.some(catalog =>
+    (catalog.matched_records || []).some(record => /^(product|brand|model|product_family)/i.test(String(record.record_type || '')))
+  );
+  if (externalProductDirectory) {
+    pageDerivedCatalogResults = pageDerivedCatalogResults.filter(catalog =>
+      (catalog.matched_records || []).some(record => /^(product|brand|model|product_family)/i.test(String(record.record_type || '')))
+    );
+  }
   let catalogResults = mergeCatalogResults(externalCatalogResults, pageDerivedCatalogResults);
   const catalogPreview = pageDerivedNetwork ? {
     status: 'freshness-unverified',
