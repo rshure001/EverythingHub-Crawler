@@ -70,12 +70,13 @@ jobs:
                 const titles = await page.locator(".eh-result-title").allTextContents();
                 report.searches[query] = {count,titles:titles.slice(0,5),emptyOrError:count===0?((await page.locator("body").innerText()).match(/no results found|temporarily unavailable|search unavailable/i)?.[0]||"No visible results"):null};
                 await page.screenshot({path:"everything-hub-"+query.toLowerCase().replace(/\s+/g,"-")+".png",fullPage:true});
-                if (!count) throw new Error(query+" returned no visible search results: "+JSON.stringify(report.searches[query]));
+                if (!count) report.searches[query].passed = false; else report.searches[query].passed = true;
               }
               await page.goto(report.url,{waitUntil:"domcontentloaded",timeout:45000});
               const news = page.locator(".top-news:visible, [aria-label*='news' i]:visible").first();
               report.liveNewsVisible = await news.count() > 0;
               report.liveNewsText = report.liveNewsVisible ? (await news.innerText()).slice(0,1200) : "No visible Live News section";
+              report.liveNewsPassed = report.liveNewsVisible && /temporarily unavailable|stories|headlines|top stories|live news/i.test(report.liveNewsText);
               await page.setViewportSize({width:390,height:844});
               await page.goto(report.url,{waitUntil:"domcontentloaded",timeout:45000});
               report.mobile = await page.evaluate(() => ({
@@ -90,8 +91,8 @@ jobs:
                 throw new Error("Mobile layout failed: "+JSON.stringify(report.mobile));
               }
               report.pageErrors=errors;
-              report.passed=errors.length===0;
-              if(errors.length) throw new Error("Browser page errors: "+errors.join("; "));
+              report.passed=errors.length===0 && Object.values(report.searches).every(x=>x.passed) && report.liveNewsPassed && report.mobile.documentWidth <= report.mobile.viewportWidth+2;
+              if(!report.passed) throw new Error("Live acceptance checks failed: "+JSON.stringify({searches:report.searches,liveNewsVisible:report.liveNewsVisible,liveNewsPassed:report.liveNewsPassed,mobile:report.mobile,pageErrors:errors}));
               fs.writeFileSync("production-report.json",JSON.stringify(report,null,2));
               console.log(JSON.stringify(report,null,2));
             } finally { await browser.close(); }
