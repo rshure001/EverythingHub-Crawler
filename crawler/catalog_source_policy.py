@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail-closed source-terms, robots.txt, redirect, and rate-limit gate for catalog APIs."""
+"""Fail-closed source-terms, robots.txt, redirect, and rate-limit gate for catalog APIs and landing pages."""
 from __future__ import annotations
 
 import json
@@ -82,6 +82,8 @@ def authorize_source_url(url: str, purpose: str = "discovery") -> tuple[dict, ob
         allowed_paths = policy.get("allowed_api_paths") or []
     elif purpose == "probe":
         allowed_paths = policy.get("allowed_probe_paths") or []
+    elif purpose == "landing_page":
+        allowed_paths = policy.get("allowed_catalog_paths") or []
     else:
         raise SourcePolicyError("unsupported catalog request purpose")
     if not path_allowed(parsed.path, allowed_paths):
