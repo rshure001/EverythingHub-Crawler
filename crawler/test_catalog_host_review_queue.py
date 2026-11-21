@@ -261,7 +261,10 @@ class CatalogHostReviewQueueTests(unittest.TestCase):
             manifest_path, registry_path, policy_path = self._fixture(Path(tmp))
             _, payload = build_from_files(manifest_path, registry_path, policy_path)
             item = next(x for x in payload["catalogs"] if x["catalog_id"] == "catalog:frontiers")
-            url = next(x for x in payload["candidate_urls"] if x["source_host"] == "frontiersin.org")
+            url = next(
+                x for x in payload["candidate_urls"]
+                if x["source_host"] == "frontiersin.org" and x["source_url"].endswith("/articles")
+            )
             self.assertEqual(item["source_access_mode"], "catalog_landing_page")
             self.assertTrue(item["metadata_only"])
             self.assertEqual(item["allowed_metadata_fields"], ["title", "authors", "doi", "license"])
