@@ -2,7 +2,7 @@
 name: Everything Hub browser verification
 on:
   push:
-    branches: [main, 'eh/fallback-attribution-2026-11-21']
+    branches: [main, 'eh/fallback-attribution-2026-11-21', 'eh/catalog-preview-cards-2026-11-21']
     paths:
       - '.github/workflows/everything-hub-production-browser-check.yml'
       - 'vercel-homepage/**'
@@ -235,8 +235,28 @@ jobs:
                 await page.locator("#results .eh-result").first().waitFor({ state: "visible", timeout: 60000 });
                 const result = await readResultCards();
                 const pattern = query === "Rolex" ? /rolex/i : query === "Las Vegas" ? /las vegas|vegas/i : /nasa/i;
-                if (!result.count || !result.titles.some(title => pattern.test(title))) throw new Error(query + " did not return relevant visible results: " + JSON.stringify(result));
-                report.searches[query] = result;
+                if (!result.count || !result.titles.some(title => pattern.test(title))) throw new Error(query + " did not return relevant visible web results: " + JSON.stringify(result));
+                const catalogCards = page.locator("#results .eh-catalog-result");
+                const catalogCount = await catalogCards.count();
+                const catalogTitles = await catalogCards.locator("a").allTextContents();
+                const catalogMatched = await catalogCards.locator(".catalog-matched").allTextContents();
+                const catalogRelevance = await catalogCards.locator(".catalog-relevance").allTextContents();
+                const catalogRights = await catalogCards.locator(".catalog-rights").allTextContents();
+                const catalogFlags = await catalogCards.evaluateAll(nodes => nodes.map(node => ({
+                  id: node.dataset.catalogId,
+                  previewOnly: node.dataset.previewOnly,
+                  commercialEligible: node.dataset.commercialEligible
+                })));
+                const relevantCatalog = catalogMatched.some(text => pattern.test(text)) ||
+                  catalogTitles.some(title => pattern.test(title));
+                if (!catalogCount || !relevantCatalog) throw new Error(query + " returned no relevant visible catalog preview: " + JSON.stringify({catalogCount,catalogTitles,catalogMatched}));
+                if (!catalogFlags.every(item => item.id && item.previewOnly === "true" && item.commercialEligible === "false") ||
+                    !catalogRelevance.every(text => text.trim().length > 0) ||
+                    !catalogRights.every(text => /Candidate preview only/.test(text) && /Record rights not cleared/.test(text) && /Commercial use not cleared/.test(text))) {
+                  throw new Error(query + " catalog preview rights or identity labels failed: " + JSON.stringify({catalogFlags,catalogRelevance,catalogRights}));
+                }
+                report.searches[query] = {...result,catalogPreview:{count:catalogCount,titles:catalogTitles,matched:catalogMatched,relevance:catalogRelevance,rights:catalogRights}};
+
                 await page.screenshot({ path: "everythinghub-fallback-" + query.toLowerCase().replace(/\s+/g, "-") + ".png", fullPage: true });
               }
 
