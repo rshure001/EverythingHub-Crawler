@@ -7,6 +7,8 @@ const {tokenize}=require('./search-core');
 const RAW='https://raw.githubusercontent.com/rshure001/EverythingHub-Crawler/';
 const REF='https://api.github.com/repos/rshure001/EverythingHub-Crawler/git/ref/heads/main';
 const CACHE_MS=300000, STALE_MS=3600000;
+const MAX_QUERY_CANDIDATES=40, MAX_CATALOG_INDEX_GZIP=8000000, MAX_CATALOG_INDEX_JSON=40000000;
+let manifestCache=null; const queryCache=new Map();
 const MAX_MANIFEST=4000000, MAX_REGISTRY_GZIP=5000000, MAX_RECORDS_GZIP=16000000;
 const MAX_REGISTRY_JSON=32000000, MAX_RECORDS_JSON=96000000;
 const CONTENT_INTENT=new Set(['article','articles','news','research','study','studies','report','reports','guide','guides','tutorial','documentation','paper','papers','dataset','datasets','video','videos','image','images','photo','photos','media','book','books']);
@@ -37,7 +39,7 @@ function safeUrl(value){
 function validateManifest(m){
  if(!m||m.version!==1||m.integrity!=='sha256')throw new Error('page_catalog_manifest_schema_invalid');
  if(!Number.isSafeInteger(m.source_index_pages)||m.source_index_pages<1||m.source_index_pages>180000)throw new Error('page_catalog_source_count_invalid');
- if(!Number.isSafeInteger(m.catalog_count)||m.catalog_count<1||m.catalog_count>10000||!Number.isSafeInteger(m.record_count)||m.record_count<1||m.record_count>250000)throw new Error('page_catalog_counts_invalid');
+ if(!Number.isSafeInteger(m.catalog_count)||m.catalog_count<1||m.catalog_count>25000||!Number.isSafeInteger(m.record_count)||m.record_count<1||m.record_count>1200000)throw new Error('page_catalog_counts_invalid');
  if(typeof m.generated_at!=='string'||!Number.isFinite(Date.parse(m.generated_at))||!Array.isArray(m.files)||m.files.length<2||m.files.length>20000)throw new Error('page_catalog_manifest_invalid');
  const files=new Map();
  for(const f of m.files){
@@ -46,7 +48,6 @@ function validateManifest(m){
   files.set(f.file,f);
  }
  if(!files.has('registry.json.gz')||!files.has('records.json.gz'))throw new Error('page_catalog_artifacts_missing');
- if(files.get('registry.json.gz').bytes>MAX_REGISTRY_GZIP||files.get('records.json.gz').bytes>MAX_RECORDS_GZIP)throw new Error('page_catalog_compressed_limit');
  return files;
 }
 function decodeArtifact(meta,raw,maxCompressed,maxDecoded,label){
@@ -110,7 +111,8 @@ async function loadPageDerivedCatalogsFromManifest(manifest,commitSha,manifestRa
  ]);
  return validatePageDerivedCatalogs(manifest,registryRaw,recordsRaw);
 }
-async function loadPageDerivedCatalogs(){
+async function loadPageDerivedCatalogs(query){
+ if(String(query||'').trim())return loadQueryScopedPageDerivedCatalogs(query);
  if(cache&&Date.now()-cache.loadedAt<CACHE_MS)return {...cache,stale:false};
  try{
   const ref=JSON.parse((await getBuffer(REF+'?v='+Date.now(),4096,7000)).toString('utf8'));
@@ -125,6 +127,100 @@ async function loadPageDerivedCatalogs(){
   throw error;
  }
 }
+
+async function loadQueryScopedPageDerivedCatalogs(query,fetchBuffer=getBuffer){
+ const text=String(query||'').trim();
+ if(!text||text.length>160)throw new Error('page_catalog_query_invalid');
+ const terms=Array.from(new Set(tokenize(text))).slice(0,12);
+ if(!terms.length)return {catalogs:[],records:[],generatedAt:null,analysisVersion:null,sourceIndexPages:0,catalogCount:0,recordCount:0,metrics:{},sourcePolicyReview:null};
+ const cacheKey=text.toLowerCase();
+ const prior=queryCache.get(cacheKey);
+ if(prior&&Date.now()-prior.loadedAt<CACHE_MS)return {...prior,stale:false};
+ try{
+  let snapshot=manifestCache;
+  if(!snapshot||Date.now()-snapshot.loadedAt>=CACHE_MS){
+   const ref=JSON.parse((await fetchBuffer(REF+'?v='+Date.now(),4096,7000)).toString('utf8'));
+   const sha=ref&&ref.object&&ref.object.sha;
+   if(typeof sha!=='string'||!/^[a-f0-9]{40}$/i.test(sha))throw new Error('page_catalog_git_ref_invalid');
+   const manifestRaw=await fetchBuffer(RAW+sha+'/data/page-derived-catalogs/manifest.json',MAX_MANIFEST,7000);
+   let manifest;try{manifest=JSON.parse(manifestRaw.toString('utf8'));}catch{throw new Error('page_catalog_manifest_json_invalid');}
+   const files=validateManifest(manifest);
+   const policyReview=manifest.source_policy_review||null;
+   if(policyReview&&(policyReview.schema_version!==1||typeof policyReview.register_sha256!=='string'||!/^[a-f0-9]{64}$/i.test(policyReview.register_sha256)||policyReview.scope!=='source-level-only'||policyReview.record_level_clearance!=='not_reviewed'||policyReview.commercial_eligibility!==false||policyReview.republication!=='not_cleared'))throw new Error('page_catalog_policy_review_invalid');
+   snapshot={sha,manifest,files,policyReview,loadedAt:Date.now()};
+   manifestCache=snapshot;
+  }
+  const {sha,manifest,files,policyReview}=snapshot;
+  const base=RAW+sha+'/data/page-derived-catalogs/';
+  const prefixes=Array.from(new Set(terms.map(term=>crypto.createHash('sha256').update(term).digest('hex').slice(0,2))));
+  const shardEntries=prefixes.map(prefix=>files.get('search-index/'+prefix+'.json.gz')).filter(Boolean);
+  if(!shardEntries.length)throw new Error('page_catalog_search_shard_missing');
+  const shardPairs=await Promise.all(shardEntries.map(async entry=>{
+   const raw=await fetchBuffer(base+entry.file.split('/').map(encodeURIComponent).join('/'),Math.min(2000000,entry.bytes),7000);
+   const payload=decodeArtifact(entry,raw,2000000,20000000,'page_catalog_search_shard');
+   const prefix=entry.file.split('/')[1].slice(0,2);
+   if(!payload||payload.version!==1||payload.prefix!==prefix||!payload.tokens||typeof payload.tokens!=='object'||Array.isArray(payload.tokens))throw new Error('page_catalog_search_shard_schema_invalid');
+   return [prefix,payload.tokens];
+  }));
+  const shardsByPrefix=new Map(shardPairs);
+  let candidates=null;
+  for(const term of terms){
+   const prefix=crypto.createHash('sha256').update(term).digest('hex').slice(0,2);
+   const postings=shardsByPrefix.get(prefix)&&shardsByPrefix.get(prefix)[term];
+   const ids=new Set(Array.isArray(postings)?postings:[]);
+   candidates=candidates===null?ids:new Set([...candidates].filter(id=>ids.has(id)));
+   if(!candidates.size)break;
+  }
+  const ids=Array.from(candidates||[]).slice(0,MAX_QUERY_CANDIDATES);
+  if(!ids.length){
+   const empty={catalogs:[],records:[],generatedAt:manifest.generated_at,analysisVersion:manifest.analysis_version,sourceIndexPages:manifest.source_index_pages,sourceIndexUpdatedAt:manifest.source_index_updated_at,sourceIndexSha256:manifest.source_index_sha256,catalogCount:manifest.catalog_count,recordCount:manifest.record_count,metrics:manifest.metrics||{},sourcePolicyReview:policyReview,loadedAt:Date.now()};
+   queryCache.set(cacheKey,empty);return {...empty};
+  }
+  const loaded=await Promise.allSettled(ids.map(async id=>{
+   const digest=crypto.createHash('sha256').update(id).digest('hex');
+   const path='indexes/'+digest.slice(0,2)+'/'+digest.slice(0,24)+'.json.gz';
+   const entry=files.get(path);
+   if(!entry||entry.bytes>MAX_CATALOG_INDEX_GZIP)throw new Error('page_catalog_index_missing_or_too_large');
+   const raw=await fetchBuffer(base+path.split('/').map(encodeURIComponent).join('/'),MAX_CATALOG_INDEX_GZIP,8000);
+   const payload=decodeArtifact(entry,raw,MAX_CATALOG_INDEX_GZIP,MAX_CATALOG_INDEX_JSON,'page_catalog_index');
+   if(!payload||payload.version!==1||payload.catalog_id!==id||!Array.isArray(payload.records)||payload.records.length!==entry.items)throw new Error('page_catalog_index_schema_invalid');
+   const seen=new Set();
+   for(const record of payload.records){
+    if(!record||typeof record.record_id!=='string'||!record.record_id||seen.has(record.record_id)||!Array.isArray(record.catalog_ids)||!record.catalog_ids.includes(id)||record.commercial_eligible!==false||!Array.isArray(record.source_urls)||!record.source_urls.length||record.source_urls.some(url=>!safeUrl(url)))throw new Error('page_catalog_index_record_invalid');
+    seen.add(record.record_id);
+    if(policyReview){
+     const status=record.source_policy_review_status,hosts=record.source_policy_review_hosts,evidence=record.source_policy_review_evidence_urls;
+     if(!['not_reviewed','conditional_source_review','partial_source_review'].includes(status)||record.record_level_clearance!=='not_reviewed'||record.source_terms_status!=='not_reviewed'||record.commercial_eligible!==false)throw new Error('page_catalog_record_policy_annotation_invalid');
+     if(status!=='not_reviewed'&&(!Array.isArray(hosts)||!hosts.length||!Array.isArray(evidence)||!evidence.length||record.source_policy_review_scope!=='source-level-only'))throw new Error('page_catalog_record_policy_evidence_invalid');
+     if(status==='not_reviewed'&&((Array.isArray(hosts)&&hosts.length)||(Array.isArray(evidence)&&evidence.length)))throw new Error('page_catalog_unreviewed_policy_has_evidence');
+    }
+   }
+   const records=payload.records,counts=new Map();
+   for(const record of records){const type=String(record.record_type||'subject').toLowerCase();counts.set(type,(counts.get(type)||0)+1);}
+   const recordType=Array.from(counts).sort((a,b)=>b[1]-a[1])[0]?.[0]||'subject';
+   const typeMap={product:'commerce',brand:'commerce',model:'commerce',place:'geographic',business:'business_directory',service:'service_directory',event:'events',organization:'organization_directory'};
+   const catalogType=typeMap[recordType]||'knowledge_base';
+   const sourceUrl=records.flatMap(r=>r.source_urls||[]).map(safeUrl).find(Boolean)||'';
+   if(!sourceUrl)throw new Error('page_catalog_index_source_missing');
+   const sourceHost=new URL(sourceUrl).hostname;
+   const pageIds=new Set(records.flatMap(r=>Array.isArray(r.source_page_ids)?r.source_page_ids:[]));
+   const hosts=Array.from(new Set(records.flatMap(r=>Array.isArray(r.source_policy_review_hosts)?r.source_policy_review_hosts:[])));
+   const statuses=records.map(r=>r.source_policy_review_status||'not_reviewed');
+   const policyStatus=statuses.includes('conditional_source_review')?'conditional_source_review':statuses.includes('partial_source_review')?'partial_source_review':'not_reviewed';
+   return {catalog:{catalog_id:id,title:String(payload.title||'Catalog'),catalog_type:catalogType,record_type:recordType,subject:'',source_host:sourceHost,source_url:sourceUrl,source_page_ids:Array.from(pageIds),source_page_count:pageIds.size,record_ids:records.map(r=>r.record_id),record_count:records.length,is_source_declared_catalog:false,catalog_origin:'page_derived_index',evidence_strength:'unknown',catalog_status:payload.status||'candidate_needs_source_validation',status:payload.status||'candidate_needs_source_validation',source_terms_status:'not_reviewed',source_policy_review_status:policyStatus,source_policy_review_hosts:hosts,record_level_clearance:'not_reviewed',rights_status:'publicly_accessible_not_cleared_for_redistribution',commercial_eligible:false},records};
+  }));
+  const catalogs=[],records=[],seenRecords=new Set();
+  for(const item of loaded){if(item.status!=='fulfilled')continue;catalogs.push(item.value.catalog);for(const record of item.value.records)if(!seenRecords.has(record.record_id)){seenRecords.add(record.record_id);records.push(record);}}
+  const result={catalogs,records,generatedAt:manifest.generated_at,analysisVersion:manifest.analysis_version,sourceIndexPages:manifest.source_index_pages,sourceIndexUpdatedAt:manifest.source_index_updated_at,sourceIndexSha256:manifest.source_index_sha256,catalogCount:manifest.catalog_count,recordCount:manifest.record_count,metrics:manifest.metrics||{},sourcePolicyReview:policyReview,loadedAt:Date.now(),queryCandidateCount:ids.length,queryCatalogsLoaded:catalogs.length};
+  queryCache.set(cacheKey,result);if(queryCache.size>100)queryCache.delete(queryCache.keys().next().value);
+  return {...result,stale:false};
+ }catch(error){
+  const cached=queryCache.get(cacheKey);
+  if(cached&&Date.now()-cached.loadedAt<STALE_MS)return {...cached,stale:true,refreshError:String(error&&error.message||error).slice(0,160)};
+  throw error;
+ }
+}
+
 function searchPageDerivedCatalogs(query,network,limit=5){
  const text=String(query||'').trim();
  if(!text||text.length>160||!network||!Array.isArray(network.catalogs)||!Array.isArray(network.records))return [];
@@ -284,5 +380,5 @@ function matchesPageIndexSnapshot(pageDerived,pageIndex){
   pageDerived.sourceIndexPages===pageIndex.indexedPages&&Number.isFinite(sourceTime)&&
   Number.isFinite(pageTime)&&Math.abs(sourceTime-pageTime)<=60000;
 }
-function clearPageDerivedCatalogsCache(){cache=null;}
-module.exports={validateManifest,validatePageDerivedCatalogs,loadPageDerivedCatalogsFromManifest,loadPageDerivedCatalogs,searchPageDerivedCatalogs,matchesPageIndexSnapshot,clearPageDerivedCatalogsCache};
+function clearPageDerivedCatalogsCache(){cache=null;manifestCache=null;queryCache.clear();}
+module.exports={validateManifest,validatePageDerivedCatalogs,loadPageDerivedCatalogsFromManifest,loadPageDerivedCatalogs,loadQueryScopedPageDerivedCatalogs,searchPageDerivedCatalogs,matchesPageIndexSnapshot,clearPageDerivedCatalogsCache};
