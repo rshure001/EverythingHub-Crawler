@@ -1,56 +1,92 @@
-# Run EverythingHub's own PostgreSQL database
+# Run Everything Hub's own PostgreSQL 17 database
 
-This is a self-hostable PostgreSQL 17 deployment for EverythingHub only.
-It binds the database port to localhost; do not expose PostgreSQL directly
-to the public internet. Put application access behind a private network or
-authenticated API. Dog Tag Day is not part of this stack.
+This is the independent, self-hosted Everything Hub database. It is separate
+from Supabase and from Dog Tag Day. It does not change production traffic or
+start any crawler/sitemap workers.
 
-## Start
+## Windows (Docker Desktop)
 
-1. Install Docker Engine and the Docker Compose plugin on the private host.
-2. Copy `.env.example` to `.env`; replace the password with a long random value.
+1. Install Docker Desktop and enable Linux containers.
+2. Open PowerShell in the repository's `database` folder.
+3. Run:
+
+```powershell
+.\\start-postgres-windows.ps1
+```
+
+The launcher creates a private `.env` file with strong random credentials if
+one does not already exist, starts the PostgreSQL 17 and authenticated search
+API containers, and verifies the database plus the `eh_quad` page, queue, and
+catalog tables. It does not start a crawler, import repository data, alter
+Supabase, or open firewall/router ports. Keep the computer powered on for
+continuous service.
+
+## Linux
+
+1. Install Docker Engine and the Docker Compose plugin.
+2. Copy `.env.example` to `.env` and replace both placeholder secrets with
+   long random hexadecimal values.
 3. From this directory run:
 
 ```sh
-set -a
-. ./.env
-set +a
-EH_DB_PASSWORD="$EH_DB_PASSWORD" EH_SEARCH_API_TOKEN="$EH_SEARCH_API_TOKEN" docker compose up -d
-docker compose ps
-docker compose logs --tail=50 everythinghub-db
+docker compose --env-file .env -f docker-compose.yml up -d --build
+docker compose --env-file .env -f docker-compose.yml ps
+docker compose --env-file .env -f docker-compose.yml logs --tail=50 everythinghub-db
 ```
 
-The first initialization applies `001_everythinghub_core.sql` automatically. The compose stack starts both PostgreSQL and the authenticated search API. The named Docker volume persists database data across container restarts. The API is published only on localhost port 58080; `/healthz` checks readiness and `/search?q=...` requires an `Authorization: Bearer <token>` header.
+## Database initialization
 
-Example local search request (use your private token; never put it in browser code):
+On a brand-new Docker volume, the PostgreSQL entrypoint creates the local
+`service_role` compatibility role and applies migrations 002 through 005 in
+order. This initializes the isolated `eh_quad` schema used by the search API,
+including page documents, crawl queue, intelligence, and catalog tables.
+The legacy unqualified `001_everythinghub_core.sql` is deliberately not used:
+the API is locked to `eh_quad`.
 
-```sh
-curl -H "Authorization: Bearer $EH_SEARCH_API_TOKEN" \
-  "http://127.0.0.1:58080/search?q=NASA&limit=10"
+Docker only runs these initialization scripts when the data volume is empty.
+Never delete the volume to force reinitialization. For an existing database,
+back it up and apply reviewed migrations manually.
+
+## Verify and search
+
+- PostgreSQL: `127.0.0.1:55432` (loopback only)
+- Authenticated search API: `http://127.0.0.1:58080`
+- Health: `http://127.0.0.1:58080/healthz`
+
+Example from PowerShell (the token is stored in the private `.env` file):
+
+```powershell
+$token = (Get-Content .env | Where-Object { $_ -like 'EH_SEARCH_API_TOKEN=*' })[0].Split('=',2)[1]
+Invoke-RestMethod -Headers @{ Authorization = "Bearer $token" } -Uri "http://127.0.0.1:58080/search?q=NASA&limit=10"
 ```
 
 ## Backups
 
-Create a compressed logical backup:
+Create a logical backup from PowerShell:
 
-```sh
-docker compose exec -T everythinghub-db pg_dump -U everythinghub -d everythinghub -Fc > everythinghub-$(date -u +%Y%m%dT%H%M%SZ).dump
+```powershell
+$stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+docker exec everythinghub-db pg_dump -U everythinghub -d everythinghub -Fc | Set-Content -Encoding Byte "everythinghub-$stamp.dump"
 ```
 
 Keep backups encrypted and off-host. Test restores before relying on them.
-Do not delete the named volume to reset the database.
+Do not delete the named Docker volume.
 
 ## Importing existing crawler data
 
-Set `DATABASE_URL` from the local .env file and run
-`python database/import_repository_index.py` from the repository root after
-the index snapshot is present. The import is additive/upsert-only.
+Only after the database is verified and a backup exists, set
+`DATABASE_URL` from the private `.env` and run
+`python database/import_repository_index.py` from the repository root.
+The importer is restricted to `eh_quad` and additive/upsert-only. Catalog
+records are imported separately by `database/import_universal_catalogs.py`.
+Do not run either importer automatically during database startup.
 
-## Operational notes
+## Security and operational boundaries
 
-- The PostgreSQL port is loopback-only (127.0.0.1:55432).
-- Use private networking or a tightly authenticated application service for
-  remote access; never open port 5432 to the world.
-- Store credentials in a host secret manager or protected environment file.
-- This compose file provisions only the database. It does not switch the
-  production crawler or search API to this database.
+- PostgreSQL binds only to `127.0.0.1:55432`; never expose port 5432 publicly.
+- The search API binds only to `127.0.0.1:58080` on the host and requires a
+  bearer token for search.
+- Keep `.env` private and out of Git. Never put the token in browser code.
+- This local stack is independent and is not yet a production cutover.
+- Do not start crawl/sitemap workers or switch production functions without
+  explicit approval.
