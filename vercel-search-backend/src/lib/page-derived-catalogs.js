@@ -128,7 +128,7 @@ function searchPageDerivedCatalogs(query,network,limit=5){
    score+=terms.filter(t=>descTokens.has(t)).length*2+terms.filter(t=>attrTokens.has(t)).length*4;
    if(['product','brand','model'].includes(type)&&(titleMatch||attrMatch||catalogMatch))score+=24;
    if(type==='place'&&terms.length>=2)score+=18;
-   if(catalogMatch)score+=15;
+   if(catalogMatch)score+=contentRecord&&!contentIntent?5:15;
    if(!groups.has(id))groups.set(id,{catalog:c,matches:new Map()});
    const prior=groups.get(id).matches.get(record.record_id);
    if(!prior||score>prior.score)groups.get(id).matches.set(record.record_id,{record,score});
@@ -143,11 +143,13 @@ function searchPageDerivedCatalogs(query,network,limit=5){
   const types=new Set(matched.map(x=>String(x.record.record_type||'').toLowerCase()));
   let score=matched.slice(0,3).reduce((sum,x)=>sum+x.score,0);
   const ct=new Set(tokenize([c.title,c.subject,c.source_host].join(' ')));
-  if(terms.every(t=>ct.has(t)))score+=100+10*terms.length;
+  const contentCatalog=['article','resource','media','subject'].includes(String(c.record_type||'').toLowerCase());
+  if(terms.every(t=>ct.has(t)))score+=contentCatalog&&!contentIntent?25+5*terms.length:100+10*terms.length;
   if(c.is_source_declared_catalog)score+=8;if(c.evidence_strength==='high')score+=4;
-  if(c.catalog_type==='geographic'&&types.has('place')&&terms.length>=2)score+=30;
-  if(c.catalog_type==='commerce'&&['product','brand','model'].some(t=>types.has(t)))score+=30;
-  if(['business_directory','service_directory'].includes(c.catalog_type)&&['business','service'].some(t=>types.has(t)))score+=20;
+  if(c.catalog_type==='geographic')score+=types.has('place')&&terms.length>=2?70:-20;
+  if(c.catalog_type==='commerce')score+=['product','brand','model'].some(t=>types.has(t))?50:-20;
+  if(c.catalog_type==='business_directory')score+=types.has('business')?40:-15;
+  if(c.catalog_type==='service_directory')score+=types.has('service')?40:-15;
   let label=String(c.catalog_type||'subject').replace(/_/g,' ')+' catalog';
   if(c.catalog_type==='geographic')label='Place catalog';
   if(c.catalog_type==='commerce')label='Product catalog';
@@ -157,7 +159,7 @@ function searchPageDerivedCatalogs(query,network,limit=5){
   const sourcePageCount=Number.isSafeInteger(c.source_page_count)?c.source_page_count:0;
   const names=matchedRecords.map(r=>r.record_type+': '+r.title);
   const snippet='Candidate catalog preview · '+recordCount.toLocaleString()+' records · '+sourcePageCount.toLocaleString()+' source pages. Matching records: '+names.join(' · ')+'. Source terms and reuse rights have not been reviewed; preview only.';
-  results.push({title:String(c.title||'Catalog')+' — '+label+': '+matchedRecords[0].title,url,snippet,description:snippet,source:'Everything Hub Catalog Preview · '+label,origin:'Everything Hub Catalog Preview',provider:'everythinghub-catalog-preview',mediaType:'web',score,catalog_id:id,catalog_title:String(c.title||''),catalog_type:c.catalog_type,catalog_status:c.catalog_status||c.status||'candidate_needs_source_validation',catalog_origin:c.catalog_origin||'unknown',evidence_strength:c.evidence_strength||'unknown',source_terms_status:c.source_terms_status||'not_reviewed',rights_status:c.rights_status||'publicly_accessible_not_cleared_for_redistribution',commercial_eligible:false,preview_only:true,record_count:recordCount,source_page_count:sourcePageCount,matched_records:matchedRecords});
+  results.push({title:String(c.title||'Catalog')+' — '+label+': '+matchedRecords[0].title,url,snippet,description:snippet,source:'Everything Hub Catalog Preview · '+label,origin:'Everything Hub Catalog Preview',provider:'everythinghub-catalog-preview',mediaType:'web',score,catalog_id:id,catalog_title:String(c.title||''),catalog_type:c.catalog_type,record_type:c.record_type,catalog_status:c.catalog_status||c.status||'candidate_needs_source_validation',catalog_origin:c.catalog_origin||'unknown',evidence_strength:c.evidence_strength||'unknown',source_terms_status:c.source_terms_status||'not_reviewed',rights_status:c.rights_status||'publicly_accessible_not_cleared_for_redistribution',commercial_eligible:false,preview_only:true,record_count:recordCount,source_page_count:sourcePageCount,matched_records:matchedRecords});
  }
  const n=Number.isInteger(limit)?Math.max(1,Math.min(8,limit)):5;
  return results.sort((a,b)=>b.score-a.score||b.matched_records.length-a.matched_records.length||a.title.localeCompare(b.title)).slice(0,n);

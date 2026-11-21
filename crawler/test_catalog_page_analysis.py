@@ -840,5 +840,33 @@ class PageDerivedCatalogAnalysisTests(unittest.TestCase):
         self.assertNotIn("model", result["metrics"]["unique_records_by_type"])
         self.assertNotIn("brand", result["metrics"]["unique_records_by_type"])
 
+    def test_catalog_search_prioritizes_matching_record_types_over_content_mentions(self):
+        analysis = {
+            "catalogs": [
+                {"catalog_id": "rolex-articles", "title": "Rolex News", "catalog_type": "knowledge_base",
+                 "record_type": "article", "record_ids": ["rolex-article"], "source_page_count": 1},
+                {"catalog_id": "rolex-models", "title": "Rolex Models", "catalog_type": "commerce",
+                 "record_type": "model", "record_ids": ["rolex-model"], "source_page_count": 1},
+                {"catalog_id": "vegas-articles", "title": "Las Vegas Events", "catalog_type": "knowledge_base",
+                 "record_type": "article", "record_ids": ["vegas-article"], "source_page_count": 1},
+                {"catalog_id": "vegas-places", "title": "Nevada Places", "catalog_type": "geographic",
+                 "record_type": "place", "record_ids": ["vegas-place"], "source_page_count": 1},
+            ],
+            "records": [
+                {"record_id": "rolex-article", "record_type": "article", "title": "Rolex News",
+                 "description": "A news article about watches.", "attributes": {}},
+                {"record_id": "rolex-model", "record_type": "model", "title": "Submariner",
+                 "description": "Rolex watch model.", "attributes": {"brand": "Rolex"}},
+                {"record_id": "vegas-article", "record_type": "article", "title": "Las Vegas Championship",
+                 "description": "Sports coverage from Las Vegas.", "attributes": {}},
+                {"record_id": "vegas-place", "record_type": "place", "title": "Las Vegas Strip",
+                 "description": "The Las Vegas Strip in Nevada.", "attributes": {}},
+            ],
+        }
+        rolex_hits = search_catalog_network("Rolex", analysis)
+        self.assertEqual(rolex_hits[0]["catalog_id"], "rolex-models")
+        vegas_hits = search_catalog_network("Las Vegas", analysis)
+        self.assertEqual(vegas_hits[0]["catalog_id"], "vegas-places")
+
 if __name__ == "__main__":
     unittest.main()

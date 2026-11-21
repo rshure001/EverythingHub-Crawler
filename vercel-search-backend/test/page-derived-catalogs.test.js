@@ -65,3 +65,22 @@ test('freshness requires matching source-page count and update timestamp',()=>{
  assert.equal(matchesPageIndexSnapshot({sourceIndexPages:9,sourceIndexUpdatedAt:'2026-11-20T22:00:00Z'},{indexedPages:10,updatedAt}),false);
  assert.equal(matchesPageIndexSnapshot({sourceIndexPages:10,sourceIndexUpdatedAt:'2026-11-20T21:50:00Z'},{indexedPages:10,updatedAt}),false);
 });
+
+test('type-aware ranking puts product and place catalogs ahead of incidental content catalogs',()=>{
+ const network={
+  catalogs:[
+   {catalog_id:'rolex-news',title:'Rolex News',catalog_type:'knowledge_base',record_type:'article',source_url:'https://example.org/rolex-news',record_count:1,source_page_count:1},
+   {catalog_id:'rolex-models',title:'Rolex Models',catalog_type:'commerce',record_type:'model',source_url:'https://example.com/rolex-models',record_count:1,source_page_count:1},
+   {catalog_id:'vegas-news',title:'Las Vegas Events',catalog_type:'knowledge_base',record_type:'article',source_url:'https://example.org/vegas-news',record_count:1,source_page_count:1},
+   {catalog_id:'vegas-places',title:'Nevada Places',catalog_type:'geographic',record_type:'place',source_url:'https://example.net/vegas-places',record_count:1,source_page_count:1}
+  ],
+  records:[
+   {record_id:'rolex-news-record',record_type:'article',title:'Rolex News',description:'A news article about watches',source_urls:['https://example.org/rolex-news'],catalog_ids:['rolex-news'],attributes:{}},
+   {record_id:'rolex-model-record',record_type:'model',title:'Submariner',description:'Rolex watch model',source_urls:['https://example.com/submariner'],catalog_ids:['rolex-models'],attributes:{brand:'Rolex'}},
+   {record_id:'vegas-news-record',record_type:'article',title:'Las Vegas Championship',description:'Sports coverage from Las Vegas',source_urls:['https://example.org/vegas-game'],catalog_ids:['vegas-news'],attributes:{}},
+   {record_id:'vegas-place-record',record_type:'place',title:'Las Vegas Strip',description:'The Las Vegas Strip in Nevada',source_urls:['https://example.net/las-vegas-strip'],catalog_ids:['vegas-places'],attributes:{}}
+  ]
+ };
+ assert.equal(searchPageDerivedCatalogs('Rolex',network,5)[0].catalog_id,'rolex-models');
+ assert.equal(searchPageDerivedCatalogs('Las Vegas',network,5)[0].catalog_id,'vegas-places');
+});
