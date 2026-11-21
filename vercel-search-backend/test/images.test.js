@@ -39,9 +39,11 @@ test("robots denial of archive thumbnail path suppresses image cards",async()=>{
 
 test("generic provider names are not accepted as CC BY creator attribution",()=>{assert.equal(normalizeArchiveImage(imageDoc(6,{creator:"Internet Archive"}),["nasa"]),null);const publicDomain=normalizeArchiveImage(imageDoc(7,{creator:"Internet Archive",licenseurl:"https://creativecommons.org/publicdomain/mark/1.0/"}),["nasa"]);assert.ok(publicDomain);assert.equal(publicDomain.creator,"");});
 
-test("image normalizer rejects records without image files and known missing Archive thumbnails",()=>{
+test("image normalizer rejects explicit missing images but tolerates absent count metadata",()=>{
   assert.equal(normalizeArchiveImage(imageDoc(8,{imagecount:0}),["nasa"]),null);
-  assert.equal(normalizeArchiveImage(imageDoc(9,{imagecount:undefined}),["nasa"]),null);
+  const unknownCount=normalizeArchiveImage(imageDoc(9,{imagecount:undefined}),["nasa"]);
+  assert.ok(unknownCount);
+  assert.equal(unknownCount.imageCount,null);
   assert.equal(normalizeArchiveImage(imageDoc(10,{identifier:"megamap"}),["nasa"]),null);
   const item=normalizeArchiveImage(imageDoc(11,{imagecount:"2"}),["nasa"]);
   assert.ok(item);
