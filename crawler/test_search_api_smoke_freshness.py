@@ -27,6 +27,8 @@ class SearchApiSmokeFreshnessTests(unittest.TestCase):
         self.assertIn('item.get("source_terms_status") != "not_reviewed"', workflow)
         self.assertIn('item.get("record_level_clearance") != "not_reviewed"', workflow)
         self.assertIn('preview.get("pageIndexPages") != expected_pages', workflow)
+        self.assertIn('abs(source_updated_seconds - expected_updated_at) <= 60', workflow)
+        self.assertIn('expected_status = "candidate-preview" if freshness_match else "stale-candidate-preview"', workflow)
         self.assertIn('preview.get("recordsPublished") != 0', workflow)
         self.assertNotIn("VERCEL_API", workflow)
         self.assertNotIn("get_vercel", workflow)
