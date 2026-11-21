@@ -1048,7 +1048,7 @@ form.addEventListener('submit',async e=>{
    return '<article class="result">'+preview+'<div class="result-copy"><a target="_blank" rel="noopener noreferrer" href="'+link+'">'+esc(x.title)+'</a>'+(isVideo(x)?'<span class="media-tag">VIDEO</span>':'')+'<p>'+esc(x.snippet||'')+'</p><div class="source">'+esc(sourceLabel)+'</div></div></article>';
   }).join('');
   const moreAvailable=shown<matches.length||(activeType==='web'&&apiHasMore);
-  const resultLabel=activeType==='web'&&totalIndexed?'Showing '+matches.length.toLocaleString()+' results · '+totalIndexed.toLocaleString()+' provider matches':matches.length.toLocaleString()+' '+activeType+' results';
+  const resultLabel=activeType==='web'&&totalIndexed?'Showing '+matches.length.toLocaleString()+' results · '+totalIndexed.toLocaleString()+' pages indexed':matches.length.toLocaleString()+' '+activeType+' results';
   out.innerHTML=tabs+'<p class="source result-count">'+resultLabel+'</p>'+cards+(moreAvailable?'<button id="moreResults" type="button" style="display:block;margin:22px auto;padding:13px 25px;border:1px solid #39ff79;border-radius:999px;background:#063b2e;color:#fff;font-weight:800">'+(shown<matches.length?'Show 24 more results':'Load next 50 indexed results')+'</button>':'')+(matches.length?'':'<p>No '+activeType+' results found for this search. Try Web or a broader search.</p>');
   out.querySelectorAll('.search-tab').forEach(tab=>tab.addEventListener('click',()=>{activeType=tab.dataset.type;shown=24;render()}));
   const more=document.querySelector('#moreResults');
