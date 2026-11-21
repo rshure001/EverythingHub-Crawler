@@ -35,11 +35,13 @@ test("keeps live public news tabs and Refresh", () => {
   assert.match(html, /everythinghub-search-backend\.vercel\.app\/api\/news/);
 });
 
-test("keeps public search and video integrations", () => {
+test("keeps public search and policy-attributed NASA video integration", () => {
   assert.match(html, /everythinghub-search-backend\.vercel\.app\/api\/search/);
   assert.match(html, /everythinghub-search-backend\.vercel\.app\/api\/search-fast/);
   assert.match(html, /everythinghub-search-backend\.vercel\.app\/api\/videos/);
-  assert.match(html, /everythinghub-search-backend\.vercel\.app\/api\/video-thumbnail/);
+  assert.match(html, /item\.credit/);
+  assert.match(html, /NASA media guidelines/);
+  assert.doesNotMatch(html, /youtube\.com\/watch\?|video-thumbnail/);
 });
 
 test("renders candidate catalog previews separately and keeps rights restrictions visible", () => {
