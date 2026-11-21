@@ -54,7 +54,7 @@ class PostCrawlDispatchTests(unittest.TestCase):
         self.assertIn("gh workflow run search-api-smoke.yml --ref main", catalog)
         publish_block = catalog.split("- name: Publish validated catalog analysis on main", 1)[1]
         push_position = publish_block.index("if git push origin HEAD:main; then")
-        dispatch_position = publish_block.index("dispatch_search_smoke\\n", push_position)
+        dispatch_position = publish_block.index("dispatch_search_smoke", push_position)
         self.assertLess(push_position, dispatch_position)
         self.assertNotIn('      - "public-search/**"', search_triggers)
         self.assertNotIn(".github/workflows/publish-site.yml", publisher)
