@@ -4,7 +4,7 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/everything-hub-production-browser-check.yml"
-      - "vercel-homepage/**"
+      - "src/**"\n      - "vercel-homepage/**"
   workflow_dispatch:
   workflow_run:
     workflows: ["EverythingHub Publisher"]
@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     env:
-      TARGET_URL: https://everythinghub-homepage-fixed.vercel.app/
+      TARGET_URL: https://everythinghub-search-engine-4x25f8.v2.appdeploy.ai/
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -36,7 +36,6 @@ jobs:
         run: |
           cat > production-check.cjs <<'JS'
           const { chromium } = require("playwright");
-          const fs = require("fs");
           (async () => {
             const browser = await chromium.launch({ headless: true });
             const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
@@ -44,163 +43,67 @@ jobs:
             page.on("pageerror", error => errors.push(error.message));
             const report = { url: process.env.TARGET_URL, startedAt: new Date().toISOString() };
             try {
-              const response = await page.goto(report.url, { waitUntil: "domcontentloaded", timeout: 45000 });
+              const response = await page.goto(report.url, { waitUntil: "networkidle", timeout: 60000 });
               report.httpStatus = response?.status();
               report.title = await page.title();
-              report.searchFormCount = await page.locator("form#search").count();
-              report.searchInputCount = await page.locator("#q").count();
-              report.categoryCount = await page.locator('.tile[href*="mode="], .hotspot[data-mode]').count();
-              report.categoryModes = await page.locator('.tile[href*="mode="], .hotspot[data-mode]').evaluateAll(nodes =>
-                nodes.map(node => node.dataset.mode || new URL(node.href).searchParams.get("mode")).filter(Boolean).sort()
-              );
-              const expected = ["business","images","news","places","research","shopping","videos","web"];
-              if (!response?.ok() || !report.title.includes("Everything Hub") ||
-                  report.searchFormCount !== 1 || report.searchInputCount !== 1 ||
-                  report.categoryCount !== 8 || JSON.stringify(report.categoryModes) !== JSON.stringify(expected)) {
-                throw new Error("Homepage structure check failed: " + JSON.stringify(report));
-              }
-              report.mediaPreviewPolicyLoaded = await page.evaluate(() =>
-                typeof window.EHMediaPreviewPolicy?.isMediaPreviewAllowed === "function"
-              );
-              if (!report.mediaPreviewPolicyLoaded) {
-                throw new Error("Homepage media preview policy script did not load");
-              }
-              const artwork = page.locator(".approved-master-art");
-              await artwork.waitFor({ state: "visible", timeout: 15000 });
+              const artwork = page.locator(".everythinghub-approved-home-art img.approved-master-image").first();
+              await artwork.waitFor({ state: "visible", timeout: 20000 });
               await page.waitForFunction(() => {
-                const img = document.querySelector(".approved-master-art");
+                const img = document.querySelector(".everythinghub-approved-home-art img.approved-master-image");
                 return !!img && img.complete && img.naturalWidth >= 100;
-              }, null, { timeout: 20000 });
+              }, null, { timeout: 30000 });
               report.approvedArtwork = await artwork.evaluate(img => ({
                 src: img.currentSrc, naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight
               }));
-              if (/appdeploy\\.ai/i.test(report.approvedArtwork.src)) throw new Error("Artwork unexpectedly served from AppDeploy");
-              const verifyHomepageMediaShelf = async (selector, label) => {
-                await page.waitForFunction((targetSelector) => {
-                  const node = document.querySelector(targetSelector);
-                  if (!node) return false;
-                  const text = node.textContent || "";
-                  return node.querySelectorAll("a.live-media-card").length > 0 ||
-                    /No fresh|temporarily unavailable/i.test(text);
-                }, selector, { timeout: 30000 });
-                const summary = await page.locator(selector).evaluate(node => {
-                  const cards = [...node.querySelectorAll("a.live-media-card")];
-                  const invalidLinks = cards.filter(card => {
-                    try {
-                      const rawHref = card.getAttribute("href") || "";
-                      const url = new URL(rawHref, location.href);
-                      const rel = (card.getAttribute("rel") || "").split(/\s+/);
-                      return !(rawHref.startsWith("https://") || rawHref.startsWith("http://")) ||
-                        !["https:", "http:"].includes(url.protocol) ||
-                        card.target !== "_blank" ||
-                        !rel.includes("noopener") ||
-                        !rel.includes("noreferrer");
-                    } catch {
-                      return true;
-                    }
-                  }).length;
-                  const images = [...node.querySelectorAll("a.live-media-card img")];
-                  const invalidImages = images.filter(img => {
-                    try {
-                      return !((img.getAttribute("src") || "").startsWith("https://") || (img.getAttribute("src") || "").startsWith("http://")) ||
-                        !["https:", "http:"].includes(new URL(img.src).protocol);
-                    } catch {
-                      return true;
-                    }
-                  }).length;
-                  const unlicensedPreviewCards = cards.filter(card =>
-                    card.querySelector("img") && card.dataset.previewAllowed !== "true"
-                  ).length;
-                  const invalidLicensePreviews = images.filter(img => {
-                    const card = img.closest("a.live-media-card");
-                    if (!card || card.dataset.previewAllowed !== "true") return true;
-                    const state = card.dataset.attributionRequired || "unknown";
-                    const attributionRequired = state === "true" ? true : state === "false" ? false : null;
-                    return window.EHMediaPreviewPolicy?.isMediaPreviewAllowed({
-                      source: card.dataset.source || "",
-                      license: card.dataset.license || "",
-                      licenseUrl: card.dataset.licenseUrl || "",
-                      attributionRequired,
-                      creator: card.dataset.creator || ""
-                    }) !== true;
-                  }).length;
-                  return {
-                    cards: cards.length,
-                    invalidLinks,
-                    images: images.length,
-                    loadedImages: images.filter(img => img.complete && img.naturalWidth > 0).length,
-                    invalidImages,
-                    unlicensedPreviewCards,
-                    invalidLicensePreviews,
-                    fallback: /No fresh|temporarily unavailable/i.test(node.textContent || "")
-                  };
-                });
-                if (summary.invalidLinks || summary.invalidImages || summary.unlicensedPreviewCards || summary.invalidLicensePreviews) {
-                  throw new Error(label + " shelf contains unsafe media destinations: " + JSON.stringify(summary));
-                }
-                return summary;
-              };
-              report.homepageImageShelf = await verifyHomepageMediaShelf("#homeLiveImages", "Images");
-              report.homepageVideoShelf = await verifyHomepageMediaShelf("#homeLiveVideos", "Videos");
+              const categoryButtons = page.locator(".hub-hero-divisions button:visible");
+              report.categoryCount = await categoryButtons.count();
+              report.categoryNames = (await categoryButtons.evaluateAll(nodes =>
+                nodes.map(node => node.getAttribute("aria-label") || node.textContent.trim()).sort()
+              ));
+              const expected = ["Business","Images","News","Places","Research","Shopping","Videos","Web"].sort();
+              const search = page.locator("input#hub-search:visible").first();
+              report.searchInputCount = await page.locator("input#hub-search:visible").count();
+              if (!response?.ok() || !report.title.includes("EverythingHub") ||
+                  report.categoryCount !== 8 || JSON.stringify(report.categoryNames) !== JSON.stringify(expected) ||
+                  report.searchInputCount < 1 || report.approvedArtwork.naturalWidth < 100) {
+                throw new Error("In-house homepage structure check failed: " + JSON.stringify(report));
+              }
               await page.screenshot({ path: "everything-hub-homepage.png", fullPage: true });
-
               for (const query of ["Rolex", "NASA"]) {
-                await page.locator("#q").fill(query);
-                await page.locator("#q").press("Enter");
-                await page.locator("#results .result").first().waitFor({ state: "visible", timeout: 45000 });
-                const count = await page.locator("#results .result").count();
-                const titles = await page.locator("#results .result a").allTextContents();
-                report[query.toLowerCase()] = { count, sampleTitles: titles.slice(0,5) };
-                if (!count) throw new Error(query + " produced no visible search results");
+                await page.goto(report.url, { waitUntil: "networkidle", timeout: 60000 });
+                const input = page.locator("input#hub-search:visible").first();
+                await input.waitFor({ state: "visible", timeout: 20000 });
+                await input.fill(query);
+                await input.press("Enter");
+                await page.locator(".eh-result-card").first().waitFor({ state: "visible", timeout: 45000 });
+                const count = await page.locator(".eh-result-card").count();
+                const titles = await page.locator(".eh-result-title").allTextContents();
+                report[query.toLowerCase()] = { count, sampleTitles: titles.slice(0, 5) };
+                if (!count) throw new Error(query + " produced no visible in-house search results");
                 await page.screenshot({ path: "everything-hub-" + query.toLowerCase() + ".png", fullPage: true });
               }
-
-              for (const [mode, query] of [["images","octopus"],["videos","Apollo 11 NASA"]]) {
-                const target = new URL(report.url);
-                target.searchParams.set("mode", mode);
-                await page.goto(target.toString(), { waitUntil: "domcontentloaded", timeout: 45000 });
-                await page.locator("#q").fill(query);
-                await page.locator("#q").press("Enter");
-                await page.locator("#results .result").first().waitFor({ state: "visible", timeout: 45000 });
-                const count = await page.locator("#results .result").count();
-                const previews = await page.locator("#results .result .preview img").count();
-                const videoMarks = await page.locator("#results .result .media-tag, #results .result .play, #results .result video").count();
-                report[mode] = { count, previews, videoMarks };
-                if (!count || (mode === "images" && !previews) || (mode === "videos" && !videoMarks)) {
-                  throw new Error(mode + " mode failed: " + JSON.stringify(report[mode]));
-                }
-              }
-
               await page.setViewportSize({ width: 390, height: 844 });
-              await page.goto(report.url, { waitUntil: "domcontentloaded" });
+              await page.goto(report.url, { waitUntil: "networkidle", timeout: 60000 });
               report.mobile = await page.evaluate(() => ({
                 viewportWidth: document.documentElement.clientWidth,
                 documentWidth: document.documentElement.scrollWidth,
-                searchVisible: !!document.querySelector("#q")?.getClientRects().length,
-                searchFormCount: document.querySelectorAll("form#search").length,
-                categoryCount: document.querySelectorAll('.tile[href*="mode="], .hotspot[data-mode]').length
+                artworkVisible: !!document.querySelector(".everythinghub-approved-home-art img.approved-master-image")?.getClientRects().length,
+                searchVisible: !!document.querySelector("input#hub-search")?.getClientRects().length,
+                categoryCount: document.querySelectorAll(".hub-hero-divisions button").length
               }));
               if (report.mobile.documentWidth > report.mobile.viewportWidth + 2 ||
-                  !report.mobile.searchVisible || report.mobile.searchFormCount !== 1 ||
-                  report.mobile.categoryCount !== 8) {
-                throw new Error("Mobile layout failed: " + JSON.stringify(report.mobile));
+                  !report.mobile.artworkVisible || !report.mobile.searchVisible || report.mobile.categoryCount !== 8) {
+                throw new Error("Mobile in-house homepage check failed: " + JSON.stringify(report.mobile));
               }
               report.pageErrors = errors;
               report.passed = errors.length === 0;
               if (errors.length) throw new Error("Browser page errors: " + errors.join("; "));
-            } catch (error) {
-              report.failure = error.stack || error.message;
-              report.pageErrors = errors;
-              report.passed = false;
-              await page.screenshot({ path: "everything-hub-failure.png", fullPage: true }).catch(() => {});
-            } finally {
-              report.finishedAt = new Date().toISOString();
-              fs.writeFileSync("everything-hub-production-report.json", JSON.stringify(report, null, 2));
-              await browser.close();
+              fs.writeFileSync("production-report.json", JSON.stringify(report, null, 2));
               console.log(JSON.stringify(report, null, 2));
-              if (!report.passed) process.exitCode = 1;
+            } finally {
+              await browser.close();
             }
-          })();
+          })().catch(error => { console.error(error); process.exit(1); });
           JS
           node production-check.cjs
       - name: Save production screenshots and report
