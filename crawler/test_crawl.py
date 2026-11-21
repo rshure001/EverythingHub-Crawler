@@ -136,6 +136,19 @@ class CrawlerTests(unittest.TestCase):
             "https://example.com/a%20b",
         )
 
+    def test_clean_drops_openlibrary_interactive_borrow_traps(self):
+        for url in (
+            "https://openlibrary.org/borrow/ia/abc?ref=ol",
+            "https://openlibrary.org/borrow/ia/abc?ref=ol&_autoReadAloud=show",
+            "https://openlibrary.org/books/OL123M/-/borrow?action=locate",
+        ):
+            with self.subTest(url=url):
+                self.assertIsNone(crawl.clean(url))
+        self.assertEqual(
+            crawl.clean("https://openlibrary.org/books/OL123M/Useful_Title"),
+            "https://openlibrary.org/books/OL123M/Useful_Title",
+        )
+
     def test_clean_skips_non_html_assets_but_keeps_xml_sitemaps(self):
         for url in (
             "https://example.com/file.pdf",
