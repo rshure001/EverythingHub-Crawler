@@ -1,7 +1,7 @@
 'use strict';
 const https = require('node:https');
 const { loadCatalog } = require('../lib/catalog');
-const { loadPageDerivedCatalogs, searchPageDerivedCatalogs } = require('../lib/page-derived-catalogs');
+const { loadPageDerivedCatalogs, searchPageDerivedCatalogs, matchesPageIndexSnapshot } = require('../lib/page-derived-catalogs');
 const { searchCatalog, parseBingRss, buildResponse } = require('../lib/search-core');
 const MAX_QUERY_LENGTH = 160;
 const MAX_LIMIT = 50;
@@ -152,11 +152,11 @@ module.exports = async function handler(req, res) {
 
   const catalog = catalogResult.value;
   if (pageDerivedNetwork) {
-    const sourceIndexMatches = pageDerivedNetwork.sourceIndexPages === catalog.indexedPages &&
-      pageDerivedNetwork.sourceIndexSha256 === catalog.sha256;
+    const sourceIndexMatches = matchesPageIndexSnapshot(pageDerivedNetwork, catalog);
     catalogPreview.freshnessMatch = sourceIndexMatches;
     catalogPreview.pageIndexPages = catalog.indexedPages;
-    catalogPreview.pageIndexSha256 = catalog.sha256;
+    catalogPreview.pageIndexUpdatedAt = new Date(catalog.updatedAt * 1000).toISOString();
+    catalogPreview.pageIndexManifestSha256 = catalog.sha256;
     catalogPreview.status = pageDerivedNetwork.stale || !sourceIndexMatches
       ? 'stale-candidate-preview' : 'candidate-preview';
     if (pageDerivedNetwork.stale || !sourceIndexMatches) {
