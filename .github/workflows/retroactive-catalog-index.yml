@@ -28,6 +28,7 @@ on:
     - cron: "23 * * * *"
 
 permissions:
+  actions: write
   contents: write
 
 concurrency:
@@ -143,6 +144,8 @@ jobs:
         run: python project/ledger.py --record-page-derived-catalog-analysis
       - name: Publish validated catalog analysis on main
         if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
@@ -156,6 +159,11 @@ jobs:
             fi
             git commit -m "Publish validated page-derived catalog candidates"
             if git push origin HEAD:main; then
+              if gh workflow run search-api-smoke.yml --ref main; then
+                echo "Dispatched first-party catalog search smoke test after publishing the new catalog snapshot."
+              else
+                echo "::warning::Catalog snapshot committed, but first-party search smoke dispatch failed."
+              fi
               exit 0
             fi
             echo "Main advanced during publish; rebuilding from the latest canonical index (attempt $attempt)."
