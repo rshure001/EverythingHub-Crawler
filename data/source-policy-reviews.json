@@ -1,0 +1,108 @@
+{
+  "schema_version": 1,
+  "purpose": "Auditable source-level policy evidence for catalog discovery and safe ingestion. These reviews are not legal advice and do not grant record-level rights clearance.",
+  "reviewed_at": "2026-11-21T00:22:00Z",
+  "policy": {
+    "default_status": "candidate_only",
+    "record_level_clearance": "not_reviewed",
+    "commercial_eligibility": false,
+    "republication": "not_cleared",
+    "rule": "A source-level policy review never clears every page or asset on a host. Require record-level provenance, content-origin classification, applicable license/terms, privacy review, and attribution before publication."
+  },
+  "reviews": [
+    {
+      "host": "nist.gov",
+      "status": "source_policy_reviewed_conditional",
+      "discovery_scope": "metadata_and_source_links_only",
+      "content_reuse": "conditional_by_record",
+      "findings": [
+        "NIST states that site information is public and may be distributed or copied except material marked copyrighted; appropriate byline/photo/image credits are requested.",
+        "NIST employee-created data and works outside the Standard Reference Data Act are generally not protected by U.S. copyright, but foreign copyright may apply.",
+        "NIST Standard Reference Data may be protected under 15 U.S.C. § 290e and must follow the specific SRD license terms.",
+        "Contractor, extramural, and other third-party material may carry separate rights or conditions; technical publications may include third-party works."
+      ],
+      "mandatory_checks": [
+        "Classify each candidate as NIST employee-created non-SRD, SRD, contractor/extramural, third-party, or unknown.",
+        "Do not redistribute SRD or third-party content without its applicable license or permission.",
+        "Preserve NIST attribution and recommended dataset/software citation details.",
+        "Keep unknown-origin content metadata-only and non-commercial."
+      ],
+      "api_access": "No API access approval inferred from this page-level review.",
+      "commercial_eligibility": false,
+      "record_level_clearance": "not_reviewed",
+      "evidence_urls": [
+        "https://www.nist.gov/copyrights-disclaimers",
+        "https://www.nist.gov/open/copyright-fair-use-and-licensing-statements-srd-data-software-and-technical-series-publications"
+      ]
+    },
+    {
+      "host": "nps.gov",
+      "status": "source_policy_reviewed_conditional",
+      "discovery_scope": "metadata_and_source_links_only",
+      "content_reuse": "conditional_by_record",
+      "findings": [
+        "NPS says material it created and presents is generally public domain unless otherwise indicated.",
+        "NPS warns that third-party copyright, trademark, privacy, publicity, donor restrictions, and contractual restrictions may apply.",
+        "NPS marks, including the Arrowhead insignia, are protected trademarks and may not be used without prior written permission.",
+        "For commercial publication or republication of NPS-created material, the copyright notice must state that no protection is claimed in the original U.S. Government work."
+      ],
+      "api_access": {
+        "api_key_required": true,
+        "api_key_available_to_this_project": false,
+        "default_rate_limit_requests_per_hour": 1000,
+        "rate_limit_scope": "per API key across developer.nps.gov API requests",
+        "rate_limit_response": 429,
+        "rule": "Do not call the NPS API until a valid project-owned key is available; obey response rate-limit headers and the rolling hourly quota."
+      },
+      "mandatory_checks": [
+        "Distinguish NPS-created records from third-party or donor-supplied material.",
+        "Do not republish third-party photos, films, music, graphics, or other assets without record-level permission.",
+        "Do not use NPS trademarks or insignia without permission.",
+        "Preserve attribution and the required government-work notice for commercial republication of eligible NPS-created material."
+      ],
+      "commercial_eligibility": false,
+      "record_level_clearance": "not_reviewed",
+      "evidence_urls": [
+        "https://www.nps.gov/aboutus/disclaimer.htm",
+        "https://www.nps.gov/subjects/developer/guides.htm"
+      ]
+    },
+    {
+      "host": "census.gov",
+      "api_host": "api.census.gov",
+      "status": "api_terms_reviewed_conditional",
+      "discovery_scope": "api_metadata_and_data_access_subject_to_terms",
+      "content_reuse": "api_use_permitted_with_restrictions; website_content_not_cleared",
+      "findings": [
+        "The Census API terms permit building services to search, display, analyze, retrieve, view, and otherwise obtain Census Bureau data.",
+        "Applications using the API must display the Census Bureau's non-endorsement attribution notice.",
+        "API data must not be modified or falsely represented as Census content.",
+        "Census data must not be combined or used to identify individual people, households, businesses, or other respondents; do not publish combinations that identify respondents.",
+        "The Census Bureau may limit or terminate API access for policy or usage violations."
+      ],
+      "api_access": {
+        "api_key_required": true,
+        "api_key_cost": "free",
+        "api_key_available_to_this_project": false,
+        "effective_requirement_verified_at": "2026-05-11",
+        "rate_limit_policy": "Follow current API guidance and response behavior; do not rely on older no-key daily limits."
+      },
+      "required_attribution": "This product uses the Census Bureau Data API but is not endorsed or certified by the Census Bureau.",
+      "mandatory_checks": [
+        "Do not call the Census API until a valid project-owned free key is available.",
+        "Display the required non-endorsement notice wherever API data is presented.",
+        "Do not combine Census data with other datasets in a way that identifies respondents.",
+        "Preserve dataset title, vintage, API base URL, and access date for citation.",
+        "Do not infer a blanket license for non-API Census website articles, images, or third-party materials."
+      ],
+      "commercial_eligibility": false,
+      "record_level_clearance": "not_reviewed",
+      "evidence_urls": [
+        "https://www.census.gov/data/developers/about/terms-of-service.html",
+        "https://www.census.gov/library/video/2026/adrm/requesting-a-census-data-api-key.html",
+        "https://www.census.gov/about/policies/citation.html"
+      ]
+    }
+  ],
+  "next_gate": "Implement record-level policy matching against these source rules. Keep all existing candidates preview-only until the record origin, applicable terms, attribution, privacy, and reuse basis are verified."
+}
