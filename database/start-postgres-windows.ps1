@@ -28,24 +28,37 @@ Invoke-Docker @("info") "Docker Engine is not ready. Start Docker Desktop and re
 Invoke-Docker @("compose", "version") "Docker Compose v2 is required. Update Docker Desktop and retry."
 
 $EnvPath = Join-Path $DbDir ".env"
-$lines = if (Test-Path -LiteralPath $EnvPath) { @(Get-Content -LiteralPath $EnvPath) } else { @() }
+$envExists = Test-Path -LiteralPath $EnvPath
+$lines = if ($envExists) { @(Get-Content -LiteralPath $EnvPath) } else { @() }
+
+# Never invent replacement credentials for a database volume that already exists.
+$volumeNames = @(& docker volume ls --format "{{.Name}}" | Where-Object { $_ -match "(^|_)everythinghub_pgdata$" })
+if ($LASTEXITCODE -ne 0) { throw "Could not inspect Docker volumes safely." }
+$hasExistingVolume = $volumeNames.Count -gt 0
 
 $dbPassword = Get-EnvValue $lines "EH_DB_PASSWORD"
 $searchDbPassword = Get-EnvValue $lines "EH_SEARCH_DB_PASSWORD"
 $apiToken = Get-EnvValue $lines "EH_SEARCH_API_TOKEN"
+$requiredSecrets = @($dbPassword, $searchDbPassword, $apiToken)
+$missingSecret = @($requiredSecrets | Where-Object { [string]::IsNullOrWhiteSpace($_) -or $_ -like "replace-with-*" }).Count -gt 0
 
+if ($hasExistingVolume -and (-not $envExists -or $missingSecret)) {
+    throw "An existing PostgreSQL data volume was found but its original .env secrets are missing or incomplete. Restore the original database\.env from a secure backup; do not generate new passwords or delete the volume."
+}
 if ([string]::IsNullOrWhiteSpace($dbPassword) -or $dbPassword -like "replace-with-*") { $dbPassword = New-Secret }
 if ([string]::IsNullOrWhiteSpace($searchDbPassword) -or $searchDbPassword -like "replace-with-*") { $searchDbPassword = New-Secret }
 if ([string]::IsNullOrWhiteSpace($apiToken) -or $apiToken -like "replace-with-*") { $apiToken = New-Secret }
 
 # Hex-only secrets avoid URI and Docker Compose interpolation problems.
+# Preserve optional settings such as a previously configured tunnel token.
+$otherLines = @($lines | Where-Object { $_ -notmatch "^(EH_DB_PASSWORD|EH_SEARCH_DB_PASSWORD|EH_SEARCH_API_TOKEN|DATABASE_URL)=" })
 $envContent = @(
     "# Generated locally. Keep private; never commit or share this file."
     "EH_DB_PASSWORD=$dbPassword"
     "EH_SEARCH_DB_PASSWORD=$searchDbPassword"
     "EH_SEARCH_API_TOKEN=$apiToken"
     "DATABASE_URL=postgresql://everythinghub:$dbPassword@127.0.0.1:55432/everythinghub"
-)
+) + $otherLines
 [System.IO.File]::WriteAllLines($EnvPath, $envContent, (New-Object System.Text.UTF8Encoding($false)))
 
 Write-Host "Checking the current Everything Hub PostgreSQL Compose configuration..."
