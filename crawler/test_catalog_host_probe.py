@@ -100,11 +100,27 @@ class CumulativeProbeTests(unittest.TestCase):
                 "source_index_pages": 100,
                 "source_index_updated_at": "2026-11-21T00:00:00Z",
                 "source_index_sha256": "source-index-sha",
-                "metrics": {"robots_checks_performed": 0, "network_requests": 0, "fetch_authorized_urls": 0, "records_published": 0},
+                "metrics": {
+                    "robots_checks_performed": 0,
+                    "network_requests": 0,
+                    "fetch_authorized_urls": 0,
+                    "records_published": 0,
+                    "catalog_definition_candidates": 0,
+                    "unique_source_urls": len(candidates),
+                },
+                "catalogs": [],
+                "hosts": [],
                 "candidate_urls": candidates,
             }), encoding="utf-8")
+            manifest_path = root / "manifest.json"
+            manifest_path.write_text(json.dumps({
+                "analysis_version": 12,
+                "source_index_pages": 100,
+                "source_index_updated_at": "2026-11-21T00:00:00Z",
+                "source_index_sha256": "source-index-sha",
+            }), encoding="utf-8")
             with patch.object(catalog_host_probe, "authorize_source_url", return_value=({"max_requests_per_run": 40}, object(), 3.0, [])) as authorize:
-                first = catalog_host_probe.run_landing_page_robots(queue_path, output_path, limit=30, recheck_seconds=86_400)
+                first = catalog_host_probe.run_landing_page_robots(queue_path, output_path, limit=30, recheck_seconds=86_400, manifest_path=manifest_path)
                 self.assertEqual(first["last_batch_urls_checked"], 30)
                 self.assertEqual(first["urls_checked"], 30)
                 self.assertEqual(first["fetch_authorized_urls"], 0)
