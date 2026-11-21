@@ -47,7 +47,7 @@
       ],
       "min_interval_seconds": 2,
       "max_requests_per_run": 40,
-      "policy_note": "Official CKAN API documentation supports metadata search. Preserve each dataset's usage symbol, attribution requirement, license and rights fields. This adapter is metadata-only and must not fetch bulk resources. Runtime access remains fail-closed on robots.txt and the effective host delay.",
+      "policy_note": "Official CKAN API documentation supports metadata search. Preserve dataset-level isopen/private/rights and each resource's controlled rights value, attribution and license fields. This adapter is metadata-only and must not fetch bulk resources. Runtime access remains fail-closed on robots.txt and the effective host delay.",
       "reviewed_at": "2026-11-21"
     },
     "data.gov.au": {
