@@ -389,7 +389,7 @@ jobs:
               if (report.imageSearch.cards < 8 || report.imageSearch.loadedThumbnails < 8 || report.imageSearch.placeholders !== 0 ||
                   report.imageSearch.attributionCards !== report.imageSearch.cards || report.imageSearch.badAttribution !== 0 ||
                   report.imageSearch.ccByCardsWithLinks !== report.imageSearch.ccByCards ||
-                  !/^https:\/\/\//i.test(imageSourceLink.href)) throw new Error("Licensed image thumbnails or attribution failed: " + JSON.stringify(report.imageSearch));
+                  !/^https:\/\/[^/]/i.test(imageSourceLink.href)) throw new Error("Licensed image thumbnails or attribution failed: " + JSON.stringify(report.imageSearch));
               report.categorySearches.images = { cards: report.imageSearch.cards, loadedThumbnails: report.imageSearch.loadedThumbnails };
               report.coreLinks.images = imageSourceLink;
               await page.screenshot({ path: "everythinghub-fallback-images.png", fullPage: true });
