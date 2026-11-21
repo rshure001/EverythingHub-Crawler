@@ -78,8 +78,7 @@ class CumulativeProbeTests(unittest.TestCase):
             "max_requests_per_run": item["max_requests_per_run"],
             "discovery_allowed": True,
         }
-        with patch.object(catalog_host_probe, "policy_for_host", return_value=policy), \\
-             patch.object(catalog_host_probe, "authorize_source_url", return_value=(policy, object(), 3.0, [])) as authorize:
+        with patch.object(catalog_host_probe, "policy_for_host", return_value=policy), patch.object(catalog_host_probe, "authorize_source_url", return_value=(policy, object(), 3.0, [])) as authorize:
             with patch.object(catalog_host_probe, "request_source_bytes") as request:
                 result = catalog_host_probe.probe_catalog_landing_page_robots(item)
         authorize.assert_called_once_with(item["source_url"], purpose="landing_page")
@@ -153,8 +152,7 @@ class CumulativeProbeTests(unittest.TestCase):
                 "max_requests_per_run": 40,
                 "discovery_allowed": True,
             }
-            with patch.object(catalog_host_probe, "policy_for_host", return_value=policy), \\
-                 patch.object(catalog_host_probe, "authorize_source_url", return_value=(policy, object(), 3.0, [])) as authorize:
+            with patch.object(catalog_host_probe, "policy_for_host", return_value=policy), patch.object(catalog_host_probe, "authorize_source_url", return_value=(policy, object(), 3.0, [])) as authorize:
                 first = catalog_host_probe.run_landing_page_robots(queue_path, output_path, limit=30, recheck_seconds=86_400, manifest_path=manifest_path)
                 self.assertEqual(first["last_batch_urls_checked"], 30)
                 self.assertEqual(first["urls_checked"], 30)
