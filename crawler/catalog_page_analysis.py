@@ -1630,6 +1630,16 @@ def search_catalog_network(query: str, analysis: dict, limit: int = 10) -> list[
         catalog_match = token_set.issubset(catalog_tokens)
         record_type = str(catalog.get("record_type", "")).casefold()
         content_record = record_type in content_types
+        # A derived subject catalog represents its own recurring topic, not
+        # every topic mentioned by one of its member-page titles. Keep generic
+        # subject catalogs out of unrelated searches (e.g. "committed" for Rolex).
+        if (
+            record_type == "subject"
+            and catalog.get("catalog_origin") == "derived_from_repeated_records"
+        ):
+            subject_tokens = set(_norm(catalog.get("subject", "")).split())
+            if not subject_tokens.intersection(token_set):
+                continue
         matched = []
         for record in related:
             title_norm = _norm(record.get("title", ""))
