@@ -5,14 +5,9 @@ on:
       - eh/nasa-video-search-2026-11-21
     paths:
       - ".github/workflows/eh-free-fallback-acceptance.yml"
-      - "vercel-homepage/**"
-      - "vercel-search-backend/**"
   workflow_dispatch:
 permissions:
   contents: read
-concurrency:
-  group: eh-free-fallback-acceptance
-  cancel-in-progress: true
 jobs:
   browser-acceptance:
     runs-on: ubuntu-latest
