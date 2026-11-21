@@ -115,6 +115,14 @@ class RetroCatalogDiscoveryTests(unittest.TestCase):
             "if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'",
             workflow,
         )
+        self.assertIn(
+            "python crawler/catalog_retro_discovery.py --page-analysis-dir data/page-derived-catalogs",
+            workflow,
+        )
+        self.assertLess(
+            workflow.index("Analyze every eligible existing indexed page"),
+            workflow.index("Associate every page profile with analyzed catalogs and 100-page coverage"),
+        )
 
 if __name__ == "__main__":
     unittest.main()
