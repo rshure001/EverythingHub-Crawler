@@ -1497,7 +1497,8 @@ class CatalogInventoryTriggerTests(unittest.TestCase):
         subject_entity_id = stable_id("entity", "subject|nasa")
         nasa_records = [item for item in records if item.get("canonical_subject_key") == "subject|nasa"]
         self.assertEqual(len(nasa_records), 3)
-        for page, record_id in zip(pages, expected_record_ids):
+        for page in pages:
+            record_id = stable_id("record", "subject|nasa|" + page["url"])
             record = next(item for item in nasa_records if item["record_id"] == record_id)
             self.assertIn(catalog_id, record["catalog_ids"])
             self.assertEqual(record["entity_id"], subject_entity_id)
