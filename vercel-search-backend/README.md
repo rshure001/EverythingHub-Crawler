@@ -67,3 +67,6 @@ These are candidate previews only. Source terms and reuse rights remain unreview
 
 
 Freshness guard: catalog preview metadata includes the source-index page count and SHA-256. The search API compares both with the active page-search snapshot and labels the preview stale when they differ or when freshness cannot be checked. The homepage's indexed counter uses indexedPages (source pages), not the matching-result count.
+
+
+Freshness guard: candidate previews are marked current only when the source-index page count and update timestamp match the active page-search snapshot within 60 seconds. The source-index SHA and page-search manifest SHA are preserved as separate provenance values; they are not compared as if they represented the same file.
