@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "analysis_version": 14,
-  "generated_at": "2026-11-21T20:17:01Z",
+  "generated_at": "2026-11-21T20:39:37Z",
   "source_index_pages": 157904,
   "source_index_updated_at": "2026-11-21T19:39:05Z",
   "source_index_sha256": "d635f470bf353cc759c27b1d179f7d89c2550b7c3d9fa3b674bb60a94e90bbfd",
@@ -128,12 +128,33 @@
   },
   "catalogs_verified": 0,
   "records_published": 0,
-  "analysis_started_at": "2026-11-21T20:15:47Z",
-  "analysis_finished_at": "2026-11-21T20:17:01Z",
-  "persisted_snapshot_at": "2026-11-21T20:17:01Z",
-  "analysis_elapsed_seconds": 73.906,
-  "elapsed_wall_clock_seconds": null,
-  "previous_counts": null,
-  "count_deltas": null,
-  "throughput": null
+  "analysis_started_at": "2026-11-21T20:37:54Z",
+  "analysis_finished_at": "2026-11-21T20:39:37Z",
+  "persisted_snapshot_at": "2026-11-21T20:39:37Z",
+  "analysis_elapsed_seconds": 102.927,
+  "elapsed_wall_clock_seconds": 1356.793,
+  "previous_counts": {
+    "pages_analyzed": 157419,
+    "eligible_pages": 156916,
+    "unique_catalogs_discovered": 18546,
+    "subcatalogs_discovered": 75,
+    "unique_records": 902613,
+    "media_references": 8536
+  },
+  "count_deltas": {
+    "pages_analyzed": 0,
+    "eligible_pages": 0,
+    "unique_catalogs_discovered": 0,
+    "subcatalogs_discovered": 0,
+    "unique_records": 0,
+    "media_references": 0
+  },
+  "throughput": {
+    "pages_per_minute": 0.0,
+    "catalogs_per_minute": 0.0,
+    "records_per_minute": 0.0,
+    "subcatalogs_per_minute": 0.0,
+    "media_references_per_minute": 0.0,
+    "measurement": "persisted_count_delta_over_wall_clock_interval"
+  }
 }
