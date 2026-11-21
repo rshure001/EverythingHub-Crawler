@@ -34,10 +34,10 @@ class SearchShardBatchBoundaryTests(unittest.TestCase):
         self.assertEqual(SHARD_GZIP_LEVEL, 6)
 
     def test_shard_capacity_is_aligned_across_builder_and_validator(self):
-        self.assertEqual(MAX_SHARD_COUNT, 640)
+        self.assertEqual(MAX_SHARD_COUNT, 768)
         self.assertEqual(MAX_SHARD_COUNT, VALIDATOR_MAX_SHARD_COUNT)
-        self.assertEqual(MAX_TOTAL_COMPRESSED_SHARD_BYTES, 80_000_000)
-        self.assertEqual(MAX_TOTAL_SHARD_UNCOMPRESSED_BYTES, 320_000_000)
+        self.assertEqual(MAX_TOTAL_COMPRESSED_SHARD_BYTES, 100_000_000)
+        self.assertEqual(MAX_TOTAL_SHARD_UNCOMPRESSED_BYTES, 400_000_000)
 
     def test_incremental_size_accounting_matches_exact_utf8_batch_bytes(self):
         pages = [
