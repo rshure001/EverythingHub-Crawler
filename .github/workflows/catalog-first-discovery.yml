@@ -32,7 +32,7 @@ on:
       max_pages:
         description: Maximum API pages per catalog
         required: false
-        default: "20"
+        default: "40"
   schedule:
     - cron: "17 */2 * * *"
 
@@ -85,7 +85,7 @@ jobs:
       - name: Discover whole catalogs and their bulk resources
         env:
           ROWS: ${{ inputs.rows || '250' }}
-          MAX_PAGES: ${{ inputs.max_pages || '20' }}
+          MAX_PAGES: ${{ inputs.max_pages || '40' }}
         run: python crawler/catalog_discovery.py --rows "$ROWS" --max-pages "$MAX_PAGES"
       - name: Discover Open Library subject catalogs
         run: python crawler/catalog_openlibrary.py --pause 1
@@ -154,7 +154,7 @@ jobs:
             fi
             echo "Main advanced during catalog publication; rebuilding snapshot from $remote_head (retry $attempt)."
             git reset --hard origin/main
-            python crawler/catalog_discovery.py --rows "${{ inputs.rows || '250' }}" --max-pages "${{ inputs.max_pages || '20' }}"
+            python crawler/catalog_discovery.py --rows "${{ inputs.rows || '250' }}" --max-pages "${{ inputs.max_pages || '40' }}"
             python crawler/catalog_openlibrary.py --pause 1
             python crawler/catalog_ingest.py
             python project/ledger.py --record-catalog-discovery
