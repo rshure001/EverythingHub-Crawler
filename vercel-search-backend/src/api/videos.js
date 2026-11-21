@@ -1,15 +1,15 @@
 "use strict";
 
-const API_HOST = "images-api.nasa.gov";
-const API_BASE = "https://images-api.nasa.gov/search";
-const ASSET_HOSTS = new Set(["images-assets.nasa.gov", "images.nasa.gov"]);
-const USER_AGENT = "EverythingHubVideoSearch/1.0 (+https://github.com/rshure001/EverythingHub-Crawler)";
-const DEFAULT_MIN_INTERVAL_MS = 2000;
+const API_HOST = "commons.wikimedia.org";
+const API_BASE = "https://commons.wikimedia.org/w/api.php";
+const ASSET_HOST = "upload.wikimedia.org";
+const USER_AGENT = "EverythingHubVideoSearch/1.0 (https://github.com/rshure001/EverythingHub-Crawler; metadata only)";
+const DEFAULT_MIN_INTERVAL_MS = 1000;
 const ROBOTS_TTL_MS = 60 * 60 * 1000;
 const MAX_ROBOTS_BYTES = 512000;
 const MAX_API_BYTES = 4 * 1024 * 1024;
 const MAX_RESULTS = 20;
-const MAX_REQUESTS_PER_HOST_PER_HOUR = 60;
+const MAX_REQUESTS_PER_HOST_PER_HOUR = 120;
 const WINDOW_MS = 60 * 60 * 1000;
 const robotsCache = new Map();
 const hostQueues = new Map();
@@ -21,17 +21,26 @@ let minIntervalMs = DEFAULT_MIN_INTERVAL_MS;
 function safeText(value, limit = 500) {
   return String(value || "")
     .replace(/<[^>]*>/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, "\"")
+    .replace(/&#39;|&apos;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
     .replace(/[\u0000-\u001f\u007f]/g, " ")
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, limit);
 }
 
+function escapeRegex(value) {
+  return value.replace(/[.*+?^\${}()|[\]\\]/g, "\\$&");
+}
+
 function robotsPatternMatches(pattern, target) {
   if (!pattern) return false;
   const anchored = pattern.endsWith("$");
   const body = anchored ? pattern.slice(0, -1) : pattern;
-  const escaped = body.split("*").map(part => part.replace(/[.*+?^\${}()|[\]\\]/g, "\\$&")).join(".*");
+  const escaped = body.split("*").map(escapeRegex).join(".*");
   return new RegExp("^" + escaped + (anchored ? "$" : "")).test(target);
 }
 
@@ -67,9 +76,7 @@ function parseRobots(text, userAgent = USER_AGENT) {
 
   const token = String(userAgent || "").split(/[ /]/, 1)[0].toLowerCase();
   const exactGroups = groups.filter(group => group.agents.some(agent => agent !== "*" && token.includes(agent)));
-  const selected = exactGroups.length
-    ? exactGroups
-    : groups.filter(group => group.agents.includes("*"));
+  const selected = exactGroups.length ? exactGroups : groups.filter(group => group.agents.includes("*"));
   const rules = selected.flatMap(group => group.rules);
   const crawlDelayMs = selected.reduce((maximum, group) => Math.max(maximum, group.crawlDelayMs), 0);
 
@@ -105,12 +112,8 @@ async function pacedFetch(url, options = {}, delayMs = minIntervalMs) {
     if (wait) await new Promise(resolve => setTimeout(resolve, wait));
     const now = Date.now();
     let window = requestWindows.get(host);
-    if (!window || now - window.startedAt >= WINDOW_MS) {
-      window = { startedAt: now, count: 0 };
-    }
-    if (window.count >= MAX_REQUESTS_PER_HOST_PER_HOUR) {
-      throw new Error("provider_request_budget_exhausted");
-    }
+    if (!window || now - window.startedAt >= WINDOW_MS) window = { startedAt: now, count: 0 };
+    if (window.count >= MAX_REQUESTS_PER_HOST_PER_HOUR) throw new Error("provider_request_budget_exhausted");
     window.count += 1;
     requestWindows.set(host, window);
     return await fetch(url, options);
@@ -132,9 +135,7 @@ async function loadRobots(host) {
     redirect: "follow"
   }, minIntervalMs);
   const finalUrl = response.url || robotsUrl;
-  if (new URL(finalUrl).hostname.toLowerCase() !== host) {
-    throw new Error("robots_redirect_host_changed");
-  }
+  if (new URL(finalUrl).hostname.toLowerCase() !== host) throw new Error("robots_redirect_host_changed:" + host);
 
   let policy;
   if (response.status === 404 || response.status === 410) {
@@ -142,7 +143,7 @@ async function loadRobots(host) {
   } else {
     if (!response.ok) throw new Error("robots_unverified:" + host + ":" + response.status);
     const text = await response.text();
-    if (text.length > MAX_ROBOTS_BYTES) throw new Error("robots_response_too_large");
+    if (text.length > MAX_ROBOTS_BYTES) throw new Error("robots_response_too_large:" + host);
     policy = parseRobots(text, USER_AGENT);
   }
   robotsCache.set(host, { policy, expiresAt: now + ROBOTS_TTL_MS });
@@ -155,99 +156,135 @@ async function ensureAllowed(url) {
   return { allowed: policy.allows(url), delayMs: policy.delayMs };
 }
 
-function normalizeNASAItem(raw) {
-  if (!raw || typeof raw !== "object") return null;
-  const data = Array.isArray(raw.data) ? raw.data[0] : null;
-  if (!data || String(data.media_type || "").toLowerCase() !== "video") return null;
+function extractLicenseUrl(value) {
+  const raw = String(value || "");
+  const href = raw.match(/href=["']([^"']+)["']/i);
+  return safeText(href ? href[1] : raw, 500);
+}
 
-  const nasaId = safeText(data.nasa_id, 100);
-  const title = safeText(data.title, 500);
-  if (!/^[A-Za-z0-9_-]{1,100}$/.test(nasaId) || !title) return null;
-
-  const copyright = safeText(data.copyright, 200);
-  if (copyright && !/^(NASA|National Aeronautics and Space Administration)$/i.test(copyright)) {
-    return null;
+function isAllowedCommonsLicense(license, licenseUrl, attributionRequired, creator) {
+  const normalized = String(license || "").trim();
+  const publicDomain = normalized.toLowerCase().startsWith("public domain");
+  const cc0 = /^cc0(?:\s|$)/i.test(normalized);
+  const ccByMatch = normalized.match(/^cc by(-sa)?\s+(1\.0|2\.0|2\.5|3\.0|4\.0)$/i);
+  let canonicalLicenseUrl = false;
+  if (ccByMatch) {
+    try {
+      const parsed = new URL(licenseUrl);
+      const kind = ccByMatch[1] ? "by-sa" : "by";
+      const expectedPath = "/licenses/" + kind + "/" + ccByMatch[2] + "/";
+      canonicalLicenseUrl = parsed.protocol === "https:" &&
+        parsed.hostname === "creativecommons.org" &&
+        parsed.pathname.replace(/\/+$/, "/") === expectedPath;
+    } catch {
+      canonicalLicenseUrl = false;
+    }
   }
+  const licenseValid = publicDomain || cc0 || (ccByMatch !== null && canonicalLicenseUrl);
+  const attributionValid = ccByMatch
+    ? String(creator || "").trim().length > 0
+    : attributionRequired === false || (attributionRequired === true && String(creator || "").trim().length > 0);
+  return licenseValid && attributionValid;
+}
 
-  const links = Array.isArray(raw.links) ? raw.links : [];
-  const preview = links.find(link => link && String(link.rel || "").toLowerCase() === "preview" && link.href);
-  if (!preview) return null;
+function normalizeCommonsItem(page, query) {
+  if (!page || typeof page !== "object") return null;
+  const info = Array.isArray(page.imageinfo) ? page.imageinfo[0] : null;
+  if (!info || !String(info.mime || "").toLowerCase().startsWith("video/")) return null;
+
+  const fileTitle = safeText(page.title, 500);
+  const title = fileTitle.replace(/^File:/i, "").trim();
+  if (!title) return null;
+
+  const stopWords = new Set(["the", "and", "for", "with", "from", "into", "about", "what", "where", "when", "how", "best", "top"]);
+  const terms = String(query || "").toLowerCase().split(/\s+/).filter(word => word.length > 2 && !stopWords.has(word));
+  const titleWords = new Set(title.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean));
+  const matchedTerms = terms.filter(term => titleWords.has(term));
+  if (terms.length && matchedTerms.length < Math.min(2, terms.length)) return null;
+  if (/chapati|egg|food|eat|recipe|dance|dancer|song|music|robbery|robber|theft|stolen|suspect|arrested|crime/i.test(title.toLowerCase())) return null;
 
   let thumbnail;
   try {
-    const parsed = new URL(preview.href);
-    if (parsed.protocol !== "https:" || !ASSET_HOSTS.has(parsed.hostname.toLowerCase())) return null;
+    const parsed = new URL(info.thumburl || "");
+    if (parsed.protocol !== "https:" || parsed.hostname.toLowerCase() !== ASSET_HOST) return null;
     thumbnail = parsed.href;
   } catch {
     return null;
   }
 
-  const credit = safeText(data.photographer || data.secondary_creator || data.center || "NASA", 240);
-  const publishedAt = safeText(data.date_created, 80);
-  const summary = safeText(data.description_508 || data.description || "", 360);
+  const ext = info.extmetadata || {};
+  const metadata = key => safeText(ext[key] && ext[key].value, 800);
+  const license = metadata("LicenseShortName");
+  const licenseUrl = extractLicenseUrl(ext.LicenseUrl && ext.LicenseUrl.value);
+  const creator = metadata("Artist");
+  const credit = metadata("Credit");
+  const attributionText = metadata("AttributionRequired");
+  const attributionRequired = attributionText ? attributionText.toLowerCase() === "true" : null;
+  const creatorForPolicy = creator || credit;
+  if (!isAllowedCommonsLicense(license, licenseUrl, attributionRequired, creatorForPolicy)) return null;
+
+  const pageKey = String(page.pageid || fileTitle);
   return {
     title,
-    url: "https://images.nasa.gov/details/" + encodeURIComponent(nasaId),
+    url: "https://commons.wikimedia.org/wiki/" + encodeURIComponent(fileTitle.replace(/ /g, "_")),
     thumbnail,
-    source: "NASA Image and Video Library",
-    credit: credit || "NASA",
-    publishedAt,
-    summary,
-    sourceId: nasaId,
-    attributionUrl: "https://www.nasa.gov/nasa-brand-center/images-and-media/",
-    rightsNote: "NASA media guidelines apply; items with explicit third-party copyright are excluded."
+    source: "Wikimedia Commons",
+    license,
+    licenseUrl: licenseUrl || "https://commons.wikimedia.org/wiki/Commons:Reusing_content_outside_Wikimedia",
+    creator,
+    credit,
+    attributionRequired,
+    sourceId: pageKey,
+    attributionUrl: "https://commons.wikimedia.org/wiki/Commons:Reusing_content_outside_Wikimedia",
+    rightsNote: "Only public-domain, CC0, CC BY and CC BY-SA media with required attribution are shown."
   };
 }
 
-async function fetchNASA(query) {
+async function fetchCommons(query) {
   const key = String(query || "").trim().toLowerCase();
   const cached = resultCache.get(key);
   if (cached && cached.expiresAt > Date.now()) return cached.items;
 
-  const url = new URL(API_BASE);
-  url.searchParams.set("q", query);
-  url.searchParams.set("media_type", "video");
-  url.searchParams.set("page", "1");
-  url.searchParams.set("page_size", "100");
+  const params = new URLSearchParams({
+    action: "query",
+    generator: "search",
+    maxlag: "5",
+    gsrsearch: query + " filetype:video",
+    gsrnamespace: "6",
+    gsrlimit: "50",
+    prop: "imageinfo",
+    iiprop: "url|mime|extmetadata",
+    iiextmetadatafilter: "Artist|Credit|LicenseShortName|LicenseUrl|AttributionRequired",
+    iiurlwidth: "640",
+    format: "json",
+    origin: "*"
+  });
+  const url = API_BASE + "?" + params.toString();
+  const apiPolicy = await ensureAllowed(url);
+  if (!apiPolicy.allowed) throw new Error("robots_disallows_commons_api");
 
-  const apiPolicy = await ensureAllowed(url.href);
-  if (!apiPolicy.allowed) throw new Error("robots_disallows_nasa_search");
-
-  const response = await pacedFetch(url.href, {
+  const response = await pacedFetch(url, {
     headers: { "User-Agent": USER_AGENT, "Accept": "application/json" },
     signal: AbortSignal.timeout(12000),
     redirect: "follow"
   }, apiPolicy.delayMs);
-  const finalUrl = response.url || url.href;
-  if (new URL(finalUrl).hostname.toLowerCase() !== API_HOST) {
-    throw new Error("nasa_api_redirect_host_changed");
-  }
-  if (!response.ok) throw new Error("nasa_api_http_" + response.status);
+  const finalUrl = response.url || url;
+  if (new URL(finalUrl).hostname.toLowerCase() !== API_HOST) throw new Error("commons_api_redirect_host_changed");
+  if (!response.ok) throw new Error("commons_api_http_" + response.status);
 
   const text = await response.text();
-  if (text.length > MAX_API_BYTES) throw new Error("nasa_api_response_too_large");
+  if (text.length > MAX_API_BYTES) throw new Error("commons_api_response_too_large");
   const payload = JSON.parse(text);
-  const rawItems = payload && payload.collection && payload.collection.items;
-  if (!Array.isArray(rawItems)) throw new Error("nasa_api_schema_unexpected");
-
+  const pages = Object.values(payload && payload.query && payload.query.pages || {});
   const items = [];
   const seen = new Set();
-  const assetPolicies = new Map();
-  for (const raw of rawItems) {
-    const item = normalizeNASAItem(raw);
+  for (const page of pages) {
+    const item = normalizeCommonsItem(page, query);
     if (!item || seen.has(item.sourceId)) continue;
-    const assetHost = new URL(item.thumbnail).hostname.toLowerCase();
-    let assetPolicy = assetPolicies.get(assetHost);
-    if (!assetPolicy) {
-      assetPolicy = await loadRobots(assetHost);
-      assetPolicies.set(assetHost, assetPolicy);
-    }
-    if (!assetPolicy.allows(item.thumbnail)) continue;
     seen.add(item.sourceId);
     items.push(item);
     if (items.length >= MAX_RESULTS) break;
   }
-
   resultCache.set(key, { items, expiresAt: Date.now() + 5 * 60 * 1000 });
   return items;
 }
@@ -264,15 +301,15 @@ module.exports = async function handler(req, res) {
   if (!query) return res.status(400).json({ error: "A search query is required" });
 
   try {
-    const items = await fetchNASA(query);
+    const items = await fetchCommons(query);
     return res.status(200).json({
       status: "ok",
       query,
-      provider: "NASA Image and Video Library",
+      provider: "Wikimedia Commons",
       updatedAt: new Date().toISOString(),
       count: items.length,
       items,
-      rightsNote: "NASA media guidelines apply; third-party copyright items are excluded. No video files are downloaded or re-hosted."
+      rightsNote: "Only public-domain, CC0, CC BY and CC BY-SA videos with required attribution are shown. Video files are not downloaded or re-hosted."
     });
   } catch (error) {
     const message = String(error && error.message || "");
@@ -281,16 +318,17 @@ module.exports = async function handler(req, res) {
       status: "unavailable",
       query,
       message: robotsFailure
-        ? "NASA video search is unavailable because source access could not be safely verified."
-        : "NASA video search is temporarily unavailable. Try again shortly."
+        ? "Wikimedia video search is unavailable because source access could not be safely verified."
+        : "Wikimedia video search is temporarily unavailable. Try again shortly."
     });
   }
 };
 
 module.exports._test = {
   parseRobots,
-  normalizeNASAItem,
-  fetchNASA,
+  normalizeCommonsItem,
+  isAllowedCommonsLicense,
+  fetchCommons,
   resetForTests() {
     robotsCache.clear();
     hostQueues.clear();
