@@ -55,7 +55,7 @@ jobs:
             const catalogTitle=String(x.catalog_title||x.title||'');
             if(query==='Rolex') return /rolex/i.test(catalogTitle)||['brand','product','model'].some(t=>types.has(t));
             if(query==='Las Vegas') return ['place','business','organization','service'].some(t=>types.has(t))&&titles.some(t=>/las vegas/i.test(t));
-            if(query==='NASA') return types.has('organization')&&titles.some(t=>/\\bNASA\\b/i.test(t));
+            if(query==='NASA') return types.has('organization')&&titles.some(t=>/\bNASA\b/i.test(t));
             return false;
           });
           const externalTitles=data.catalogResults.filter(x=>String(x.catalog_id||'').startsWith('external:')).map(x=>String(x.catalog_title||x.title||x.name||''));
