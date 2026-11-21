@@ -35,15 +35,15 @@ test("keeps live public news tabs and Refresh", () => {
   assert.match(html, /everythinghub-search-backend\.vercel\.app\/api\/news/);
 });
 
-test("keeps public search and policy-attributed NASA video integration", () => {
+test("keeps public search and policy-attributed Wikimedia video integration", () => {
   assert.match(html, /everythinghub-search-backend\.vercel\.app\/api\/search/);
   assert.match(html, /everythinghub-search-backend\.vercel\.app\/api\/search-fast/);
   assert.match(html, /everythinghub-search-backend\.vercel\.app\/api\/videos/);
   assert.match(html, /item\.credit/);
+  assert.match(html, /item\.license/);
+  assert.match(html, /item\.creator/);
   assert.match(html, /license and reuse terms/);
-  assert.match(html, /item\\.license/);
-  assert.match(html, /item\\.creator/);
-  assert.doesNotMatch(html, /youtube\.com\/watch\?|video-thumbnail/);
+  assert.doesNotMatch(html, /youtube\.com\/watch\?|video-thumbnail|NASA media guidelines/);
 });
 
 test("renders candidate catalog previews separately and keeps rights restrictions visible", () => {
