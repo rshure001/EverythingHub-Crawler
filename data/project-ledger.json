@@ -1643,6 +1643,87 @@
         "repository": "rshure001/EverythingHub-Crawler",
         "source_index_sha256": "3213901d7fd2c06c0f2750a640240744fbd1efa9464737183e873630566a463c"
       }
+    },
+    {
+      "id": "page-derived-catalog-analysis-44902612350",
+      "timestamp": "2026-11-21T12:19:05Z",
+      "type": "page_derived_catalog_analysis",
+      "status": "validated_staging",
+      "summary": "Page-derived catalog registry and per-catalog indexes passed integrity validation; candidate records remain staging-only pending source-terms review and production indexing.",
+      "metrics": {
+        "pages_analyzed": 151100,
+        "eligible_pages": 150688,
+        "unique_catalogs_discovered": 2627,
+        "duplicate_catalog_candidates": 58314,
+        "subcatalogs_discovered": 75,
+        "unique_records": 56038,
+        "media_references": 8538,
+        "unique_media_urls": 4355,
+        "records_staged": 56038,
+        "source_terms_reviewed_records": 0,
+        "commercially_eligible_records": 0,
+        "records_with_provenance": 56038,
+        "records_with_timestamps": 56038,
+        "cross_host_record_merges": 0,
+        "catalogs_with_records": 1229,
+        "catalogs_without_records": 1398,
+        "unassigned_records": 3038,
+        "unique_records_by_type": {
+          "article": 32911,
+          "brand": 142,
+          "business": 573,
+          "dataset": 2467,
+          "event": 2260,
+          "media": 2061,
+          "model": 173,
+          "organization": 2031,
+          "person": 3515,
+          "place": 1365,
+          "product": 1466,
+          "resource": 2759,
+          "service": 587,
+          "software": 1127,
+          "subject": 2601
+        },
+        "coverage_percentage": 100.0,
+        "unique_source_coverage_percentage": 100.0,
+        "eligible_page_coverage_percentage": 100.0,
+        "eligible_unique_source_page_coverage_percentage": 100.0,
+        "source_index_pages": 151584,
+        "records_published": 0,
+        "catalogs_verified": 0,
+        "previous_counts": {
+          "pages_analyzed": 150446,
+          "eligible_pages": 150037,
+          "unique_catalogs_discovered": 2615,
+          "subcatalogs_discovered": 75,
+          "unique_records": 55790,
+          "media_references": 8539
+        },
+        "count_deltas": {
+          "pages_analyzed": 654,
+          "eligible_pages": 651,
+          "unique_catalogs_discovered": 12,
+          "subcatalogs_discovered": 0,
+          "unique_records": 248,
+          "media_references": -1
+        },
+        "elapsed_wall_clock_seconds": 3284.41,
+        "analysis_elapsed_seconds": 76.165,
+        "throughput": {
+          "pages_per_minute": 11.9474,
+          "catalogs_per_minute": 0.2192,
+          "records_per_minute": 4.5305,
+          "subcatalogs_per_minute": 0.0,
+          "media_references_per_minute": -0.0183,
+          "measurement": "persisted_count_delta_over_wall_clock_interval"
+        }
+      },
+      "source": {
+        "workflow_run_id": "44902612350",
+        "repository": "rshure001/EverythingHub-Crawler",
+        "source_index_sha256": "cd96d15f258ef1ba2c86ee7dbf507336b5496285c93978e35be8175da63ca9f1"
+      }
     }
   ]
 }
