@@ -1151,6 +1151,11 @@ class CatalogInventoryTriggerTests(unittest.TestCase):
         self.assertTrue(records["Submariner"]["structured_catalog_item"])
         self.assertEqual(len(records["Submariner"]["source_page_ids"]), 1)
         self.assertTrue(search_catalog_network("Rolex", result))
+        with tempfile.TemporaryDirectory() as tmp:
+            write_outputs(result, Path(tmp))
+            validated = validate_outputs(Path(tmp))
+            self.assertEqual(validated["catalogs"], metrics["unique_catalogs_discovered"])
+            self.assertEqual(validated["records_validated"], metrics["unique_records"])
 
     def test_structured_item_list_with_one_item_does_not_force_a_catalog(self):
         result = analyze_pages([{
