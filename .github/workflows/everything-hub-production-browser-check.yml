@@ -6,6 +6,9 @@ on:
     paths:
       - '.github/workflows/everything-hub-production-browser-check.yml'
       - 'vercel-homepage/**'
+      - 'vercel-search-backend/**'
+      - 'crawler/catalog-source-terms.json'
+      - 'crawler/test_catalog_source_policy.py'
   workflow_dispatch:
   workflow_run:
     workflows: ["Publish and verify Everything Hub — in-house Supabase route"]
@@ -149,6 +152,8 @@ jobs:
         run: |
           node --test vercel-homepage/fallback-contract.test.js
           node --check vercel-homepage/fallback/inline-script.js
+          node --test vercel-search-backend/test/*.test.js
+          node vercel-search-backend/test/videos-live-smoke.cjs
       - name: Install Playwright
         run: |
           npm init -y
@@ -412,12 +417,26 @@ jobs:
                   return !!image && image.complete && image.naturalWidth > 0;
                 }).length,
                 fallbacks: cards.filter(card => !!card.querySelector(".video-placeholder")).length,
-                sampleTitles: cards.slice(0, 5).map(card => card.querySelector("a")?.textContent || "")
+                attributionCards: cards.filter(card => {
+                  const text = card.querySelector("small")?.textContent || "";
+                  return text.includes("NASA Image and Video Library") && text.includes("NASA media guidelines");
+                }).length,
+                sampleTitles: cards.slice(0, 5).map(card => card.querySelectorAll("a")[1]?.textContent?.trim() || ""),
+                sampleAttributions: cards.slice(0, 5).map(card => card.querySelector("small")?.textContent || "")
               }));
               const videoLink = await page.locator("#results .video-card > a").first().evaluate(anchor => ({ href: anchor.href, target: anchor.target, rel: anchor.rel }));
               if (report.videoSearch.cards < 15 || report.videoSearch.loadedThumbnails < 15 || report.videoSearch.fallbacks !== 0 ||
-                  !/^https:\/\/www\.youtube\.com\/watch\?/i.test(videoLink.href)) throw new Error("Video cards or thumbnails failed: " + JSON.stringify(report.videoSearch));
-              report.categorySearches.videos = { cards: report.videoSearch.cards, loadedThumbnails: report.videoSearch.loadedThumbnails };
+                  report.videoSearch.attributionCards !== report.videoSearch.cards ||
+                  report.videoSearch.sampleTitles.filter(Boolean).length < 5 ||
+                  !/^https:\/\/images\.nasa\.gov\/details\//i.test(videoLink.href) ||
+                  videoLink.target !== "_blank" || !videoLink.rel.includes("noopener")) {
+                throw new Error("NASA video cards, thumbnails, titles, or attribution failed: " + JSON.stringify(report.videoSearch));
+              }
+              report.categorySearches.videos = {
+                cards: report.videoSearch.cards,
+                loadedThumbnails: report.videoSearch.loadedThumbnails,
+                attributionCards: report.videoSearch.attributionCards
+              };
               report.coreLinks.videos = videoLink;
               await page.screenshot({ path: "everythinghub-fallback-videos.png", fullPage: true });
 
@@ -466,6 +485,7 @@ jobs:
                 Object.values(report.newsCategories).every(value => value.count > 0) &&
                 report.newsRefresh.http === 200 && report.imageSearch.loadedThumbnails >= 8 &&
                 report.imageSearch.badAttribution === 0 && report.videoSearch.loadedThumbnails >= 15 &&
+                report.videoSearch.attributionCards === report.videoSearch.cards && report.videoSearch.sampleTitles.filter(Boolean).length >= 5 &&
                 report.mobile.documentWidth <= report.mobile.viewportWidth + 2 &&
                 pageErrors.length === 0 && consoleErrors.length === 0;
               if (!report.passed) throw new Error("One or more live fallback acceptance gates failed.");
