@@ -283,7 +283,7 @@ function searchPageDerivedCatalogs(query,network,limit=5){
    source_policy_review_status:r.source_policy_review_status||'not_reviewed',
    record_level_clearance:r.record_level_clearance||'not_reviewed'
   }));
-  const url=safeUrl(c.source_url)||matchedRecords.map(r=>r.source_url).find(Boolean)||'';if(!url)continue;
+  const url=matchedRecords.map(r=>r.source_url).find(Boolean)||safeUrl(c.source_url)||'';if(!url)continue;
   const types=new Set(matched.map(x=>String(x.record.record_type||'').toLowerCase()));
   const recordScores=matched.slice(0,5).map(x=>x.score);
   let score=Math.max(...recordScores)+Math.min(30,recordScores.reduce((sum,value)=>sum+value,0)-Math.max(...recordScores));
