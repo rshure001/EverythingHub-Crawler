@@ -1507,6 +1507,77 @@ class CatalogInventoryTriggerTests(unittest.TestCase):
         self.assertEqual(len({item["record_id"] for item in nasa_records}), 3)
         self.assertEqual(len({item["entity_id"] for item in nasa_records}), 1)
         self.assertTrue(all(source_key in row["catalog_group_keys"] for row in page_rows))
+        nasa_hits = search_catalog_network("NASA", {"records": records, "catalogs": catalogs})
+        self.assertTrue(any(item.get("subject") == "nasa" for item in nasa_hits))
+        self.assertFalse(any(item.get("subject") == "mission" for item in nasa_hits))
+
+
+    def test_derived_subject_search_requires_subject_token_match(self):
+        rolex_pages = [
+            {
+                "url": "https://one.example/national-geographic/rolex",
+                "title": "National Geographic and Rolex Committed to a Perpetual Planet",
+                "description": "National Geographic and Rolex support conservation research.",
+                "text": "A partnership about conservation.",
+                "lane": "nature", "robots_allowed": True,
+            },
+            {
+                "url": "https://two.example/national-geographic/conservation",
+                "title": "National Geographic Conservation Update",
+                "description": "National Geographic conservation research.",
+                "text": "New field research.",
+                "lane": "nature", "robots_allowed": True,
+            },
+            {
+                "url": "https://three.example/national-geographic/research",
+                "title": "National Geographic Research Update",
+                "description": "National Geographic research news.",
+                "text": "Research findings.",
+                "lane": "nature", "robots_allowed": True,
+            },
+        ]
+        rolex_result = analyze_pages(rolex_pages, source_total=3)
+        rolex_hits = search_catalog_network("Rolex", rolex_result)
+        self.assertFalse(any(
+            item.get("record_type") == "subject"
+            and item.get("catalog_origin") == "derived_from_repeated_records"
+            for item in rolex_hits
+        ))
+        rolex_evidence = search_source_page_evidence("Rolex", rolex_result)
+        self.assertTrue(any("Rolex" in item.get("title", "") for item in rolex_evidence))
+
+        vegas_pages = [
+            {
+                "url": "https://one.example/places/las-vegas/strip",
+                "title": "Las Vegas Strip",
+                "description": "Attractions along the Las Vegas Strip.",
+                "text": "Places and landmarks in Las Vegas.",
+                "lane": "places", "robots_allowed": True,
+            },
+            {
+                "url": "https://two.example/places/las-vegas/field-office",
+                "title": "Las Vegas Field Office",
+                "description": "Local public-land office serving Las Vegas.",
+                "text": "The office serves Southern Nevada.",
+                "lane": "places", "robots_allowed": True,
+            },
+            {
+                "url": "https://three.example/events/las-vegas-grand-prix",
+                "title": "Las Vegas Grand Prix",
+                "description": "The Las Vegas race weekend.",
+                "text": "A major event in Las Vegas.",
+                "lane": "events", "robots_allowed": True,
+            },
+        ]
+        vegas_result = analyze_pages(vegas_pages, source_total=3)
+        vegas_hits = search_catalog_network("Las Vegas", vegas_result)
+        self.assertTrue(any(item.get("subject") == "vegas" for item in vegas_hits))
+        self.assertFalse(any(
+            item.get("record_type") == "subject"
+            and item.get("catalog_origin") == "derived_from_repeated_records"
+            and item.get("subject") != "vegas"
+            for item in vegas_hits
+        ))
 
 
     def test_global_subject_metrics_separate_page_records_from_entities(self):
