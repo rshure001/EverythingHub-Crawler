@@ -109,6 +109,8 @@ function renderCatalogResults(items,q){
   for(const item of safeItems){
     const card=document.createElement('article');card.className='eh-catalog-result';
     card.dataset.catalogId=String(item.catalog_id||'');
+    card.dataset.sourceKind=String(item.source_kind||'page-derived');
+    card.dataset.rightsStatus=String(item.rights_status||'not_cleared');
     card.dataset.relevanceClass=String(item.relevance_class||'');
     card.dataset.previewOnly='true';
     card.dataset.commercialEligible='false';
