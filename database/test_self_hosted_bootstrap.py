@@ -49,4 +49,3 @@ class SelfHostedBootstrapTests(unittest.TestCase):
         self.assertIn("initialization scripts run only when the data directory is empty", guide)
         self.assertIn("docker compose down -v", guide)
         self.assertIn("managed Supabase database and this self-hosted database remain separate", guide)
-}
