@@ -32,8 +32,8 @@ on:
       - "crawler/test_hourly_production.py"
       - "crawler/test_live_diagnostics_schedule.py"
   schedule:
-    # Run every 10 minutes on staggered minutes; keep the independent public search index fresh and let the watchdog recover delayed or missed runs.
-    - cron: "3,13,23,33,43,53 * * * *"
+    # Queue a fresh crawl every five minutes. The concurrency group serializes runs without cancelling active work, reducing idle gaps between bounded crawl batches.
+    - cron: "*/5 * * * *"
   workflow_dispatch:
 permissions:
   actions: write
