@@ -1023,7 +1023,12 @@ form.addEventListener('submit',async e=>{
   const d=await r.json();
   apiHasMore=Boolean(d.hasMore);
   totalIndexed=Number(d.count)||totalIndexed;
-  return (d.results||[]).map(x=>({...x,description:x.snippet||x.description||'',source:x.source||d.provider||'Web search',mediaType:'web'}));
+  const catalogResults=(d.catalogResults||[]).map(x=>{
+   const snippet=x.snippet||x.description||'Candidate catalog preview; source terms and reuse rights have not been reviewed.';
+   return {...x,title:x.title||x.catalog_title||x.catalog_id||'Catalog candidate',url:x.url||x.source_url||'',snippet,description:snippet,source:x.source||'Everything Hub Catalog Preview',origin:x.origin||'Everything Hub Catalog Preview',mediaType:'web',score:Number(x.score)||0};
+  }).filter(x=>x.url);
+  const pageResults=(d.results||[]).map(x=>({...x,description:x.snippet||x.description||'',source:x.source||d.provider||'Web search',mediaType:'web'}));
+  return catalogResults.concat(pageResults);
  };
  const render=()=>{
   const isVideo=x=>x.mediaType==='video'||Boolean(x.video)||/youtube\.com|youtu\.be|vimeo\.com/i.test(String(x.url||''));
