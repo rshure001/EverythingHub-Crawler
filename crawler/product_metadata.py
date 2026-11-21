@@ -1,6 +1,7 @@
 """Extract conservative product metadata from HTML for Everything Hub search."""
 from html.parser import HTMLParser
 import json
+import re
 from urllib.parse import urljoin, urlsplit
 
 MAX_JSON_LD_BYTES = 1_000_000
@@ -27,6 +28,67 @@ def _absolute_http(value, base_url):
         return url
     except ValueError:
         return ""
+
+
+def _stable_same_as_ids(value):
+    """Keep only stable, namespaced HTTPS entity identifiers from schema.org sameAs."""
+    pending = [value]
+    found = []
+    seen = set()
+    while pending and len(found) < 5:
+        current = pending.pop(0)
+        if isinstance(current, list):
+            pending.extend(current[:20])
+            continue
+        if isinstance(current, dict):
+            pending.extend([current.get("@id"), current.get("url")])
+            continue
+        if not isinstance(current, str) or not current.strip():
+            continue
+        try:
+            parsed = urlsplit(current.strip())
+        except ValueError:
+            continue
+        if (
+            parsed.scheme.lower() != "https"
+            or not parsed.hostname
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.query
+            or parsed.fragment
+        ):
+            continue
+        host = parsed.hostname.lower().rstrip(".")
+        path = parsed.path.rstrip("/")
+        identity = ""
+        if host in {"www.wikidata.org", "wikidata.org"}:
+            match = re.fullmatch(r"/(?:entity|wiki)/(Q[1-9]\d*)", path, re.I)
+            if match:
+                identity = "wikidata:" + match.group(1).upper()
+        elif host in {"orcid.org", "www.orcid.org"}:
+            match = re.fullmatch(r"/(\d{4}-\d{4}-\d{4}-\d{3}[\dXx])", path)
+            if match:
+                identity = "orcid:" + match.group(1).upper()
+        elif host == "viaf.org":
+            match = re.fullmatch(r"/viaf/(\d+)", path)
+            if match:
+                identity = "viaf:" + match.group(1)
+        elif host in {"isni.org", "www.isni.org"}:
+            match = re.fullmatch(r"/isni/(\d{15}[\dXx])", path)
+            if match:
+                identity = "isni:" + match.group(1).upper()
+        elif host in {"geonames.org", "www.geonames.org"}:
+            match = re.fullmatch(r"/(\d+)", path)
+            if match:
+                identity = "geonames:" + match.group(1)
+        elif host in {"openstreetmap.org", "www.openstreetmap.org"}:
+            match = re.fullmatch(r"/(node|way|relation)/(\d+)", path)
+            if match:
+                identity = "osm:" + match.group(1) + ":" + match.group(2)
+        if identity and identity not in seen:
+            seen.add(identity)
+            found.append(identity)
+    return found
 
 
 class _MetadataParser(HTMLParser):
@@ -102,9 +164,12 @@ def extract_product_metadata(html, page_url):
         return {}
     product = product or {}
 
-    brand = product.get("brand") or parser.meta.get("product:brand") or {}
-    if isinstance(brand, dict):
-        brand = brand.get("name", "")
+    brand_value = product.get("brand") or parser.meta.get("product:brand") or {}
+    brand_same_as_ids = _stable_same_as_ids(
+        [brand_value.get("sameAs"), brand_value.get("@id")]
+    ) if isinstance(brand_value, dict) else []
+    brand = brand_value.get("name", "") if isinstance(brand_value, dict) else brand_value
+    same_as_ids = _stable_same_as_ids([product.get("sameAs"), product.get("@id")])
     offers = product.get("offers") or {}
     if isinstance(offers, list):
         offers = offers[0] if offers else {}
@@ -141,6 +206,8 @@ def extract_product_metadata(html, page_url):
         "currency": _text(offers.get("priceCurrency") or meta.get("product:price:currency"), 8),
         "availability": _text(availability, 80),
         "image": _absolute_http(image, page_url),
+        "same_as_ids": same_as_ids,
+        "brand_same_as_ids": brand_same_as_ids,
         "url": _absolute_http(product.get("url") or page_url, page_url),
     }
     return {k: v for k, v in result.items() if v}
@@ -307,16 +374,23 @@ def extract_structured_catalog_metadata(html, page_url):
                     item.get("gtin12") or item.get("gtin8") or item.get("gtin"),
                     32,
                 )
-                brand = item.get("brand") or item.get("manufacturer") or ""
-                if isinstance(brand, dict):
-                    brand = brand.get("name") or ""
+                brand_value = item.get("brand") or item.get("manufacturer") or ""
+                brand_same_as_ids = _stable_same_as_ids(
+                    [brand_value.get("sameAs"), brand_value.get("@id")]
+                ) if isinstance(brand_value, dict) else []
+                brand = brand_value.get("name") or "" if isinstance(brand_value, dict) else brand_value
                 brand = _text(brand, 48)
+                same_as_ids = _stable_same_as_ids([item.get("sameAs"), item.get("@id")])
                 if sku:
                     entry["sku"] = sku
                 if gtin:
                     entry["gtin"] = gtin
                 if brand:
                     entry["brand"] = brand
+                if same_as_ids:
+                    entry["same_as_ids"] = same_as_ids
+                if brand_same_as_ids:
+                    entry["brand_same_as_ids"] = brand_same_as_ids
                 raw_position = wrapper.get("position")
                 if isinstance(raw_position, int) and not isinstance(raw_position, bool) and raw_position > 0:
                     entry["position"] = raw_position
