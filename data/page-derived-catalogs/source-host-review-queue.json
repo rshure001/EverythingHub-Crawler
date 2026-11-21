@@ -1,19 +1,19 @@
 {
   "schema_version": 1,
   "status": "source_review_backlog_not_a_fetch_queue",
-  "generated_at": "2026-11-21T12:56:37Z",
+  "generated_at": "2026-11-21T13:25:51Z",
   "analysis_version": 13,
-  "source_index_pages": 151584,
-  "source_index_updated_at": "2026-11-21T12:09:31Z",
-  "source_index_sha256": "cd96d15f258ef1ba2c86ee7dbf507336b5496285c93978e35be8175da63ca9f1",
+  "source_index_pages": 152631,
+  "source_index_updated_at": "2026-11-21T12:57:47Z",
+  "source_index_sha256": "9010e3976a8afa8b94510a5bdb9819c7b0789fff8ca6a7a38821f8b1eaf68c8b",
   "metrics": {
-    "catalog_definition_candidates": 1871,
+    "catalog_definition_candidates": 1885,
     "unique_source_hosts": 100,
-    "unique_source_urls": 1864,
-    "policy_preapproved_urls_needing_runtime_robots_check": 386,
+    "unique_source_urls": 1878,
+    "policy_preapproved_urls_needing_runtime_robots_check": 399,
     "policy_preapproved_api_urls_needing_runtime_robots_check": 0,
-    "policy_preapproved_catalog_page_urls_needing_runtime_robots_check": 386,
-    "policy_review_required_urls": 1426,
+    "policy_preapproved_catalog_page_urls_needing_runtime_robots_check": 399,
+    "policy_review_required_urls": 1427,
     "path_not_allowlisted_urls": 52,
     "mixed_policy_status_urls": 0,
     "invalid_catalog_candidates": 0,
@@ -6201,7 +6201,7 @@
       "evidence_strength": "high",
       "catalog_status": "candidate_needs_source_validation",
       "record_count": 1,
-      "source_page_count": 1095,
+      "source_page_count": 1139,
       "source_host": "clevelandart.org",
       "source_url": "https://clevelandart.org/art/collection/contact?artwork=1917.383&reason=artwork_information",
       "review_status": "policy_review_required",
@@ -13372,6 +13372,56 @@
       "fetch_authorized": false
     },
     {
+      "catalog_id": "catalog:432d5466c41bf7d7485a3c2f",
+      "title": "Frontiers Articles",
+      "catalog_type": "knowledge_base",
+      "record_type": "article",
+      "catalog_origin": "source_declared_collection",
+      "evidence_strength": "medium",
+      "catalog_status": "candidate_needs_source_validation",
+      "record_count": 37,
+      "source_page_count": 38,
+      "source_host": "frontiersin.org",
+      "source_url": "https://frontiersin.org/journals/developmental-psychology/articles",
+      "review_status": "policy_preapproved_robots_recheck_required",
+      "source_access_mode": "catalog_landing_page",
+      "terms_url": "https://www.frontiersin.org/legal/terms-and-conditions",
+      "terms_status": "reviewed_per_dataset",
+      "reviewed_at": "2026-11-21",
+      "metadata_only": true,
+      "per_dataset_rights_required": true,
+      "attribution_required": "per_article",
+      "rights_scope": "per_article_license",
+      "allowed_metadata_fields": [
+        "title",
+        "authors",
+        "doi",
+        "journal",
+        "publication_date",
+        "article_url",
+        "license",
+        "publisher"
+      ],
+      "allowed_catalog_path_patterns": [
+        "/articles",
+        "/journals/*/articles",
+        "/journals/*/sections/*",
+        "/journals/*/sections/*/articles"
+      ],
+      "prohibited_content": [
+        "full_text",
+        "images",
+        "supplementary_files",
+        "bulk_assets"
+      ],
+      "max_response_bytes": 1500000,
+      "min_interval_seconds": 3.0,
+      "max_requests_per_run": 40,
+      "policy_note": "Frontiers Terms and Conditions section 14 permits text and data mining of public content for the legitimate purpose of enriching external collections of scientific literature. Content remains subject to each article's applicable CC-BY, CC0, or other license and applicable data-protection laws. This policy is limited to bounded landing-page discovery of bibliographic metadata; do not retrieve full text, images, supplementary files, or bulk assets. Exact path shapes only: /articles; /journals/{journal}/articles; /journals/{journal}/sections/{section}; /journals/{journal}/sections/{section}/articles. Individual article paths and deeper descendants are not allowlisted. Runtime robots.txt verification on the exact host is mandatory; honor disallowed paths and any performance restrictions.",
+      "robots_recheck_required": true,
+      "fetch_authorized": false
+    },
+    {
       "catalog_id": "catalog:435835782ed65a60b499cfe6",
       "title": "Frontiers Articles",
       "catalog_type": "knowledge_base",
@@ -14829,8 +14879,8 @@
       "catalog_origin": "source_declared_collection",
       "evidence_strength": "high",
       "catalog_status": "candidate_needs_source_validation",
-      "record_count": 112,
-      "source_page_count": 114,
+      "record_count": 122,
+      "source_page_count": 124,
       "source_host": "frontiersin.org",
       "source_url": "https://frontiersin.org/journals/cardiovascular-medicine/articles",
       "review_status": "policy_preapproved_robots_recheck_required",
@@ -16735,6 +16785,56 @@
       "source_url": "https://frontiersin.org/research-topics/60440/immune-cell-metabolic-reprogramming-in-cancer-development-and-therapy/articles",
       "review_status": "path_not_allowlisted",
       "source_access_mode": null,
+      "terms_url": "https://www.frontiersin.org/legal/terms-and-conditions",
+      "terms_status": "reviewed_per_dataset",
+      "reviewed_at": "2026-11-21",
+      "metadata_only": true,
+      "per_dataset_rights_required": true,
+      "attribution_required": "per_article",
+      "rights_scope": "per_article_license",
+      "allowed_metadata_fields": [
+        "title",
+        "authors",
+        "doi",
+        "journal",
+        "publication_date",
+        "article_url",
+        "license",
+        "publisher"
+      ],
+      "allowed_catalog_path_patterns": [
+        "/articles",
+        "/journals/*/articles",
+        "/journals/*/sections/*",
+        "/journals/*/sections/*/articles"
+      ],
+      "prohibited_content": [
+        "full_text",
+        "images",
+        "supplementary_files",
+        "bulk_assets"
+      ],
+      "max_response_bytes": 1500000,
+      "min_interval_seconds": 3.0,
+      "max_requests_per_run": 40,
+      "policy_note": "Frontiers Terms and Conditions section 14 permits text and data mining of public content for the legitimate purpose of enriching external collections of scientific literature. Content remains subject to each article's applicable CC-BY, CC0, or other license and applicable data-protection laws. This policy is limited to bounded landing-page discovery of bibliographic metadata; do not retrieve full text, images, supplementary files, or bulk assets. Exact path shapes only: /articles; /journals/{journal}/articles; /journals/{journal}/sections/{section}; /journals/{journal}/sections/{section}/articles. Individual article paths and deeper descendants are not allowlisted. Runtime robots.txt verification on the exact host is mandatory; honor disallowed paths and any performance restrictions.",
+      "robots_recheck_required": true,
+      "fetch_authorized": false
+    },
+    {
+      "catalog_id": "catalog:1610fc2c758bea14b372e66b",
+      "title": "Frontiersin Articles",
+      "catalog_type": "knowledge_base",
+      "record_type": "article",
+      "catalog_origin": "source_declared_collection",
+      "evidence_strength": "medium",
+      "catalog_status": "definition_only",
+      "record_count": 0,
+      "source_page_count": 1,
+      "source_host": "frontiersin.org",
+      "source_url": "https://frontiersin.org/journals/surgery/sections/obstetrics-and-gynecological-surgery/articles",
+      "review_status": "policy_preapproved_robots_recheck_required",
+      "source_access_mode": "catalog_landing_page",
       "terms_url": "https://www.frontiersin.org/legal/terms-and-conditions",
       "terms_status": "reviewed_per_dataset",
       "reviewed_at": "2026-11-21",
@@ -20572,6 +20672,56 @@
       "fetch_authorized": false
     },
     {
+      "catalog_id": "catalog:3fff6ddaeb18ed5e18ebb60a",
+      "title": "Frontiersin Articles",
+      "catalog_type": "knowledge_base",
+      "record_type": "article",
+      "catalog_origin": "source_declared_collection",
+      "evidence_strength": "medium",
+      "catalog_status": "definition_only",
+      "record_count": 0,
+      "source_page_count": 1,
+      "source_host": "frontiersin.org",
+      "source_url": "https://frontiersin.org/journals/developmental-psychology/sections/adolescent-psychological-development/articles",
+      "review_status": "policy_preapproved_robots_recheck_required",
+      "source_access_mode": "catalog_landing_page",
+      "terms_url": "https://www.frontiersin.org/legal/terms-and-conditions",
+      "terms_status": "reviewed_per_dataset",
+      "reviewed_at": "2026-11-21",
+      "metadata_only": true,
+      "per_dataset_rights_required": true,
+      "attribution_required": "per_article",
+      "rights_scope": "per_article_license",
+      "allowed_metadata_fields": [
+        "title",
+        "authors",
+        "doi",
+        "journal",
+        "publication_date",
+        "article_url",
+        "license",
+        "publisher"
+      ],
+      "allowed_catalog_path_patterns": [
+        "/articles",
+        "/journals/*/articles",
+        "/journals/*/sections/*",
+        "/journals/*/sections/*/articles"
+      ],
+      "prohibited_content": [
+        "full_text",
+        "images",
+        "supplementary_files",
+        "bulk_assets"
+      ],
+      "max_response_bytes": 1500000,
+      "min_interval_seconds": 3.0,
+      "max_requests_per_run": 40,
+      "policy_note": "Frontiers Terms and Conditions section 14 permits text and data mining of public content for the legitimate purpose of enriching external collections of scientific literature. Content remains subject to each article's applicable CC-BY, CC0, or other license and applicable data-protection laws. This policy is limited to bounded landing-page discovery of bibliographic metadata; do not retrieve full text, images, supplementary files, or bulk assets. Exact path shapes only: /articles; /journals/{journal}/articles; /journals/{journal}/sections/{section}; /journals/{journal}/sections/{section}/articles. Individual article paths and deeper descendants are not allowlisted. Runtime robots.txt verification on the exact host is mandatory; honor disallowed paths and any performance restrictions.",
+      "robots_recheck_required": true,
+      "fetch_authorized": false
+    },
+    {
       "catalog_id": "catalog:4006235c0b38095b55db5792",
       "title": "Frontiersin Articles",
       "catalog_type": "knowledge_base",
@@ -22972,6 +23122,56 @@
       "fetch_authorized": false
     },
     {
+      "catalog_id": "catalog:60c2ce43d1f9917bfd4b18f6",
+      "title": "Frontiersin Articles",
+      "catalog_type": "knowledge_base",
+      "record_type": "article",
+      "catalog_origin": "source_declared_collection",
+      "evidence_strength": "medium",
+      "catalog_status": "definition_only",
+      "record_count": 0,
+      "source_page_count": 1,
+      "source_host": "frontiersin.org",
+      "source_url": "https://frontiersin.org/journals/surgery/sections/otorhinolaryngology---head-and-neck-surgery/articles",
+      "review_status": "policy_preapproved_robots_recheck_required",
+      "source_access_mode": "catalog_landing_page",
+      "terms_url": "https://www.frontiersin.org/legal/terms-and-conditions",
+      "terms_status": "reviewed_per_dataset",
+      "reviewed_at": "2026-11-21",
+      "metadata_only": true,
+      "per_dataset_rights_required": true,
+      "attribution_required": "per_article",
+      "rights_scope": "per_article_license",
+      "allowed_metadata_fields": [
+        "title",
+        "authors",
+        "doi",
+        "journal",
+        "publication_date",
+        "article_url",
+        "license",
+        "publisher"
+      ],
+      "allowed_catalog_path_patterns": [
+        "/articles",
+        "/journals/*/articles",
+        "/journals/*/sections/*",
+        "/journals/*/sections/*/articles"
+      ],
+      "prohibited_content": [
+        "full_text",
+        "images",
+        "supplementary_files",
+        "bulk_assets"
+      ],
+      "max_response_bytes": 1500000,
+      "min_interval_seconds": 3.0,
+      "max_requests_per_run": 40,
+      "policy_note": "Frontiers Terms and Conditions section 14 permits text and data mining of public content for the legitimate purpose of enriching external collections of scientific literature. Content remains subject to each article's applicable CC-BY, CC0, or other license and applicable data-protection laws. This policy is limited to bounded landing-page discovery of bibliographic metadata; do not retrieve full text, images, supplementary files, or bulk assets. Exact path shapes only: /articles; /journals/{journal}/articles; /journals/{journal}/sections/{section}; /journals/{journal}/sections/{section}/articles. Individual article paths and deeper descendants are not allowlisted. Runtime robots.txt verification on the exact host is mandatory; honor disallowed paths and any performance restrictions.",
+      "robots_recheck_required": true,
+      "fetch_authorized": false
+    },
+    {
       "catalog_id": "catalog:612ea47acf15a029fb90d7cd",
       "title": "Frontiersin Articles",
       "catalog_type": "knowledge_base",
@@ -24135,6 +24335,56 @@
       "source_url": "https://frontiersin.org/research-topics/57753/the-livers-dilemma-sensing-real-danger-in-a-sea-of-pamps/articles",
       "review_status": "path_not_allowlisted",
       "source_access_mode": null,
+      "terms_url": "https://www.frontiersin.org/legal/terms-and-conditions",
+      "terms_status": "reviewed_per_dataset",
+      "reviewed_at": "2026-11-21",
+      "metadata_only": true,
+      "per_dataset_rights_required": true,
+      "attribution_required": "per_article",
+      "rights_scope": "per_article_license",
+      "allowed_metadata_fields": [
+        "title",
+        "authors",
+        "doi",
+        "journal",
+        "publication_date",
+        "article_url",
+        "license",
+        "publisher"
+      ],
+      "allowed_catalog_path_patterns": [
+        "/articles",
+        "/journals/*/articles",
+        "/journals/*/sections/*",
+        "/journals/*/sections/*/articles"
+      ],
+      "prohibited_content": [
+        "full_text",
+        "images",
+        "supplementary_files",
+        "bulk_assets"
+      ],
+      "max_response_bytes": 1500000,
+      "min_interval_seconds": 3.0,
+      "max_requests_per_run": 40,
+      "policy_note": "Frontiers Terms and Conditions section 14 permits text and data mining of public content for the legitimate purpose of enriching external collections of scientific literature. Content remains subject to each article's applicable CC-BY, CC0, or other license and applicable data-protection laws. This policy is limited to bounded landing-page discovery of bibliographic metadata; do not retrieve full text, images, supplementary files, or bulk assets. Exact path shapes only: /articles; /journals/{journal}/articles; /journals/{journal}/sections/{section}; /journals/{journal}/sections/{section}/articles. Individual article paths and deeper descendants are not allowlisted. Runtime robots.txt verification on the exact host is mandatory; honor disallowed paths and any performance restrictions.",
+      "robots_recheck_required": true,
+      "fetch_authorized": false
+    },
+    {
+      "catalog_id": "catalog:726aede6944cc9563a3515fb",
+      "title": "Frontiersin Articles",
+      "catalog_type": "knowledge_base",
+      "record_type": "article",
+      "catalog_origin": "source_declared_collection",
+      "evidence_strength": "medium",
+      "catalog_status": "definition_only",
+      "record_count": 0,
+      "source_page_count": 1,
+      "source_host": "frontiersin.org",
+      "source_url": "https://frontiersin.org/journals/surgery/sections/pediatric-surgery/articles",
+      "review_status": "policy_preapproved_robots_recheck_required",
+      "source_access_mode": "catalog_landing_page",
       "terms_url": "https://www.frontiersin.org/legal/terms-and-conditions",
       "terms_status": "reviewed_per_dataset",
       "reviewed_at": "2026-11-21",
@@ -27572,6 +27822,56 @@
       "fetch_authorized": false
     },
     {
+      "catalog_id": "catalog:a973646de5e89db76c1ef115",
+      "title": "Frontiersin Articles",
+      "catalog_type": "knowledge_base",
+      "record_type": "article",
+      "catalog_origin": "source_declared_collection",
+      "evidence_strength": "medium",
+      "catalog_status": "definition_only",
+      "record_count": 0,
+      "source_page_count": 1,
+      "source_host": "frontiersin.org",
+      "source_url": "https://frontiersin.org/journals/surgery/sections/genitourinary-surgery-and-interventions/articles",
+      "review_status": "policy_preapproved_robots_recheck_required",
+      "source_access_mode": "catalog_landing_page",
+      "terms_url": "https://www.frontiersin.org/legal/terms-and-conditions",
+      "terms_status": "reviewed_per_dataset",
+      "reviewed_at": "2026-11-21",
+      "metadata_only": true,
+      "per_dataset_rights_required": true,
+      "attribution_required": "per_article",
+      "rights_scope": "per_article_license",
+      "allowed_metadata_fields": [
+        "title",
+        "authors",
+        "doi",
+        "journal",
+        "publication_date",
+        "article_url",
+        "license",
+        "publisher"
+      ],
+      "allowed_catalog_path_patterns": [
+        "/articles",
+        "/journals/*/articles",
+        "/journals/*/sections/*",
+        "/journals/*/sections/*/articles"
+      ],
+      "prohibited_content": [
+        "full_text",
+        "images",
+        "supplementary_files",
+        "bulk_assets"
+      ],
+      "max_response_bytes": 1500000,
+      "min_interval_seconds": 3.0,
+      "max_requests_per_run": 40,
+      "policy_note": "Frontiers Terms and Conditions section 14 permits text and data mining of public content for the legitimate purpose of enriching external collections of scientific literature. Content remains subject to each article's applicable CC-BY, CC0, or other license and applicable data-protection laws. This policy is limited to bounded landing-page discovery of bibliographic metadata; do not retrieve full text, images, supplementary files, or bulk assets. Exact path shapes only: /articles; /journals/{journal}/articles; /journals/{journal}/sections/{section}; /journals/{journal}/sections/{section}/articles. Individual article paths and deeper descendants are not allowlisted. Runtime robots.txt verification on the exact host is mandatory; honor disallowed paths and any performance restrictions.",
+      "robots_recheck_required": true,
+      "fetch_authorized": false
+    },
+    {
       "catalog_id": "catalog:a992e82a09b56bbcff274094",
       "title": "Frontiersin Articles",
       "catalog_type": "knowledge_base",
@@ -28083,6 +28383,56 @@
       "source_page_count": 1,
       "source_host": "frontiersin.org",
       "source_url": "https://frontiersin.org/journals/oncology/sections/pharmacology-of-anti-cancer-drugs/articles",
+      "review_status": "policy_preapproved_robots_recheck_required",
+      "source_access_mode": "catalog_landing_page",
+      "terms_url": "https://www.frontiersin.org/legal/terms-and-conditions",
+      "terms_status": "reviewed_per_dataset",
+      "reviewed_at": "2026-11-21",
+      "metadata_only": true,
+      "per_dataset_rights_required": true,
+      "attribution_required": "per_article",
+      "rights_scope": "per_article_license",
+      "allowed_metadata_fields": [
+        "title",
+        "authors",
+        "doi",
+        "journal",
+        "publication_date",
+        "article_url",
+        "license",
+        "publisher"
+      ],
+      "allowed_catalog_path_patterns": [
+        "/articles",
+        "/journals/*/articles",
+        "/journals/*/sections/*",
+        "/journals/*/sections/*/articles"
+      ],
+      "prohibited_content": [
+        "full_text",
+        "images",
+        "supplementary_files",
+        "bulk_assets"
+      ],
+      "max_response_bytes": 1500000,
+      "min_interval_seconds": 3.0,
+      "max_requests_per_run": 40,
+      "policy_note": "Frontiers Terms and Conditions section 14 permits text and data mining of public content for the legitimate purpose of enriching external collections of scientific literature. Content remains subject to each article's applicable CC-BY, CC0, or other license and applicable data-protection laws. This policy is limited to bounded landing-page discovery of bibliographic metadata; do not retrieve full text, images, supplementary files, or bulk assets. Exact path shapes only: /articles; /journals/{journal}/articles; /journals/{journal}/sections/{section}; /journals/{journal}/sections/{section}/articles. Individual article paths and deeper descendants are not allowlisted. Runtime robots.txt verification on the exact host is mandatory; honor disallowed paths and any performance restrictions.",
+      "robots_recheck_required": true,
+      "fetch_authorized": false
+    },
+    {
+      "catalog_id": "catalog:b5c13bc23e5ae3b0692abc14",
+      "title": "Frontiersin Articles",
+      "catalog_type": "knowledge_base",
+      "record_type": "article",
+      "catalog_origin": "source_declared_collection",
+      "evidence_strength": "medium",
+      "catalog_status": "definition_only",
+      "record_count": 0,
+      "source_page_count": 1,
+      "source_host": "frontiersin.org",
+      "source_url": "https://frontiersin.org/journals/surgery/sections/orthopedic-surgery/articles",
       "review_status": "policy_preapproved_robots_recheck_required",
       "source_access_mode": "catalog_landing_page",
       "terms_url": "https://www.frontiersin.org/legal/terms-and-conditions",
@@ -29072,6 +29422,56 @@
       "fetch_authorized": false
     },
     {
+      "catalog_id": "catalog:c0c2d73a8d92234abcf34b6d",
+      "title": "Frontiersin Articles",
+      "catalog_type": "knowledge_base",
+      "record_type": "article",
+      "catalog_origin": "source_declared_collection",
+      "evidence_strength": "medium",
+      "catalog_status": "definition_only",
+      "record_count": 0,
+      "source_page_count": 1,
+      "source_host": "frontiersin.org",
+      "source_url": "https://frontiersin.org/journals/developmental-psychology/sections/cognitive-development/articles",
+      "review_status": "policy_preapproved_robots_recheck_required",
+      "source_access_mode": "catalog_landing_page",
+      "terms_url": "https://www.frontiersin.org/legal/terms-and-conditions",
+      "terms_status": "reviewed_per_dataset",
+      "reviewed_at": "2026-11-21",
+      "metadata_only": true,
+      "per_dataset_rights_required": true,
+      "attribution_required": "per_article",
+      "rights_scope": "per_article_license",
+      "allowed_metadata_fields": [
+        "title",
+        "authors",
+        "doi",
+        "journal",
+        "publication_date",
+        "article_url",
+        "license",
+        "publisher"
+      ],
+      "allowed_catalog_path_patterns": [
+        "/articles",
+        "/journals/*/articles",
+        "/journals/*/sections/*",
+        "/journals/*/sections/*/articles"
+      ],
+      "prohibited_content": [
+        "full_text",
+        "images",
+        "supplementary_files",
+        "bulk_assets"
+      ],
+      "max_response_bytes": 1500000,
+      "min_interval_seconds": 3.0,
+      "max_requests_per_run": 40,
+      "policy_note": "Frontiers Terms and Conditions section 14 permits text and data mining of public content for the legitimate purpose of enriching external collections of scientific literature. Content remains subject to each article's applicable CC-BY, CC0, or other license and applicable data-protection laws. This policy is limited to bounded landing-page discovery of bibliographic metadata; do not retrieve full text, images, supplementary files, or bulk assets. Exact path shapes only: /articles; /journals/{journal}/articles; /journals/{journal}/sections/{section}; /journals/{journal}/sections/{section}/articles. Individual article paths and deeper descendants are not allowlisted. Runtime robots.txt verification on the exact host is mandatory; honor disallowed paths and any performance restrictions.",
+      "robots_recheck_required": true,
+      "fetch_authorized": false
+    },
+    {
       "catalog_id": "catalog:c1d063704764069ec42de7f4",
       "title": "Frontiersin Articles",
       "catalog_type": "knowledge_base",
@@ -29522,6 +29922,56 @@
       "fetch_authorized": false
     },
     {
+      "catalog_id": "catalog:c4eda4507dc2b446c338d7e8",
+      "title": "Frontiersin Articles",
+      "catalog_type": "knowledge_base",
+      "record_type": "article",
+      "catalog_origin": "source_declared_collection",
+      "evidence_strength": "medium",
+      "catalog_status": "definition_only",
+      "record_count": 0,
+      "source_page_count": 1,
+      "source_host": "frontiersin.org",
+      "source_url": "https://frontiersin.org/journals/surgery/sections/neurosurgery/articles",
+      "review_status": "policy_preapproved_robots_recheck_required",
+      "source_access_mode": "catalog_landing_page",
+      "terms_url": "https://www.frontiersin.org/legal/terms-and-conditions",
+      "terms_status": "reviewed_per_dataset",
+      "reviewed_at": "2026-11-21",
+      "metadata_only": true,
+      "per_dataset_rights_required": true,
+      "attribution_required": "per_article",
+      "rights_scope": "per_article_license",
+      "allowed_metadata_fields": [
+        "title",
+        "authors",
+        "doi",
+        "journal",
+        "publication_date",
+        "article_url",
+        "license",
+        "publisher"
+      ],
+      "allowed_catalog_path_patterns": [
+        "/articles",
+        "/journals/*/articles",
+        "/journals/*/sections/*",
+        "/journals/*/sections/*/articles"
+      ],
+      "prohibited_content": [
+        "full_text",
+        "images",
+        "supplementary_files",
+        "bulk_assets"
+      ],
+      "max_response_bytes": 1500000,
+      "min_interval_seconds": 3.0,
+      "max_requests_per_run": 40,
+      "policy_note": "Frontiers Terms and Conditions section 14 permits text and data mining of public content for the legitimate purpose of enriching external collections of scientific literature. Content remains subject to each article's applicable CC-BY, CC0, or other license and applicable data-protection laws. This policy is limited to bounded landing-page discovery of bibliographic metadata; do not retrieve full text, images, supplementary files, or bulk assets. Exact path shapes only: /articles; /journals/{journal}/articles; /journals/{journal}/sections/{section}; /journals/{journal}/sections/{section}/articles. Individual article paths and deeper descendants are not allowlisted. Runtime robots.txt verification on the exact host is mandatory; honor disallowed paths and any performance restrictions.",
+      "robots_recheck_required": true,
+      "fetch_authorized": false
+    },
+    {
       "catalog_id": "catalog:c514c5ea8dfb394ad896d050",
       "title": "Frontiersin Articles",
       "catalog_type": "knowledge_base",
@@ -29633,6 +30083,56 @@
       "source_page_count": 1,
       "source_host": "frontiersin.org",
       "source_url": "https://frontiersin.org/journals/robotics-and-ai/sections/robot-vision-and-artificial-perception/articles",
+      "review_status": "policy_preapproved_robots_recheck_required",
+      "source_access_mode": "catalog_landing_page",
+      "terms_url": "https://www.frontiersin.org/legal/terms-and-conditions",
+      "terms_status": "reviewed_per_dataset",
+      "reviewed_at": "2026-11-21",
+      "metadata_only": true,
+      "per_dataset_rights_required": true,
+      "attribution_required": "per_article",
+      "rights_scope": "per_article_license",
+      "allowed_metadata_fields": [
+        "title",
+        "authors",
+        "doi",
+        "journal",
+        "publication_date",
+        "article_url",
+        "license",
+        "publisher"
+      ],
+      "allowed_catalog_path_patterns": [
+        "/articles",
+        "/journals/*/articles",
+        "/journals/*/sections/*",
+        "/journals/*/sections/*/articles"
+      ],
+      "prohibited_content": [
+        "full_text",
+        "images",
+        "supplementary_files",
+        "bulk_assets"
+      ],
+      "max_response_bytes": 1500000,
+      "min_interval_seconds": 3.0,
+      "max_requests_per_run": 40,
+      "policy_note": "Frontiers Terms and Conditions section 14 permits text and data mining of public content for the legitimate purpose of enriching external collections of scientific literature. Content remains subject to each article's applicable CC-BY, CC0, or other license and applicable data-protection laws. This policy is limited to bounded landing-page discovery of bibliographic metadata; do not retrieve full text, images, supplementary files, or bulk assets. Exact path shapes only: /articles; /journals/{journal}/articles; /journals/{journal}/sections/{section}; /journals/{journal}/sections/{section}/articles. Individual article paths and deeper descendants are not allowlisted. Runtime robots.txt verification on the exact host is mandatory; honor disallowed paths and any performance restrictions.",
+      "robots_recheck_required": true,
+      "fetch_authorized": false
+    },
+    {
+      "catalog_id": "catalog:c82885678e0548c05b6015e6",
+      "title": "Frontiersin Articles",
+      "catalog_type": "knowledge_base",
+      "record_type": "article",
+      "catalog_origin": "source_declared_collection",
+      "evidence_strength": "medium",
+      "catalog_status": "definition_only",
+      "record_count": 0,
+      "source_page_count": 1,
+      "source_host": "frontiersin.org",
+      "source_url": "https://frontiersin.org/journals/developmental-psychology/sections/social-and-emotional-development/articles",
       "review_status": "policy_preapproved_robots_recheck_required",
       "source_access_mode": "catalog_landing_page",
       "terms_url": "https://www.frontiersin.org/legal/terms-and-conditions",
@@ -32772,6 +33272,56 @@
       "fetch_authorized": false
     },
     {
+      "catalog_id": "catalog:f538d21a3f40417db52874e0",
+      "title": "Frontiersin Articles",
+      "catalog_type": "knowledge_base",
+      "record_type": "article",
+      "catalog_origin": "source_declared_collection",
+      "evidence_strength": "medium",
+      "catalog_status": "definition_only",
+      "record_count": 0,
+      "source_page_count": 1,
+      "source_host": "frontiersin.org",
+      "source_url": "https://frontiersin.org/journals/developmental-psychology/sections/development-in-infancy/articles",
+      "review_status": "policy_preapproved_robots_recheck_required",
+      "source_access_mode": "catalog_landing_page",
+      "terms_url": "https://www.frontiersin.org/legal/terms-and-conditions",
+      "terms_status": "reviewed_per_dataset",
+      "reviewed_at": "2026-11-21",
+      "metadata_only": true,
+      "per_dataset_rights_required": true,
+      "attribution_required": "per_article",
+      "rights_scope": "per_article_license",
+      "allowed_metadata_fields": [
+        "title",
+        "authors",
+        "doi",
+        "journal",
+        "publication_date",
+        "article_url",
+        "license",
+        "publisher"
+      ],
+      "allowed_catalog_path_patterns": [
+        "/articles",
+        "/journals/*/articles",
+        "/journals/*/sections/*",
+        "/journals/*/sections/*/articles"
+      ],
+      "prohibited_content": [
+        "full_text",
+        "images",
+        "supplementary_files",
+        "bulk_assets"
+      ],
+      "max_response_bytes": 1500000,
+      "min_interval_seconds": 3.0,
+      "max_requests_per_run": 40,
+      "policy_note": "Frontiers Terms and Conditions section 14 permits text and data mining of public content for the legitimate purpose of enriching external collections of scientific literature. Content remains subject to each article's applicable CC-BY, CC0, or other license and applicable data-protection laws. This policy is limited to bounded landing-page discovery of bibliographic metadata; do not retrieve full text, images, supplementary files, or bulk assets. Exact path shapes only: /articles; /journals/{journal}/articles; /journals/{journal}/sections/{section}; /journals/{journal}/sections/{section}/articles. Individual article paths and deeper descendants are not allowlisted. Runtime robots.txt verification on the exact host is mandatory; honor disallowed paths and any performance restrictions.",
+      "robots_recheck_required": true,
+      "fetch_authorized": false
+    },
+    {
       "catalog_id": "catalog:f579abf6d3c8b989b0c35e8b",
       "title": "Frontiersin Articles",
       "catalog_type": "knowledge_base",
@@ -33083,6 +33633,106 @@
       "source_page_count": 1,
       "source_host": "frontiersin.org",
       "source_url": "https://frontiersin.org/journals/endocrinology/sections/pediatric-endocrinology/articles",
+      "review_status": "policy_preapproved_robots_recheck_required",
+      "source_access_mode": "catalog_landing_page",
+      "terms_url": "https://www.frontiersin.org/legal/terms-and-conditions",
+      "terms_status": "reviewed_per_dataset",
+      "reviewed_at": "2026-11-21",
+      "metadata_only": true,
+      "per_dataset_rights_required": true,
+      "attribution_required": "per_article",
+      "rights_scope": "per_article_license",
+      "allowed_metadata_fields": [
+        "title",
+        "authors",
+        "doi",
+        "journal",
+        "publication_date",
+        "article_url",
+        "license",
+        "publisher"
+      ],
+      "allowed_catalog_path_patterns": [
+        "/articles",
+        "/journals/*/articles",
+        "/journals/*/sections/*",
+        "/journals/*/sections/*/articles"
+      ],
+      "prohibited_content": [
+        "full_text",
+        "images",
+        "supplementary_files",
+        "bulk_assets"
+      ],
+      "max_response_bytes": 1500000,
+      "min_interval_seconds": 3.0,
+      "max_requests_per_run": 40,
+      "policy_note": "Frontiers Terms and Conditions section 14 permits text and data mining of public content for the legitimate purpose of enriching external collections of scientific literature. Content remains subject to each article's applicable CC-BY, CC0, or other license and applicable data-protection laws. This policy is limited to bounded landing-page discovery of bibliographic metadata; do not retrieve full text, images, supplementary files, or bulk assets. Exact path shapes only: /articles; /journals/{journal}/articles; /journals/{journal}/sections/{section}; /journals/{journal}/sections/{section}/articles. Individual article paths and deeper descendants are not allowlisted. Runtime robots.txt verification on the exact host is mandatory; honor disallowed paths and any performance restrictions.",
+      "robots_recheck_required": true,
+      "fetch_authorized": false
+    },
+    {
+      "catalog_id": "catalog:fc5c96f254e796c0b13e0b05",
+      "title": "Frontiersin Articles",
+      "catalog_type": "knowledge_base",
+      "record_type": "article",
+      "catalog_origin": "source_declared_collection",
+      "evidence_strength": "medium",
+      "catalog_status": "definition_only",
+      "record_count": 0,
+      "source_page_count": 1,
+      "source_host": "frontiersin.org",
+      "source_url": "https://frontiersin.org/journals/surgery/sections/colorectal-and-proctological-surgery/articles",
+      "review_status": "policy_preapproved_robots_recheck_required",
+      "source_access_mode": "catalog_landing_page",
+      "terms_url": "https://www.frontiersin.org/legal/terms-and-conditions",
+      "terms_status": "reviewed_per_dataset",
+      "reviewed_at": "2026-11-21",
+      "metadata_only": true,
+      "per_dataset_rights_required": true,
+      "attribution_required": "per_article",
+      "rights_scope": "per_article_license",
+      "allowed_metadata_fields": [
+        "title",
+        "authors",
+        "doi",
+        "journal",
+        "publication_date",
+        "article_url",
+        "license",
+        "publisher"
+      ],
+      "allowed_catalog_path_patterns": [
+        "/articles",
+        "/journals/*/articles",
+        "/journals/*/sections/*",
+        "/journals/*/sections/*/articles"
+      ],
+      "prohibited_content": [
+        "full_text",
+        "images",
+        "supplementary_files",
+        "bulk_assets"
+      ],
+      "max_response_bytes": 1500000,
+      "min_interval_seconds": 3.0,
+      "max_requests_per_run": 40,
+      "policy_note": "Frontiers Terms and Conditions section 14 permits text and data mining of public content for the legitimate purpose of enriching external collections of scientific literature. Content remains subject to each article's applicable CC-BY, CC0, or other license and applicable data-protection laws. This policy is limited to bounded landing-page discovery of bibliographic metadata; do not retrieve full text, images, supplementary files, or bulk assets. Exact path shapes only: /articles; /journals/{journal}/articles; /journals/{journal}/sections/{section}; /journals/{journal}/sections/{section}/articles. Individual article paths and deeper descendants are not allowlisted. Runtime robots.txt verification on the exact host is mandatory; honor disallowed paths and any performance restrictions.",
+      "robots_recheck_required": true,
+      "fetch_authorized": false
+    },
+    {
+      "catalog_id": "catalog:fd94c15ec8a8f7b6f9d7624d",
+      "title": "Frontiersin Articles",
+      "catalog_type": "knowledge_base",
+      "record_type": "article",
+      "catalog_origin": "source_declared_collection",
+      "evidence_strength": "medium",
+      "catalog_status": "definition_only",
+      "record_count": 0,
+      "source_page_count": 1,
+      "source_host": "frontiersin.org",
+      "source_url": "https://frontiersin.org/journals/surgery/sections/pediatric-orthopedics/articles",
       "review_status": "policy_preapproved_robots_recheck_required",
       "source_access_mode": "catalog_landing_page",
       "terms_url": "https://www.frontiersin.org/legal/terms-and-conditions",
@@ -34579,8 +35229,8 @@
       "catalog_origin": "source_declared_collection",
       "evidence_strength": "high",
       "catalog_status": "candidate_needs_source_validation",
-      "record_count": 51,
-      "source_page_count": 64,
+      "record_count": 54,
+      "source_page_count": 67,
       "source_host": "fws.gov",
       "source_url": "https://fws.gov/office/abernathy-fish-technology-center/map",
       "review_status": "policy_review_required",
@@ -34703,8 +35353,8 @@
       "catalog_origin": "source_declared_collection",
       "evidence_strength": "medium",
       "catalog_status": "candidate_needs_source_validation",
-      "record_count": 10,
-      "source_page_count": 7,
+      "record_count": 11,
+      "source_page_count": 9,
       "source_host": "fws.gov",
       "source_url": "https://fws.gov/events",
       "review_status": "policy_review_required",
@@ -34765,8 +35415,8 @@
       "catalog_origin": "source_declared_collection",
       "evidence_strength": "high",
       "catalog_status": "candidate_needs_source_validation",
-      "record_count": 412,
-      "source_page_count": 563,
+      "record_count": 474,
+      "source_page_count": 652,
       "source_host": "fws.gov",
       "source_url": "https://fws.gov/locations",
       "review_status": "policy_review_required",
@@ -34827,8 +35477,8 @@
       "catalog_origin": "source_declared_collection",
       "evidence_strength": "medium",
       "catalog_status": "candidate_needs_source_validation",
-      "record_count": 133,
-      "source_page_count": 147,
+      "record_count": 136,
+      "source_page_count": 150,
       "source_host": "fws.gov",
       "source_url": "https://fws.gov/library/collections",
       "review_status": "policy_review_required",
@@ -34858,8 +35508,8 @@
       "catalog_origin": "source_declared_collection",
       "evidence_strength": "high",
       "catalog_status": "candidate_needs_source_validation",
-      "record_count": 50,
-      "source_page_count": 58,
+      "record_count": 51,
+      "source_page_count": 59,
       "source_host": "fws.gov",
       "source_url": "https://fws.gov/service/3-200-54-enhancement-survival-permits-associated-conservation-benefit-agreements",
       "review_status": "policy_review_required",
@@ -43872,6 +44522,37 @@
       "fetch_authorized": false
     },
     {
+      "catalog_id": "catalog:9c47d682cb34af3c444081e2",
+      "title": "Ilo Articles",
+      "catalog_type": "knowledge_base",
+      "record_type": "article",
+      "catalog_origin": "source_declared_collection",
+      "evidence_strength": "medium",
+      "catalog_status": "definition_only",
+      "record_count": 0,
+      "source_page_count": 1,
+      "source_host": "ilo.org",
+      "source_url": "https://ilo.org/resource/project-document/publications",
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "reviewed_at": null,
+      "metadata_only": false,
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null,
+      "robots_recheck_required": true,
+      "fetch_authorized": false
+    },
+    {
       "catalog_id": "catalog:616e50e02aea1f29f1256573",
       "title": "Ilo Resources",
       "catalog_type": "resource_library",
@@ -43879,8 +44560,8 @@
       "catalog_origin": "source_declared_collection",
       "evidence_strength": "high",
       "catalog_status": "candidate_needs_source_validation",
-      "record_count": 745,
-      "source_page_count": 756,
+      "record_count": 787,
+      "source_page_count": 800,
       "source_host": "ilo.org",
       "source_url": "https://ilo.org/resource/2019-labour-overview-latin-america-and-caribbean-executive-summary",
       "review_status": "policy_review_required",
@@ -43910,8 +44591,8 @@
       "catalog_origin": "source_declared_collection",
       "evidence_strength": "high",
       "catalog_status": "candidate_needs_source_validation",
-      "record_count": 417,
-      "source_page_count": 419,
+      "record_count": 438,
+      "source_page_count": 440,
       "source_host": "ilo.org",
       "source_url": "https://ilo.org/resource/news",
       "review_status": "policy_review_required",
@@ -43941,8 +44622,8 @@
       "catalog_origin": "source_declared_collection",
       "evidence_strength": "high",
       "catalog_status": "candidate_needs_source_validation",
-      "record_count": 161,
-      "source_page_count": 185,
+      "record_count": 172,
+      "source_page_count": 197,
       "source_host": "ilo.org",
       "source_url": "https://ilo.org/projects-and-partnerships/projects/%E2%80%9Cmore-and-better-jobs-women-women%E2%80%99s-empowerment-through-decent-work-turkey%E2%80%9D",
       "review_status": "policy_review_required",
@@ -52219,7 +52900,7 @@
       "evidence_strength": "high",
       "catalog_status": "definition_only",
       "record_count": 0,
-      "source_page_count": 228,
+      "source_page_count": 229,
       "source_host": "nasa.gov",
       "source_url": "https://nasa.gov/people/aaron-cohen",
       "review_status": "policy_review_required",
@@ -81967,6 +82648,231 @@
       "policy_note": "Frontiers Terms and Conditions section 14 permits text and data mining of public content for the legitimate purpose of enriching external collections of scientific literature. Content remains subject to each article's applicable CC-BY, CC0, or other license and applicable data-protection laws. This policy is limited to bounded landing-page discovery of bibliographic metadata; do not retrieve full text, images, supplementary files, or bulk assets. Exact path shapes only: /articles; /journals/{journal}/articles; /journals/{journal}/sections/{section}; /journals/{journal}/sections/{section}/articles. Individual article paths and deeper descendants are not allowlisted. Runtime robots.txt verification on the exact host is mandatory; honor disallowed paths and any performance restrictions."
     },
     {
+      "source_url": "https://frontiersin.org/journals/developmental-psychology/articles",
+      "source_host": "frontiersin.org",
+      "catalog_ids": [
+        "catalog:432d5466c41bf7d7485a3c2f"
+      ],
+      "catalog_count": 1,
+      "review_status": "policy_preapproved_robots_recheck_required",
+      "source_access_mode": "catalog_landing_page",
+      "policy_preapproved": true,
+      "metadata_only": true,
+      "robots_recheck_required": true,
+      "fetch_authorized": false,
+      "terms_url": "https://www.frontiersin.org/legal/terms-and-conditions",
+      "terms_status": "reviewed_per_dataset",
+      "per_dataset_rights_required": true,
+      "attribution_required": "per_article",
+      "rights_scope": "per_article_license",
+      "allowed_metadata_fields": [
+        "title",
+        "authors",
+        "doi",
+        "journal",
+        "publication_date",
+        "article_url",
+        "license",
+        "publisher"
+      ],
+      "allowed_catalog_path_patterns": [
+        "/articles",
+        "/journals/*/articles",
+        "/journals/*/sections/*",
+        "/journals/*/sections/*/articles"
+      ],
+      "prohibited_content": [
+        "full_text",
+        "images",
+        "supplementary_files",
+        "bulk_assets"
+      ],
+      "max_response_bytes": 1500000,
+      "min_interval_seconds": 3.0,
+      "max_requests_per_run": 40,
+      "policy_note": "Frontiers Terms and Conditions section 14 permits text and data mining of public content for the legitimate purpose of enriching external collections of scientific literature. Content remains subject to each article's applicable CC-BY, CC0, or other license and applicable data-protection laws. This policy is limited to bounded landing-page discovery of bibliographic metadata; do not retrieve full text, images, supplementary files, or bulk assets. Exact path shapes only: /articles; /journals/{journal}/articles; /journals/{journal}/sections/{section}; /journals/{journal}/sections/{section}/articles. Individual article paths and deeper descendants are not allowlisted. Runtime robots.txt verification on the exact host is mandatory; honor disallowed paths and any performance restrictions."
+    },
+    {
+      "source_url": "https://frontiersin.org/journals/developmental-psychology/sections/adolescent-psychological-development/articles",
+      "source_host": "frontiersin.org",
+      "catalog_ids": [
+        "catalog:3fff6ddaeb18ed5e18ebb60a"
+      ],
+      "catalog_count": 1,
+      "review_status": "policy_preapproved_robots_recheck_required",
+      "source_access_mode": "catalog_landing_page",
+      "policy_preapproved": true,
+      "metadata_only": true,
+      "robots_recheck_required": true,
+      "fetch_authorized": false,
+      "terms_url": "https://www.frontiersin.org/legal/terms-and-conditions",
+      "terms_status": "reviewed_per_dataset",
+      "per_dataset_rights_required": true,
+      "attribution_required": "per_article",
+      "rights_scope": "per_article_license",
+      "allowed_metadata_fields": [
+        "title",
+        "authors",
+        "doi",
+        "journal",
+        "publication_date",
+        "article_url",
+        "license",
+        "publisher"
+      ],
+      "allowed_catalog_path_patterns": [
+        "/articles",
+        "/journals/*/articles",
+        "/journals/*/sections/*",
+        "/journals/*/sections/*/articles"
+      ],
+      "prohibited_content": [
+        "full_text",
+        "images",
+        "supplementary_files",
+        "bulk_assets"
+      ],
+      "max_response_bytes": 1500000,
+      "min_interval_seconds": 3.0,
+      "max_requests_per_run": 40,
+      "policy_note": "Frontiers Terms and Conditions section 14 permits text and data mining of public content for the legitimate purpose of enriching external collections of scientific literature. Content remains subject to each article's applicable CC-BY, CC0, or other license and applicable data-protection laws. This policy is limited to bounded landing-page discovery of bibliographic metadata; do not retrieve full text, images, supplementary files, or bulk assets. Exact path shapes only: /articles; /journals/{journal}/articles; /journals/{journal}/sections/{section}; /journals/{journal}/sections/{section}/articles. Individual article paths and deeper descendants are not allowlisted. Runtime robots.txt verification on the exact host is mandatory; honor disallowed paths and any performance restrictions."
+    },
+    {
+      "source_url": "https://frontiersin.org/journals/developmental-psychology/sections/cognitive-development/articles",
+      "source_host": "frontiersin.org",
+      "catalog_ids": [
+        "catalog:c0c2d73a8d92234abcf34b6d"
+      ],
+      "catalog_count": 1,
+      "review_status": "policy_preapproved_robots_recheck_required",
+      "source_access_mode": "catalog_landing_page",
+      "policy_preapproved": true,
+      "metadata_only": true,
+      "robots_recheck_required": true,
+      "fetch_authorized": false,
+      "terms_url": "https://www.frontiersin.org/legal/terms-and-conditions",
+      "terms_status": "reviewed_per_dataset",
+      "per_dataset_rights_required": true,
+      "attribution_required": "per_article",
+      "rights_scope": "per_article_license",
+      "allowed_metadata_fields": [
+        "title",
+        "authors",
+        "doi",
+        "journal",
+        "publication_date",
+        "article_url",
+        "license",
+        "publisher"
+      ],
+      "allowed_catalog_path_patterns": [
+        "/articles",
+        "/journals/*/articles",
+        "/journals/*/sections/*",
+        "/journals/*/sections/*/articles"
+      ],
+      "prohibited_content": [
+        "full_text",
+        "images",
+        "supplementary_files",
+        "bulk_assets"
+      ],
+      "max_response_bytes": 1500000,
+      "min_interval_seconds": 3.0,
+      "max_requests_per_run": 40,
+      "policy_note": "Frontiers Terms and Conditions section 14 permits text and data mining of public content for the legitimate purpose of enriching external collections of scientific literature. Content remains subject to each article's applicable CC-BY, CC0, or other license and applicable data-protection laws. This policy is limited to bounded landing-page discovery of bibliographic metadata; do not retrieve full text, images, supplementary files, or bulk assets. Exact path shapes only: /articles; /journals/{journal}/articles; /journals/{journal}/sections/{section}; /journals/{journal}/sections/{section}/articles. Individual article paths and deeper descendants are not allowlisted. Runtime robots.txt verification on the exact host is mandatory; honor disallowed paths and any performance restrictions."
+    },
+    {
+      "source_url": "https://frontiersin.org/journals/developmental-psychology/sections/development-in-infancy/articles",
+      "source_host": "frontiersin.org",
+      "catalog_ids": [
+        "catalog:f538d21a3f40417db52874e0"
+      ],
+      "catalog_count": 1,
+      "review_status": "policy_preapproved_robots_recheck_required",
+      "source_access_mode": "catalog_landing_page",
+      "policy_preapproved": true,
+      "metadata_only": true,
+      "robots_recheck_required": true,
+      "fetch_authorized": false,
+      "terms_url": "https://www.frontiersin.org/legal/terms-and-conditions",
+      "terms_status": "reviewed_per_dataset",
+      "per_dataset_rights_required": true,
+      "attribution_required": "per_article",
+      "rights_scope": "per_article_license",
+      "allowed_metadata_fields": [
+        "title",
+        "authors",
+        "doi",
+        "journal",
+        "publication_date",
+        "article_url",
+        "license",
+        "publisher"
+      ],
+      "allowed_catalog_path_patterns": [
+        "/articles",
+        "/journals/*/articles",
+        "/journals/*/sections/*",
+        "/journals/*/sections/*/articles"
+      ],
+      "prohibited_content": [
+        "full_text",
+        "images",
+        "supplementary_files",
+        "bulk_assets"
+      ],
+      "max_response_bytes": 1500000,
+      "min_interval_seconds": 3.0,
+      "max_requests_per_run": 40,
+      "policy_note": "Frontiers Terms and Conditions section 14 permits text and data mining of public content for the legitimate purpose of enriching external collections of scientific literature. Content remains subject to each article's applicable CC-BY, CC0, or other license and applicable data-protection laws. This policy is limited to bounded landing-page discovery of bibliographic metadata; do not retrieve full text, images, supplementary files, or bulk assets. Exact path shapes only: /articles; /journals/{journal}/articles; /journals/{journal}/sections/{section}; /journals/{journal}/sections/{section}/articles. Individual article paths and deeper descendants are not allowlisted. Runtime robots.txt verification on the exact host is mandatory; honor disallowed paths and any performance restrictions."
+    },
+    {
+      "source_url": "https://frontiersin.org/journals/developmental-psychology/sections/social-and-emotional-development/articles",
+      "source_host": "frontiersin.org",
+      "catalog_ids": [
+        "catalog:c82885678e0548c05b6015e6"
+      ],
+      "catalog_count": 1,
+      "review_status": "policy_preapproved_robots_recheck_required",
+      "source_access_mode": "catalog_landing_page",
+      "policy_preapproved": true,
+      "metadata_only": true,
+      "robots_recheck_required": true,
+      "fetch_authorized": false,
+      "terms_url": "https://www.frontiersin.org/legal/terms-and-conditions",
+      "terms_status": "reviewed_per_dataset",
+      "per_dataset_rights_required": true,
+      "attribution_required": "per_article",
+      "rights_scope": "per_article_license",
+      "allowed_metadata_fields": [
+        "title",
+        "authors",
+        "doi",
+        "journal",
+        "publication_date",
+        "article_url",
+        "license",
+        "publisher"
+      ],
+      "allowed_catalog_path_patterns": [
+        "/articles",
+        "/journals/*/articles",
+        "/journals/*/sections/*",
+        "/journals/*/sections/*/articles"
+      ],
+      "prohibited_content": [
+        "full_text",
+        "images",
+        "supplementary_files",
+        "bulk_assets"
+      ],
+      "max_response_bytes": 1500000,
+      "min_interval_seconds": 3.0,
+      "max_requests_per_run": 40,
+      "policy_note": "Frontiers Terms and Conditions section 14 permits text and data mining of public content for the legitimate purpose of enriching external collections of scientific literature. Content remains subject to each article's applicable CC-BY, CC0, or other license and applicable data-protection laws. This policy is limited to bounded landing-page discovery of bibliographic metadata; do not retrieve full text, images, supplementary files, or bulk assets. Exact path shapes only: /articles; /journals/{journal}/articles; /journals/{journal}/sections/{section}; /journals/{journal}/sections/{section}/articles. Individual article paths and deeper descendants are not allowlisted. Runtime robots.txt verification on the exact host is mandatory; honor disallowed paths and any performance restrictions."
+    },
+    {
       "source_url": "https://frontiersin.org/journals/ecology-and-evolution/articles",
       "source_host": "frontiersin.org",
       "catalog_ids": [
@@ -92771,6 +93677,366 @@
       "source_host": "frontiersin.org",
       "catalog_ids": [
         "catalog:df71cd03e9255979489c4ac9"
+      ],
+      "catalog_count": 1,
+      "review_status": "policy_preapproved_robots_recheck_required",
+      "source_access_mode": "catalog_landing_page",
+      "policy_preapproved": true,
+      "metadata_only": true,
+      "robots_recheck_required": true,
+      "fetch_authorized": false,
+      "terms_url": "https://www.frontiersin.org/legal/terms-and-conditions",
+      "terms_status": "reviewed_per_dataset",
+      "per_dataset_rights_required": true,
+      "attribution_required": "per_article",
+      "rights_scope": "per_article_license",
+      "allowed_metadata_fields": [
+        "title",
+        "authors",
+        "doi",
+        "journal",
+        "publication_date",
+        "article_url",
+        "license",
+        "publisher"
+      ],
+      "allowed_catalog_path_patterns": [
+        "/articles",
+        "/journals/*/articles",
+        "/journals/*/sections/*",
+        "/journals/*/sections/*/articles"
+      ],
+      "prohibited_content": [
+        "full_text",
+        "images",
+        "supplementary_files",
+        "bulk_assets"
+      ],
+      "max_response_bytes": 1500000,
+      "min_interval_seconds": 3.0,
+      "max_requests_per_run": 40,
+      "policy_note": "Frontiers Terms and Conditions section 14 permits text and data mining of public content for the legitimate purpose of enriching external collections of scientific literature. Content remains subject to each article's applicable CC-BY, CC0, or other license and applicable data-protection laws. This policy is limited to bounded landing-page discovery of bibliographic metadata; do not retrieve full text, images, supplementary files, or bulk assets. Exact path shapes only: /articles; /journals/{journal}/articles; /journals/{journal}/sections/{section}; /journals/{journal}/sections/{section}/articles. Individual article paths and deeper descendants are not allowlisted. Runtime robots.txt verification on the exact host is mandatory; honor disallowed paths and any performance restrictions."
+    },
+    {
+      "source_url": "https://frontiersin.org/journals/surgery/sections/colorectal-and-proctological-surgery/articles",
+      "source_host": "frontiersin.org",
+      "catalog_ids": [
+        "catalog:fc5c96f254e796c0b13e0b05"
+      ],
+      "catalog_count": 1,
+      "review_status": "policy_preapproved_robots_recheck_required",
+      "source_access_mode": "catalog_landing_page",
+      "policy_preapproved": true,
+      "metadata_only": true,
+      "robots_recheck_required": true,
+      "fetch_authorized": false,
+      "terms_url": "https://www.frontiersin.org/legal/terms-and-conditions",
+      "terms_status": "reviewed_per_dataset",
+      "per_dataset_rights_required": true,
+      "attribution_required": "per_article",
+      "rights_scope": "per_article_license",
+      "allowed_metadata_fields": [
+        "title",
+        "authors",
+        "doi",
+        "journal",
+        "publication_date",
+        "article_url",
+        "license",
+        "publisher"
+      ],
+      "allowed_catalog_path_patterns": [
+        "/articles",
+        "/journals/*/articles",
+        "/journals/*/sections/*",
+        "/journals/*/sections/*/articles"
+      ],
+      "prohibited_content": [
+        "full_text",
+        "images",
+        "supplementary_files",
+        "bulk_assets"
+      ],
+      "max_response_bytes": 1500000,
+      "min_interval_seconds": 3.0,
+      "max_requests_per_run": 40,
+      "policy_note": "Frontiers Terms and Conditions section 14 permits text and data mining of public content for the legitimate purpose of enriching external collections of scientific literature. Content remains subject to each article's applicable CC-BY, CC0, or other license and applicable data-protection laws. This policy is limited to bounded landing-page discovery of bibliographic metadata; do not retrieve full text, images, supplementary files, or bulk assets. Exact path shapes only: /articles; /journals/{journal}/articles; /journals/{journal}/sections/{section}; /journals/{journal}/sections/{section}/articles. Individual article paths and deeper descendants are not allowlisted. Runtime robots.txt verification on the exact host is mandatory; honor disallowed paths and any performance restrictions."
+    },
+    {
+      "source_url": "https://frontiersin.org/journals/surgery/sections/genitourinary-surgery-and-interventions/articles",
+      "source_host": "frontiersin.org",
+      "catalog_ids": [
+        "catalog:a973646de5e89db76c1ef115"
+      ],
+      "catalog_count": 1,
+      "review_status": "policy_preapproved_robots_recheck_required",
+      "source_access_mode": "catalog_landing_page",
+      "policy_preapproved": true,
+      "metadata_only": true,
+      "robots_recheck_required": true,
+      "fetch_authorized": false,
+      "terms_url": "https://www.frontiersin.org/legal/terms-and-conditions",
+      "terms_status": "reviewed_per_dataset",
+      "per_dataset_rights_required": true,
+      "attribution_required": "per_article",
+      "rights_scope": "per_article_license",
+      "allowed_metadata_fields": [
+        "title",
+        "authors",
+        "doi",
+        "journal",
+        "publication_date",
+        "article_url",
+        "license",
+        "publisher"
+      ],
+      "allowed_catalog_path_patterns": [
+        "/articles",
+        "/journals/*/articles",
+        "/journals/*/sections/*",
+        "/journals/*/sections/*/articles"
+      ],
+      "prohibited_content": [
+        "full_text",
+        "images",
+        "supplementary_files",
+        "bulk_assets"
+      ],
+      "max_response_bytes": 1500000,
+      "min_interval_seconds": 3.0,
+      "max_requests_per_run": 40,
+      "policy_note": "Frontiers Terms and Conditions section 14 permits text and data mining of public content for the legitimate purpose of enriching external collections of scientific literature. Content remains subject to each article's applicable CC-BY, CC0, or other license and applicable data-protection laws. This policy is limited to bounded landing-page discovery of bibliographic metadata; do not retrieve full text, images, supplementary files, or bulk assets. Exact path shapes only: /articles; /journals/{journal}/articles; /journals/{journal}/sections/{section}; /journals/{journal}/sections/{section}/articles. Individual article paths and deeper descendants are not allowlisted. Runtime robots.txt verification on the exact host is mandatory; honor disallowed paths and any performance restrictions."
+    },
+    {
+      "source_url": "https://frontiersin.org/journals/surgery/sections/neurosurgery/articles",
+      "source_host": "frontiersin.org",
+      "catalog_ids": [
+        "catalog:c4eda4507dc2b446c338d7e8"
+      ],
+      "catalog_count": 1,
+      "review_status": "policy_preapproved_robots_recheck_required",
+      "source_access_mode": "catalog_landing_page",
+      "policy_preapproved": true,
+      "metadata_only": true,
+      "robots_recheck_required": true,
+      "fetch_authorized": false,
+      "terms_url": "https://www.frontiersin.org/legal/terms-and-conditions",
+      "terms_status": "reviewed_per_dataset",
+      "per_dataset_rights_required": true,
+      "attribution_required": "per_article",
+      "rights_scope": "per_article_license",
+      "allowed_metadata_fields": [
+        "title",
+        "authors",
+        "doi",
+        "journal",
+        "publication_date",
+        "article_url",
+        "license",
+        "publisher"
+      ],
+      "allowed_catalog_path_patterns": [
+        "/articles",
+        "/journals/*/articles",
+        "/journals/*/sections/*",
+        "/journals/*/sections/*/articles"
+      ],
+      "prohibited_content": [
+        "full_text",
+        "images",
+        "supplementary_files",
+        "bulk_assets"
+      ],
+      "max_response_bytes": 1500000,
+      "min_interval_seconds": 3.0,
+      "max_requests_per_run": 40,
+      "policy_note": "Frontiers Terms and Conditions section 14 permits text and data mining of public content for the legitimate purpose of enriching external collections of scientific literature. Content remains subject to each article's applicable CC-BY, CC0, or other license and applicable data-protection laws. This policy is limited to bounded landing-page discovery of bibliographic metadata; do not retrieve full text, images, supplementary files, or bulk assets. Exact path shapes only: /articles; /journals/{journal}/articles; /journals/{journal}/sections/{section}; /journals/{journal}/sections/{section}/articles. Individual article paths and deeper descendants are not allowlisted. Runtime robots.txt verification on the exact host is mandatory; honor disallowed paths and any performance restrictions."
+    },
+    {
+      "source_url": "https://frontiersin.org/journals/surgery/sections/obstetrics-and-gynecological-surgery/articles",
+      "source_host": "frontiersin.org",
+      "catalog_ids": [
+        "catalog:1610fc2c758bea14b372e66b"
+      ],
+      "catalog_count": 1,
+      "review_status": "policy_preapproved_robots_recheck_required",
+      "source_access_mode": "catalog_landing_page",
+      "policy_preapproved": true,
+      "metadata_only": true,
+      "robots_recheck_required": true,
+      "fetch_authorized": false,
+      "terms_url": "https://www.frontiersin.org/legal/terms-and-conditions",
+      "terms_status": "reviewed_per_dataset",
+      "per_dataset_rights_required": true,
+      "attribution_required": "per_article",
+      "rights_scope": "per_article_license",
+      "allowed_metadata_fields": [
+        "title",
+        "authors",
+        "doi",
+        "journal",
+        "publication_date",
+        "article_url",
+        "license",
+        "publisher"
+      ],
+      "allowed_catalog_path_patterns": [
+        "/articles",
+        "/journals/*/articles",
+        "/journals/*/sections/*",
+        "/journals/*/sections/*/articles"
+      ],
+      "prohibited_content": [
+        "full_text",
+        "images",
+        "supplementary_files",
+        "bulk_assets"
+      ],
+      "max_response_bytes": 1500000,
+      "min_interval_seconds": 3.0,
+      "max_requests_per_run": 40,
+      "policy_note": "Frontiers Terms and Conditions section 14 permits text and data mining of public content for the legitimate purpose of enriching external collections of scientific literature. Content remains subject to each article's applicable CC-BY, CC0, or other license and applicable data-protection laws. This policy is limited to bounded landing-page discovery of bibliographic metadata; do not retrieve full text, images, supplementary files, or bulk assets. Exact path shapes only: /articles; /journals/{journal}/articles; /journals/{journal}/sections/{section}; /journals/{journal}/sections/{section}/articles. Individual article paths and deeper descendants are not allowlisted. Runtime robots.txt verification on the exact host is mandatory; honor disallowed paths and any performance restrictions."
+    },
+    {
+      "source_url": "https://frontiersin.org/journals/surgery/sections/orthopedic-surgery/articles",
+      "source_host": "frontiersin.org",
+      "catalog_ids": [
+        "catalog:b5c13bc23e5ae3b0692abc14"
+      ],
+      "catalog_count": 1,
+      "review_status": "policy_preapproved_robots_recheck_required",
+      "source_access_mode": "catalog_landing_page",
+      "policy_preapproved": true,
+      "metadata_only": true,
+      "robots_recheck_required": true,
+      "fetch_authorized": false,
+      "terms_url": "https://www.frontiersin.org/legal/terms-and-conditions",
+      "terms_status": "reviewed_per_dataset",
+      "per_dataset_rights_required": true,
+      "attribution_required": "per_article",
+      "rights_scope": "per_article_license",
+      "allowed_metadata_fields": [
+        "title",
+        "authors",
+        "doi",
+        "journal",
+        "publication_date",
+        "article_url",
+        "license",
+        "publisher"
+      ],
+      "allowed_catalog_path_patterns": [
+        "/articles",
+        "/journals/*/articles",
+        "/journals/*/sections/*",
+        "/journals/*/sections/*/articles"
+      ],
+      "prohibited_content": [
+        "full_text",
+        "images",
+        "supplementary_files",
+        "bulk_assets"
+      ],
+      "max_response_bytes": 1500000,
+      "min_interval_seconds": 3.0,
+      "max_requests_per_run": 40,
+      "policy_note": "Frontiers Terms and Conditions section 14 permits text and data mining of public content for the legitimate purpose of enriching external collections of scientific literature. Content remains subject to each article's applicable CC-BY, CC0, or other license and applicable data-protection laws. This policy is limited to bounded landing-page discovery of bibliographic metadata; do not retrieve full text, images, supplementary files, or bulk assets. Exact path shapes only: /articles; /journals/{journal}/articles; /journals/{journal}/sections/{section}; /journals/{journal}/sections/{section}/articles. Individual article paths and deeper descendants are not allowlisted. Runtime robots.txt verification on the exact host is mandatory; honor disallowed paths and any performance restrictions."
+    },
+    {
+      "source_url": "https://frontiersin.org/journals/surgery/sections/otorhinolaryngology---head-and-neck-surgery/articles",
+      "source_host": "frontiersin.org",
+      "catalog_ids": [
+        "catalog:60c2ce43d1f9917bfd4b18f6"
+      ],
+      "catalog_count": 1,
+      "review_status": "policy_preapproved_robots_recheck_required",
+      "source_access_mode": "catalog_landing_page",
+      "policy_preapproved": true,
+      "metadata_only": true,
+      "robots_recheck_required": true,
+      "fetch_authorized": false,
+      "terms_url": "https://www.frontiersin.org/legal/terms-and-conditions",
+      "terms_status": "reviewed_per_dataset",
+      "per_dataset_rights_required": true,
+      "attribution_required": "per_article",
+      "rights_scope": "per_article_license",
+      "allowed_metadata_fields": [
+        "title",
+        "authors",
+        "doi",
+        "journal",
+        "publication_date",
+        "article_url",
+        "license",
+        "publisher"
+      ],
+      "allowed_catalog_path_patterns": [
+        "/articles",
+        "/journals/*/articles",
+        "/journals/*/sections/*",
+        "/journals/*/sections/*/articles"
+      ],
+      "prohibited_content": [
+        "full_text",
+        "images",
+        "supplementary_files",
+        "bulk_assets"
+      ],
+      "max_response_bytes": 1500000,
+      "min_interval_seconds": 3.0,
+      "max_requests_per_run": 40,
+      "policy_note": "Frontiers Terms and Conditions section 14 permits text and data mining of public content for the legitimate purpose of enriching external collections of scientific literature. Content remains subject to each article's applicable CC-BY, CC0, or other license and applicable data-protection laws. This policy is limited to bounded landing-page discovery of bibliographic metadata; do not retrieve full text, images, supplementary files, or bulk assets. Exact path shapes only: /articles; /journals/{journal}/articles; /journals/{journal}/sections/{section}; /journals/{journal}/sections/{section}/articles. Individual article paths and deeper descendants are not allowlisted. Runtime robots.txt verification on the exact host is mandatory; honor disallowed paths and any performance restrictions."
+    },
+    {
+      "source_url": "https://frontiersin.org/journals/surgery/sections/pediatric-orthopedics/articles",
+      "source_host": "frontiersin.org",
+      "catalog_ids": [
+        "catalog:fd94c15ec8a8f7b6f9d7624d"
+      ],
+      "catalog_count": 1,
+      "review_status": "policy_preapproved_robots_recheck_required",
+      "source_access_mode": "catalog_landing_page",
+      "policy_preapproved": true,
+      "metadata_only": true,
+      "robots_recheck_required": true,
+      "fetch_authorized": false,
+      "terms_url": "https://www.frontiersin.org/legal/terms-and-conditions",
+      "terms_status": "reviewed_per_dataset",
+      "per_dataset_rights_required": true,
+      "attribution_required": "per_article",
+      "rights_scope": "per_article_license",
+      "allowed_metadata_fields": [
+        "title",
+        "authors",
+        "doi",
+        "journal",
+        "publication_date",
+        "article_url",
+        "license",
+        "publisher"
+      ],
+      "allowed_catalog_path_patterns": [
+        "/articles",
+        "/journals/*/articles",
+        "/journals/*/sections/*",
+        "/journals/*/sections/*/articles"
+      ],
+      "prohibited_content": [
+        "full_text",
+        "images",
+        "supplementary_files",
+        "bulk_assets"
+      ],
+      "max_response_bytes": 1500000,
+      "min_interval_seconds": 3.0,
+      "max_requests_per_run": 40,
+      "policy_note": "Frontiers Terms and Conditions section 14 permits text and data mining of public content for the legitimate purpose of enriching external collections of scientific literature. Content remains subject to each article's applicable CC-BY, CC0, or other license and applicable data-protection laws. This policy is limited to bounded landing-page discovery of bibliographic metadata; do not retrieve full text, images, supplementary files, or bulk assets. Exact path shapes only: /articles; /journals/{journal}/articles; /journals/{journal}/sections/{section}; /journals/{journal}/sections/{section}/articles. Individual article paths and deeper descendants are not allowlisted. Runtime robots.txt verification on the exact host is mandatory; honor disallowed paths and any performance restrictions."
+    },
+    {
+      "source_url": "https://frontiersin.org/journals/surgery/sections/pediatric-surgery/articles",
+      "source_host": "frontiersin.org",
+      "catalog_ids": [
+        "catalog:726aede6944cc9563a3515fb"
       ],
       "catalog_count": 1,
       "review_status": "policy_preapproved_robots_recheck_required",
@@ -104449,6 +105715,32 @@
       "source_host": "ilo.org",
       "catalog_ids": [
         "catalog:5dd0257daf70e41ac50f55d0"
+      ],
+      "catalog_count": 1,
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "policy_preapproved": false,
+      "metadata_only": false,
+      "robots_recheck_required": true,
+      "fetch_authorized": false,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null
+    },
+    {
+      "source_url": "https://ilo.org/resource/project-document/publications",
+      "source_host": "ilo.org",
+      "catalog_ids": [
+        "catalog:9c47d682cb34af3c444081e2"
       ],
       "catalog_count": 1,
       "review_status": "policy_review_required",
@@ -123145,11 +124437,11 @@
   "hosts": [
     {
       "host": "frontiersin.org",
-      "catalog_definition_count": 438,
-      "unique_source_urls": 438,
+      "catalog_definition_count": 451,
+      "unique_source_urls": 451,
       "review_status_counts": {
         "path_not_allowlisted": 52,
-        "policy_preapproved_robots_recheck_required": 386
+        "policy_preapproved_robots_recheck_required": 399
       },
       "terms_url": "https://www.frontiersin.org/legal/terms-and-conditions",
       "terms_status": "reviewed_per_dataset",
@@ -127793,6 +129085,76 @@
       ]
     },
     {
+      "host": "ilo.org",
+      "catalog_definition_count": 7,
+      "unique_source_urls": 7,
+      "review_status_counts": {
+        "policy_review_required": 7
+      },
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "reviewed_at": null,
+      "source_access_modes": [],
+      "metadata_only": false,
+      "allowed_catalog_path_patterns": [],
+      "max_response_bytes": 0,
+      "per_dataset_rights_required": true,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null,
+      "sample_catalogs": [
+        {
+          "catalog_id": "catalog:01f717d64da62275687d9be1",
+          "title": "Ilo Articles",
+          "catalog_type": "knowledge_base",
+          "source_url": "https://ilo.org/es/about-ilo/how-ilo-works/ilo-director-general/news",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:2eed89998e6e9fb26b27db84",
+          "title": "Ilo Articles",
+          "catalog_type": "knowledge_base",
+          "source_url": "https://ilo.org/about-ilo/how-ilo-works/ilo-director-general/news",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:9c47d682cb34af3c444081e2",
+          "title": "Ilo Articles",
+          "catalog_type": "knowledge_base",
+          "source_url": "https://ilo.org/resource/project-document/publications",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:616e50e02aea1f29f1256573",
+          "title": "Ilo Resources",
+          "catalog_type": "resource_library",
+          "source_url": "https://ilo.org/resource/2019-labour-overview-latin-america-and-caribbean-executive-summary",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:5dd0257daf70e41ac50f55d0",
+          "title": "International Articles",
+          "catalog_type": "knowledge_base",
+          "source_url": "https://ilo.org/resource/news",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:2911e85518a76dac9e3e2747",
+          "title": "International Labour Software",
+          "catalog_type": "software",
+          "source_url": "https://ilo.org/projects-and-partnerships/projects/%E2%80%9Cmore-and-better-jobs-women-women%E2%80%99s-empowerment-through-decent-work-turkey%E2%80%9D",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:531e23802c1a2691c596f430",
+          "title": "Labour International Labour Organizations",
+          "catalog_type": "organization_directory",
+          "source_url": "https://ilo.org/projects-and-partnerships/projects/addressing-worst-forms-child-labour-jordanian-agriculture-sector",
+          "review_status": "policy_review_required"
+        }
+      ]
+    },
+    {
       "host": "army.mil",
       "catalog_definition_count": 6,
       "unique_source_urls": 6,
@@ -127914,69 +129276,6 @@
           "title": "Programming Language Articles",
           "catalog_type": "knowledge_base",
           "source_url": "https://go.dev/blog",
-          "review_status": "policy_review_required"
-        }
-      ]
-    },
-    {
-      "host": "ilo.org",
-      "catalog_definition_count": 6,
-      "unique_source_urls": 6,
-      "review_status_counts": {
-        "policy_review_required": 6
-      },
-      "terms_url": null,
-      "terms_status": "unreviewed",
-      "reviewed_at": null,
-      "source_access_modes": [],
-      "metadata_only": false,
-      "allowed_catalog_path_patterns": [],
-      "max_response_bytes": 0,
-      "per_dataset_rights_required": true,
-      "min_interval_seconds": 1.0,
-      "max_requests_per_run": 1,
-      "policy_note": null,
-      "sample_catalogs": [
-        {
-          "catalog_id": "catalog:01f717d64da62275687d9be1",
-          "title": "Ilo Articles",
-          "catalog_type": "knowledge_base",
-          "source_url": "https://ilo.org/es/about-ilo/how-ilo-works/ilo-director-general/news",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:2eed89998e6e9fb26b27db84",
-          "title": "Ilo Articles",
-          "catalog_type": "knowledge_base",
-          "source_url": "https://ilo.org/about-ilo/how-ilo-works/ilo-director-general/news",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:616e50e02aea1f29f1256573",
-          "title": "Ilo Resources",
-          "catalog_type": "resource_library",
-          "source_url": "https://ilo.org/resource/2019-labour-overview-latin-america-and-caribbean-executive-summary",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:5dd0257daf70e41ac50f55d0",
-          "title": "International Articles",
-          "catalog_type": "knowledge_base",
-          "source_url": "https://ilo.org/resource/news",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:2911e85518a76dac9e3e2747",
-          "title": "International Labour Software",
-          "catalog_type": "software",
-          "source_url": "https://ilo.org/projects-and-partnerships/projects/%E2%80%9Cmore-and-better-jobs-women-women%E2%80%99s-empowerment-through-decent-work-turkey%E2%80%9D",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:531e23802c1a2691c596f430",
-          "title": "Labour International Labour Organizations",
-          "catalog_type": "organization_directory",
-          "source_url": "https://ilo.org/projects-and-partnerships/projects/addressing-worst-forms-child-labour-jordanian-agriculture-sector",
           "review_status": "policy_review_required"
         }
       ]
