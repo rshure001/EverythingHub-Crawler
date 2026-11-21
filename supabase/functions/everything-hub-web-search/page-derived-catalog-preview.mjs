@@ -424,8 +424,27 @@ export async function loadPageDerivedCatalogPreview({ fetchImpl = fetch } = {}) 
   }
 }
 
+function singularSearchToken(token) {
+  if (["news", "series", "species", "politics", "physics", "mathematics", "economics", "ethics"].includes(token)) return "";
+  if (token.endsWith("ies") && token.length > 4) return token.slice(0, -3) + "y";
+  if (["ches", "shes", "sses", "xes", "zes", "oes"].some((suffix) => token.endsWith(suffix)) && token.length > 4) {
+    return token.slice(0, -2);
+  }
+  if (token.endsWith("s") && token.length > 3 &&
+      !["ss", "us", "is", "as", "os", "ws", "ics"].some((suffix) => token.endsWith(suffix))) {
+    return token.slice(0, -1);
+  }
+  return "";
+}
+
 function tokenize(value) {
-  return String(value || "").normalize("NFKC").toLowerCase().match(/[\p{L}\p{N}]+/gu) || [];
+  const raw = String(value || "").normalize("NFKC").toLowerCase().match(/[\p{L}\p{N}]+/gu) || [];
+  const tokens = new Set(raw);
+  for (const token of raw) {
+    const singular = singularSearchToken(token);
+    if (singular) tokens.add(singular);
+  }
+  return Array.from(tokens);
 }
 
 function recordTokens(record) {
