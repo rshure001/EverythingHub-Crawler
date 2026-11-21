@@ -1,14 +1,11 @@
 name: EverythingHub first-party catalog search smoke test
-# Verify the Supabase Edge search path after committed corpus or page-derived catalog updates.
+# Run after the validation-gated catalog workflow completes so the public page index
+# and page-derived catalog registry cannot race each other.
 on:
-  push:
+  workflow_run:
+    workflows: ["Retroactive catalog inventory"]
+    types: [completed]
     branches: [main]
-    paths:
-      - "public-search/manifest.json"
-      - "public-search/shard-*.json"
-      - "public-search/shard-*.json.gz"
-      - "public-search/catalog-v1.json.gz"
-      - "data/page-derived-catalogs/**"
   workflow_dispatch:
 permissions:
   contents: read
