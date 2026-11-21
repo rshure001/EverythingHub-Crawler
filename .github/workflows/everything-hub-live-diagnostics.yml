@@ -210,6 +210,7 @@ jobs:
               echo "::error::NASA query returned neither the eh_quad index, verified public crawler index, nor approved independent fallback."
               exit 1
             fi
+            fi
           else
             echo "::warning::NASA search endpoint timed out or failed; continuing to independent search and media checks."
             static_index_ok=0
