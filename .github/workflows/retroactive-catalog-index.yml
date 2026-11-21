@@ -8,6 +8,8 @@ on:
       - "crawler/test_catalog_page_analysis.py"
       - "crawler/catalog_host_review_queue.py"
       - "crawler/test_catalog_host_review_queue.py"
+      - "crawler/catalog_source_policy.py"
+      - "crawler/test_catalog_source_policy.py"
       - "crawler/catalog-source-terms.json"
       - "crawler/test_catalog_retro_discovery.py"
       - "crawler/product_metadata.py"
@@ -86,6 +88,9 @@ jobs:
       - name: Test fail-closed catalog source review backlog
         working-directory: crawler
         run: python -m unittest test_catalog_host_review_queue.py -v
+      - name: Test fail-closed catalog source policy
+        working-directory: crawler
+        run: python -m unittest test_catalog_source_policy.py -v
 
       - name: Test public search publisher limits
         working-directory: publisher

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail-closed source-terms, robots.txt, redirect, and rate-limit gate for catalog APIs."""
+"""Fail-closed source-terms, robots.txt, redirect, and rate-limit gate for catalog APIs and landing pages."""
 from __future__ import annotations
 
 import json
@@ -82,6 +82,16 @@ def authorize_source_url(url: str, purpose: str = "discovery") -> tuple[dict, ob
         allowed_paths = policy.get("allowed_api_paths") or []
     elif purpose == "probe":
         allowed_paths = policy.get("allowed_probe_paths") or []
+    elif purpose == "landing_page":
+        if policy.get("metadata_only") is not True:
+            raise SourcePolicyError("catalog landing-page discovery must remain metadata-only")
+        metadata_fields = policy.get("allowed_metadata_fields")
+        prohibited_content = policy.get("prohibited_content")
+        if not isinstance(metadata_fields, list) or not metadata_fields:
+            raise SourcePolicyError("catalog landing-page policy must enumerate allowed metadata fields")
+        if not isinstance(prohibited_content, list) or not prohibited_content:
+            raise SourcePolicyError("catalog landing-page policy must enumerate prohibited content")
+        allowed_paths = policy.get("allowed_catalog_paths") or []
     else:
         raise SourcePolicyError("unsupported catalog request purpose")
     if not path_allowed(parsed.path, allowed_paths):
@@ -108,6 +118,16 @@ def request_source_bytes(
     accept: str = "application/json",
 ) -> tuple[bytes, int, dict, dict]:
     policy, parser, delay, allowed_paths = authorize_source_url(url, purpose)
+    if purpose == "landing_page":
+        if accept != "text/html":
+            raise SourcePolicyError("catalog landing-page requests must explicitly accept text/html")
+        try:
+            policy_max_bytes = int(policy.get("max_response_bytes") or 0)
+        except (TypeError, ValueError) as exc:
+            raise SourcePolicyError("catalog landing-page policy has an invalid response-size limit") from exc
+        if policy_max_bytes < 1:
+            raise SourcePolicyError("catalog landing-page policy must set a positive response-size limit")
+        max_bytes = min(max_bytes, policy_max_bytes)
     host = urllib.parse.urlsplit(url).hostname.lower().rstrip(".")
     count = _REQUEST_COUNTS.get(host, 0)
     if count >= int(policy.get("max_requests_per_run", 1)):
@@ -132,6 +152,10 @@ def request_source_bytes(
     request = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": accept})
     with opener.open(request, timeout=timeout) as response:
         final_url = response.geturl()
+        if purpose == "landing_page":
+            content_type = response.headers.get("Content-Type") or response.headers.get("content-type") or ""
+            if not str(content_type).lower().startswith("text/html"):
+                raise SourcePolicyError("catalog landing-page response must be text/html")
         if not same_origin(url, final_url):
             raise SourcePolicyError("cross-origin catalog API redirect blocked")
         final = urllib.parse.urlsplit(final_url)

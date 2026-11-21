@@ -84,6 +84,20 @@ class CatalogHostReviewQueueTests(unittest.TestCase):
                 "source_url": "https://allowed.example/catalog",
             },
             {
+                "catalog_id": "catalog:frontiers",
+                "title": "Frontiers Insect Science Articles",
+                "catalog_type": "knowledge_base",
+                "record_type": "article",
+                "catalog_origin": "source_declared_collection",
+                "catalog_definition": True,
+                "evidence_strength": "high",
+                "catalog_status": "candidate_needs_source_validation",
+                "record_count": 12,
+                "source_page_count": 1,
+                "source_host": "frontiersin.org",
+                "source_url": "https://frontiersin.org/journals/insect-science/articles",
+            },
+            {
                 "catalog_id": "catalog:derived",
                 "title": "Derived records are not landing-page definitions",
                 "catalog_type": "knowledge_base",
@@ -144,6 +158,24 @@ class CatalogHostReviewQueueTests(unittest.TestCase):
                     "discovery_allowed": False,
                     "allowed_api_paths": ["/api"],
                 },
+                "frontiersin.org": {
+                    "terms_url": "https://www.frontiersin.org/legal/terms-and-conditions",
+                    "terms_status": "reviewed_per_dataset",
+                    "reviewed_at": "2026-11-21",
+                    "discovery_allowed": True,
+                    "metadata_only": True,
+                    "per_dataset_rights_required": True,
+                    "attribution_required": "per_article",
+                    "rights_scope": "per_article_license",
+                    "allowed_api_paths": [],
+                    "allowed_catalog_paths": ["/journals", "/articles"],
+                    "allowed_metadata_fields": ["title", "authors", "doi", "license"],
+                    "prohibited_content": ["full_text", "images", "supplementary_files", "bulk_assets"],
+                    "max_response_bytes": 1500000,
+                    "min_interval_seconds": 3,
+                    "max_requests_per_run": 40,
+                    "policy_note": "Metadata-only fixture policy.",
+                },
             },
         }
         policy_path = root / "catalog-source-terms.json"
@@ -155,9 +187,10 @@ class CatalogHostReviewQueueTests(unittest.TestCase):
             manifest_path, registry_path, policy_path = self._fixture(Path(tmp))
             manifest, payload = build_from_files(manifest_path, registry_path, policy_path)
             summary = validate_review_queue(payload, manifest)
-            self.assertEqual(summary["catalog_definition_candidates"], 5)
-            self.assertEqual(summary["unique_source_urls"], 4)
-            self.assertEqual(summary["policy_preapproved_urls_needing_runtime_robots_check"], 1)
+            self.assertEqual(summary["catalog_definition_candidates"], 6)
+            self.assertEqual(summary["unique_source_urls"], 5)
+            self.assertEqual(summary["policy_preapproved_urls_needing_runtime_robots_check"], 2)
+            self.assertEqual(summary["policy_preapproved_catalog_page_urls_needing_runtime_robots_check"], 1)
             self.assertEqual(summary["policy_review_required_urls"], 2)
             self.assertEqual(summary["fetch_authorized_urls"], 0)
             self.assertEqual(payload["status"], "source_review_backlog_not_a_fetch_queue")
@@ -175,6 +208,7 @@ class CatalogHostReviewQueueTests(unittest.TestCase):
             self.assertEqual(statuses["catalog:three"], "policy_review_required")
             self.assertEqual(statuses["catalog:four"], "discovery_disabled")
             self.assertEqual(statuses["catalog:five"], "path_not_allowlisted")
+            self.assertEqual(statuses["catalog:frontiers"], "policy_preapproved_robots_recheck_required")
             self.assertNotIn("catalog:derived", statuses)
 
     def test_registry_hash_mismatch_is_rejected(self):
@@ -183,6 +217,26 @@ class CatalogHostReviewQueueTests(unittest.TestCase):
             registry_path.write_bytes(registry_path.read_bytes() + b"tamper")
             with self.assertRaises(ValueError):
                 build_from_files(manifest_path, registry_path, policy_path)
+
+
+    def test_frontiers_landing_page_is_preapproved_but_never_fetch_authorized(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            manifest_path, registry_path, policy_path = self._fixture(Path(tmp))
+            _, payload = build_from_files(manifest_path, registry_path, policy_path)
+            item = next(x for x in payload["catalogs"] if x["catalog_id"] == "catalog:frontiers")
+            url = next(x for x in payload["candidate_urls"] if x["source_host"] == "frontiersin.org")
+            self.assertEqual(item["source_access_mode"], "catalog_landing_page")
+            self.assertTrue(item["metadata_only"])
+            self.assertEqual(item["allowed_metadata_fields"], ["title", "authors", "doi", "license"])
+            self.assertEqual(item["prohibited_content"], ["full_text", "images", "supplementary_files", "bulk_assets"])
+            self.assertEqual(item["max_response_bytes"], 1500000)
+            self.assertFalse(item["fetch_authorized"])
+            self.assertTrue(item["robots_recheck_required"])
+            self.assertEqual(url["source_access_mode"], "catalog_landing_page")
+            self.assertFalse(url["fetch_authorized"])
+            self.assertTrue(url["robots_recheck_required"])
+            self.assertEqual(url["min_interval_seconds"], 3.0)
+            self.assertEqual(url["max_requests_per_run"], 40)
 
     def test_no_fetch_or_robots_claims_can_be_published(self):
         with tempfile.TemporaryDirectory() as tmp:

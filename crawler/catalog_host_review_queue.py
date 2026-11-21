@@ -3,7 +3,7 @@
 
 This is deliberately NOT a fetch queue. It makes no network requests, does not
 check robots.txt, and never authorizes ingestion. Runtime crawling must still
-pass catalog_source_policy.authorize_source_url before any API request.
+pass catalog_source_policy.authorize_source_url before any API or catalog landing-page request.
 """
 from __future__ import annotations
 
@@ -70,21 +70,23 @@ def _path_allowed(path: str, prefixes: object) -> bool:
     )
 
 
-def _policy_status(host: str, path: str, sources: dict) -> tuple[str, dict]:
+def _policy_status(host: str, path: str, sources: dict) -> tuple[str, dict, str | None]:
     policy = sources.get(host)
     if not isinstance(policy, dict):
-        return "policy_review_required", {}
+        return "policy_review_required", {}, None
     if policy.get("discovery_allowed") is not True:
-        return "discovery_disabled", policy
+        return "discovery_disabled", policy, None
     if (
         policy.get("terms_status") not in REVIEWED_STATUSES
         or not policy.get("terms_url")
         or not policy.get("reviewed_at")
     ):
-        return "terms_unreviewed", policy
-    if not _path_allowed(path, policy.get("allowed_api_paths")):
-        return "path_not_allowlisted", policy
-    return "policy_preapproved_robots_recheck_required", policy
+        return "terms_unreviewed", policy, None
+    if _path_allowed(path, policy.get("allowed_api_paths")):
+        return "policy_preapproved_robots_recheck_required", policy, "api"
+    if _path_allowed(path, policy.get("allowed_catalog_paths")):
+        return "policy_preapproved_robots_recheck_required", policy, "catalog_landing_page"
+    return "path_not_allowlisted", policy, None
 
 
 def load_verified_registry(manifest_path: Path, registry_path: Path) -> tuple[dict, dict]:
@@ -147,13 +149,15 @@ def build_review_queue(manifest: dict, registry: dict, policy_registry: dict) ->
             status = url_error
             invalid_count += 1
             policy = {}
+            access_mode = None
         elif declared_host and declared_host != host:
             status = "source_host_mismatch"
             invalid_count += 1
             policy = {}
+            access_mode = None
         else:
             parsed = urlsplit(canonical)
-            status, policy = _policy_status(host, parsed.path, sources)
+            status, policy, access_mode = _policy_status(host, parsed.path, sources)
 
         status_counts[status] += 1
         item = {
@@ -169,10 +173,20 @@ def build_review_queue(manifest: dict, registry: dict, policy_registry: dict) ->
             "source_host": host or declared_host or None,
             "source_url": canonical,
             "review_status": status,
+            "source_access_mode": access_mode,
             "terms_url": policy.get("terms_url"),
             "terms_status": policy.get("terms_status", "unreviewed"),
             "reviewed_at": policy.get("reviewed_at"),
+            "metadata_only": policy.get("metadata_only") is True,
             "per_dataset_rights_required": bool(policy.get("per_dataset_rights_required", True)),
+            "attribution_required": policy.get("attribution_required"),
+            "rights_scope": policy.get("rights_scope"),
+            "allowed_metadata_fields": policy.get("allowed_metadata_fields", []),
+            "prohibited_content": policy.get("prohibited_content", []),
+            "max_response_bytes": int(policy.get("max_response_bytes") or 0),
+            "min_interval_seconds": float(policy.get("min_interval_seconds", 1.0)),
+            "max_requests_per_run": int(policy.get("max_requests_per_run", 1)),
+            "policy_note": policy.get("policy_note"),
             "robots_recheck_required": bool(canonical),
             "fetch_authorized": False,
         }
@@ -184,11 +198,9 @@ def build_review_queue(manifest: dict, registry: dict, policy_registry: dict) ->
     candidate_urls = []
     for url, rows in url_groups.items():
         statuses = sorted({row["review_status"] for row in rows})
-        status = statuses[0] if len(statuses) == 1 else "mixed_policy_statuses"
-        if status == "policy_preapproved_robots_recheck_required" and len(statuses) == 1:
-            policy_preapproved = True
-        else:
-            policy_preapproved = False
+        access_modes = sorted({row["source_access_mode"] for row in rows if row.get("source_access_mode")})
+        status = statuses[0] if len(statuses) == 1 and len(access_modes) <= 1 else "mixed_policy_statuses"
+        policy_preapproved = status == "policy_preapproved_robots_recheck_required"
         sample = rows[0]
         candidate_urls.append({
             "source_url": url,
@@ -196,12 +208,22 @@ def build_review_queue(manifest: dict, registry: dict, policy_registry: dict) ->
             "catalog_ids": sorted({row["catalog_id"] for row in rows}),
             "catalog_count": len({row["catalog_id"] for row in rows}),
             "review_status": status,
+            "source_access_mode": access_modes[0] if len(access_modes) == 1 else None,
             "policy_preapproved": policy_preapproved,
+            "metadata_only": all(row.get("metadata_only") is True for row in rows),
             "robots_recheck_required": True,
             "fetch_authorized": False,
             "terms_url": sample.get("terms_url"),
             "terms_status": sample.get("terms_status", "unreviewed"),
             "per_dataset_rights_required": any(row["per_dataset_rights_required"] for row in rows),
+            "attribution_required": sample.get("attribution_required"),
+            "rights_scope": sample.get("rights_scope"),
+            "allowed_metadata_fields": sample.get("allowed_metadata_fields", []),
+            "prohibited_content": sample.get("prohibited_content", []),
+            "max_response_bytes": min(int(row.get("max_response_bytes") or 0) for row in rows),
+            "min_interval_seconds": max(float(row.get("min_interval_seconds", 1.0)) for row in rows),
+            "max_requests_per_run": min(int(row.get("max_requests_per_run", 1)) for row in rows),
+            "policy_note": sample.get("policy_note"),
         })
 
     hosts = []
@@ -217,7 +239,13 @@ def build_review_queue(manifest: dict, registry: dict, policy_registry: dict) ->
             "terms_url": sample.get("terms_url"),
             "terms_status": sample.get("terms_status", "unreviewed"),
             "reviewed_at": sample.get("reviewed_at"),
+            "source_access_modes": sorted({row["source_access_mode"] for row in rows if row.get("source_access_mode")}),
+            "metadata_only": all(row.get("metadata_only") is True for row in rows),
+            "max_response_bytes": min(int(row.get("max_response_bytes") or 0) for row in rows),
             "per_dataset_rights_required": any(row["per_dataset_rights_required"] for row in rows),
+            "min_interval_seconds": max(float(row.get("min_interval_seconds", 1.0)) for row in rows),
+            "max_requests_per_run": min(int(row.get("max_requests_per_run", 1)) for row in rows),
+            "policy_note": sample.get("policy_note"),
             "sample_catalogs": [
                 {
                     "catalog_id": row["catalog_id"],
@@ -235,12 +263,21 @@ def build_review_queue(manifest: dict, registry: dict, policy_registry: dict) ->
     hosts.sort(key=lambda x: (-x["catalog_definition_count"], x["host"]))
 
     url_status_counts = Counter(row["review_status"] for row in candidate_urls)
-    preapproved_urls = url_status_counts["policy_preapproved_robots_recheck_required"]
+    preapproved_urls = [
+        row for row in candidate_urls
+        if row["review_status"] == "policy_preapproved_robots_recheck_required"
+    ]
     metrics = {
         "catalog_definition_candidates": len(candidates),
         "unique_source_hosts": len(hosts),
         "unique_source_urls": len(candidate_urls),
-        "policy_preapproved_urls_needing_runtime_robots_check": preapproved_urls,
+        "policy_preapproved_urls_needing_runtime_robots_check": len(preapproved_urls),
+        "policy_preapproved_api_urls_needing_runtime_robots_check": sum(
+            row.get("source_access_mode") == "api" for row in preapproved_urls
+        ),
+        "policy_preapproved_catalog_page_urls_needing_runtime_robots_check": sum(
+            row.get("source_access_mode") == "catalog_landing_page" for row in preapproved_urls
+        ),
         "policy_review_required_urls": sum(
             count for status, count in url_status_counts.items()
             if status in {"policy_review_required", "discovery_disabled", "terms_unreviewed"}
@@ -293,6 +330,27 @@ def validate_review_queue(payload: dict, manifest: dict) -> dict:
         raise ValueError("source review backlog must not authorize fetching")
     if any(row.get("robots_recheck_required") is not True for row in urls):
         raise ValueError("every candidate URL must require a fresh runtime robots check")
+    valid_access_modes = {None, "api", "catalog_landing_page"}
+    if any(row.get("source_access_mode") not in valid_access_modes for row in catalogs + urls):
+        raise ValueError("source review backlog contains an unsupported access mode")
+    if any(
+        row.get("review_status") == "policy_preapproved_robots_recheck_required"
+        and row.get("source_access_mode") not in {"api", "catalog_landing_page"}
+        for row in urls
+    ):
+        raise ValueError("policy-preapproved URLs must identify their exact access mode")
+    if any(
+        row.get("source_access_mode") == "catalog_landing_page"
+        and (
+            row.get("metadata_only") is not True
+            or not row.get("allowed_metadata_fields")
+            or not row.get("prohibited_content")
+            or not isinstance(row.get("max_response_bytes"), int)
+            or row.get("max_response_bytes") < 1
+        )
+        for row in catalogs + urls
+    ):
+        raise ValueError("catalog landing-page review must define metadata-only fields, exclusions, and a response-size limit")
     if metrics.get("catalog_definition_candidates") != len(catalogs):
         raise ValueError("source review candidate count does not match its rows")
     if metrics.get("unique_source_urls") != len(urls):
@@ -302,6 +360,8 @@ def validate_review_queue(payload: dict, manifest: dict) -> dict:
         "unique_source_hosts": len(payload.get("hosts", [])),
         "unique_source_urls": len(urls),
         "policy_preapproved_urls_needing_runtime_robots_check": metrics.get("policy_preapproved_urls_needing_runtime_robots_check", 0),
+        "policy_preapproved_api_urls_needing_runtime_robots_check": metrics.get("policy_preapproved_api_urls_needing_runtime_robots_check", 0),
+        "policy_preapproved_catalog_page_urls_needing_runtime_robots_check": metrics.get("policy_preapproved_catalog_page_urls_needing_runtime_robots_check", 0),
         "policy_review_required_urls": metrics.get("policy_review_required_urls", 0),
         "fetch_authorized_urls": 0,
         "network_requests": 0,

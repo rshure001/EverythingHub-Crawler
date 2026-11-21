@@ -18,6 +18,16 @@ class CatalogSourcePolicyTests(unittest.TestCase):
         self.assertEqual(swiss["terms_status"], "reviewed_per_dataset")
         self.assertEqual(swiss["max_requests_per_run"], 40)
         self.assertEqual(swiss["min_interval_seconds"], 2.0)
+        frontiers = policy.policy_for_host("frontiersin.org")
+        self.assertTrue(frontiers["discovery_allowed"])
+        self.assertTrue(frontiers["metadata_only"])
+        self.assertTrue(frontiers["per_dataset_rights_required"])
+        self.assertEqual(frontiers["allowed_api_paths"], [])
+        self.assertEqual(frontiers["allowed_catalog_paths"], ["/journals", "/articles"])
+        self.assertEqual(frontiers["min_interval_seconds"], 3)
+        self.assertEqual(frontiers["max_response_bytes"], 1500000)
+        self.assertIn("doi", frontiers["allowed_metadata_fields"])
+        self.assertIn("full_text", frontiers["prohibited_content"])
 
     def test_unreviewed_host_is_rejected_before_robots_fetch(self):
         with patch.object(policy, "load_robots_policy") as load_robots:
@@ -49,6 +59,101 @@ class CatalogSourcePolicyTests(unittest.TestCase):
         self.assertEqual(delay, 2.5)
         self.assertIn("/api/3/action/package_search", paths)
         self.assertEqual(source["terms_status"], "reviewed_per_dataset")
+
+
+    def test_frontiers_catalog_landing_page_requires_its_separate_allowlist_and_robots(self):
+        parser = object()
+        with patch.object(policy, "load_robots_policy", return_value=parser), \
+             patch.object(policy, "robots_can_fetch", return_value=True), \
+             patch.object(policy, "effective_host_delay", return_value=3.5):
+            source, loaded_parser, delay, paths = policy.authorize_source_url(
+                "https://frontiersin.org/journals/insect-science/articles",
+                purpose="landing_page",
+            )
+        self.assertIs(loaded_parser, parser)
+        self.assertEqual(delay, 3.5)
+        self.assertEqual(paths, ["/journals", "/articles"])
+        self.assertTrue(source["metadata_only"])
+        self.assertEqual(source["rights_scope"], "per_article_license")
+
+    def test_frontiers_landing_page_path_outside_allowlist_is_rejected_before_robots(self):
+        with patch.object(policy, "load_robots_policy") as load_robots:
+            with self.assertRaises(policy.SourcePolicyError):
+                policy.authorize_source_url(
+                    "https://frontiersin.org/images/logo.png",
+                    purpose="landing_page",
+                )
+            load_robots.assert_not_called()
+
+    def test_frontiers_catalog_page_is_not_accidentally_authorized_as_an_api(self):
+        with patch.object(policy, "load_robots_policy") as load_robots:
+            with self.assertRaises(policy.SourcePolicyError):
+                policy.authorize_source_url(
+                    "https://frontiersin.org/journals/insect-science/articles",
+                    purpose="discovery",
+                )
+            load_robots.assert_not_called()
+
+    def test_frontiers_landing_page_robots_denial_fails_closed(self):
+        with patch.object(policy, "load_robots_policy", return_value=object()), \
+             patch.object(policy, "robots_can_fetch", return_value=False):
+            with self.assertRaises(policy.SourcePolicyError):
+                policy.authorize_source_url(
+                    "https://frontiersin.org/journals/testfieldhumanities/articles",
+                    purpose="landing_page",
+                )
+
+
+    def test_frontiers_landing_page_policy_requires_metadata_schema_before_robots(self):
+        source = policy.policy_for_host("frontiersin.org")
+        source.pop("allowed_metadata_fields")
+        with patch.object(policy, "policy_for_host", return_value=source), \
+             patch.object(policy, "load_robots_policy") as load_robots:
+            with self.assertRaises(policy.SourcePolicyError):
+                policy.authorize_source_url(
+                    "https://frontiersin.org/journals/insect-science/articles",
+                    purpose="landing_page",
+                )
+            load_robots.assert_not_called()
+
+    def test_landing_page_request_requires_html_and_uses_policy_size_limit(self):
+        class Response:
+            status = 200
+            headers = {"Content-Type": "text/html"}
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def geturl(self):
+                return "https://frontiersin.org/journals/insect-science/articles"
+
+            def read(self, amount):
+                return b"x" * amount
+
+        class Opener:
+            def open(self, request, timeout):
+                return Response()
+
+        source = policy.policy_for_host("frontiersin.org")
+        parser = object()
+        with patch.object(policy, "authorize_source_url", return_value=(source, parser, 0.0, ["/journals"])), \
+             patch.object(policy, "build_pinned_opener", return_value=Opener()), \
+             patch.object(policy, "robots_can_fetch", return_value=True):
+            with self.assertRaises(policy.SourcePolicyError):
+                policy.request_source_bytes(
+                    "https://frontiersin.org/journals/insect-science/articles",
+                    purpose="landing_page",
+                    accept="application/json",
+                )
+            with self.assertRaises(policy.SourcePolicyError):
+                policy.request_source_bytes(
+                    "https://frontiersin.org/journals/insect-science/articles",
+                    purpose="landing_page",
+                    accept="text/html",
+                )
 
     def test_openlibrary_is_not_an_api_discovery_source(self):
         with self.assertRaises(policy.SourcePolicyError):

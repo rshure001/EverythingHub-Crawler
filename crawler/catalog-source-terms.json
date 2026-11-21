@@ -69,6 +69,42 @@
       "allowed_api_paths": [],
       "allowed_probe_paths": [],
       "reason": "The API is not intended as a bulk-data backend or high-traffic commercial infrastructure; use the official data dumps or obtain permission before bulk harvesting."
+    },
+    "frontiersin.org": {
+      "terms_url": "https://www.frontiersin.org/legal/terms-and-conditions",
+      "terms_status": "reviewed_per_dataset",
+      "reviewed_at": "2026-11-21",
+      "discovery_allowed": true,
+      "metadata_only": true,
+      "per_dataset_rights_required": true,
+      "attribution_required": "per_article",
+      "rights_scope": "per_article_license",
+      "allowed_api_paths": [],
+      "allowed_catalog_paths": [
+        "/journals",
+        "/articles"
+      ],
+      "allowed_probe_paths": [],
+      "allowed_metadata_fields": [
+        "title",
+        "authors",
+        "doi",
+        "journal",
+        "publication_date",
+        "article_url",
+        "license",
+        "publisher"
+      ],
+      "prohibited_content": [
+        "full_text",
+        "images",
+        "supplementary_files",
+        "bulk_assets"
+      ],
+      "min_interval_seconds": 3,
+      "max_requests_per_run": 40,
+      "policy_note": "Frontiers Terms and Conditions section 14 permits text and data mining of public content for the legitimate purpose of enriching external collections of scientific literature. Content remains subject to each article's applicable CC-BY, CC0, or other license and applicable data-protection laws. This policy is limited to bounded landing-page discovery of bibliographic metadata; do not retrieve full text, images, supplementary files, or bulk assets. Runtime robots.txt verification on the exact host is mandatory; honor disallowed paths and any performance restrictions.",
+      "max_response_bytes": 1500000
     }
   }
 }
