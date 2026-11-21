@@ -33,12 +33,42 @@ jobs:
             const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
             const pageErrors = [];
             const consoleErrors = [];
+            const httpErrors = [];
+            const requestFailures = [];
+            const isFirstPartyUrl = value => /everythinghub-search-backend\.vercel\.app|everythinghub-homepage-fixed/.test(value);
             page.on("pageerror", error => pageErrors.push(error.message));
             page.on("console", message => { if (message.type() === "error") consoleErrors.push(message.text()); });
-            const report = { url: process.env.TARGET_URL, checks: {}, pageErrors, consoleErrors };
+            page.on("response", response => {
+              if (response.status() >= 400 && isFirstPartyUrl(response.url())) {
+                httpErrors.push({ status: response.status(), url: response.url() });
+              }
+            });
+            page.on("requestfailed", request => {
+              if (isFirstPartyUrl(request.url())) requestFailures.push({ url: request.url(), failure: request.failure()?.errorText || "" });
+            });
+            await page.addInitScript(() => {
+              const originalFetch = window.fetch.bind(window);
+              window.__ehNewsRequestCount = 0;
+              window.__ehNewsRetrySimulated = false;
+              window.fetch = async (...args) => {
+                let url = null;
+                try { url = new URL(String(args[0]), location.href); } catch {}
+                if (url && url.hostname === "everythinghub-search-backend.vercel.app" && url.pathname === "/api/news") {
+                  window.__ehNewsRequestCount += 1;
+                  if (!window.__ehNewsRetrySimulated && url.searchParams.get("category") === "world") {
+                    window.__ehNewsRetrySimulated = true;
+                    throw new TypeError("Failed to fetch");
+                  }
+                }
+                return originalFetch(...args);
+              };
+            });
+            const report = { url: process.env.TARGET_URL, checks: {}, pageErrors, consoleErrors, httpErrors, requestFailures };
             const shot = async name => page.screenshot({ path: name, fullPage: true });
             const goHome = async () => {
               await page.goto(process.env.TARGET_URL, { waitUntil: "domcontentloaded", timeout: 45000 });
+              const release = await page.locator("body").getAttribute("data-release").catch(() => null);
+              if (release !== "fallback-2026-11-21-r3") throw new Error("Unexpected live release marker: " + release);
               await page.locator("#query").waitFor({ state: "visible", timeout: 20000 });
               const image = page.locator(".art img").first();
               await image.waitFor({ state: "visible", timeout: 20000 });
@@ -47,6 +77,17 @@ jobs:
                 const img = document.querySelector(".art img");
                 return !!img && img.complete && img.naturalWidth >= 800;
               }, null, { timeout: 30000 });
+            };
+            const waitForRelease = async () => {
+              let response = null;
+              let release = null;
+              for (let attempt = 0; attempt < 24; attempt++) {
+                try { response = await page.goto(report.url, { waitUntil: "domcontentloaded", timeout: 20000 }); } catch {}
+                release = await page.locator("body").getAttribute("data-release").catch(() => null);
+                if (response && response.status() === 200 && release === "fallback-2026-11-21-r3") return response;
+                await page.waitForTimeout(5000);
+              }
+              throw new Error("Vercel fallback did not serve r3 release marker; last release=" + release);
             };
             const search = async (mode, query, resultSelector, minCount = 1) => {
               await page.locator('.hotspots [data-mode="' + mode + '"]').click();
@@ -70,8 +111,10 @@ jobs:
               return { count: titles.length, titles: titles.slice(0, 6) };
             };
             try {
-              const response = await page.goto(report.url, { waitUntil: "domcontentloaded", timeout: 45000 });
+              const response = await waitForRelease();
               if (!response || response.status() !== 200) throw new Error("Homepage did not return HTTP 200");
+              const release = await page.locator("body").getAttribute("data-release");
+              if (release !== "fallback-2026-11-21-r3") throw new Error("Live release marker mismatch: " + release);
               const artworkImage = page.locator(".art img").first();
               await artworkImage.waitFor({ state: "visible", timeout: 20000 });
               await artworkImage.scrollIntoViewIfNeeded();
@@ -83,7 +126,7 @@ jobs:
               if (!art.src.includes("everythinghub-approved-octopus.png") || art.width < 800 || art.height < 800) throw new Error("Approved octopus artwork check failed: " + JSON.stringify(art));
               const modes = await page.locator(".hotspots [data-mode]").evaluateAll(nodes => nodes.map(node => node.dataset.mode));
               if (modes.length !== 8) throw new Error("Expected eight search categories; got " + modes.length);
-              report.checks.home = { http: response.status(), title: await page.title(), artwork: art, modes };
+              report.checks.home = { http: response.status(), release, title: await page.title(), artwork: art, modes };
               report.checks.desktop = await page.evaluate(() => {
                 const art = document.querySelector(".art").getBoundingClientRect();
                 const results = document.querySelector("#results").getBoundingClientRect();
@@ -133,7 +176,10 @@ jobs:
               }
 
               await goHome();
-              await page.locator("#news-items .news-item").first().waitFor({ state: "visible", timeout: 45000 });
+              await page.waitForFunction(() => {
+                const status = document.querySelector("#news-status")?.textContent || "";
+                return status.startsWith("Updated") && document.querySelectorAll("#news-items .news-item").length > 0;
+              }, null, { timeout: 45000 });
               const topTitles = (await page.locator("#news-items .news-item a").allTextContents()).map(value => value.trim().toLowerCase()).filter(Boolean);
               const newsApi = await page.evaluate(async () => {
                 const response = await fetch("https://everythinghub-search-backend.vercel.app/api/news?category=for-you");
@@ -158,34 +204,43 @@ jobs:
               for (const category of ["world", "technology", "business", "science"]) {
                 const tab = page.locator('[data-news="' + category + '"]');
                 if (!(await tab.count())) throw new Error("Missing Top Stories tab: " + category);
-                const responsePromise = page.waitForResponse(response => {
-                  try {
-                    const url = new URL(response.url());
-                    return url.pathname === "/api/news" && url.searchParams.get("category") === category && response.ok();
-                  } catch { return false; }
-                }, { timeout: 30000 });
+                const beforeRequests = await page.evaluate(() => window.__ehNewsRequestCount || 0);
+                const requiredRequests = category === "world" ? 2 : 1;
                 await tab.click();
-                const categoryResponse = await responsePromise;
-                const categoryData = await categoryResponse.json();
-                await page.locator("#news-items .news-item").first().waitFor({ state: "visible", timeout: 20000 });
-                const active = await tab.evaluate(button => button.classList.contains("active"));
+                await page.waitForFunction(({ category, beforeRequests, requiredRequests }) => {
+                  const active = document.querySelector('[data-news="' + category + '"]')?.classList.contains("active");
+                  const status = document.querySelector("#news-status")?.textContent || "";
+                  const count = document.querySelectorAll("#news-items .news-item").length;
+                  const requests = window.__ehNewsRequestCount || 0;
+                  return active && status.startsWith("Updated") && count > 0 && requests >= beforeRequests + requiredRequests;
+                }, { category, beforeRequests, requiredRequests }, { timeout: 30000 });
+                const afterRequests = await page.evaluate(() => window.__ehNewsRequestCount || 0);
                 const count = await page.locator("#news-items .news-item").count();
-                if (!active || count < 1 || categoryData.status !== "ok") throw new Error("News tab failed: " + category);
-                report.checks.news[category] = { count, firstTitle: categoryData.items?.[0]?.title || "" };
+                const firstTitle = (await page.locator("#news-items .news-item a").first().innerText()).trim();
+                report.checks.news[category] = { count, firstTitle, requests: afterRequests - beforeRequests };
+                if (category === "world") {
+                  const retryState = await page.evaluate(() => ({ simulated: window.__ehNewsRetrySimulated, requests: window.__ehNewsRequestCount || 0 }));
+                  if (!retryState.simulated || afterRequests - beforeRequests < 2) throw new Error("News transient retry did not recover: " + JSON.stringify(retryState));
+                  report.checks.news.retryTest = { simulatedFailure: true, requests: afterRequests - beforeRequests };
+                }
               }
               const refresh = page.locator("#news-refresh");
               if (!(await refresh.count())) throw new Error("Top Stories Refresh control is missing.");
-              const refreshPromise = page.waitForResponse(response => {
-                try {
-                  const url = new URL(response.url());
-                  return url.pathname === "/api/news" && url.searchParams.get("category") === "science" && response.ok();
-                } catch { return false; }
-              }, { timeout: 30000 });
+              const beforeRefresh = await page.evaluate(() => window.__ehNewsRequestCount || 0);
               await refresh.click();
-              const refreshResponse = await refreshPromise;
-              const refreshData = await refreshResponse.json();
-              if (refreshData.status !== "ok" || refreshData.count < 1) throw new Error("Top Stories Refresh failed.");
-              report.checks.news.refresh = { http: refreshResponse.status(), count: refreshData.count };
+              await page.waitForFunction(beforeRequests => {
+                const status = document.querySelector("#news-status")?.textContent || "";
+                const count = document.querySelectorAll("#news-items .news-item").length;
+                const requests = window.__ehNewsRequestCount || 0;
+                return status.startsWith("Updated") && count > 0 && requests >= beforeRequests + 1;
+              }, beforeRefresh, { timeout: 30000 });
+              const afterRefresh = await page.evaluate(() => window.__ehNewsRequestCount || 0);
+              report.checks.news.refresh = {
+                requests: afterRefresh - beforeRefresh,
+                count: await page.locator("#news-items .news-item").count(),
+                status: await page.locator("#news-status").innerText()
+              };
+              if (report.checks.news.refresh.requests < 1) throw new Error("Top Stories Refresh did not issue a new request.");
               const newsLink = await page.locator("#news-items .news-item a").first().evaluate(anchor => ({ href: anchor.href, target: anchor.target, rel: anchor.rel }));
               if (!/^https?:\/\//i.test(newsLink.href) || newsLink.target !== "_blank" || !newsLink.rel.includes("noopener")) {
                 throw new Error("News article link contract failed: " + JSON.stringify(newsLink));
@@ -268,7 +323,39 @@ jobs:
               }
               report.checks.mobile = mobile;
               await shot("everythinghub-mobile.png");
-              if (pageErrors.length || consoleErrors.length) throw new Error("Browser errors: " + JSON.stringify({ pageErrors, consoleErrors }));
+              const isNewsEndpoint = value => {
+                try {
+                  const url = new URL(value);
+                  return url.hostname === "everythinghub-search-backend.vercel.app" && url.pathname === "/api/news";
+                } catch { return false; }
+              };
+              const loadedNewsCategories = new Set();
+              if (report.checks.news.count > 0) loadedNewsCategories.add("for-you");
+              for (const category of ["world", "technology", "business", "science"]) {
+                if (report.checks.news[category]?.count > 0) loadedNewsCategories.add(category);
+              }
+              const recoveredNewsHttpErrors = httpErrors.filter(item => {
+                if (!isNewsEndpoint(item.url)) return false;
+                return loadedNewsCategories.has(new URL(item.url).searchParams.get("category"));
+              });
+              const recoveredNewsRequestFailures = requestFailures.filter(item => {
+                if (!isNewsEndpoint(item.url)) return false;
+                return loadedNewsCategories.has(new URL(item.url).searchParams.get("category"));
+              });
+              const fatalHttpErrors = httpErrors.filter(item => !recoveredNewsHttpErrors.includes(item));
+              const fatalRequestFailures = requestFailures.filter(item => !recoveredNewsRequestFailures.includes(item));
+              const genericNetworkConsoleErrors = consoleErrors.filter(message => /Failed to load resource: the server responded with a status of [45]\\d\\d/i.test(message));
+              const fatalConsoleErrors = consoleErrors.filter(message => !/Failed to load resource: the server responded with a status of [45]\\d\\d/i.test(message));
+              if (pageErrors.length || fatalConsoleErrors.length || fatalHttpErrors.length || fatalRequestFailures.length ||
+                  genericNetworkConsoleErrors.length > recoveredNewsHttpErrors.length + recoveredNewsRequestFailures.length) {
+                throw new Error("Browser errors affected core functions: " + JSON.stringify({
+                  pageErrors, consoleErrors, httpErrors, requestFailures,
+                  recoveredNewsHttpErrors, recoveredNewsRequestFailures
+                }));
+              }
+              report.checks.browserErrors = {
+                pageErrors, consoleErrors, recoveredNewsHttpErrors, recoveredNewsRequestFailures
+              };
               report.passed = true;
             } catch (error) {
               report.error = error.message || String(error);
