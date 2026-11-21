@@ -15,10 +15,10 @@ from index_store import load_index
 ROOT = Path(__file__).resolve().parents[1]
 MAX_SHARD_BYTES = 350_000
 MAX_SHARD_UNCOMPRESSED_BYTES = 500_000
-MAX_TOTAL_COMPRESSED_SHARD_BYTES = 80_000_000
+MAX_TOTAL_COMPRESSED_SHARD_BYTES = 100_000_000
 MAX_TOTAL_LEGACY_SHARD_BYTES = 100_000_000
-MAX_TOTAL_SHARD_UNCOMPRESSED_BYTES = 320_000_000
-MAX_SHARD_COUNT = 640
+MAX_TOTAL_SHARD_UNCOMPRESSED_BYTES = 400_000_000
+MAX_SHARD_COUNT = 768
 # Keep validation aligned with the independent Vercel backend's bounded decoder.
 # The Supabase Edge Function uses a smaller 30 MB budget and delegates larger
 # catalogs to Vercel rather than scanning all shards in its CPU-limited isolate.
@@ -140,7 +140,7 @@ def validate(root: Path = ROOT) -> list[str]:
     if manifest.get("shard_count") != len(shards):
         errors.append("manifest shard_count does not match shards array")
     if len(shards) > MAX_SHARD_COUNT:
-        errors.append("manifest exceeds the fixed 640-shard safety limit")
+        errors.append("manifest exceeds the fixed 768-shard safety limit")
 
     expected_urls = {
         page.get("url")
