@@ -49,5 +49,19 @@ services:
     security_opt:
       - no-new-privileges:true
 
+  # Optional HTTPS bridge. It creates an outbound tunnel; no inbound ports
+  # are opened on the host and PostgreSQL itself remains loopback-only.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: everythinghub-cloudflared
+    restart: unless-stopped
+    profiles: ["tunnel"]
+    command: tunnel --no-autoupdate run --token ${EH_CLOUDFLARE_TUNNEL_TOKEN:?Set EH_CLOUDFLARE_TUNNEL_TOKEN in .env}
+    depends_on:
+      everythinghub-search:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+
 volumes:
   everythinghub_pgdata:
