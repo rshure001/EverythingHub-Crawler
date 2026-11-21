@@ -231,9 +231,20 @@ function renderVideos(data,q){
   for(const item of items){
     const card=document.createElement('article');card.className='video-card';
     const link=document.createElement('a');link.href=safeUrl(item.url);link.target='_blank';link.rel='noopener noreferrer';
-    if(item.thumbnail){const img=document.createElement('img');img.src=item.videoId?'https://everythinghub-search-backend.vercel.app/api/video-thumbnail?id='+encodeURIComponent(item.videoId):safeUrl(item.thumbnail);img.alt=item.title||q;img.loading='eager';img.referrerPolicy='no-referrer';img.onerror=()=>{if(item.thumbnail&&img.src!==safeUrl(item.thumbnail)){img.src=safeUrl(item.thumbnail);img.onerror=()=>{const p=document.createElement('div');p.className='video-placeholder';p.textContent='▶ Watch video';img.replaceWith(p);};}else{const p=document.createElement('div');p.className='video-placeholder';p.textContent='▶ Watch video';img.replaceWith(p);}};link.append(img);}else{const placeholder=document.createElement('div');placeholder.className='results-empty';placeholder.textContent='▶ Video';link.append(placeholder);}
+    if(item.thumbnail){
+      const img=document.createElement('img');img.src=safeUrl(item.thumbnail);img.alt=item.title||q;
+      img.loading='eager';img.referrerPolicy='no-referrer';img.decoding='async';
+      img.onerror=()=>{const p=document.createElement('div');p.className='video-placeholder';p.textContent='▶ Watch video';img.replaceWith(p);};
+      link.append(img);
+    }else{
+      const placeholder=document.createElement('div');placeholder.className='video-placeholder';placeholder.textContent='▶ Watch video';link.append(placeholder);
+    }
     const title=document.createElement('a');title.href=safeUrl(item.url);title.target='_blank';title.rel='noopener noreferrer';title.textContent=item.title||'Video';
-    const small=document.createElement('small');small.textContent=(item.source||'Video source')+(item.duration?' · '+item.duration:'')+(item.views?' · '+item.views:'');
+    const small=document.createElement('small');
+    small.append(document.createTextNode((item.source||'Video source')+' · Credit: '+(item.credit||'NASA')+' · '));
+    const policyLink=document.createElement('a');policyLink.href=safeUrl(item.attributionUrl||'https://www.nasa.gov/nasa-brand-center/images-and-media/');
+    policyLink.target='_blank';policyLink.rel='noopener noreferrer';policyLink.textContent='NASA media guidelines';
+    small.append(policyLink);
     card.append(link,title,small);grid.append(card);
   }
   if(!items.length){const empty=document.createElement('div');empty.className='results-empty';empty.textContent='No videos were returned for this search.';resultsRoot.append(empty);return;}
