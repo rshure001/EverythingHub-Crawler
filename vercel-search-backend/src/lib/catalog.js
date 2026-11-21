@@ -21,6 +21,7 @@ const MAX_SHARD_CONCURRENCY = 32;
 const SHARD_FETCH_TIMEOUT_MS = 7000;
 const agent = new https.Agent({ keepAlive: true, maxSockets: MAX_SHARD_CONCURRENCY });
 let cache = null;
+let pending = null;
 
 function getBuffer(url, maxBytes, timeoutMs = 10000) {
   return new Promise((resolve, reject) => {
@@ -342,32 +343,43 @@ async function loadCatalogFromManifest(manifest, commitSha, manifestRaw, fetchBu
 
 async function loadCatalog() {
   if (cache && Date.now() - cache.loadedAt < CACHE_TTL_MS) return { ...cache, stale: false };
+  if (pending) return pending;
+
+  const current = (async () => {
+    try {
+      const gitRef = JSON.parse((await getBuffer(GIT_REF_URL + '?v=' + Date.now(), 4096)).toString('utf8'));
+      const sha = gitRef && gitRef.object && gitRef.object.sha;
+      if (typeof sha !== 'string' || !/^[a-f0-9]{40}$/i.test(sha)) {
+        throw new Error('catalog_git_ref_invalid');
+      }
+      const manifestRaw = await getBuffer(
+        CATALOG_BASE_URL + sha + '/public-search/manifest.json',
+        MAX_MANIFEST_BYTES
+      );
+      let manifest;
+      try { manifest = JSON.parse(manifestRaw.toString('utf8')); } catch {
+        throw new Error('manifest_json_invalid');
+      }
+      const validated = await loadCatalogFromManifest(manifest, sha, manifestRaw, getBuffer);
+      cache = { ...validated, loadedAt: Date.now(), stale: false };
+      return { ...cache };
+    } catch (error) {
+      if (cache && Date.now() - cache.loadedAt < STALE_TTL_MS) {
+        return { ...cache, stale: true, refreshError: String(error.message || error).slice(0, 180) };
+      }
+      throw error;
+    }
+  })();
+
+  pending = current;
   try {
-    const gitRef = JSON.parse((await getBuffer(GIT_REF_URL + '?v=' + Date.now(), 4096)).toString('utf8'));
-    const sha = gitRef && gitRef.object && gitRef.object.sha;
-    if (typeof sha !== 'string' || !/^[a-f0-9]{40}$/i.test(sha)) {
-      throw new Error('catalog_git_ref_invalid');
-    }
-    const manifestRaw = await getBuffer(
-      CATALOG_BASE_URL + sha + '/public-search/manifest.json',
-      MAX_MANIFEST_BYTES
-    );
-    let manifest;
-    try { manifest = JSON.parse(manifestRaw.toString('utf8')); } catch {
-      throw new Error('manifest_json_invalid');
-    }
-    const validated = await loadCatalogFromManifest(manifest, sha, manifestRaw, getBuffer);
-    cache = { ...validated, loadedAt: Date.now(), stale: false };
-    return { ...cache };
-  } catch (error) {
-    if (cache && Date.now() - cache.loadedAt < STALE_TTL_MS) {
-      return { ...cache, stale: true, refreshError: String(error.message || error).slice(0, 180) };
-    }
-    throw error;
+    return await current;
+  } finally {
+    if (pending === current) pending = null;
   }
 }
 
-function clearCatalogCache() { cache = null; }
+function clearCatalogCache() { cache = null; pending = null; }
 
 module.exports = {
   MAX_CATALOG_GZIP_BYTES,
