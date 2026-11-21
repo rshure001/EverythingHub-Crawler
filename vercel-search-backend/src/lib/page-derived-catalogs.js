@@ -222,7 +222,8 @@ function searchPageDerivedCatalogs(query,network,limit=5){
   }
   let relevanceClass='record_match';
   if(productIntent&&['product','brand','model'].some(t=>types.has(t)))relevanceClass='typed_product_match';
-  else if(geoIntent&&['place','business','service','organization','event','dataset'].some(t=>types.has(t)))relevanceClass='typed_location_match';
+  else if(geoIntent&&['place','business','service','organization','dataset'].some(t=>types.has(t)))relevanceClass='typed_location_match';
+  else if(geoIntent&&types.has('event'))relevanceClass='related_event_match';
   else if(locationBusinessIntent&&['business','service'].some(t=>types.has(t)))relevanceClass='typed_business_match';
   else if(eventIntent&&types.has('event'))relevanceClass='typed_event_match';
   else if(['article','resource','media','subject'].some(t=>types.has(t)))relevanceClass='related_mention';
@@ -232,6 +233,7 @@ function searchPageDerivedCatalogs(query,network,limit=5){
    typed_location_match:'Place or local directory match',
    typed_business_match:'Business or service match',
    typed_event_match:'Event catalog match',
+   related_event_match:'Related event mention for this location',
    related_mention:'Related mention, not a dedicated catalog match',
    catalog_match:'Catalog title match',
    record_match:'Record match'
