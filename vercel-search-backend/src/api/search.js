@@ -127,7 +127,7 @@ module.exports = async function handler(req, res) {
     });
   }
   const [catalogResult, bingResult, pageDerivedResult] = await Promise.allSettled([
-    loadCatalog(), loadBing(query), loadPageDerivedCatalogs()
+    loadCatalog(), loadBing(query), loadPageDerivedCatalogs(query)
   ]);
   const bingResults = bingResult.status === 'fulfilled' ? bingResult.value : [];
   const pageDerivedNetwork = pageDerivedResult.status === 'fulfilled' ? pageDerivedResult.value : null;
