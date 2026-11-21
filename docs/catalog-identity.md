@@ -7,7 +7,7 @@ Catalog definitions remain source-scoped. A catalog discovered on one publisher'
 Record IDs may be shared across source hosts only when a stable external identifier is present and matches exactly. The page analyzer uses these rules:
 
 1. Product GTIN remains the strongest product identifier.
-2. A vetted schema.org `sameAs` identifier can provide a cross-host canonical identity for a record.
+2. An allowlisted schema.org `sameAs` identifier can provide a cross-host canonical identity. ORCID and ISNI identifiers must also pass their ISO 7064 MOD 11-2 check digit.
 3. If no vetted external identifier exists, the record remains host-scoped and is keyed by its normalized type and title (or by the existing host-scoped SKU rule for products).
 
 ## Accepted external identifier namespaces
@@ -21,7 +21,7 @@ Only absolute HTTPS identifiers from these known namespaces are accepted:
 - GeoNames feature IDs: `geonames:…`
 - OpenStreetMap object IDs: `osm:node|way|relation:…`
 
-The parser rejects unknown hosts, non-HTTPS URLs, user information, query strings, fragments, and malformed identifier paths. A page-provided `sameAs` value is untrusted input until it passes this allowlist.
+The parser rejects unknown hosts, non-HTTPS URLs, user information, query strings, fragments, malformed identifier paths, and invalid ORCID/ISNI check digits. A page-provided `sameAs` value remains a source claim; this pipeline does not dereference the identifier URL or independently verify the target entity.
 
 ## Provenance and deduplication
 
