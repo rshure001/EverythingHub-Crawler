@@ -69,6 +69,14 @@ test("Las Vegas prefers a typed geographic catalog and excludes unrelated articl
   assert.equal(results[0].relevance_class, "typed_location_match");
 });
 
+test("general location searches suppress event-only catalogs when no place record is in the query shard", () => {
+  const network = {
+    catalogs: [catalog("catalog:vegas-events", "Homeland Security Events", "events", "event", "")],
+    records: [record("r-vegas-event", "Las Vegas Events Calendar", "event", ["catalog:vegas-events"])]
+  };
+  assert.deepEqual(searchPageDerivedCatalogs("Las Vegas", network, 8), []);
+});
+
 test("explicit Las Vegas events intent still returns the matching event catalog", () => {
   const results = searchPageDerivedCatalogs("Las Vegas events", fixture(), 8);
   assert.deepEqual(results.map(x => x.catalog_id), ["catalog:vegas-events"]);
