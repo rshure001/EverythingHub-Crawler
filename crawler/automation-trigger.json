@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "updated_at": "2026-11-21T17:01:15.621Z",
-  "reason": "One bounded recovery crawl requested because scheduled crawl delivery remains stale (last scheduled run 2026-11-21T12:49:57Z) and the public manifest is older than the 10-minute freshness target. No queued or running crawler was found. Normal schedule unchanged; existing crawler concurrency and safety gates remain in force.",
-  "manifest_before_pages": 156138,
-  "manifest_before_updated_at": "2026-11-21T16:40:29Z"
+  "updated_at": "2026-11-21T17:36:16.462Z",
+  "reason": "One bounded recovery crawl requested because the public-search manifest aged past the 15-minute freshness threshold after the catalog registry refresh. No queued or running crawler was found. Normal five-minute schedule remains unchanged; robots.txt, source terms, provider rate limits, bounded batches, and concurrency guards remain active.",
+  "manifest_before_pages": 157056,
+  "manifest_before_updated_at": "2026-11-21T17:19:30Z"
 }
