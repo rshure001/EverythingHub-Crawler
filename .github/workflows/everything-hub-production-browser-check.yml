@@ -243,13 +243,15 @@ jobs:
                 const catalogMatched = await catalogCards.locator(".catalog-matched").allTextContents();
                 const catalogRelevance = await catalogCards.locator(".catalog-relevance").allTextContents();
                 const catalogRights = await catalogCards.locator(".catalog-rights").allTextContents();
+                const catalogSources = await catalogCards.evaluateAll(nodes => nodes.map(node => node.dataset.sourceKind || ""));
                 const catalogFlags = await catalogCards.evaluateAll(nodes => nodes.map(node => ({
                   id: node.dataset.catalogId,
                   previewOnly: node.dataset.previewOnly,
                   commercialEligible: node.dataset.commercialEligible
                 })));
                 const familyLinksVisible = query === "Rolex" && /Submariner/.test(catalogMatched.join(" ")) && /Datejust/.test(catalogMatched.join(" ")) && /Cosmograph Daytona/.test(catalogMatched.join(" "));
-                const relevantCatalog = (query === "Rolex" && familyLinksVisible) || catalogMatched.some(text => pattern.test(text)) ||
+                const rolexLinkOnlyVisible = query === "Rolex" && catalogSources.includes("curated_external_link_directory");
+                const relevantCatalog = (query === "Rolex" && familyLinksVisible && rolexLinkOnlyVisible) || catalogMatched.some(text => pattern.test(text)) ||
                   catalogTitles.some(title => pattern.test(title));
                 if (!catalogCount || !relevantCatalog) throw new Error(query + " returned no relevant visible catalog preview: " + JSON.stringify({catalogCount,catalogTitles,catalogMatched}));
                 if (!catalogFlags.every(item => item.id && item.previewOnly === "true" && item.commercialEligible === "false") ||
@@ -257,7 +259,7 @@ jobs:
                     !catalogRights.every(text => /Candidate preview only/.test(text) && /Record rights not cleared/.test(text) && /Commercial use not cleared/.test(text))) {
                   throw new Error(query + " catalog preview rights or identity labels failed: " + JSON.stringify({catalogFlags,catalogRelevance,catalogRights}));
                 }
-                report.searches[query] = {...result,status:await page.locator("#status").textContent(),catalogPreview:{count:catalogCount,titles:catalogTitles,matched:catalogMatched,relevance:catalogRelevance,rights:catalogRights,familyLinksVisible}};
+                report.searches[query] = {...result,status:await page.locator("#status").textContent(),catalogPreview:{count:catalogCount,titles:catalogTitles,matched:catalogMatched,relevance:catalogRelevance,rights:catalogRights,sources:catalogSources,familyLinksVisible,rolexLinkOnlyVisible}};
 
                 await page.screenshot({ path: "everythinghub-fallback-" + query.toLowerCase().replace(/\s+/g, "-") + ".png", fullPage: true });
               }
