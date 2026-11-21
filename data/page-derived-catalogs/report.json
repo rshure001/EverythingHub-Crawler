@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "analysis_version": 13,
-  "generated_at": "2026-11-21T12:19:05Z",
+  "generated_at": "2026-11-21T12:27:43Z",
   "source_index_pages": 151584,
   "source_index_updated_at": "2026-11-21T12:09:31Z",
   "source_index_sha256": "cd96d15f258ef1ba2c86ee7dbf507336b5496285c93978e35be8175da63ca9f1",
@@ -91,8 +91,8 @@
     "unique_source_coverage_percentage": 100.0,
     "eligible_page_coverage_percentage": 100.0,
     "eligible_unique_source_page_coverage_percentage": 100.0,
-    "host_partitions_reused": 106,
-    "host_partitions_rebuilt": 9,
+    "host_partitions_reused": 115,
+    "host_partitions_rebuilt": 0,
     "records_with_conditional_source_policy_review": 5249,
     "records_with_partial_source_policy_review": 0,
     "catalogs_with_conditional_source_policy_review": 129,
@@ -125,33 +125,33 @@
   },
   "catalogs_verified": 0,
   "records_published": 0,
-  "analysis_started_at": "2026-11-21T12:17:49Z",
-  "analysis_finished_at": "2026-11-21T12:19:05Z",
-  "persisted_snapshot_at": "2026-11-21T12:19:05Z",
-  "analysis_elapsed_seconds": 76.165,
-  "elapsed_wall_clock_seconds": 3284.41,
+  "analysis_started_at": "2026-11-21T12:27:28Z",
+  "analysis_finished_at": "2026-11-21T12:27:43Z",
+  "persisted_snapshot_at": "2026-11-21T12:27:43Z",
+  "analysis_elapsed_seconds": 15.661,
+  "elapsed_wall_clock_seconds": 518.937,
   "previous_counts": {
-    "pages_analyzed": 150446,
-    "eligible_pages": 150037,
-    "unique_catalogs_discovered": 2615,
+    "pages_analyzed": 151100,
+    "eligible_pages": 150688,
+    "unique_catalogs_discovered": 2627,
     "subcatalogs_discovered": 75,
-    "unique_records": 55790,
-    "media_references": 8539
+    "unique_records": 56038,
+    "media_references": 8538
   },
   "count_deltas": {
-    "pages_analyzed": 654,
-    "eligible_pages": 651,
-    "unique_catalogs_discovered": 12,
+    "pages_analyzed": 0,
+    "eligible_pages": 0,
+    "unique_catalogs_discovered": 0,
     "subcatalogs_discovered": 0,
-    "unique_records": 248,
-    "media_references": -1
+    "unique_records": 0,
+    "media_references": 0
   },
   "throughput": {
-    "pages_per_minute": 11.9474,
-    "catalogs_per_minute": 0.2192,
-    "records_per_minute": 4.5305,
+    "pages_per_minute": 0.0,
+    "catalogs_per_minute": 0.0,
+    "records_per_minute": 0.0,
     "subcatalogs_per_minute": 0.0,
-    "media_references_per_minute": -0.0183,
+    "media_references_per_minute": 0.0,
     "measurement": "persisted_count_delta_over_wall_clock_interval"
   }
 }
