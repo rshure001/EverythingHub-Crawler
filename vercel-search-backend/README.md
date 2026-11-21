@@ -55,3 +55,12 @@ Run from the repository root:
     node --test vercel-search-backend/test/*.test.js
 
 The GitHub workflow runs these tests on pull requests and main-branch changes.
+
+
+## Page-derived catalog search preview
+
+The independent search API reads the commit-pinned data/page-derived-catalogs manifest, registry.json.gz, and records.json.gz artifacts. It verifies each compressed artifact's byte count and SHA-256, checks unique catalog and record IDs, and rejects commercially eligible records in candidate staging.
+
+Matching catalog candidates are returned separately as catalogResults; the homepage renders them ahead of ordinary page results. Cards include catalog type, matched record titles, source-page and record counts, and a source link. Record descriptions and full attributes are not copied into these public preview cards.
+
+These are candidate previews only. Source terms and reuse rights remain unreviewed, commercial_eligible remains false, and recordsPublished remains zero. The preview endpoint does not mark records as production-published or rights-cleared. The Vercel project still requires its existing controlled deployment path; GitHub auto-deployment is not configured.
