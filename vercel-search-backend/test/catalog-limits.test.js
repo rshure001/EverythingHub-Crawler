@@ -15,12 +15,12 @@ const {
   validateShardManifest
 } = require("../src/lib/catalog");
 
-test("Vercel catalog loader accepts the current 609-shard manifest with headroom", () => {
+test("Vercel catalog loader retains a bounded manifest envelope", () => {
   assert.equal(MAX_MANIFEST_BYTES, 256_000);
   assert.ok(MAX_MANIFEST_BYTES >= 128_660);
 });
 
-test("Vercel catalog loader accepts the current 14,112,415-byte compressed catalog with headroom", () => {
+test("Vercel catalog loader retains a bounded optional gzip envelope", () => {
   assert.equal(MAX_CATALOG_GZIP_BYTES, 16_000_000);
   assert.ok(MAX_CATALOG_GZIP_BYTES >= 14_112_415);
 });
@@ -33,7 +33,7 @@ test("Vercel catalog loader exposes the 180,000-page bounded shard envelope", ()
   assert.equal(MAX_TOTAL_SHARD_BYTES, 100_000_000);
   assert.equal(MAX_TOTAL_COMPRESSED_SHARD_BYTES, 100_000_000);
   assert.equal(MAX_TOTAL_SHARD_UNCOMPRESSED_BYTES, 400_000_000);
-  assert.equal(MAX_SHARD_CONCURRENCY, 32);
+  assert.equal(MAX_SHARD_CONCURRENCY, 48);
 });
 
 test("Vercel shard validator accepts the full 180,000-page capacity envelope", () => {
