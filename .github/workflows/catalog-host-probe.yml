@@ -4,6 +4,8 @@ on:
   push:
     paths:
       - "crawler/catalog_host_probe.py"
+      - "crawler/catalog_host_review_queue.py"
+      - "crawler/test_catalog_host_review_queue.py"
       - "crawler/catalog_source_policy.py"
       - "crawler/catalog-source-terms.json"
       - "crawler/test_catalog_source_policy.py"
@@ -43,6 +45,11 @@ jobs:
       - name: Test cumulative host probe inventory
         working-directory: crawler
         run: python -m unittest test_catalog_host_probe.py -v
+      - name: Test and rebuild the current fail-closed review queue
+        run: |
+          python -m unittest discover -s crawler -p "test_catalog_host_review_queue.py" -v
+          python crawler/catalog_host_review_queue.py
+          python crawler/catalog_host_review_queue.py --validate-only
       - name: Probe a bounded host batch
         if: github.ref == 'refs/heads/main'
         id: batch
@@ -65,7 +72,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           for attempt in 1 2 3; do
-            git add -f data/host-catalog-probes.json data/catalog-landing-page-robots.json
+            git add -f data/host-catalog-probes.json data/catalog-landing-page-robots.json data/page-derived-catalogs/source-host-review-queue.json
             if git diff --cached --quiet; then
               echo "No probe evidence changes."
               exit 0
@@ -79,6 +86,8 @@ jobs:
             git rebase --abort || true
             git fetch origin main
             git reset --hard origin/main
+            python crawler/catalog_host_review_queue.py
+            python crawler/catalog_host_review_queue.py --validate-only
             python crawler/catalog_host_probe.py --limit 30 --offset "$PROBE_OFFSET" --pause 0.2
             echo "Retrying probe evidence publish ($attempt/3)."
             sleep "$((attempt * 2))"
