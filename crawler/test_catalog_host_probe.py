@@ -71,6 +71,11 @@ class CumulativeProbeTests(unittest.TestCase):
         authorize.assert_called_once_with(item["source_url"], purpose="landing_page")
         request.assert_not_called()
         self.assertEqual(result["status"], "robots_allowed")
+        self.assertEqual(result["review_status"], item["review_status"])
+        self.assertEqual(
+            catalog_host_probe._landing_policy_fingerprint(result),
+            catalog_host_probe._landing_policy_fingerprint(item),
+        )
         self.assertTrue(result["robots_allowed"])
         self.assertFalse(result["fetch_authorized"])
         self.assertFalse(result["page_content_fetched"])
