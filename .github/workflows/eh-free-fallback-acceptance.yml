@@ -311,12 +311,14 @@ jobs:
               await shot("everythinghub-images.png");
               await goHome();
               await search("videos", "animation", "#results .video-card", 4);
+              await page.waitForTimeout(3000);
               const videoStats = await page.locator("#results .video-card").evaluateAll(cards => ({
                 cards: cards.length,
                 loaded: cards.filter(card => { const img=card.querySelector("img"); return img && img.complete && img.naturalWidth > 0; }).length,
                 providers: cards.map(card => card.querySelector("small")?.textContent || ""),
                 links: cards.map(card => card.querySelector("a")?.href || ""),
-                titles: cards.map(card => (card.querySelector("a.video-title") || card.querySelector("a"))?.textContent?.trim() || "")
+                titles: cards.map(card => Array.from(card.querySelectorAll("a")).slice(1).map(anchor => anchor.textContent.trim()).find(Boolean) || ""),
+                thumbnailUrls: cards.map(card => card.querySelector("img")?.src || "")
               }));
               if (videoStats.cards < 4 || videoStats.loaded < 4 || videoStats.titles.some(x => !x) ||
                   videoStats.providers.some(x => !x.includes("Internet Archive")) ||
