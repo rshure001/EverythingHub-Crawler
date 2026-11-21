@@ -10,6 +10,7 @@ import re
 import zlib
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 FORMAT = "eh-index-shards-v1"
 SHARD_DIR_NAME = "index-shards"
@@ -21,6 +22,13 @@ MAX_SHARD_COMPRESSED_BYTES = 2_000_000
 MAX_TOTAL_UNCOMPRESSED_BYTES = 768_000_000
 _BUCKET_RE = re.compile(r"^[0-9a-f]{2}$")
 _SHA_RE = re.compile(r"^[0-9a-f]{64}$")
+_PUBLIC_SHARD_RE = re.compile(r"^shard-[0-9]{4}\\.json\\.gz$")
+MAX_PUBLIC_SEARCH_PAGES = 180_000
+MAX_PUBLIC_SEARCH_SHARDS = 768
+MAX_PUBLIC_SEARCH_SHARD_BYTES = 350_000
+MAX_PUBLIC_SEARCH_SHARD_UNCOMPRESSED_BYTES = 500_000
+MAX_PUBLIC_SEARCH_TOTAL_COMPRESSED_BYTES = 100_000_000
+MAX_PUBLIC_SEARCH_TOTAL_UNCOMPRESSED_BYTES = 400_000_000
 
 
 def bucket_for_url(url: str) -> str:
@@ -50,6 +58,99 @@ def _bounded_decompress(raw: bytes, max_bytes: int) -> bytes:
     return decoded
 
 
+def _load_public_search_index(path: Path, manifest: dict[str, Any]) -> dict[str, Any]:
+    """Load the independently published, SHA-256 checked public-search shard format."""
+    if manifest.get("version") != 1 or manifest.get("integrity") != "sha256":
+        raise ValueError("public search manifest schema or integrity is invalid")
+    updated_at = manifest.get("updated_at")
+    total_pages = manifest.get("total_pages")
+    shard_count = manifest.get("shard_count")
+    shards = manifest.get("shards")
+    if not isinstance(updated_at, int) or isinstance(updated_at, bool) or updated_at <= 0:
+        raise ValueError("public search manifest timestamp is invalid")
+    if not isinstance(total_pages, int) or isinstance(total_pages, bool) or not 1 <= total_pages <= MAX_PUBLIC_SEARCH_PAGES:
+        raise ValueError("public search manifest page count is invalid")
+    if not isinstance(shard_count, int) or isinstance(shard_count, bool) or not 1 <= shard_count <= MAX_PUBLIC_SEARCH_SHARDS:
+        raise ValueError("public search manifest shard count is invalid")
+    if not isinstance(shards, list) or len(shards) != shard_count:
+        raise ValueError("public search manifest shard list is invalid")
+
+    pages: list[dict[str, Any]] = []
+    seen_urls: set[str] = set()
+    seen_names: set[str] = set()
+    total_compressed = 0
+    total_uncompressed = 0
+    total_shard_pages = 0
+    for entry in shards:
+        if not isinstance(entry, dict):
+            raise ValueError("public search shard descriptor is invalid")
+        name = entry.get("file")
+        page_count = entry.get("pages")
+        compressed_bytes = entry.get("bytes")
+        uncompressed_bytes = entry.get("uncompressed_bytes")
+        digest = entry.get("sha256")
+        if not isinstance(name, str) or not _PUBLIC_SHARD_RE.fullmatch(name) or name in seen_names:
+            raise ValueError("public search shard filename is unsafe or duplicated")
+        seen_names.add(name)
+        if not isinstance(page_count, int) or isinstance(page_count, bool) or not 1 <= page_count <= 1000:
+            raise ValueError(f"{name}: page count is invalid")
+        if not isinstance(compressed_bytes, int) or isinstance(compressed_bytes, bool) or not 1 <= compressed_bytes <= MAX_PUBLIC_SEARCH_SHARD_BYTES:
+            raise ValueError(f"{name}: compressed byte count is invalid")
+        if not isinstance(uncompressed_bytes, int) or isinstance(uncompressed_bytes, bool) or not 1 <= uncompressed_bytes <= MAX_PUBLIC_SEARCH_SHARD_UNCOMPRESSED_BYTES:
+            raise ValueError(f"{name}: uncompressed byte count is invalid")
+        if not isinstance(digest, str) or not _SHA_RE.fullmatch(digest):
+            raise ValueError(f"{name}: SHA-256 digest is invalid")
+        total_compressed += compressed_bytes
+        total_uncompressed += uncompressed_bytes
+        total_shard_pages += page_count
+        if total_compressed > MAX_PUBLIC_SEARCH_TOTAL_COMPRESSED_BYTES:
+            raise ValueError("public search shards exceed the aggregate compressed limit")
+        if total_uncompressed > MAX_PUBLIC_SEARCH_TOTAL_UNCOMPRESSED_BYTES:
+            raise ValueError("public search shards exceed the aggregate decompression limit")
+
+        shard_path = path.parent / name
+        try:
+            raw = shard_path.read_bytes()
+        except OSError as exc:
+            raise ValueError(f"{name}: public search shard is missing or unreadable") from exc
+        if len(raw) != compressed_bytes:
+            raise ValueError(f"{name}: compressed byte count mismatch")
+        if hashlib.sha256(raw).hexdigest() != digest:
+            raise ValueError(f"{name}: SHA-256 mismatch")
+        decoded = _bounded_decompress(raw, MAX_PUBLIC_SEARCH_SHARD_UNCOMPRESSED_BYTES)
+        if len(decoded) != uncompressed_bytes:
+            raise ValueError(f"{name}: uncompressed byte count mismatch")
+        try:
+            payload = json.loads(decoded.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise ValueError(f"{name}: shard JSON is invalid") from exc
+        shard_pages = payload.get("pages") if isinstance(payload, dict) and payload.get("version") == 1 else None
+        if not isinstance(shard_pages, list) or len(shard_pages) != page_count:
+            raise ValueError(f"{name}: shard schema or page count mismatch")
+        for page in shard_pages:
+            if not isinstance(page, dict) or not isinstance(page.get("url"), str):
+                raise ValueError(f"{name}: page record or URL is invalid")
+            try:
+                parsed = urlsplit(page["url"])
+                safe = parsed.scheme in ("http", "https") and bool(parsed.hostname) and parsed.username is None and parsed.password is None
+            except ValueError:
+                safe = False
+            if not safe:
+                raise ValueError(f"{name}: page URL is unsafe")
+            if page.get("robots_allowed") is False or page.get("robotsAllowed") is False:
+                raise ValueError(f"{name}: robots-denied page is not publishable")
+            if page["url"] in seen_urls:
+                raise ValueError(f"{name}: duplicate page URL")
+            seen_urls.add(page["url"])
+            pages.append(page)
+
+    if total_shard_pages != total_pages or len(pages) != total_pages:
+        raise ValueError("public search shard totals do not match manifest total_pages")
+    result = dict(manifest)
+    result["pages"] = pages
+    return result
+
+
 def load_index(index_path: str | Path, fallback: dict[str, Any] | None = None) -> dict[str, Any]:
     """Load a legacy monolithic index or the versioned sharded canonical format."""
     path = Path(index_path)
@@ -66,6 +167,8 @@ def load_index(index_path: str | Path, fallback: dict[str, Any] | None = None) -
         raise ValueError("canonical index must be a JSON object")
 
     storage_format = manifest.get("storage_format")
+    if storage_format is None and manifest.get("integrity") == "sha256" and isinstance(manifest.get("shards"), list):
+        return _load_public_search_index(path, manifest)
     if storage_format is None:
         # One-way migration compatibility: the next successful crawl rewrites
         # this legacy object into bounded shards without dropping its page data.
