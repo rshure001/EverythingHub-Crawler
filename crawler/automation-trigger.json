@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "updated_at": "2026-11-21T02:48:12.135Z",
-  "reason": "Push-triggered fallback after scheduled crawl delivery was 10931s old (>25 minutes); no queued or running crawler; public manifest was 4405s old (>10 minutes). One bounded recovery crawl; normal schedule unchanged.",
+  "updated_at": "2026-11-21T04:01:33.163Z",
+  "reason": "Explicit workflow_dispatch fallback after scheduled crawl delivery was 15332s old (>25 minutes); no queued or running crawler; public manifest was 8806s old (>10 minutes). One bounded recovery crawl; normal schedule unchanged.",
   "manifest_before_pages": 139623,
   "manifest_before_updated_at": "2026-11-21T01:34:47Z"
 }
