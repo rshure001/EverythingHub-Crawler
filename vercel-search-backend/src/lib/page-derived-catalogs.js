@@ -330,7 +330,8 @@ function searchPageDerivedCatalogs(query,network,limit=5){
   else if(types.has('organization'))relevanceClass='typed_organization_match';
   else if(['article','resource','media','subject'].some(t=>types.has(t)))relevanceClass='related_mention';
   else if(catalogMatch)relevanceClass='catalog_match';
-  if(relevanceClass==='related_event_match'&&!eventIntent)continue;
+  const catalogEventIntent=Array.from(catalogTokens).some(token=>eventTerms.has(token));
+  if(!eventIntent&&(relevanceClass==='related_event_match'||(geoIntent&&catalogEventIntent)))continue;
   const relevanceLabel={
    typed_product_match:'Product or model match',
    typed_location_match:'Place or local directory match',
