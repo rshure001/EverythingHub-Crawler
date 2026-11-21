@@ -3,7 +3,7 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const crypto=require('node:crypto');
 const zlib=require('node:zlib');
-const {validatePageDerivedCatalogs,loadPageDerivedCatalogsFromManifest,searchPageDerivedCatalogs}=require('../src/lib/page-derived-catalogs');
+const {validatePageDerivedCatalogs,loadPageDerivedCatalogsFromManifest,loadQueryScopedPageDerivedCatalogs,searchPageDerivedCatalogs}=require('../src/lib/page-derived-catalogs');
 const gzip=value=>zlib.gzipSync(Buffer.from(JSON.stringify(value)));
 const hash=buffer=>crypto.createHash('sha256').update(buffer).digest('hex');
 
@@ -102,6 +102,50 @@ test('Rolex article or subject hits are labeled as related mentions when no prod
  assert.equal(results[0].relevance_class,'related_mention');
  assert.match(results[0].relevance_label,/not a dedicated catalog match/);
  assert.equal(results[0].query_intent,'general');
+});
+
+
+test('catalog preview links to the matching record instead of an unrelated first catalog source',()=>{
+ const results=searchPageDerivedCatalogs('Las Vegas',{
+  catalogs:[{catalog_id:'mixed',title:'Geographic Subject Catalog',catalog_type:'knowledge_base',record_type:'subject',source_url:'https://example.org/unrelated-first-record',record_count:100,source_page_count:100}],
+  records:[
+   {record_id:'other',record_type:'subject',title:'Unrelated catalog starter',description:'General knowledge record',source_urls:['https://example.org/unrelated-first-record'],catalog_ids:['mixed'],attributes:{}},
+   {record_id:'match',record_type:'subject',title:'Las Vegas public resource',description:'A matching Las Vegas resource',source_urls:['https://example.org/las-vegas-match'],catalog_ids:['mixed'],attributes:{}}
+  ]
+ },5);
+ assert.equal(results.length,1);
+ assert.equal(results[0].matched_records[0].source_url,'https://example.org/las-vegas-match');
+ assert.equal(results[0].url,'https://example.org/las-vegas-match');
+});
+
+test('loads only matching sharded catalog indexes for Rolex and Las Vegas queries',async()=>{
+ const f=fixture(),sha='c'.repeat(40),artifacts=new Map();
+ const add=(file,buffer,items)=>{f.manifest.files.push({file,bytes:buffer.length,sha256:hash(buffer),items});artifacts.set('https://raw.githubusercontent.com/rshure001/EverythingHub-Crawler/'+sha+'/data/page-derived-catalogs/'+file.split('/').map(encodeURIComponent).join('/'),buffer);};
+ for(const [id,title,recordId] of [['catalog-rolex','Rolex Watches','record-rolex'],['catalog-vegas','Nevada Places','record-vegas']]){
+  const digest=crypto.createHash('sha256').update(id).digest('hex'),path='indexes/'+digest.slice(0,2)+'/'+digest.slice(0,24)+'.json.gz';
+  const record=f.recordsFile;
+  const records=JSON.parse(zlib.gunzipSync(record).toString('utf8')).records.filter(r=>r.record_id===recordId);
+  add(path,gzip({version:1,catalog_id:id,title,status:'candidate_needs_source_validation',records}),records.length);
+ }
+ const terms=['rolex','las','vegas'];
+ const byPrefix=new Map();
+ for(const term of terms){const prefix=crypto.createHash('sha256').update(term).digest('hex').slice(0,2);if(!byPrefix.has(prefix))byPrefix.set(prefix,{});byPrefix.get(prefix)[term]=[term==='rolex'?'catalog-rolex':'catalog-vegas'];}
+ for(const [prefix,tokens] of byPrefix)add('search-index/'+prefix+'.json.gz',gzip({version:1,prefix,tokens}),Object.keys(tokens).length);
+ const manifestRaw=Buffer.from(JSON.stringify(f.manifest));
+ const refUrl='https://api.github.com/repos/rshure001/EverythingHub-Crawler/git/ref/heads/main';
+ const manifestUrl='https://raw.githubusercontent.com/rshure001/EverythingHub-Crawler/'+sha+'/data/page-derived-catalogs/manifest.json';
+ const fetcher=async url=>{
+  if(url.startsWith(refUrl))return Buffer.from(JSON.stringify({object:{sha}}));
+  if(url===manifestUrl)return manifestRaw;
+  if(artifacts.has(url))return artifacts.get(url);
+  throw new Error('unexpected_test_url '+url);
+ };
+ const rolex=await loadQueryScopedPageDerivedCatalogs('Rolex',fetcher);
+ assert.equal(rolex.catalogs.length,1);assert.equal(rolex.catalogs[0].catalog_id,'catalog-rolex');
+ assert.equal(rolex.records[0].record_id,'record-rolex');
+ const vegas=await loadQueryScopedPageDerivedCatalogs('Las Vegas',fetcher);
+ assert.equal(vegas.catalogs.length,1);assert.equal(vegas.catalogs[0].catalog_id,'catalog-vegas');
+ assert.equal(vegas.records[0].record_id,'record-vegas');
 });
 
 test('freshness requires matching source-page count and update timestamp',()=>{
