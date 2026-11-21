@@ -10,7 +10,7 @@ const MAX_OFFSET = 5000;
 const BING_CACHE_TTL_MS = 120000;
 const MAX_BING_BYTES = 1000000;
 const bingCache = new Map();
-const CATALOG_LOAD_BUDGET_MS = 4500;
+const CATALOG_LOAD_BUDGET_MS = 10000;
 const PAGE_DERIVED_LOAD_BUDGET_MS = 7000;
 
 function withTimeout(promise, milliseconds, code) {
