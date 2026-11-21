@@ -192,5 +192,23 @@ class ProductMetadataTests(unittest.TestCase):
         html = '<script type="application/ld+json">' + json.dumps(payload) + "</script>"
         self.assertEqual(extract_structured_catalog_metadata(html, "https://data.example/catalog"), {})
 
+
+    def test_same_as_orcid_and_isni_check_digits_are_validated(self):
+        html = """<script type="application/ld+json">{
+          "@context":"https://schema.org","@type":"Product",
+          "name":"Test watch","sku":"TEST-1",
+          "sameAs":[
+            "https://orcid.org/0000-0002-1825-0097",
+            "https://orcid.org/0000-0002-1825-0098",
+            "https://isni.org/isni/000000012281955X",
+            "https://isni.org/isni/0000000122819550"
+          ]
+        }</script>"""
+        result = extract_product_metadata(html, "https://shop.example/test-watch")
+        self.assertEqual(
+            result["same_as_ids"],
+            ["orcid:0000-0002-1825-0097", "isni:000000012281955X"],
+        )
+
 if __name__ == "__main__":
     unittest.main()
