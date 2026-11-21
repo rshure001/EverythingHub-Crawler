@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 12
     env:
-      TARGET_URL: https://everythinghub.ink/
+      TARGET_URL: https://everythinghub-homepage-fixed.vercel.app/
     steps:
       - uses: actions/setup-node@v4
         with:
@@ -50,6 +50,18 @@ jobs:
               if (count < minCount) throw new Error(mode + " returned only " + count + " results for " + query);
               return { count, titles: (await page.locator(resultSelector).allTextContents()).slice(0, 6) };
             };
+            const categorySearch = async (mode, query, pattern) => {
+              await goHome();
+              await page.locator('.hotspots [data-mode="' + mode + '"]').click();
+              const selected = await page.locator("#status").innerText();
+              if (!selected.toLowerCase().includes("selected")) throw new Error("Category did not activate: " + mode);
+              await page.locator("#query").fill(query);
+              await page.locator("#searchForm button[type=submit]").click();
+              await page.locator("#results .eh-result").first().waitFor({ state: "visible", timeout: 60000 });
+              const titles = (await page.locator("#results .eh-result a").allTextContents()).map(value => value.trim()).filter(Boolean);
+              if (!titles.some(title => pattern.test(title))) throw new Error("Category results were not relevant: " + mode + " / " + titles.slice(0, 5).join(" | "));
+              return { count: titles.length, titles: titles.slice(0, 6) };
+            };
             try {
               const response = await page.goto(report.url, { waitUntil: "domcontentloaded", timeout: 45000 });
               if (!response || response.status() !== 200) throw new Error("Homepage did not return HTTP 200");
@@ -59,6 +71,20 @@ jobs:
               const modes = await page.locator(".hotspots [data-mode]").evaluateAll(nodes => nodes.map(node => node.dataset.mode));
               if (modes.length !== 8) throw new Error("Expected eight search categories; got " + modes.length);
               report.checks.home = { http: response.status(), title: await page.title(), artwork: art, modes };
+              report.checks.desktop = await page.evaluate(() => {
+                const art = document.querySelector(".art").getBoundingClientRect();
+                const results = document.querySelector("#results").getBoundingClientRect();
+                return {
+                  viewport: document.documentElement.clientWidth,
+                  document: document.documentElement.scrollWidth,
+                  artworkBottom: art.bottom,
+                  resultsTop: results.top
+                };
+              });
+              if (report.checks.desktop.document > report.checks.desktop.viewport + 2 ||
+                  report.checks.desktop.resultsTop < report.checks.desktop.artworkBottom - 2) {
+                throw new Error("Desktop layout overflow or overlap: " + JSON.stringify(report.checks.desktop));
+              }
               await shot("everythinghub-home.png");
               await search("web", "Rolex", "#results .eh-result", 1);
               report.checks.rolex = { results: await page.locator("#results .eh-result").count(), catalogs: await page.locator("#results .eh-catalog-result").count() };
@@ -71,23 +97,87 @@ jobs:
               await search("web", "NASA", "#results .eh-result", 1);
               report.checks.nasa = { results: await page.locator("#results .eh-result").count(), catalogs: await page.locator("#results .eh-catalog-result").count() };
               await shot("everythinghub-nasa.png");
+              const searchLink = await page.locator("#results .eh-result a").first().evaluate(anchor => ({ href: anchor.href, target: anchor.target, rel: anchor.rel }));
+              if (!/^https:\/\//i.test(searchLink.href) || searchLink.target !== "_blank" || !searchLink.rel.includes("noopener")) {
+                throw new Error("Search result link contract failed: " + JSON.stringify(searchLink));
+              }
+              const popupPromise = page.waitForEvent("popup", { timeout: 10000 });
+              await page.locator("#results .eh-result a").first().click();
+              const popup = await popupPromise;
+              await popup.waitForLoadState("domcontentloaded", { timeout: 15000 }).catch(() => undefined);
+              report.checks.coreLinks = { search: { ...searchLink, openedUrl: popup.url() } };
+              await popup.close().catch(() => undefined);
+
+              report.checks.categories = {};
+              for (const item of [
+                { mode: "news", query: "NASA", pattern: /nasa|space|mars/i },
+                { mode: "shopping", query: "Rolex", pattern: /rolex/i },
+                { mode: "places", query: "Las Vegas", pattern: /las vegas|vegas/i },
+                { mode: "business", query: "Las Vegas", pattern: /las vegas|vegas/i },
+                { mode: "research", query: "NASA", pattern: /nasa/i }
+              ]) {
+                report.checks.categories[item.mode] = await categorySearch(item.mode, item.query, item.pattern);
+              }
+
               await goHome();
               await page.locator("#news-items .news-item").first().waitFor({ state: "visible", timeout: 45000 });
-              report.checks.news = { count: await page.locator("#news-items .news-item").count(), status: await page.locator("#news-status").innerText() };
+              const topTitles = (await page.locator("#news-items .news-item a").allTextContents()).map(value => value.trim().toLowerCase()).filter(Boolean);
+              const newsApi = await page.evaluate(async () => {
+                const response = await fetch("https://everythinghub-search-backend.vercel.app/api/news?category=for-you");
+                return { http: response.status, data: await response.json() };
+              });
+              const latestPublished = (newsApi.data.items || []).map(item => Date.parse(item.publishedAt || "")).filter(Number.isFinite).sort((a, b) => b - a)[0] || null;
+              const updateAgeMinutes = (Date.now() - Date.parse(newsApi.data.updatedAt || "")) / 60000;
+              report.checks.news = {
+                count: await page.locator("#news-items .news-item").count(),
+                uniqueTitles: new Set(topTitles).size,
+                status: await page.locator("#news-status").innerText(),
+                apiHttp: newsApi.http,
+                updatedAt: newsApi.data.updatedAt,
+                updateAgeMinutes,
+                latestPublishedAt: latestPublished ? new Date(latestPublished).toISOString() : null
+              };
+              if (report.checks.news.count < 5 || report.checks.news.uniqueTitles !== report.checks.news.count ||
+                  newsApi.http !== 200 || newsApi.data.status !== "ok" || !Number.isFinite(updateAgeMinutes) ||
+                  updateAgeMinutes > 360 || !latestPublished || (Date.now() - latestPublished) / 3600000 > 24) {
+                throw new Error("Top Stories freshness or uniqueness failed: " + JSON.stringify(report.checks.news));
+              }
               for (const category of ["world", "technology", "business", "science"]) {
                 const tab = page.locator('[data-news="' + category + '"]');
-                if (await tab.count()) {
-                  await tab.click();
-                  await page.locator("#news-items .news-item").first().waitFor({ state: "visible", timeout: 30000 });
-                  report.checks.news[category] = await page.locator("#news-items .news-item").count();
-                }
+                if (!(await tab.count())) throw new Error("Missing Top Stories tab: " + category);
+                const responsePromise = page.waitForResponse(response => {
+                  try {
+                    const url = new URL(response.url());
+                    return url.pathname === "/api/news" && url.searchParams.get("category") === category && response.ok();
+                  } catch { return false; }
+                }, { timeout: 30000 });
+                await tab.click();
+                const categoryResponse = await responsePromise;
+                const categoryData = await categoryResponse.json();
+                await page.locator("#news-items .news-item").first().waitFor({ state: "visible", timeout: 20000 });
+                const active = await tab.evaluate(button => button.classList.contains("active"));
+                const count = await page.locator("#news-items .news-item").count();
+                if (!active || count < 1 || categoryData.status !== "ok") throw new Error("News tab failed: " + category);
+                report.checks.news[category] = { count, firstTitle: categoryData.items?.[0]?.title || "" };
               }
               const refresh = page.locator("#news-refresh");
-              if (await refresh.count()) {
-                await refresh.click();
-                await page.locator("#news-items .news-item").first().waitFor({ state: "visible", timeout: 30000 });
-                report.checks.news.refresh = "passed";
+              if (!(await refresh.count())) throw new Error("Top Stories Refresh control is missing.");
+              const refreshPromise = page.waitForResponse(response => {
+                try {
+                  const url = new URL(response.url());
+                  return url.pathname === "/api/news" && url.searchParams.get("category") === "science" && response.ok();
+                } catch { return false; }
+              }, { timeout: 30000 });
+              await refresh.click();
+              const refreshResponse = await refreshPromise;
+              const refreshData = await refreshResponse.json();
+              if (refreshData.status !== "ok" || refreshData.count < 1) throw new Error("Top Stories Refresh failed.");
+              report.checks.news.refresh = { http: refreshResponse.status(), count: refreshData.count };
+              const newsLink = await page.locator("#news-items .news-item a").first().evaluate(anchor => ({ href: anchor.href, target: anchor.target, rel: anchor.rel }));
+              if (!/^https?:\/\//i.test(newsLink.href) || newsLink.target !== "_blank" || !newsLink.rel.includes("noopener")) {
+                throw new Error("News article link contract failed: " + JSON.stringify(newsLink));
               }
+              report.checks.coreLinks.news = newsLink;
               await shot("everythinghub-news.png");
               await goHome();
               await search("images", "NASA", "#results .media-card", 8);
@@ -96,33 +186,73 @@ jobs:
                 loaded: cards.filter(card => { const img=card.querySelector("img"); return img && img.complete && img.naturalWidth > 0; }).length,
                 providers: cards.map(card => card.querySelector("small")?.textContent || ""),
                 licenses: cards.map(card => card.dataset.license || ""),
-                creators: cards.map(card => card.dataset.creator || "")
+                creators: cards.map(card => card.dataset.creator || ""),
+                attributions: cards.map(card => card.querySelector("small")?.textContent || "")
               }));
-              if (imageStats.loaded < 8 || imageStats.providers.some(x => !x.includes("Internet Archive")) || imageStats.licenses.some(x => !x)) throw new Error("Openverse image checks failed: " + JSON.stringify(imageStats));
+              if (imageStats.loaded < 8 || imageStats.providers.some(x => !x.includes("Internet Archive")) ||
+                  imageStats.licenses.some(x => !x) || imageStats.creators.some(x => !x) ||
+                  imageStats.attributions.some(x => !/Source:\s*Internet Archive/i.test(x))) {
+                throw new Error("Image thumbnails or attribution failed: " + JSON.stringify(imageStats));
+              }
+              const imageLink = await page.locator("#results .media-card > a").first().evaluate(anchor => ({ href: anchor.href, target: anchor.target, rel: anchor.rel }));
+              if (!/^https:\/\/archive\.org\/details\//i.test(imageLink.href) || imageLink.target !== "_blank" || !imageLink.rel.includes("noopener")) {
+                throw new Error("Image source link contract failed: " + JSON.stringify(imageLink));
+              }
               report.checks.images = imageStats;
+              report.checks.coreLinks.images = imageLink;
               await shot("everythinghub-images.png");
               await goHome();
-              await search("videos", "animation", "#results .video-card", 5);
+              await search("videos", "animation", "#results .video-card", 4);
               const videoStats = await page.locator("#results .video-card").evaluateAll(cards => ({
                 cards: cards.length,
                 loaded: cards.filter(card => { const img=card.querySelector("img"); return img && img.complete && img.naturalWidth > 0; }).length,
                 providers: cards.map(card => card.querySelector("small")?.textContent || ""),
-                links: cards.map(card => card.querySelector("a")?.href || "")
+                links: cards.map(card => card.querySelector("a")?.href || ""),
+                titles: cards.map(card => (card.querySelector("a.video-title") || card.querySelector("a"))?.textContent?.trim() || "")
               }));
-              if (videoStats.loaded < 5 || videoStats.providers.some(x => !x.includes("Internet Archive")) || videoStats.links.some(x => !x.startsWith("https://archive.org/details/"))) throw new Error("Internet Archive video checks failed: " + JSON.stringify(videoStats));
+              if (videoStats.cards < 4 || videoStats.loaded < 4 || videoStats.titles.some(x => !x) ||
+                  videoStats.providers.some(x => !x.includes("Internet Archive")) ||
+                  videoStats.links.some(x => !x.startsWith("https://archive.org/details/"))) {
+                throw new Error("Internet Archive video cards, titles, or thumbnails failed: " + JSON.stringify(videoStats));
+              }
+              const videoLink = await page.locator("#results .video-card > a").first().evaluate(anchor => ({ href: anchor.href, target: anchor.target, rel: anchor.rel }));
+              if (videoLink.target !== "_blank" || !videoLink.rel.includes("noopener")) throw new Error("Video source link contract failed: " + JSON.stringify(videoLink));
               report.checks.videos = videoStats;
+              report.checks.coreLinks.videos = videoLink;
               await shot("everythinghub-videos.png");
               await page.setViewportSize({ width: 390, height: 844 });
               await goHome();
-              const mobile = await page.evaluate(() => ({
-                viewport: document.documentElement.clientWidth,
-                document: document.documentElement.scrollWidth,
-                artwork: !!document.querySelector(".art img")?.getClientRects().length,
-                search: !!document.querySelector("#query")?.getClientRects().length,
-                categories: document.querySelectorAll(".hotspots [data-mode]").length,
-                brokenImages: [...document.images].filter(img => img.complete && img.naturalWidth === 0).length
-              }));
-              if (mobile.document > mobile.viewport + 2 || !mobile.artwork || !mobile.search || mobile.categories !== 8 || mobile.brokenImages) throw new Error("Mobile layout failed: " + JSON.stringify(mobile));
+              const mobile = await page.evaluate(() => {
+                const art = document.querySelector(".art").getBoundingClientRect();
+                const search = document.querySelector("#searchForm").getBoundingClientRect();
+                const input = document.querySelector("#query").getBoundingClientRect();
+                const categories = document.querySelector(".hotspots").getBoundingClientRect();
+                const stories = document.querySelector("#top-stories").getBoundingClientRect();
+                const results = document.querySelector("#results").getBoundingClientRect();
+                return {
+                  viewport: document.documentElement.clientWidth,
+                  document: document.documentElement.scrollWidth,
+                  artwork: !!document.querySelector(".art img")?.getClientRects().length,
+                  search: !!document.querySelector("#query")?.getClientRects().length,
+                  categories: document.querySelectorAll(".hotspots [data-mode]").length,
+                  artworkWidth: art.width,
+                  artworkBottom: art.bottom,
+                  searchBottom: Math.max(search.bottom, input.bottom),
+                  categoriesTop: categories.top,
+                  categoriesBottom: categories.bottom,
+                  storiesLeft: stories.left,
+                  storiesRight: stories.right,
+                  resultsTop: results.top,
+                  brokenImages: [...document.images].filter(img => img.complete && img.naturalWidth === 0).length
+                };
+              });
+              if (mobile.document > mobile.viewport + 2 || !mobile.artwork || !mobile.search || mobile.categories !== 8 ||
+                  mobile.artworkWidth < mobile.viewport - 4 || mobile.searchBottom > mobile.categoriesTop + 2 ||
+                  mobile.categoriesBottom > mobile.artworkBottom + 2 || mobile.storiesLeft < -2 ||
+                  mobile.storiesRight > mobile.viewport + 2 || mobile.resultsTop < mobile.artworkBottom - 2 ||
+                  mobile.brokenImages) {
+                throw new Error("Mobile clipping, overlap, or image check failed: " + JSON.stringify(mobile));
+              }
               report.checks.mobile = mobile;
               await shot("everythinghub-mobile.png");
               if (pageErrors.length || consoleErrors.length) throw new Error("Browser errors: " + JSON.stringify({ pageErrors, consoleErrors }));
