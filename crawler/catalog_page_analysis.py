@@ -22,6 +22,7 @@ from index_store import load_index
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_INDEX = ROOT / "data" / "index.json"
 DEFAULT_OUTPUT = ROOT / "data" / "page-derived-catalogs"
+DEFAULT_SOURCE_POLICY_REVIEWS = ROOT / "data" / "source-policy-reviews.json"
 ANALYZER_VERSION = 9
 TRACKING_KEYS = {"fbclid", "gclid", "dclid", "mc_cid", "mc_eid", "ref", "source"}
 STOP_TOKENS = {
@@ -1185,6 +1186,192 @@ def search_source_page_evidence(query: str, pages: list[dict], limit: int = 5) -
     return matches[:limit]
 
 
+
+
+def _normalized_policy_host(value: object) -> str:
+    if not isinstance(value, str):
+        return ""
+    host = value.strip().lower().rstrip(".")
+    return host[4:] if host.startswith("www.") else host
+
+
+def _policy_hosts_from_urls(urls: object) -> set[str]:
+    hosts = set()
+    if not isinstance(urls, list):
+        return hosts
+    for value in urls:
+        if not isinstance(value, str):
+            continue
+        try:
+            host = _normalized_policy_host(urlsplit(value).hostname or "")
+        except ValueError:
+            host = ""
+        if host:
+            hosts.add(host)
+    return hosts
+
+
+def _policy_host_matches(source_host: str, aliases: set[str]) -> bool:
+    return any(
+        source_host == alias or source_host.endswith("." + alias)
+        for alias in aliases if alias
+    )
+
+
+def apply_source_policy_reviews(
+    analysis: dict,
+    policy_path: Path = DEFAULT_SOURCE_POLICY_REVIEWS,
+) -> dict:
+    """Annotate matching source-level policy reviews without clearing record-level rights."""
+    raw = Path(policy_path).read_bytes()
+    register = json.loads(raw.decode("utf-8"))
+    policy = register.get("policy") if isinstance(register, dict) else None
+    reviews = register.get("reviews") if isinstance(register, dict) else None
+    if (
+        register.get("schema_version") != 1
+        or not isinstance(register.get("reviewed_at"), str)
+        or not register.get("reviewed_at")
+        or not isinstance(policy, dict)
+        or policy.get("default_status") != "candidate_only"
+        or policy.get("record_level_clearance") != "not_reviewed"
+        or policy.get("commercial_eligibility") is not False
+        or policy.get("republication") != "not_cleared"
+        or not isinstance(reviews, list)
+    ):
+        raise ValueError("source policy review register must remain conditional and deny-by-default")
+
+    normalized_reviews = []
+    for review in reviews:
+        if not isinstance(review, dict):
+            raise ValueError("source policy review entry is malformed")
+        host = _normalized_policy_host(review.get("host"))
+        api_host = _normalized_policy_host(review.get("api_host"))
+        evidence_urls = review.get("evidence_urls")
+        if (
+            not host
+            or not isinstance(review.get("status"), str)
+            or not review.get("status")
+            or review.get("record_level_clearance") != "not_reviewed"
+            or review.get("commercial_eligibility") is not False
+            or not isinstance(evidence_urls, list)
+            or not evidence_urls
+        ):
+            raise ValueError("source policy review entry cannot grant record-level clearance")
+        safe_evidence = []
+        for evidence_url in evidence_urls:
+            if not isinstance(evidence_url, str):
+                raise ValueError("source policy evidence URL is malformed")
+            parsed = urlsplit(evidence_url)
+            if parsed.scheme.lower() != "https" or not parsed.hostname or parsed.username or parsed.password:
+                raise ValueError("source policy evidence must use credential-free HTTPS URLs")
+            safe_evidence.append(evidence_url)
+        normalized_reviews.append({
+            "host": host,
+            "aliases": {host, api_host},
+            "status": review["status"],
+            "evidence_urls": sorted(set(safe_evidence)),
+        })
+
+    matched_review_hosts = set()
+
+    def annotate(item: dict, source_hosts: set[str]) -> str:
+        matched = []
+        matched_source_hosts = set()
+        for review in normalized_reviews:
+            covered = {
+                host for host in source_hosts
+                if _policy_host_matches(host, review["aliases"])
+            }
+            if covered:
+                matched.append(review)
+                matched_source_hosts.update(covered)
+                matched_review_hosts.add(review["host"])
+        unmatched_hosts = sorted(source_hosts - matched_source_hosts)
+        matched_hosts = sorted({review["host"] for review in matched})
+        if not matched:
+            status = "not_reviewed"
+        elif unmatched_hosts:
+            status = "partial_source_review"
+        else:
+            status = "conditional_source_review"
+        item.update({
+            "source_policy_review_status": status,
+            "source_policy_review_hosts": matched_hosts,
+            "source_policy_review_categories": sorted({review["status"] for review in matched}),
+            "source_policy_review_evidence_urls": sorted({
+                url for review in matched for url in review["evidence_urls"]
+            }),
+            "source_policy_review_unmatched_hosts": unmatched_hosts,
+            "source_policy_reviewed_at": register["reviewed_at"] if matched else None,
+            "source_policy_review_scope": "source-level-only" if matched else "none",
+            "record_level_clearance": "not_reviewed",
+            "source_terms_status": "not_reviewed",
+            "rights_status": "publicly_accessible_not_cleared_for_redistribution",
+            "commercial_eligible": False,
+        })
+        return status
+
+    records = analysis.get("records", [])
+    catalogs = analysis.get("catalogs", [])
+    if not isinstance(records, list) or not isinstance(catalogs, list):
+        raise ValueError("source policy annotation requires record and catalog lists")
+
+    for record in records:
+        urls = record.get("source_urls", [])
+        if not urls and record.get("source_url"):
+            urls = [record["source_url"]]
+        source_hosts = _policy_hosts_from_urls(urls)
+        if record.get("source_host"):
+            host = _normalized_policy_host(record["source_host"])
+            if host:
+                source_hosts.add(host)
+        annotate(record, source_hosts)
+
+    for catalog in catalogs:
+        urls = [catalog.get("source_url")] if catalog.get("source_url") else []
+        source_hosts = _policy_hosts_from_urls(urls)
+        if catalog.get("source_host"):
+            host = _normalized_policy_host(catalog["source_host"])
+            if host:
+                source_hosts.add(host)
+        annotate(catalog, source_hosts)
+
+    metrics = analysis.setdefault("metrics", {})
+    metrics.update({
+        "records_with_conditional_source_policy_review": sum(
+            item.get("source_policy_review_status") == "conditional_source_review" for item in records
+        ),
+        "records_with_partial_source_policy_review": sum(
+            item.get("source_policy_review_status") == "partial_source_review" for item in records
+        ),
+        "catalogs_with_conditional_source_policy_review": sum(
+            item.get("source_policy_review_status") == "conditional_source_review" for item in catalogs
+        ),
+        "catalogs_with_partial_source_policy_review": sum(
+            item.get("source_policy_review_status") == "partial_source_review" for item in catalogs
+        ),
+        "source_policy_review_hosts_matched": sorted(matched_review_hosts),
+        "source_policy_review_register_entries": len(normalized_reviews),
+        "source_terms_reviewed_records": sum(
+            item.get("source_terms_status") != "not_reviewed" for item in records
+        ),
+        "commercially_eligible_records": sum(bool(item.get("commercial_eligible")) for item in records),
+    })
+    analysis["source_policy_review"] = {
+        "schema_version": 1,
+        "register_path": "data/source-policy-reviews.json",
+        "register_sha256": hashlib.sha256(raw).hexdigest(),
+        "reviewed_at": register["reviewed_at"],
+        "review_count": len(normalized_reviews),
+        "matched_hosts": sorted(matched_review_hosts),
+        "scope": "source-level-only",
+        "record_level_clearance": "not_reviewed",
+        "commercial_eligibility": False,
+        "republication": "not_cleared",
+    }
+    return analysis
+
+
 def _write_gzip(path: Path, payload: dict) -> tuple[int, str]:
     path.parent.mkdir(parents=True, exist_ok=True)
     raw = (json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n").encode("utf-8")
@@ -1196,6 +1383,7 @@ def _write_gzip(path: Path, payload: dict) -> tuple[int, str]:
 
 
 def write_outputs(analysis: dict, output_dir: Path) -> dict:
+    apply_source_policy_reviews(analysis)
     output_dir.mkdir(parents=True, exist_ok=True)
     files = []
     for catalog in analysis["catalogs"]:
@@ -1212,7 +1400,7 @@ def write_outputs(analysis: dict, output_dir: Path) -> dict:
     size, digest = _write_gzip(output_dir / "registry.json.gz", {
         "version": 1, "analysis_version": analysis.get("analysis_version", ANALYZER_VERSION),
         "status": "candidate_staging_not_production",
-        "metrics": analysis["metrics"], "catalogs": analysis["catalogs"],
+        "metrics": analysis["metrics"], "source_policy_review": analysis.get("source_policy_review"), "catalogs": analysis["catalogs"],
     })
     files.append({"file": "registry.json.gz", "bytes": size, "sha256": digest, "items": len(analysis["catalogs"])})
     records_by_catalog = defaultdict(list)
@@ -1252,6 +1440,7 @@ def write_outputs(analysis: dict, output_dir: Path) -> dict:
         "source_index_updated_at": analysis["source_index_updated_at"],
         "source_index_sha256": analysis.get("source_index_sha256"),
         "metrics": analysis["metrics"],
+        "source_policy_review": analysis.get("source_policy_review"),
         "catalogs_verified": 0, "records_published": 0,
         **snapshot_fields,
     }
@@ -1265,6 +1454,7 @@ def write_outputs(analysis: dict, output_dir: Path) -> dict:
         "catalog_count": len(analysis["catalogs"]), "record_count": len(analysis["records"]),
         "generated_at": analysis["generated_at"],
         "metrics": analysis["metrics"],
+        "source_policy_review": analysis.get("source_policy_review"),
         **snapshot_fields,
         "files": sorted(files, key=lambda x: x["file"]),
     }
@@ -1283,6 +1473,17 @@ def validate_outputs(output_dir: Path) -> dict:
     report = json.loads((output_dir / "report.json").read_text(encoding="utf-8"))
     if manifest.get("metrics") != report.get("metrics"):
         raise ValueError("report and manifest metrics do not match")
+    policy_review = manifest.get("source_policy_review")
+    if (
+        policy_review != report.get("source_policy_review")
+        or not isinstance(policy_review, dict)
+        or not re.fullmatch(r"[0-9a-f]{64}", str(policy_review.get("register_sha256", "")))
+        or policy_review.get("scope") != "source-level-only"
+        or policy_review.get("record_level_clearance") != "not_reviewed"
+        or policy_review.get("commercial_eligibility") is not False
+        or policy_review.get("republication") != "not_cleared"
+    ):
+        raise ValueError("source policy review summary is missing or overstates record-level clearance")
     pages_raw = (output_dir / "pages.json.gz").read_bytes()
     pages = json.loads(gzip.decompress(pages_raw).decode("utf-8"))["pages"]
     page_by_id = {item["page_id"]: item for item in pages if item.get("page_id")}
@@ -1329,6 +1530,19 @@ def validate_outputs(output_dir: Path) -> dict:
             raise ValueError("record ID does not match its canonical entity key")
         if record.get("commercial_eligible") is not False or record.get("source_terms_status") != "not_reviewed":
             raise ValueError("candidate records cannot be marked commercially eligible or source-cleared")
+        if (
+            record.get("source_policy_review_status") not in (
+                "not_reviewed", "conditional_source_review", "partial_source_review"
+            )
+            or record.get("record_level_clearance") != "not_reviewed"
+        ):
+            raise ValueError("source-level policy review cannot clear an individual record")
+        if record.get("source_policy_review_status") != "not_reviewed" and (
+            not record.get("source_policy_review_hosts")
+            or not record.get("source_policy_review_evidence_urls")
+            or record.get("source_policy_review_scope") != "source-level-only"
+        ):
+            raise ValueError("conditional source-policy annotations lack evidence or scope")
         if stable_id("entity", record.get("canonical_entity_key", "")) != record.get("entity_id"):
             raise ValueError("entity ID does not match its canonical entity key")
         if not set(record.get("source_page_ids", [])).issubset(page_ids):
@@ -1350,6 +1564,19 @@ def validate_outputs(output_dir: Path) -> dict:
             raise ValueError("catalog origin is missing or invalid")
         if catalog.get("commercial_eligible") is not False or catalog.get("source_terms_status") != "not_reviewed":
             raise ValueError("candidate catalogs cannot be marked commercially eligible or source-cleared")
+        if (
+            catalog.get("source_policy_review_status") not in (
+                "not_reviewed", "conditional_source_review", "partial_source_review"
+            )
+            or catalog.get("record_level_clearance") != "not_reviewed"
+        ):
+            raise ValueError("source-level policy review cannot clear an individual catalog")
+        if catalog.get("source_policy_review_status") != "not_reviewed" and (
+            not catalog.get("source_policy_review_hosts")
+            or not catalog.get("source_policy_review_evidence_urls")
+            or catalog.get("source_policy_review_scope") != "source-level-only"
+        ):
+            raise ValueError("conditional catalog policy annotations lack evidence or scope")
         if catalog.get("record_count") != len(catalog.get("record_ids", [])):
             raise ValueError("catalog record count does not match its membership")
         if catalog.get("source_page_count") != len(catalog.get("source_page_ids", [])):
