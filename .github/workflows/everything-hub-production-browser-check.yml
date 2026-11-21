@@ -123,7 +123,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     env:
-      TARGET_URL: https://everythinghub-homepage-fixed-fnvd7kss4-rshure001-8053.vercel.app/
+      TARGET_URL: https://everythinghub-homepage-fixed-1yxcezmie-rshure001-8053.vercel.app/
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -152,11 +152,12 @@ jobs:
               await page.waitForFunction(()=>{const i=document.querySelector(".art img");return !!i&&i.complete&&i.naturalWidth>=100;},null,{timeout:20000});
               report.httpStatus=response?.status();
               report.title=await page.title();
-              report.artwork=await image.evaluate(i=>({src:i.currentSrc,width:i.naturalWidth,height:i.naturalHeight}));
+              report.artwork=await image.evaluate(i=>({src:i.currentSrc,width:i.naturalWidth,height:i.naturalHeight,renderedWidth:i.getBoundingClientRect().width}));
+              report.desktopLayout=await page.evaluate(()=>{const a=document.querySelector(".art").getBoundingClientRect(),r=document.querySelector("#results").getBoundingClientRect();return {mainDirection:getComputedStyle(document.querySelector("main")).flexDirection,artRight:a.right,artBottom:a.bottom,resultsTop:r.top,viewportWidth:document.documentElement.clientWidth}});
               report.searchInputCount=await page.locator("#query").count();
               report.categoryCount=await page.locator(".hotspots [data-mode]").count();
               report.categoryModes=await page.locator(".hotspots [data-mode]").evaluateAll(xs=>xs.map(x=>x.dataset.mode));
-              if(!response?.ok()||!report.title.includes("Everything Hub")||report.searchInputCount!==1||report.categoryCount!==8)throw new Error("Fallback homepage structure failed: "+JSON.stringify(report));
+              if(!response?.ok()||!report.title.includes("Everything Hub")||report.searchInputCount!==1||report.categoryCount!==8||report.artwork.renderedWidth<700||report.desktopLayout.mainDirection!=="column"||report.desktopLayout.resultsTop<report.desktopLayout.artBottom)throw new Error("Fallback homepage structure failed: "+JSON.stringify(report));
               await page.screenshot({path:"everythinghub-fallback-home.png",fullPage:true});
               for(const query of ["Rolex","Las Vegas","NASA"]){
                 await page.goto(report.url,{waitUntil:"domcontentloaded",timeout:45000});
@@ -171,9 +172,9 @@ jobs:
               }
               await page.setViewportSize({width:390,height:844});
               await page.goto(report.url,{waitUntil:"domcontentloaded",timeout:45000});
-              report.mobile=await page.evaluate(()=>({viewportWidth:document.documentElement.clientWidth,documentWidth:document.documentElement.scrollWidth,artworkVisible:!!document.querySelector(".art img")?.getClientRects().length,searchVisible:!!document.querySelector("#query")?.getClientRects().length,categories:document.querySelectorAll(".hotspots [data-mode]").length}));
+              report.mobile=await page.evaluate(()=>({viewportWidth:document.documentElement.clientWidth,documentWidth:document.documentElement.scrollWidth,artworkVisible:!!document.querySelector(".art img")?.getClientRects().length,searchVisible:!!document.querySelector("#query")?.getClientRects().length,categories:document.querySelectorAll(".hotspots [data-mode]").length,artworkWidth:document.querySelector(".art").getBoundingClientRect().width,resultsTop:document.querySelector("#results").getBoundingClientRect().top,artworkBottom:document.querySelector(".art").getBoundingClientRect().bottom}));
               await page.screenshot({path:"everythinghub-fallback-mobile.png",fullPage:true});
-              if(report.mobile.documentWidth>report.mobile.viewportWidth+2||!report.mobile.artworkVisible||!report.mobile.searchVisible||report.mobile.categories!==8)throw new Error("Fallback mobile layout failed: "+JSON.stringify(report.mobile));
+              if(report.mobile.documentWidth>report.mobile.viewportWidth+2||!report.mobile.artworkVisible||!report.mobile.searchVisible||report.mobile.categories!==8||report.mobile.artworkWidth<report.mobile.viewportWidth-4||report.mobile.resultsTop<report.mobile.artworkBottom)throw new Error("Fallback mobile layout failed: "+JSON.stringify(report.mobile));
               report.pageErrors=errors;
               report.passed=errors.length===0&&Object.keys(report.searches).length===3;
               if(errors.length)throw new Error("Fallback page errors: "+errors.join("; "));
