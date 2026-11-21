@@ -159,8 +159,9 @@ module.exports = async function handler(req, res) {
     catalogPreview.pageIndexSha256 = catalog.sha256;
     catalogPreview.status = pageDerivedNetwork.stale || !sourceIndexMatches
       ? 'stale-candidate-preview' : 'candidate-preview';
-    if (!sourceIndexMatches) {
-      catalogResults = catalogResults.map(item => ({ ...item, snippet: item.snippet + ' Catalog analysis is behind the current page index.', description: item.snippet + ' Catalog analysis is behind the current page index.' }));
+    if (pageDerivedNetwork.stale || !sourceIndexMatches) {
+      const warning = !sourceIndexMatches ? ' Catalog analysis is behind the current page index.' : ' Catalog preview is using a cached snapshot.';
+      catalogResults = catalogResults.map(item => ({ ...item, snippet: item.snippet + warning, description: item.snippet + warning }));
     }
   }
   const ranked = searchCatalog(catalog.pages, query, lane);
@@ -178,6 +179,7 @@ module.exports = async function handler(req, res) {
   payload.catalogResults = catalogResults;
   payload.catalogPreview = catalogPreview;
   if (catalogResults.length) payload.providers.push('Everything Hub Catalog Preview');
+  if (bingResult.status !== 'fulfilled') payload.providers = payload.providers.filter(x => x !== 'Bing Web Search');
   if (catalog.refreshError) payload.catalogRefreshError = safeCatalogError({ message: catalog.refreshError });
   res.setHeader('X-Index-Updated-At', String(catalog.updatedAt));
   return res.status(200).json(payload);
