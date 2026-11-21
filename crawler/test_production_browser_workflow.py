@@ -34,6 +34,7 @@ class ProductionBrowserWorkflowContractTests(unittest.TestCase):
         self.assertIn('catalogPreview:{count:catalogCount', workflow)
         self.assertIn('Record rights not cleared', workflow)
         self.assertIn('Commercial use not cleared', workflow)
+        self.assertIn('timeout: 25000', workflow)
 
 
 if __name__ == "__main__":
