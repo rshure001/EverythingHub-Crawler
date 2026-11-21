@@ -9,10 +9,35 @@ from catalog_page_analysis import (
     search_catalog_network, search_source_page_evidence, write_outputs, validate_outputs, stable_id,
     apply_source_policy_reviews, _reconcile_page_record_provenance,
     _add_global_subject_catalogs, _global_subject_catalog_source_key,
+    measure_persisted_count_deltas,
 )
 
 
 class PageDerivedCatalogAnalysisTests(unittest.TestCase):
+    def test_count_decreases_are_reported_without_negative_throughput(self):
+        measured = measure_persisted_count_deltas(
+            {
+                "pages_analyzed": 100,
+                "unique_catalogs_discovered": 20,
+                "unique_records": 500,
+                "subcatalogs_discovered": 4,
+                "media_references": 30,
+            },
+            {
+                "pages_analyzed": 100,
+                "unique_catalogs_discovered": 18,
+                "unique_records": 450,
+                "subcatalogs_discovered": 3,
+                "media_references": 25,
+            },
+            60,
+        )
+        self.assertEqual(measured["count_deltas"]["unique_catalogs_discovered"], -2)
+        self.assertEqual(measured["negative_count_deltas"]["unique_records"], -50)
+        self.assertEqual(measured["throughput"]["catalogs_per_minute"], 0.0)
+        self.assertEqual(measured["throughput"]["records_per_minute"], 0.0)
+        self.assertTrue(measured["throughput"]["negative_count_deltas_excluded"])
+
     def test_generic_page_does_not_become_a_fake_catalog(self):
         result = analyze_pages([{
             "url": "https://example.org/about",
