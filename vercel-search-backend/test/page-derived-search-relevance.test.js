@@ -57,7 +57,7 @@ test("Rolex does not return an unrelated article catalog just because an article
 test("NASA does not return unrelated subject catalogs based on nasa.gov source host or incidental page titles", () => {
   const results = searchPageDerivedCatalogs("NASA", fixture(), 8);
   assert.deepEqual(results.map(x => x.catalog_id), ["catalog:nasa-org"]);
-  assert.equal(results[0].relevance_class, "record_match");
+  assert.equal(results[0].relevance_class, "typed_organization_match");
 });
 
 test("Las Vegas prefers a typed geographic catalog and excludes unrelated article catalogs", () => {
