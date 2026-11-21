@@ -10,6 +10,9 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: eh-free-fallback-acceptance
+  cancel-in-progress: true
 jobs:
   browser-acceptance:
     runs-on: ubuntu-latest
@@ -17,7 +20,6 @@ jobs:
     env:
       TARGET_URL: https://everythinghub.ink/
     steps:
-      - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
