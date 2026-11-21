@@ -155,17 +155,18 @@ async function loadQueryScopedPageDerivedCatalogs(query,fetchBuffer=getBuffer){
   const prefixes=Array.from(new Set(terms.map(term=>crypto.createHash('sha256').update(term).digest('hex').slice(0,2))));
   const shardEntries=prefixes.map(prefix=>files.get('search-index/'+prefix+'.json.gz')).filter(Boolean);
   if(!shardEntries.length)throw new Error('page_catalog_search_shard_missing');
-  const shards=await Promise.all(shardEntries.map(async entry=>{
+  const shardPairs=await Promise.all(shardEntries.map(async entry=>{
    const raw=await fetchBuffer(base+entry.file.split('/').map(encodeURIComponent).join('/'),Math.min(2000000,entry.bytes),7000);
    const payload=decodeArtifact(entry,raw,2000000,20000000,'page_catalog_search_shard');
    const prefix=entry.file.split('/')[1].slice(0,2);
    if(!payload||payload.version!==1||payload.prefix!==prefix||!payload.tokens||typeof payload.tokens!=='object'||Array.isArray(payload.tokens))throw new Error('page_catalog_search_shard_schema_invalid');
-   return payload.tokens;
+   return [prefix,payload.tokens];
   }));
+  const shardsByPrefix=new Map(shardPairs);
   let candidates=null;
   for(const term of terms){
    const prefix=crypto.createHash('sha256').update(term).digest('hex').slice(0,2);
-   const shardIndex=prefixes.indexOf(prefix),postings=shards[shardIndex]&&shards[shardIndex][term];
+   const postings=shardsByPrefix.get(prefix)&&shardsByPrefix.get(prefix)[term];
    const ids=new Set(Array.isArray(postings)?postings:[]);
    candidates=candidates===null?ids:new Set([...candidates].filter(id=>ids.has(id)));
    if(!candidates.size)break;
