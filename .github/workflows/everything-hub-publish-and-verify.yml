@@ -1,5 +1,5 @@
 name: Publish and verify Everything Hub — in-house Supabase route
-# No-op change used to exercise the credential-gated publisher and end-to-end verification.
+# In-house static release: publish the approved homepage through the signed-in Supabase publisher and verify the public Storage URL.
 on:
   workflow_dispatch:
   push:
