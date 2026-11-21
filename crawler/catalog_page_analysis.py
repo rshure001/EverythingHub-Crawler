@@ -2271,7 +2271,18 @@ def validate_outputs(output_dir: Path) -> dict:
             or record.get("source_policy_review_scope") != "source-level-only"
         ):
             raise ValueError("conditional source-policy annotations lack evidence or scope")
-        if stable_id("entity", record.get("canonical_entity_key", "")) != record.get("entity_id"):
+        canonical_subject_key = record.get("canonical_subject_key")
+        if canonical_subject_key is not None:
+            if (
+                record.get("record_type") != "subject"
+                or not isinstance(canonical_subject_key, str)
+                or not canonical_subject_key.startswith("subject|")
+            ):
+                raise ValueError("canonical subject key is invalid for this record")
+            entity_key = canonical_subject_key
+        else:
+            entity_key = record.get("canonical_entity_key", "")
+        if stable_id("entity", entity_key) != record.get("entity_id"):
             raise ValueError("entity ID does not match its canonical entity key")
         if not set(record.get("source_page_ids", [])).issubset(page_ids):
             raise ValueError("record provenance references an unknown source page")
