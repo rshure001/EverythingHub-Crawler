@@ -419,7 +419,7 @@ jobs:
                 fallbacks: cards.filter(card => !!card.querySelector(".video-placeholder")).length,
                 attributionCards: cards.filter(card => {
                   const text = card.querySelector("small")?.textContent || "";
-                  return text.includes("NASA Image and Video Library") && text.includes("NASA media guidelines");
+                  return text.includes("Wikimedia Commons") && /CC0|CC BY|Public domain/i.test(text);
                 }).length,
                 sampleTitles: cards.slice(0, 5).map(card => card.querySelectorAll("a")[1]?.textContent?.trim() || ""),
                 sampleAttributions: cards.slice(0, 5).map(card => card.querySelector("small")?.textContent || "")
@@ -428,9 +428,9 @@ jobs:
               if (report.videoSearch.cards < 15 || report.videoSearch.loadedThumbnails < 15 || report.videoSearch.fallbacks !== 0 ||
                   report.videoSearch.attributionCards !== report.videoSearch.cards ||
                   report.videoSearch.sampleTitles.filter(Boolean).length < 5 ||
-                  !/^https:\/\/images\.nasa\.gov\/details\//i.test(videoLink.href) ||
+                  !/^https:\/\/commons\.wikimedia\.org\/wiki\/File(?:%3A|:)/i.test(videoLink.href) ||
                   videoLink.target !== "_blank" || !videoLink.rel.includes("noopener")) {
-                throw new Error("NASA video cards, thumbnails, titles, or attribution failed: " + JSON.stringify(report.videoSearch));
+                throw new Error("Wikimedia video cards, thumbnails, titles, or license attribution failed: " + JSON.stringify(report.videoSearch));
               }
               report.categorySearches.videos = {
                 cards: report.videoSearch.cards,
