@@ -422,11 +422,12 @@ jobs:
                   const text = card.querySelector("small")?.textContent || "";
                   return text.includes("Internet Archive") && /CC0|CC BY|Public domain/i.test(text);
                 }).length,
+                relevantCards: cards.filter(card => /space|astronomy|astronaut|apollo|artemis|hubble|satellite|rocket|mission/i.test(card.innerText)).length,
                 sampleTitles: cards.slice(0, 5).map(card => card.querySelectorAll("a")[1]?.textContent?.trim() || ""),
                 sampleAttributions: cards.slice(0, 5).map(card => card.querySelector("small")?.textContent || "")
               }));
               const videoLink = await page.locator("#results .video-card > a").first().evaluate(anchor => ({ href: anchor.href, target: anchor.target, rel: anchor.rel }));
-              if (report.videoSearch.cards < 5 || report.videoSearch.loadedThumbnails < 5 || report.videoSearch.fallbacks !== 0 ||
+              if (report.videoSearch.cards < 5 || report.videoSearch.loadedThumbnails < 5 || report.videoSearch.relevantCards < 5 || report.videoSearch.fallbacks !== 0 ||
                   report.videoSearch.attributionCards !== report.videoSearch.cards ||
                   report.videoSearch.sampleTitles.filter(Boolean).length < 5 ||
                   !/^https:\/\/archive\.org\/details\//i.test(videoLink.href) ||
@@ -436,7 +437,8 @@ jobs:
               report.categorySearches.videos = {
                 cards: report.videoSearch.cards,
                 loadedThumbnails: report.videoSearch.loadedThumbnails,
-                attributionCards: report.videoSearch.attributionCards
+                attributionCards: report.videoSearch.attributionCards,
+                relevantCards: report.videoSearch.relevantCards
               };
               report.coreLinks.videos = videoLink;
               await page.screenshot({ path: "everythinghub-fallback-videos.png", fullPage: true });
@@ -486,7 +488,7 @@ jobs:
                 Object.values(report.newsCategories).every(value => value.count > 0) &&
                 report.newsRefresh.http === 200 && report.imageSearch.loadedThumbnails >= 8 &&
                 report.imageSearch.badAttribution === 0 && report.videoSearch.loadedThumbnails >= 5 &&
-                report.videoSearch.attributionCards === report.videoSearch.cards && report.videoSearch.sampleTitles.filter(Boolean).length >= 5 &&
+                report.videoSearch.attributionCards === report.videoSearch.cards && report.videoSearch.relevantCards >= 5 && report.videoSearch.sampleTitles.filter(Boolean).length >= 5 &&
                 report.mobile.documentWidth <= report.mobile.viewportWidth + 2 &&
                 pageErrors.length === 0 && consoleErrors.length === 0;
               if (!report.passed) throw new Error("One or more live fallback acceptance gates failed.");
