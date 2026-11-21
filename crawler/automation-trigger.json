@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "updated_at": "2026-11-21T12:01:49Z",
-  "reason": "One bounded recovery crawl after a fresh preflight: latest scheduled crawler 2026-11-21T04:19:41Z (27728s old), public index 2026-11-21T11:13:01.000Z (2928s old), and no queued/running crawler or watchdog. Last scheduled run 44865556005 concluded success; a later push crawler completed, but scheduled delivery remains stale.",
-  "manifest_before_pages": 150930,
-  "manifest_before_updated_at": "2026-11-21T11:13:01.000Z"
+  "updated_at": "2026-11-21T12:29:53Z",
+  "reason": "One bounded recovery crawl after a fresh preflight: last scheduled crawler 2026-11-21T04:19:41Z was 29412 seconds old; public index had 151584 pages and was 1222 seconds old; no queued or running crawler existed. The prior recovery marker at 12:01:49Z produced a completed crawler run, so this is a new bounded recovery after that run finished and the index again exceeded the 10-minute freshness window.",
+  "manifest_before_pages": 151584,
+  "manifest_before_updated_at": "2026-11-21T12:09:31.000Z"
 }
