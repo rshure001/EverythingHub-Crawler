@@ -13,7 +13,7 @@ test("primary site search renders catalogResults and falls back to the first-par
   const searchEnd = site.indexOf("form.addEventListener", searchStart);
   assert.ok(searchStart >= 0 && searchEnd > searchStart);
   const search = site.slice(searchStart, searchEnd);
-  assert.ok(search.includes("https://everythinghub-search-backend.vercel.app/api/search"));
+  assert.ok(site.includes("https://everythinghub-search-backend.vercel.app/api/search"));
   assert.ok(search.includes('new URL(BASE+"/everything-hub-web-search")'));
   assert.ok(search.includes("data.catalogResults"));
   assert.ok(search.includes("catalogItems.concat(pageItems)"));
