@@ -48,12 +48,23 @@ jobs:
             throw new Error(query+' response schema incomplete: '+JSON.stringify({keys:Object.keys(data)}));
           }
           const derived=data.catalogResults.filter(x=>x.catalog_id&&!String(x.catalog_id).startsWith('external:'));
+          const relevant=derived.filter(x=>{
+            const matched=x.matched_records||[];
+            const types=new Set(matched.map(r=>String(r.record_type||'').toLowerCase()));
+            const titles=matched.map(r=>String(r.title||''));
+            const catalogTitle=String(x.catalog_title||x.title||'');
+            if(query==='Rolex') return /rolex/i.test(catalogTitle)||['brand','product','model'].some(t=>types.has(t));
+            if(query==='Las Vegas') return ['place','business','organization','service'].some(t=>types.has(t))&&titles.some(t=>/las vegas/i.test(t));
+            if(query==='NASA') return types.has('organization')&&titles.some(t=>/\\bNASA\\b/i.test(t));
+            return false;
+          });
           const summary={
             query,
             visibleWebResults:data.results.length,
             catalogCards:data.catalogResults.length,
-            pageDerivedCatalogs:derived.map(x=>({id:x.catalog_id,title:x.catalog_title||x.title,origin:x.catalog_origin,matchedRecords:(x.matched_records||[]).map(r=>r.title)})),
-            externalCatalogs:data.catalogResults.filter(x=>String(x.catalog_id||'').startsWith('external:')).map(x=>x.title),
+            pageDerivedCatalogs:derived.map(x=>({id:x.catalog_id,title:x.catalog_title||x.title,origin:x.catalog_origin,matchedRecords:(x.matched_records||[]).map(r=>({type:r.record_type,title:r.title}))})),
+            relevantPageDerivedCatalogs:relevant.map(x=>({id:x.catalog_id,title:x.catalog_title||x.title})),
+            externalCatalogs:data.catalogResults.filter(x=>String(x.catalog_id||'').startsWith('external:')).map(x=>x.catalog_title||x.title||x.name),
             previewStatus:data.catalogPreview.status,
             previewCount:data.catalogPreview.resultCount,
             analysisVersion:data.catalogPreview.analysisVersion,
@@ -61,7 +72,9 @@ jobs:
           };
           console.log(JSON.stringify(summary,null,2));
           if(data.results.length===0) throw new Error(query+' returned no visible search results');
-          if(query!=='Rolex'&&derived.length===0) throw new Error(query+' returned no page-derived catalog result');
+          if(query==='Las Vegas'&&relevant.length===0) throw new Error('Las Vegas returned no relevant typed place/local directory catalog');
+          if(query==='NASA'&&relevant.length===0) throw new Error('NASA returned no relevant organization catalog');
+          if(query==='Rolex'&&derived.length>0&&relevant.length===0) throw new Error('Rolex returned only incidental page-mention catalogs');
           NODE
           done
   live-smoke:
