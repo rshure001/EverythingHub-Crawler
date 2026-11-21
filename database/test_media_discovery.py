@@ -39,13 +39,15 @@ class MediaDiscoveryComplianceTests(unittest.TestCase):
 
     def test_live_media_smoke_covers_images_videos_and_reuse_rights(self):
         workflow = (SOURCE.parents[3] / ".github" / "workflows" / "media-discovery-smoke.yml").read_text(encoding="utf-8")
-        self.assertIn('q=latest technology science nature', workflow)
-        self.assertIn('q=latest science technology discoveries', workflow)
+        self.assertIn('--data-urlencode "q=NASA"', workflow)
+        self.assertIn('--data-urlencode "q=animation"', workflow)
+        self.assertIn('--data-urlencode "type=image"', workflow)
+        self.assertIn('--data-urlencode "type=video"', workflow)
         self.assertIn('cache-control: public, max-age=180, s-maxage=180', workflow)
         self.assertIn('Unverified', workflow)
 
 
-    def test_homepage_media_queries_match_live_smoke_queries(self):
+    def test_homepage_media_queries_remain_configured(self):
         homepage = (SOURCE.parents[3] / "vercel-homepage" / "index.html").read_text(encoding="utf-8")
         self.assertIn("loadHomepageMedia('image','latest technology science nature','homeLiveImages')", homepage)
         self.assertIn("loadHomepageMedia('video','latest science technology discoveries','homeLiveVideos')", homepage)
