@@ -43,7 +43,7 @@ class RetroCatalogDiscoveryTests(unittest.TestCase):
         self.assertEqual(result["metrics"]["profiles_associated_with_catalogs"], 0)
         self.assertEqual(result["metrics"]["profiles_with_catalogs_meeting_100_page_target"], 0)
         self.assertTrue(all("catalog_candidate_id" not in x for x in result["page_catalog_seeds"]))
-        self.assertTrue(all(x["analysis_status"] == "pending_page_content_analysis" for x in result["page_catalog_seeds"]))
+        self.assertTrue(all(x["analysis_status"] == "pending_expansion" for x in result["page_catalog_seeds"]))
         self.assertEqual(result["metrics"]["pages_with_catalog_signals"], 1)
         self.assertGreaterEqual(result["metrics"]["page_catalog_signal_references"], 1)
 
