@@ -2,7 +2,7 @@
 name: Everything Hub browser verification
 on:
   push:
-    branches: [main, 'eh/fallback-attribution-2026-11-21', 'eh/catalog-preview-cards-2026-11-21']
+    branches: [main, 'eh/fallback-attribution-2026-11-21', 'eh/catalog-preview-cards-2026-11-21', 'eh/nasa-video-search-2026-11-21']
     paths:
       - '.github/workflows/everything-hub-production-browser-check.yml'
       - 'vercel-homepage/**'
@@ -139,7 +139,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 12
     env:
-      TARGET_URL: ${{ github.ref == 'refs/heads/main' && 'https://everythinghub-homepage-fixed.vercel.app/' || 'https://everythinghub-homepage-fixed-rshure001-8053.vercel.app/src/index.html' }}
+      TARGET_URL: https://everythinghub-homepage-fixed.vercel.app/
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
