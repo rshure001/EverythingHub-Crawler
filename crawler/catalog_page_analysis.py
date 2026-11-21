@@ -332,6 +332,19 @@ def _candidate_groups(page: dict, host: str, segments: list[str], body: str, tit
             found[key] = (key, kind, path, ["catalog_title", "listing_language", "title_kind:" + kind])
     return list(found.values())
 
+def _valid_mod_11_2(value: str) -> bool:
+    """Validate ORCID/ISNI ISO 7064 MOD 11-2 check digits before record merges."""
+    compact = str(value or "").replace("-", "").upper()
+    if not re.fullmatch(r"\d{15}[\dX]", compact):
+        return False
+    total = 0
+    for digit in compact[:15]:
+        total = (total + int(digit)) * 2
+    check = (12 - (total % 11)) % 11
+    expected = "X" if check == 10 else str(check)
+    return compact[-1] == expected
+
+
 def _external_identity(attributes: dict | None, key: str = "same_as_ids") -> str:
     """Return a vetted global identifier; unknown sameAs URLs never merge records."""
     if not isinstance(attributes, dict):
@@ -360,6 +373,8 @@ def _external_identity(attributes: dict | None, key: str = "same_as_ids") -> str
             if namespace == "wikidata":
                 return namespace + ":" + match.group(1).upper()
             if namespace in {"orcid", "isni"}:
+                if not _valid_mod_11_2(match.group(1)):
+                    continue
                 return namespace + ":" + match.group(1).upper()
             if namespace == "osm":
                 return namespace + ":" + match.group(1).lower() + ":" + match.group(2)
