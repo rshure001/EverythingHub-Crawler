@@ -7,7 +7,7 @@ const CATALOG_BASE_URL = 'https://raw.githubusercontent.com/rshure001/Everything
 const GIT_REF_URL = 'https://api.github.com/repos/rshure001/EverythingHub-Crawler/git/ref/heads/main';
 const CACHE_TTL_MS = 300000;
 const STALE_TTL_MS = 3600000;
-const MAX_MANIFEST_BYTES = 128000;
+const MAX_MANIFEST_BYTES = 256000;
 const MAX_CATALOG_GZIP_BYTES = 16000000;
 const MAX_CATALOG_JSON_BYTES = 64000000;
 const MAX_INDEXED_PAGES = 180000;
@@ -344,7 +344,6 @@ async function loadCatalogFromManifest(manifest, commitSha, manifestRaw, fetchBu
 async function loadCatalog() {
   if (cache && Date.now() - cache.loadedAt < CACHE_TTL_MS) return { ...cache, stale: false };
   if (pending) return pending;
-
   const current = (async () => {
     try {
       const gitRef = JSON.parse((await getBuffer(GIT_REF_URL + '?v=' + Date.now(), 4096)).toString('utf8'));
@@ -370,7 +369,6 @@ async function loadCatalog() {
       throw error;
     }
   })();
-
   pending = current;
   try {
     return await current;
@@ -382,6 +380,7 @@ async function loadCatalog() {
 function clearCatalogCache() { cache = null; pending = null; }
 
 module.exports = {
+  MAX_MANIFEST_BYTES,
   MAX_CATALOG_GZIP_BYTES,
   MAX_CATALOG_JSON_BYTES,
   MAX_INDEXED_PAGES,
