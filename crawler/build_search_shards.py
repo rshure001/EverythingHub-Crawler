@@ -14,7 +14,7 @@ SOURCE = ROOT / "data" / "index.json"
 OUT = ROOT / "public-search"
 MAX_BYTES = 500_000  # Decoded shard target; gzip transport remains below 350 KB.
 MAX_COMPRESSED_BYTES = 350_000
-MAX_SHARD_COUNT = 640
+MAX_SHARD_COUNT = 768
 SHARD_GZIP_LEVEL = 6
 # The independent Vercel backend safely decompresses up to 64 MB. The
 # Supabase Edge Function has a smaller 30 MB/6 MB budget and delegates larger
