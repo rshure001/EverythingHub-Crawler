@@ -7,7 +7,7 @@
   "source_index_sha256": "3213901d7fd2c06c0f2750a640240744fbd1efa9464737183e873630566a463c",
   "catalog_count": 2615,
   "record_count": 55790,
-  "generated_at": "2026-11-21T11:17:57Z",
+  "generated_at": "2026-11-21T11:24:21Z",
   "metrics": {
     "pages_analyzed": 150446,
     "source_page_rows": 150930,
@@ -94,8 +94,8 @@
     "unique_source_coverage_percentage": 100.0,
     "eligible_page_coverage_percentage": 100.0,
     "eligible_unique_source_page_coverage_percentage": 100.0,
-    "host_partitions_reused": 107,
-    "host_partitions_rebuilt": 8,
+    "host_partitions_reused": 115,
+    "host_partitions_rebuilt": 0,
     "records_with_conditional_source_policy_review": 5249,
     "records_with_partial_source_policy_review": 0,
     "catalogs_with_conditional_source_policy_review": 129,
@@ -126,14 +126,35 @@
     "commercial_eligibility": false,
     "republication": "not_cleared"
   },
-  "analysis_started_at": "2026-11-21T11:17:18Z",
-  "analysis_finished_at": "2026-11-21T11:17:57Z",
-  "persisted_snapshot_at": "2026-11-21T11:17:57Z",
-  "analysis_elapsed_seconds": 38.235,
-  "elapsed_wall_clock_seconds": null,
-  "previous_counts": null,
-  "count_deltas": null,
-  "throughput": null,
+  "analysis_started_at": "2026-11-21T11:24:08Z",
+  "analysis_finished_at": "2026-11-21T11:24:21Z",
+  "persisted_snapshot_at": "2026-11-21T11:24:21Z",
+  "analysis_elapsed_seconds": 12.9,
+  "elapsed_wall_clock_seconds": 384.1,
+  "previous_counts": {
+    "pages_analyzed": 150446,
+    "eligible_pages": 150037,
+    "unique_catalogs_discovered": 2615,
+    "subcatalogs_discovered": 75,
+    "unique_records": 55790,
+    "media_references": 8539
+  },
+  "count_deltas": {
+    "pages_analyzed": 0,
+    "eligible_pages": 0,
+    "unique_catalogs_discovered": 0,
+    "subcatalogs_discovered": 0,
+    "unique_records": 0,
+    "media_references": 0
+  },
+  "throughput": {
+    "pages_per_minute": 0.0,
+    "catalogs_per_minute": 0.0,
+    "records_per_minute": 0.0,
+    "subcatalogs_per_minute": 0.0,
+    "media_references_per_minute": 0.0,
+    "measurement": "persisted_count_delta_over_wall_clock_interval"
+  },
   "files": [
     {
       "file": "indexes/00/000a8da85151b57c00881f8d.json.gz",
@@ -15846,7 +15867,7 @@
     {
       "file": "registry.json.gz",
       "bytes": 2090184,
-      "sha256": "aadf4ddef08999659950685023459cc159b2e385554de8f4c48cf9f0fe8a497e",
+      "sha256": "31e2e8fb0b73b91670920d95edc89211ebfc3084fc34b57663a3d21fd3a2000f",
       "items": 2615
     },
     {
