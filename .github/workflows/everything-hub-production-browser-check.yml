@@ -389,7 +389,7 @@ jobs:
               if (report.imageSearch.cards < 8 || report.imageSearch.loadedThumbnails < 8 || report.imageSearch.placeholders !== 0 ||
                   report.imageSearch.attributionCards !== report.imageSearch.cards || report.imageSearch.badAttribution !== 0 ||
                   report.imageSearch.ccByCardsWithLinks !== report.imageSearch.ccByCards ||
-                  !/^https:\\/\\//i.test(imageSourceLink.href)) throw new Error("Licensed image thumbnails or attribution failed: " + JSON.stringify(report.imageSearch));
+                  !/^https:\/\/\//i.test(imageSourceLink.href)) throw new Error("Licensed image thumbnails or attribution failed: " + JSON.stringify(report.imageSearch));
               report.categorySearches.images = { cards: report.imageSearch.cards, loadedThumbnails: report.imageSearch.loadedThumbnails };
               report.coreLinks.images = imageSourceLink;
               await page.screenshot({ path: "everythinghub-fallback-images.png", fullPage: true });
@@ -420,7 +420,7 @@ jobs:
                 fallbacks: cards.filter(card => !!card.querySelector(".video-placeholder")).length,
                 attributionCards: cards.filter(card => {
                   const text = card.querySelector("small")?.textContent || "";
-                  return text.includes("Openverse") && /CC0|CC BY|Public domain/i.test(text);
+                  return text.includes("Internet Archive") && /CC0|CC BY|Public domain/i.test(text);
                 }).length,
                 sampleTitles: cards.slice(0, 5).map(card => card.querySelectorAll("a")[1]?.textContent?.trim() || ""),
                 sampleAttributions: cards.slice(0, 5).map(card => card.querySelector("small")?.textContent || "")
@@ -429,7 +429,7 @@ jobs:
               if (report.videoSearch.cards < 15 || report.videoSearch.loadedThumbnails < 15 || report.videoSearch.fallbacks !== 0 ||
                   report.videoSearch.attributionCards !== report.videoSearch.cards ||
                   report.videoSearch.sampleTitles.filter(Boolean).length < 5 ||
-                  !/^https:\\/\\/archive\\.org\\/details\\//i.test(videoLink.href) ||
+                  !/^https:\/\/archive\.org\/details\//i.test(videoLink.href) ||
                   videoLink.target !== "_blank" || !videoLink.rel.includes("noopener")) {
                 throw new Error("Internet Archive video cards, thumbnails, titles, or license attribution failed: " + JSON.stringify(report.videoSearch));
               }
