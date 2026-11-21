@@ -274,6 +274,16 @@ _SCHEMA_RECORD_TYPES = {
 _MAX_STRUCTURED_LISTS = 2
 _MAX_STRUCTURED_ITEMS_PER_LIST = 8
 _MAX_STRUCTURED_CATALOG_BYTES = 1024
+_STRUCTURED_CATALOG_MARKERS = (
+    "itemlist", "datacatalog", "collectionpage", "productgroup", "offercatalog",
+)
+
+
+def has_structured_catalog_markup(html):
+    """Return whether HTML mentions any supported schema.org collection container."""
+    return isinstance(html, str) and bool(html) and any(
+        marker in html.casefold() for marker in _STRUCTURED_CATALOG_MARKERS
+    )
 
 
 def _schema_type_names(obj):
@@ -352,12 +362,7 @@ def extract_structured_catalog_metadata(html, page_url):
     provenance and click-through locations; they are not fetched here.
     A candidate needs at least two uniquely linked records of one type.
     """
-    if not isinstance(html, str) or not html:
-        return {}
-    lowered = html.casefold()
-    if not any(marker in lowered for marker in (
-        "itemlist", "datacatalog", "collectionpage", "productgroup", "offercatalog"
-    )):
+    if not has_structured_catalog_markup(html):
         return {}
     if not _absolute_http(page_url, page_url):
         return {}

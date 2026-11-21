@@ -348,6 +348,49 @@ class PageDerivedCatalogAnalysisTests(unittest.TestCase):
             self.assertEqual(validated["catalogs"], 2)
             self.assertEqual(validated["records_validated"], 4)
 
+    def test_structured_schema_catalog_expands_typed_records_with_provenance(self):
+        page_url = "https://data.example/catalog"
+        result = analyze_pages([{
+            "url": page_url,
+            "title": "Nevada Public Datasets",
+            "description": "Official public datasets from Nevada.",
+            "text": "",
+            "lane": "research",
+            "robots_allowed": True,
+            "fetched_at": 1234567890,
+            "structured_catalog": {
+                "version": 1,
+                "lists": [{
+                    "name": "Nevada Public Datasets",
+                    "record_type": "dataset",
+                    "items": [
+                        {"record_type": "dataset", "name": "Business Licenses", "url": "https://data.example/datasets/licenses"},
+                        {"record_type": "dataset", "name": "Building Permits", "url": "https://data.example/datasets/permits"},
+                    ],
+                }],
+            },
+        }], source_total=1)
+
+        self.assertEqual(result["metrics"]["unique_catalogs_discovered"], 1)
+        self.assertEqual(result["metrics"]["unique_records_by_type"], {"dataset": 2})
+        self.assertEqual(result["metrics"]["structured_catalog_pages"], 1)
+        self.assertEqual(result["metrics"]["structured_catalog_lists"], 1)
+        self.assertEqual(result["metrics"]["structured_catalog_items"], 2)
+        self.assertEqual(result["metrics"]["structured_catalog_records"], 2)
+
+        catalog = result["catalogs"][0]
+        self.assertEqual(catalog["catalog_origin"], "structured_schema_collection")
+        self.assertEqual(catalog["record_count"], 2)
+        records = {record["title"]: record for record in result["records"]}
+        licenses = records["Business Licenses"]
+        self.assertTrue(licenses["structured_catalog_item"])
+        self.assertEqual(licenses["source_urls"], ["https://data.example/datasets/licenses"])
+        self.assertEqual(len(licenses["source_page_ids"]), 1)
+        self.assertEqual(licenses["last_seen_at"], 1234567890)
+        hits = search_catalog_network("Business Licenses", result)
+        self.assertEqual(len(hits), 1)
+        self.assertEqual(hits[0]["matched_records"][0]["title"], "Business Licenses")
+
     def test_single_list_item_does_not_force_a_catalog(self):
         result = analyze_pages([{
             "url": "https://example.org/about",

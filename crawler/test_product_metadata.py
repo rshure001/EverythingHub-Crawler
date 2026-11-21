@@ -1,9 +1,20 @@
 import unittest
 
-from product_metadata import extract_product_metadata, extract_structured_catalog_metadata
+from product_metadata import (
+    extract_product_metadata, extract_structured_catalog_metadata,
+    has_structured_catalog_markup,
+)
 
 
 class ProductMetadataTests(unittest.TestCase):
+    def test_structured_catalog_markup_guard_covers_all_supported_containers(self):
+        for schema_type in ("ItemList", "DataCatalog", "CollectionPage", "ProductGroup", "OfferCatalog"):
+            with self.subTest(schema_type=schema_type):
+                html = '<script type="application/ld+json">{"@type":"' + schema_type + '"}</script>'
+                self.assertTrue(has_structured_catalog_markup(html))
+        self.assertFalse(has_structured_catalog_markup("<html><body>ordinary content</body></html>"))
+        self.assertFalse(has_structured_catalog_markup(None))
+
     def test_extracts_schema_product_fields(self):
         html = """<script type="application/ld+json">{
           "@context":"https://schema.org","@type":"Product",
@@ -177,6 +188,23 @@ class ProductMetadataTests(unittest.TestCase):
         result = extract_structured_catalog_metadata(html, "https://shop.example/watches/submariner")
         self.assertEqual(len(result["lists"]), 1)
         self.assertEqual(result["lists"][0]["record_type"], "product")
+        self.assertEqual(len(result["lists"][0]["items"]), 2)
+
+    def test_extracts_offer_catalog_service_records(self):
+        import json
+        payload = {
+            "@context": "https://schema.org",
+            "@type": "OfferCatalog",
+            "name": "Watch Services",
+            "itemOffered": [
+                {"@type": "Service", "name": "Watch repair", "url": "/services/repair"},
+                {"@type": "Service", "name": "Watch cleaning", "url": "/services/cleaning"},
+            ],
+        }
+        html = '<script type="application/ld+json">' + json.dumps(payload) + "</script>"
+        result = extract_structured_catalog_metadata(html, "https://shop.example/services")
+        self.assertEqual(len(result["lists"]), 1)
+        self.assertEqual(result["lists"][0]["record_type"], "service")
         self.assertEqual(len(result["lists"][0]["items"]), 2)
 
     def test_data_catalog_with_one_dataset_does_not_force_a_catalog(self):
