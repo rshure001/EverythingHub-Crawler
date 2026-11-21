@@ -7,6 +7,7 @@ import { normalizeManifestTimestamp } from "./manifest-time.mjs";
 import { isValidStaticManifest } from "./static-manifest.mjs";
 import { readBoundedText } from "./bounded-stream.mjs";
 import { fetchVercelCatalogFallback } from "./vercel-fallback.mjs";
+import { fetchSelfHostedPostgresSearch } from "./self-hosted-postgres-bridge.mjs";
 import { loadPageDerivedCatalogPreview, searchPageDerivedCatalogPreview } from "./page-derived-catalog-preview.mjs";
 
 const cors = {
@@ -411,6 +412,28 @@ Deno.serve(async (req: Request) => {
 
     return unavailable();
   };
+
+  // Optional bridge to the independent PostgreSQL host. It is disabled until
+  // both secrets are configured; failures and empty results preserve existing paths.
+  const selfHostedEndpoint = Deno.env.get("EH_SELF_HOSTED_SEARCH_URL");
+  const selfHostedToken = Deno.env.get("EH_SELF_HOSTED_SEARCH_TOKEN");
+  if (selfHostedEndpoint && selfHostedToken) {
+    const selfHosted = await fetchSelfHostedPostgresSearch({
+      endpoint: selfHostedEndpoint,
+      token: selfHostedToken,
+      query,
+      lane: validLane,
+      limit,
+      offset,
+    });
+    if (selfHosted && selfHosted.results.length > 0) {
+      return json(
+        selfHosted,
+        200,
+        "public, max-age=15, stale-while-revalidate=30",
+      );
+    }
+  }
 
   try {
     let data: any[] = [];
