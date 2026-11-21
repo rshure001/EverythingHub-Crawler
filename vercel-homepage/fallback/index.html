@@ -173,7 +173,7 @@ function renderResults(data,q){
 function renderImages(data,q){
   resultsRoot.replaceChildren();
   const items=Array.isArray(data.items)?data.items:[];
-  makeHeading(q,"Image results",items.length.toLocaleString()+" openly licensed images · Openverse");
+  makeHeading(q,"Image results",items.length.toLocaleString()+" openly licensed images · Internet Archive");
   const grid=document.createElement("div");grid.className="media-grid";
   for(let index=0;index<items.length;index++){
     const item=items[index],card=document.createElement("article");card.className="media-card";
@@ -183,7 +183,7 @@ function renderImages(data,q){
     img.onerror=()=>{const placeholder=document.createElement("div");placeholder.className="image-placeholder";placeholder.textContent="Preview unavailable";img.replaceWith(placeholder);};
     link.append(img);
     const title=document.createElement("a");title.href=safeUrl(item.url);title.target="_blank";title.rel="noopener noreferrer";title.textContent=item.title||"Image";
-    const small=document.createElement("small");small.append(document.createTextNode("Openverse · "+String(item.provider||item.source||"Openverse")+" · "));
+    const small=document.createElement("small");small.append(document.createTextNode("Internet Archive · "+String(item.provider||item.source||"Internet Archive")+" · "));
     if(item.creator){
       if(safeUrl(item.creatorUrl)!=="#"){const creatorLink=document.createElement("a");creatorLink.href=safeUrl(item.creatorUrl);creatorLink.target="_blank";creatorLink.rel="noopener noreferrer";creatorLink.textContent=item.creator;small.append(creatorLink);}
       else small.append(document.createTextNode(item.creator));
@@ -192,7 +192,7 @@ function renderImages(data,q){
     const licenseLink=document.createElement("a");licenseLink.href=safeUrl(item.licenseUrl);licenseLink.target="_blank";licenseLink.rel="noopener noreferrer";licenseLink.textContent=item.license||"License";small.append(licenseLink);
     card.append(link,title,small);grid.append(card);
   }
-  if(!items.length){const empty=document.createElement("div");empty.className="results-empty";empty.textContent="No matching Openverse images with an approved license and required attribution were found. Try another search.";resultsRoot.append(empty);return;}
+  if(!items.length){const empty=document.createElement("div");empty.className="results-empty";empty.textContent="No matching Internet Archive images with an approved license and required attribution were found. Try another search.";resultsRoot.append(empty);return;}
   resultsRoot.append(grid);
 }
 function renderVideos(data,q){
@@ -221,7 +221,7 @@ async function runImageSearch(q){
   const u=new URL("https://everythinghub-search-backend.vercel.app/api/images");u.searchParams.set("q",q);
   const response=await fetch(u,{signal:AbortSignal.timeout(25000)});const data=await response.json();
   if(!response.ok||data.status!=="ok")throw new Error(data.message||"Image search unavailable");
-  renderImages(data,q);status.textContent=data.count.toLocaleString()+" openly licensed images from Openverse.";
+  renderImages(data,q);status.textContent=data.count.toLocaleString()+" openly licensed images from Internet Archive.";
 }
 async function runVideoSearch(q){
   status.textContent='Searching public video sources…';
