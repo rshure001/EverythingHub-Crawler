@@ -22,7 +22,10 @@ from media_discovery import discover_media, merge_media_candidates
 from seed_coverage import DEFAULT_SEED_RETRY_SECONDS, schedule_missing_seed_urls
 from index_store import load_index, save_index
 from catalog_frontier import load_catalog_seed_urls, plan_catalog_seed_enqueue
-from product_metadata import extract_product_metadata, extract_structured_catalog_metadata
+from product_metadata import (
+    extract_product_metadata, extract_structured_catalog_metadata,
+    has_structured_catalog_markup,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 SEEDS = ROOT / "crawler" / "seeds.txt"
@@ -202,6 +205,18 @@ def parse_published_at(value):
 def normalize_text(value, limit):
     """Remove NUL bytes and normalize text before indexing or database writes."""
     return re.sub(r"\s+", " ", str(value or "").replace("\x00", "")).strip()[:limit]
+
+
+def extract_page_structured_catalog_metadata(html, page_url):
+    """Extract bounded metadata for every supported schema.org collection type."""
+    if not has_structured_catalog_markup(html):
+        return {}
+    try:
+        return extract_structured_catalog_metadata(html, page_url)
+    except (ValueError, TypeError, RecursionError):
+        # Structured catalog metadata is additive; malformed markup must not
+        # prevent an otherwise valid public page from being indexed.
+        return {}
 
 
 def build_page_record(url, title, description, text, depth, directives, published_at=None,
@@ -1298,12 +1313,7 @@ def main():
                     # Product metadata is additive; malformed structured data
                     # must never make an otherwise valid page fail to index.
                     product_metadata = {}
-                if "itemlist" in html.casefold():
-                    try:
-                        structured_catalog_metadata = extract_structured_catalog_metadata(html, final)
-                    except (ValueError, TypeError, RecursionError):
-                        # Structured catalog metadata is additive and bounded.
-                        structured_catalog_metadata = {}
+                structured_catalog_metadata = extract_page_structured_catalog_metadata(html, final)
             record = build_page_record(
                 final, title, description, text, depth, directives,
                 parser.published_at, product_metadata, structured_catalog_metadata,
