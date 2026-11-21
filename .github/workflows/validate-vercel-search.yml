@@ -30,7 +30,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 3
     env:
-      BASE: https://everythinghub-search-backend-inuiaz584-rshure001-8053.vercel.app
+      BASE: https://everythinghub-search-backend-dm43cqbli-rshure001-8053.vercel.app
     steps:
       - name: Verify staging backend health and representative catalog searches
         run: |
