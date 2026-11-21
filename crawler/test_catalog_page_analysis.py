@@ -1156,7 +1156,7 @@ class CatalogInventoryTriggerTests(unittest.TestCase):
     def test_catalog_publish_rebuilds_from_latest_main_after_concurrent_updates(self):
         repository_root = Path(__file__).resolve().parents[1]
         workflow = (repository_root / ".github" / "workflows" / "retroactive-catalog-index.yml").read_text(encoding="utf-8")
-        publish = workflow.split("Publish validated page-derived catalog analysis on main", 1)[1]
+        publish = workflow.split("Publish validated catalog analysis on main", 1)[1]
         self.assertIn("git merge-base --is-ancestor", publish)
         self.assertIn("git reset --hard origin/main", publish)
         self.assertIn('python crawler/catalog_page_analysis.py --query Rolex --query "Las Vegas"', publish)
