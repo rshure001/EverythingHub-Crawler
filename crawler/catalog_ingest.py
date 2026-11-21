@@ -74,7 +74,17 @@ def adapt(manifest: dict[str, Any]) -> dict[str, Any]:
             if not isinstance(license_info, dict):
                 license_info = {}
             license_present = bool(license_info.get("url") or license_info.get("id"))
-            public_search_allowed = catalog_policy_approved and license_present
+            resource_rights_present = any(
+                isinstance(resource, dict) and bool(str(resource.get("rights") or "").strip())
+                for resource in (dataset.get("resources") or [])
+            )
+            rights_metadata_present = bool(
+                license_present
+                or license_info.get("rights")
+                or license_info.get("is_open") is not None
+                or resource_rights_present
+            )
+            public_search_allowed = catalog_policy_approved and rights_metadata_present
             attributes = dataset.get("attributes") or {
                 "organization": dataset.get("organization") or "",
                 "tags": dataset.get("tags") or [],
@@ -91,7 +101,11 @@ def adapt(manifest: dict[str, Any]) -> dict[str, Any]:
                 "source_terms_status": source_terms_status,
                 "source_terms_reviewed_at": source_terms_reviewed_at,
                 "attribution_required": dataset.get("attribution_required", catalog.get("attribution_required")),
-                "rights_status": "license_metadata_present" if license_present else "review_required",
+                "rights_status": (
+                    "license_metadata_present" if license_present
+                    else "dataset_rights_metadata_present" if rights_metadata_present
+                    else "review_required"
+                ),
                 "public_search_allowed": public_search_allowed,
             })
             raw = {
