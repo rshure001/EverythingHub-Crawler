@@ -179,6 +179,7 @@ jobs:
               let apiBody = {};
               try { apiBody = await apiResponse.json(); } catch (error) { apiBody = { parseError: String(error) }; }
               report.apiProbes[query] = { status: apiResponse.status(), pageResults: Array.isArray(apiBody.results) ? apiBody.results.length : 0, catalogResults: Array.isArray(apiBody.catalogResults) ? apiBody.catalogResults.length : 0, externalCatalogResults: Array.isArray(apiBody.externalCatalogResults) ? apiBody.externalCatalogResults.length : 0, catalogPreview: apiBody.catalogPreview || null, providers: apiBody.providers || [], error: apiBody.error || apiBody.message || null };
+              if (apiResponse.status() !== 200 || !Array.isArray(apiBody.catalogResults) || !apiBody.catalogResults.length || !Array.isArray(apiBody.externalCatalogResults) || !apiBody.externalCatalogResults.length) throw new Error(query + " first-party external catalog API probe failed: " + JSON.stringify(report.apiProbes[query]));
             }
             async function goHome() {
               const response = await page.goto(report.url, { waitUntil: "domcontentloaded", timeout: 45000 });
@@ -261,16 +262,20 @@ jobs:
                   commercialEligible: node.dataset.commercialEligible
                 })));
                 const familyLinksVisible = query === "Rolex" && /Submariner/.test(catalogMatched.join(" ")) && /Datejust/.test(catalogMatched.join(" ")) && /Cosmograph Daytona/.test(catalogMatched.join(" "));
-                const rolexLinkOnlyVisible = query === "Rolex" && catalogSources.includes("curated_external_link_directory");
-                const relevantCatalog = (query === "Rolex" && familyLinksVisible && rolexLinkOnlyVisible) || catalogMatched.some(text => pattern.test(text)) ||
-                  catalogTitles.some(title => pattern.test(title));
+                const lasVegasResourcesVisible = query === "Las Vegas" && /Business License/.test(catalogMatched.join(" ")) && /Things to Do/.test(catalogMatched.join(" "));
+                const nasaResourcesVisible = query === "NASA" && /NASA Earthdata Search/.test(catalogMatched.join(" ")) && /NASA Image and Video Library/.test(catalogMatched.join(" "));
+                const externalDirectoryVisible = catalogSources.includes("curated_external_link_directory");
+                const relevantCatalog = (query === "Rolex" && familyLinksVisible && externalDirectoryVisible) ||
+                  (query === "Las Vegas" && lasVegasResourcesVisible && externalDirectoryVisible) ||
+                  (query === "NASA" && nasaResourcesVisible && externalDirectoryVisible) ||
+                  catalogMatched.some(text => pattern.test(text)) || catalogTitles.some(title => pattern.test(title));
                 if (!catalogCount || !relevantCatalog) throw new Error(query + " returned no relevant visible catalog preview: " + JSON.stringify({catalogCount,catalogTitles,catalogMatched}));
                 if (!catalogFlags.every(item => item.id && item.previewOnly === "true" && item.commercialEligible === "false") ||
                     !catalogRelevance.every(text => text.trim().length > 0) ||
                     !catalogRights.every(text => /Candidate preview only/.test(text) && /Record rights not cleared/.test(text) && /Commercial use not cleared/.test(text))) {
                   throw new Error(query + " catalog preview rights or identity labels failed: " + JSON.stringify({catalogFlags,catalogRelevance,catalogRights}));
                 }
-                report.searches[query] = {...result,status:await page.locator("#status").textContent(),catalogPreview:{count:catalogCount,titles:catalogTitles,matched:catalogMatched,relevance:catalogRelevance,rights:catalogRights,sources:catalogSources,familyLinksVisible,rolexLinkOnlyVisible}};
+                report.searches[query] = {...result,status:await page.locator("#status").textContent(),catalogPreview:{count:catalogCount,titles:catalogTitles,matched:catalogMatched,relevance:catalogRelevance,rights:catalogRights,sources:catalogSources,familyLinksVisible,lasVegasResourcesVisible,nasaResourcesVisible,externalDirectoryVisible}};
 
                 await page.screenshot({ path: "everythinghub-fallback-" + query.toLowerCase().replace(/\s+/g, "-") + ".png", fullPage: true });
               }
