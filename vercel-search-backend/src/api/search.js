@@ -10,6 +10,16 @@ const MAX_OFFSET = 5000;
 const BING_CACHE_TTL_MS = 120000;
 const MAX_BING_BYTES = 1000000;
 const bingCache = new Map();
+const CATALOG_LOAD_BUDGET_MS = 4500;
+const PAGE_DERIVED_LOAD_BUDGET_MS = 7000;
+
+function withTimeout(promise, milliseconds, code) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(code)), milliseconds);
+  });
+  return Promise.race([Promise.resolve(promise), timeout]).finally(() => clearTimeout(timer));
+}
 
 function fetchText(url) {
   return new Promise((resolve, reject) => {
@@ -108,7 +118,9 @@ module.exports = async function handler(req, res) {
   const externalCatalogResults = searchExternalCatalogs(query);
   const externalCatalogStats = getExternalCatalogStats();
   const [catalogResult, bingResult, pageDerivedResult] = await Promise.allSettled([
-    loadCatalog(), loadBing(query), loadPageDerivedCatalogs(query)
+    withTimeout(loadCatalog(), CATALOG_LOAD_BUDGET_MS, 'catalog_load_budget_exceeded'),
+    loadBing(query),
+    withTimeout(loadPageDerivedCatalogs(query), PAGE_DERIVED_LOAD_BUDGET_MS, 'page_catalog_load_budget_exceeded')
   ]);
   const bingResults = bingResult.status === 'fulfilled' ? bingResult.value : [];
   const pageDerivedNetwork = pageDerivedResult.status === 'fulfilled' ? pageDerivedResult.value : null;
