@@ -130,6 +130,8 @@ async function decodeGzip(bytes, maxBytes, label) {
 }
 
 function validateManifest(manifest) {
+  const analysisVersion = Number(manifest && manifest.analysis_version || 0);
+  const legacy = analysisVersion < 10;
   if (!manifest || manifest.version !== 1 || manifest.integrity !== "sha256") {
     throw new Error("page_catalog_manifest_schema_invalid");
   }
@@ -148,7 +150,7 @@ function validateManifest(manifest) {
       !Number.isFinite(Date.parse(manifest.source_index_updated_at)) ||
       typeof manifest.source_index_sha256 !== "string" ||
       !/^[a-f0-9]{64}$/i.test(manifest.source_index_sha256) ||
-      !Array.isArray(manifest.files) || manifest.files.length < 3 || manifest.files.length > 20_000) {
+      !Array.isArray(manifest.files) || manifest.files.length < (legacy ? 2 : 3) || manifest.files.length > 20_000) {
     throw new Error("page_catalog_manifest_invalid");
   }
   const files = new Map();
@@ -166,7 +168,7 @@ function validateManifest(manifest) {
   const registry = files.get("registry.json.gz");
   const records = files.get("records.json.gz");
   const searchIndexFiles = Array.from(files.values()).filter((file) => file.file.startsWith("search-index/"));
-  if (!registry || !records || !searchIndexFiles.length) {
+  if (!registry || !records || (!legacy && !searchIndexFiles.length)) {
     throw new Error("page_catalog_artifacts_missing");
   }
   if (registry.bytes > MAX_REGISTRY_GZIP_BYTES || records.bytes > MAX_RECORDS_GZIP_BYTES ||
@@ -185,7 +187,7 @@ function validateManifest(manifest) {
       Number(manifest.catalogs_verified || 0) !== 0) {
     throw new Error("page_catalog_candidate_only_contract_invalid");
   }
-  return { registry, records, searchIndexFiles, files };
+  return { registry, records, searchIndexFiles, files, legacy };
 }
 
 function validatePolicyAnnotation(item, policyReview) {
@@ -210,7 +212,7 @@ function validatePolicyAnnotation(item, policyReview) {
   }
 }
 
-function validateNetwork(manifest, registry, metadata) {
+function validateRegistry(manifest, registry, metadata) {
   if (!registry || registry.version !== 1 ||
       registry.status !== "candidate_staging_not_production" ||
       !Array.isArray(registry.catalogs) || registry.catalogs.length !== manifest.catalog_count) {
@@ -275,6 +277,90 @@ function validateNetwork(manifest, registry, metadata) {
   };
 }
 
+
+function validateLegacyNetwork(manifest, registry, payload) {
+  if (!registry || registry.version !== 1 ||
+      registry.status !== "candidate_staging_not_production" ||
+      !Array.isArray(registry.catalogs) || registry.catalogs.length !== manifest.catalog_count) {
+    throw new Error("page_catalog_registry_schema_invalid");
+  }
+  if (!payload || payload.version !== 1 ||
+      !Array.isArray(payload.records) || payload.records.length !== manifest.record_count) {
+    throw new Error("page_catalog_records_schema_invalid");
+  }
+  const policyReview = registry.source_policy_review || manifest.source_policy_review || null;
+  if (policyReview) {
+    if (manifest.source_policy_review && registry.source_policy_review &&
+        manifest.source_policy_review.register_sha256 !== registry.source_policy_review.register_sha256) {
+      throw new Error("page_catalog_policy_review_digest_mismatch");
+    }
+    if (policyReview.schema_version !== 1 ||
+        typeof policyReview.register_sha256 !== "string" ||
+        !/^[a-f0-9]{64}$/i.test(policyReview.register_sha256) ||
+        policyReview.scope !== "source-level-only" ||
+        policyReview.record_level_clearance !== "not_reviewed" ||
+        policyReview.commercial_eligibility !== false ||
+        policyReview.republication !== "not_cleared") {
+      throw new Error("page_catalog_policy_review_invalid");
+    }
+  }
+
+  const catalogs = new Map();
+  for (const catalog of registry.catalogs) {
+    if (!catalog || typeof catalog.catalog_id !== "string" || !catalog.catalog_id ||
+        catalogs.has(catalog.catalog_id) || !Array.isArray(catalog.record_ids) ||
+        catalog.record_count !== catalog.record_ids.length ||
+        !Array.isArray(catalog.source_page_ids) ||
+        catalog.source_page_count !== catalog.source_page_ids.length ||
+        catalog.commercial_eligible !== false) {
+      throw new Error("page_catalog_identity_or_membership_invalid");
+    }
+    if (catalog.source_url && !safeUrl(catalog.source_url)) {
+      throw new Error("page_catalog_source_url_invalid");
+    }
+    validatePolicyAnnotation(catalog, policyReview);
+    catalogs.set(catalog.catalog_id, catalog);
+  }
+
+  const records = new Map();
+  for (const record of payload.records) {
+    if (!record || typeof record.record_id !== "string" || !record.record_id ||
+        records.has(record.record_id) || typeof record.entity_id !== "string" || !record.entity_id ||
+        typeof record.record_type !== "string" || !record.record_type ||
+        !Array.isArray(record.catalog_ids) || record.commercial_eligible !== false ||
+        !Array.isArray(record.source_urls) || !record.source_urls.length ||
+        record.source_urls.some((url) => !safeUrl(url))) {
+      throw new Error("page_record_identity_or_provenance_invalid");
+    }
+    if (new Set(record.catalog_ids).size !== record.catalog_ids.length ||
+        record.catalog_ids.some((id) => !catalogs.has(id))) {
+      throw new Error("page_record_catalog_membership_invalid");
+    }
+    validatePolicyAnnotation(record, policyReview);
+    records.set(record.record_id, record);
+  }
+  for (const catalog of registry.catalogs) {
+    if (new Set(catalog.record_ids).size !== catalog.record_ids.length ||
+        catalog.record_ids.some((id) => !records.has(id))) {
+      throw new Error("page_catalog_record_reference_invalid");
+    }
+  }
+  return {
+    catalogs: registry.catalogs,
+    records: payload.records,
+    generatedAt: manifest.generated_at,
+    analysisVersion: manifest.analysis_version,
+    sourceIndexPages: manifest.source_index_pages,
+    sourceIndexUpdatedAt: manifest.source_index_updated_at,
+    sourceIndexSha256: manifest.source_index_sha256,
+    catalogCount: manifest.catalog_count,
+    recordCount: manifest.record_count,
+    metrics: manifest.metrics || {},
+    sourcePolicyReview: policyReview,
+    legacySnapshot: true,
+  };
+}
+
 async function loadSnapshot(fetchImpl) {
   const ref = await fetchJson(REF_URL, MAX_REF_BYTES, fetchImpl, "application/vnd.github+json");
   const sha = ref.value && ref.value.object && ref.value.object.sha;
@@ -296,11 +382,8 @@ async function loadSnapshot(fetchImpl) {
     throw new Error("public_search_manifest_invalid");
   }
 
-  const registryBytes = await fetchBytes(
-    base + "data/page-derived-catalogs/registry.json.gz",
-    MAX_REGISTRY_GZIP_BYTES,
-    fetchImpl,
-  );
+  const registryUrl = base + "data/page-derived-catalogs/registry.json.gz";
+  const registryBytes = await fetchBytes(registryUrl, MAX_REGISTRY_GZIP_BYTES, fetchImpl);
   if (registryBytes.byteLength !== metadata.registry.bytes) {
     throw new Error("page_catalog_registry_size_mismatch");
   }
@@ -309,7 +392,30 @@ async function loadSnapshot(fetchImpl) {
     throw new Error("page_catalog_registry_sha256_mismatch");
   }
   const registry = await decodeGzip(registryBytes, MAX_REGISTRY_JSON_BYTES, "page_catalog_registry");
-  const network = validateNetwork(manifest, registry, metadata);
+
+  let network;
+  if (metadata.legacy) {
+    const recordsBytes = await fetchBytes(
+      base + "data/page-derived-catalogs/records.json.gz",
+      MAX_RECORDS_GZIP_BYTES,
+      fetchImpl,
+    );
+    if (recordsBytes.byteLength !== metadata.records.bytes) {
+      throw new Error("page_catalog_records_size_mismatch");
+    }
+    const recordsDigest = await sha256(recordsBytes);
+    if (recordsDigest.toLowerCase() !== metadata.records.sha256.toLowerCase()) {
+      throw new Error("page_catalog_records_sha256_mismatch");
+    }
+    const recordsPayload = await decodeGzip(recordsBytes, MAX_RECORDS_JSON_BYTES, "page_catalog_records");
+    network = validateLegacyNetwork(manifest, registry, recordsPayload);
+  } else {
+    network = validateRegistry(manifest, registry, metadata);
+    network.filesByPath = metadata.files;
+    network.baseUrl = base + "data/page-derived-catalogs/";
+    network.legacySnapshot = false;
+  }
+
   const publicUpdatedAt = publicManifest.updated_at * 1000;
   const sourceUpdatedAt = Date.parse(network.sourceIndexUpdatedAt);
   network.pageIndexPages = publicManifest.total_pages;
@@ -317,7 +423,6 @@ async function loadSnapshot(fetchImpl) {
   network.freshnessMatch = network.sourceIndexPages === publicManifest.total_pages &&
     Number.isFinite(sourceUpdatedAt) && Math.abs(sourceUpdatedAt - publicUpdatedAt) <= 60_000;
   network.gitCommit = sha;
-  network.baseUrl = base + "data/page-derived-catalogs/";
   return network;
 }
 
@@ -470,7 +575,14 @@ function allTermsPresent(terms, tokens) {
   return terms.every((term) => tokens.has(term));
 }
 
-export async function searchPageDerivedCatalogPreview(query, network, limit = 5, fetchImpl = fetch) {
+export function searchPageDerivedCatalogPreview(query, network, limit = 5, fetchImpl = fetch) {
+  if (network && Array.isArray(network.records)) {
+    return searchCatalogRecords(query, network, limit);
+  }
+  return searchPageDerivedCatalogPreviewIndexed(query, network, limit, fetchImpl);
+}
+
+async function searchPageDerivedCatalogPreviewIndexed(query, network, limit = 5, fetchImpl = fetch) {
   const text = String(query || "").trim();
   if (!text || text.length > 160 || !network || !Array.isArray(network.catalogs) ||
       !network.catalogsById || !network.filesByPath || typeof fetchImpl !== "function") return [];
