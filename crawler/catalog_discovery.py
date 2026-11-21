@@ -76,7 +76,10 @@ def normalize_dataset(dataset: dict[str, Any], source: dict[str, Any]) -> dict[s
             continue
         resources.append({
             "name": _clean_text(resource.get("name") or resource.get("description"), 300),
+            "description": _clean_text(resource.get("description"), 1000),
             "format": _clean_text(resource.get("format"), 40).upper(),
+            "media_type": _clean_text(resource.get("mimetype") or resource.get("media-type"), 160),
+            "rights": _clean_text(resource.get("rights"), 800),
             "url": url,
             "bytes": resource.get("size") if isinstance(resource.get("size"), int) else None,
         })
@@ -88,6 +91,7 @@ def normalize_dataset(dataset: dict[str, Any], source: dict[str, Any]) -> dict[s
         "url": _clean_text(dataset.get("license_url"), 1000),
         "rights": _clean_text(dataset.get("rights") or dataset.get("access_and_use"), 1000),
         "is_open": dataset.get("isopen") if isinstance(dataset.get("isopen"), bool) else None,
+        "private": dataset.get("private") if isinstance(dataset.get("private"), bool) else None,
     }
     return {
         "id": source["id"] + ":" + name,
