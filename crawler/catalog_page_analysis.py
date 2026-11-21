@@ -558,6 +558,23 @@ def _add_global_subject_catalogs(pages: list[dict], page_rows: list[dict], recor
                 "source_url": member["url"],
                 "source_page_count": 1,
             })
+            if record.get("canonical_entity_key") not in (None, entity_key):
+                raise ValueError("global subject record ID maps to a different canonical entity key")
+            record.setdefault("canonical_entity_key", entity_key)
+            record.setdefault("entity_id", stable_id("entity", entity_key))
+            if not isinstance(record.get("source_urls"), list):
+                current_urls = record.get("source_urls")
+                record["source_urls"] = [current_urls] if isinstance(current_urls, str) and current_urls else []
+            if not isinstance(record.get("source_page_ids"), list):
+                record["source_page_ids"] = []
+            if member["url"] not in record["source_urls"]:
+                record["source_urls"].append(member["url"])
+            if member["page_id"] not in record["source_page_ids"]:
+                record["source_page_ids"].append(member["page_id"])
+            record["source_urls"] = sorted(set(record["source_urls"]))
+            record["source_page_ids"] = sorted(set(record["source_page_ids"]))
+            record["source_url"] = record["source_urls"][0] if record["source_urls"] else ""
+            record["source_page_count"] = len(record["source_page_ids"])
             if catalog_id not in record["catalog_ids"]:
                 record["catalog_ids"].append(catalog_id)
             record_ids.append(record_id)
@@ -605,6 +622,62 @@ def _add_global_subject_catalogs(pages: list[dict], page_rows: list[dict], recor
     if catalogs_are_list:
         catalogs.extend(item for key, item in catalog_map.items() if key not in original_catalog_ids)
     return created
+
+
+def _reconcile_page_record_provenance(page_rows: list[dict], records) -> int:
+    """Reconcile page-to-record edges with each record's reverse provenance index."""
+    if isinstance(records, dict):
+        records_by_id = records
+    else:
+        records_by_id = {
+            item.get("record_id"): item
+            for item in records
+            if isinstance(item, dict) and item.get("record_id")
+        }
+
+    repaired = 0
+    for page in page_rows:
+        if not isinstance(page, dict):
+            continue
+        page_id = page.get("page_id")
+        if not page_id:
+            continue
+        page_url = canonical_url(page.get("url"))
+        page_record_ids = page.get("record_ids", [])
+        if not isinstance(page_record_ids, list):
+            raise ValueError(f"source page {page_id} has malformed record relationships")
+        if page_record_ids and not page_url:
+            raise ValueError(f"source page {page_id} has record relationships but no canonical URL")
+
+        for record_id in page_record_ids:
+            record = records_by_id.get(record_id)
+            if record is None:
+                raise ValueError(f"source page {page_id} ({page_url}) references missing record {record_id}")
+            entity_key = record.get("canonical_entity_key")
+            if entity_key and stable_id("record", entity_key) != record_id:
+                raise ValueError(f"source page {page_id} references record {record_id} with inconsistent canonical identity")
+
+            source_page_ids = record.get("source_page_ids")
+            if not isinstance(source_page_ids, list):
+                source_page_ids = []
+            source_urls = record.get("source_urls")
+            if not isinstance(source_urls, list):
+                source_urls = [source_urls] if isinstance(source_urls, str) and source_urls else []
+            changed = False
+            if page_id not in source_page_ids:
+                source_page_ids.append(page_id)
+                changed = True
+            if page_url and page_url not in source_urls:
+                source_urls.append(page_url)
+                changed = True
+
+            record["source_page_ids"] = sorted(set(source_page_ids))
+            record["source_urls"] = sorted(set(source_urls))
+            record["source_url"] = record["source_urls"][0] if record["source_urls"] else ""
+            record["source_page_count"] = len(record["source_page_ids"])
+            if changed:
+                repaired += 1
+    return repaired
 
 
 def analyze_pages(
@@ -1132,6 +1205,7 @@ def analyze_pages(
                 records[record_id]["catalog_ids"].append(catalog_id)
 
     global_subject_catalogs = _add_global_subject_catalogs(pages, page_rows, records, catalogs)
+    _reconcile_page_record_provenance(page_rows, records)
 
     for item in records.values():
         item["source_urls"] = sorted(item["source_urls"])
@@ -1357,6 +1431,7 @@ def analyze_pages_incremental(
         signals += shard["metrics"]["pages_with_catalog_signals"]
     all_records, cross_host_record_merges = _merge_cross_host_records(all_records)
     global_subject_catalogs = _add_global_subject_catalogs(pages, all_page_rows, all_records, all_catalogs)
+    _reconcile_page_record_provenance(all_page_rows, all_records)
     all_catalogs.sort(key=lambda x: (x["catalog_type"], x["title"].casefold(), x["catalog_id"]))
     all_records.sort(key=lambda x: (x["record_type"], x["title"].casefold(), x["record_id"]))
     all_page_rows.sort(key=lambda x: (x.get("url") or "", x.get("page_id") or ""))
@@ -2130,8 +2205,15 @@ def validate_outputs(output_dir: Path) -> dict:
             raise ValueError("primary page record is missing from its record relationship list")
         for related_record_id in page_record_ids:
             related_record = records_by_id.get(related_record_id)
-            if related_record is None or page.get("page_id") not in related_record.get("source_page_ids", []):
-                raise ValueError("source page record relationship lacks matching record provenance")
+            if related_record is None:
+                raise ValueError(
+                    f"source page {page.get('page_id')} ({page.get('url')}) references missing record {related_record_id}"
+                )
+            if page.get("page_id") not in related_record.get("source_page_ids", []):
+                raise ValueError(
+                    f"source page {page.get('page_id')} ({page.get('url')}) references record "
+                    f"{related_record_id}, but its provenance lists {related_record.get('source_page_ids', [])[:8]}"
+                )
     for record in records:
         if stable_id("record", record.get("canonical_entity_key", "")) != record.get("record_id"):
             raise ValueError("record ID does not match its canonical entity key")

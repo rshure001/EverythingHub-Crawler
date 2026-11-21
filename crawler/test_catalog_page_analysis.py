@@ -7,7 +7,7 @@ from pathlib import Path
 from catalog_page_analysis import (
     ANALYZER_VERSION, analyze_pages, analyze_pages_incremental,
     search_catalog_network, search_source_page_evidence, write_outputs, validate_outputs, stable_id,
-    apply_source_policy_reviews,
+    apply_source_policy_reviews, _reconcile_page_record_provenance,
 )
 
 
@@ -1408,6 +1408,41 @@ class CatalogInventoryTriggerTests(unittest.TestCase):
                 write_outputs(result, Path(tmp))
                 validated = validate_outputs(Path(tmp))
                 self.assertEqual(validated["catalogs"], result["metrics"]["unique_catalogs_discovered"])
+
+
+    def test_reconcile_repairs_missing_reverse_page_record_provenance(self):
+        url = "https://example.org/nasa"
+        page_id = stable_id("page", url)
+        entity_key = "subject|nasa|" + url
+        record_id = stable_id("record", entity_key)
+        record = {
+            "record_id": record_id,
+            "entity_id": stable_id("entity", entity_key),
+            "canonical_entity_key": entity_key,
+            "record_type": "subject",
+            "title": "NASA",
+            "source_urls": [],
+            "source_page_ids": [],
+            "catalog_ids": [],
+            "last_seen_at": None,
+            "attributes": {},
+        }
+        page_rows = [{"page_id": page_id, "url": url, "record_ids": [record_id]}]
+
+        repaired = _reconcile_page_record_provenance(page_rows, [record])
+
+        self.assertEqual(repaired, 1)
+        self.assertEqual(record["source_page_ids"], [page_id])
+        self.assertEqual(record["source_urls"], [url])
+        self.assertEqual(record["source_url"], url)
+        self.assertEqual(record["source_page_count"], 1)
+
+    def test_reconcile_fails_closed_for_missing_record_identity(self):
+        url = "https://example.org/nasa"
+        page_id = stable_id("page", url)
+        page_rows = [{"page_id": page_id, "url": url, "record_ids": ["missing-record"]}]
+        with self.assertRaisesRegex(ValueError, "references missing record"):
+            _reconcile_page_record_provenance(page_rows, [])
 
 
 if __name__ == "__main__":
