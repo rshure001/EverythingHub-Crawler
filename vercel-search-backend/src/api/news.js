@@ -50,8 +50,7 @@ module.exports = async function handler(req, res) {
     });
     if (!response.ok) throw new Error("News provider HTTP " + response.status);
     const xml = await response.text();
-    const items = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/gi)]
-      .slice(0, 10)
+    const rawItems = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/gi)]
       .map(match => {
         const item = match[1];
         const title = readTag(item, "title");
@@ -68,6 +67,13 @@ module.exports = async function handler(req, res) {
         };
       })
       .filter(item => item.title && /^https?:\/\//i.test(item.url));
+    const seenTitles = new Set();
+    const items = rawItems.filter(item => {
+      const key = item.title.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+      if (!key || seenTitles.has(key)) return false;
+      seenTitles.add(key);
+      return true;
+    }).slice(0, 10);
 
     if (!items.length) throw new Error("The news provider returned no usable stories");
     return res.status(200).json({
