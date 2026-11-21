@@ -64,6 +64,30 @@ class UniversalCatalogIngestTests(unittest.TestCase):
         self.assertEqual(record["attributes"]["resources"][0]["rights"], "Open use. Must provide the source")
         self.assertIsNot(record["attributes"].get("commercial_eligible"), True)
 
+
+    def test_private_dataset_never_becomes_public_searchable(self):
+        result = adapt({
+            "updated_at": "2026-11-21T00:00:00Z",
+            "catalogs": [{
+                "id": "swiss-open-data", "name": "opendata.swiss",
+                "base_url": "https://opendata.swiss",
+                "source_terms_url": "https://opendata.swiss/en/terms-of-use",
+                "source_terms_status": "reviewed_per_dataset",
+                "source_terms_reviewed_at": "2026-11-21",
+                "errors": [],
+            }],
+            "datasets": [{
+                "catalog_id": "swiss-open-data", "id": "swiss-open-data:private",
+                "dataset_id": "private", "title": "Private Dataset",
+                "landing_url": "https://opendata.swiss/dataset/private",
+                "license": {"rights": "Open use", "is_open": True, "private": True},
+                "resource_count": 0,
+            }],
+        })
+        self.assertFalse(result["records"][0]["attributes"]["public_search_allowed"])
+        self.assertEqual(result["records"][0]["attributes"]["rights_status"], "private_dataset")
+        self.assertFalse(result["source_pages"][0]["policy_allowed"])
+
     def test_merges_library_archive_catalogs_and_document_records(self):
         result = adapt({
             "updated_at": "2026-11-20T00:00:00Z",
