@@ -32,6 +32,8 @@ jobs:
           python-version: "3.12"
       - name: Run catalog analyzer unit tests
         run: python -m unittest discover -s crawler -p 'test_catalog_page_analysis.py' -v
+      - name: Prepare artifact directory
+        run: mkdir -p artifacts
       - name: Rebuild catalog candidates offline from canonical index
         run: |
           python crawler/catalog_page_analysis.py \
