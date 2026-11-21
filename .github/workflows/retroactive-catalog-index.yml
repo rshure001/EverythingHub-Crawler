@@ -51,7 +51,7 @@ jobs:
         run: |
           set -euo pipefail
           git fetch --depth=1 origin main
-          git checkout origin/main -- data/index.json data/index-shards
+          git checkout origin/main -- data/index.json data/index-shards public-search
           python - <<'PY'
           import json
           from datetime import datetime, timezone
@@ -98,7 +98,7 @@ jobs:
       - name: Inventory every existing indexed host
         run: python crawler/catalog_retro_discovery.py
       - name: Analyze every eligible existing indexed page
-        run: python crawler/catalog_page_analysis.py --query Rolex --query "Las Vegas" --query NASA
+        run: python crawler/catalog_page_analysis.py --index public-search/manifest.json --query Rolex --query "Las Vegas" --query NASA
       - name: Record persisted catalog and record throughput
         run: |
           python - <<'PY'
@@ -202,7 +202,7 @@ jobs:
 
             echo "Main advanced during catalog publication; rebuilding the complete validated snapshot from the new main tip (rebuild $attempt of 3)."
             python crawler/catalog_retro_discovery.py
-            python crawler/catalog_page_analysis.py --query Rolex --query "Las Vegas"
+            python crawler/catalog_page_analysis.py --index public-search/manifest.json --query Rolex --query "Las Vegas"
             python crawler/catalog_host_review_queue.py
             python crawler/catalog_page_analysis.py --validate-only
             python crawler/catalog_host_review_queue.py --validate-only
