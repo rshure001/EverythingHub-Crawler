@@ -12,3 +12,12 @@ test("robots denial blocks the Archive image search API and fails closed",async(
 test("robots denial of archive thumbnail path suppresses image cards",async()=>{resetForTests();const originalFetch=global.fetch;global.fetch=async url=>{const parsed=new URL(url);if(parsed.pathname==="/robots.txt")return response(200,"User-agent: *\nDisallow: /services/img/\n",parsed.href);if(parsed.pathname==="/advancedsearch.php")return response(200,JSON.stringify({response:{docs:[imageDoc(90)]}}),parsed.href);throw new Error("Unexpected request "+parsed.href);};try{const res=mockResponse();await handler({method:"GET",query:{q:"NASA"}},res);assert.equal(res.statusCode,200);assert.equal(res.body.count,0);}finally{global.fetch=originalFetch;resetForTests();}});
 
 test("generic provider names are not accepted as CC BY creator attribution",()=>{assert.equal(normalizeArchiveImage(imageDoc(6,{creator:"Internet Archive"}),["nasa"]),null);const publicDomain=normalizeArchiveImage(imageDoc(7,{creator:"Internet Archive",licenseurl:"https://creativecommons.org/publicdomain/mark/1.0/"}),["nasa"]);assert.ok(publicDomain);assert.equal(publicDomain.creator,"");});
+
+test("image normalizer rejects records without image files and known missing Archive thumbnails",()=>{
+  assert.equal(normalizeArchiveImage(imageDoc(8,{imagecount:0}),["nasa"]),null);
+  assert.equal(normalizeArchiveImage(imageDoc(9,{imagecount:undefined}),["nasa"]),null);
+  assert.equal(normalizeArchiveImage(imageDoc(10,{identifier:"megamap"}),["nasa"]),null);
+  const item=normalizeArchiveImage(imageDoc(11,{imagecount:"2"}),["nasa"]);
+  assert.ok(item);
+  assert.equal(item.imageCount,2);
+});
