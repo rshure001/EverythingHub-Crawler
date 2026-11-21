@@ -114,3 +114,82 @@ jobs:
             production-report.json
           if-no-files-found: warn
           retention-days: 3
+
+  free-fallback-browser-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      TARGET_URL: https://everythinghub.ink/
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install Playwright
+        run: |
+          npm init -y
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+      - name: Verify free Vercel fallback, live search, and mobile layout
+        run: |
+          cat > fallback-check.cjs <<'JS'
+          const { chromium } = require("playwright");
+          const fs = require("fs");
+          (async () => {
+            const browser = await chromium.launch({headless:true});
+            const page = await browser.newPage({viewport:{width:1440,height:1000}});
+            const errors=[];
+            page.on("pageerror",e=>errors.push(e.message));
+            const report={url:process.env.TARGET_URL,startedAt:new Date().toISOString(),searches:{}};
+            try {
+              const response=await page.goto(report.url,{waitUntil:"domcontentloaded",timeout:45000});
+              const image=page.locator(".art img").first();
+              await image.waitFor({state:"visible",timeout:20000});
+              await page.waitForFunction(()=>{const i=document.querySelector(".art img");return !!i&&i.complete&&i.naturalWidth>=100;},null,{timeout:20000});
+              report.httpStatus=response?.status();
+              report.title=await page.title();
+              report.artwork=await image.evaluate(i=>({src:i.currentSrc,width:i.naturalWidth,height:i.naturalHeight}));
+              report.searchInputCount=await page.locator("#query").count();
+              report.categoryCount=await page.locator(".hotspots [data-mode]").count();
+              report.categoryModes=await page.locator(".hotspots [data-mode]").evaluateAll(xs=>xs.map(x=>x.dataset.mode));
+              if(!response?.ok()||!report.title.includes("Everything Hub")||report.searchInputCount!==1||report.categoryCount!==8)throw new Error("Fallback homepage structure failed: "+JSON.stringify(report));
+              await page.screenshot({path:"everythinghub-fallback-home.png",fullPage:true});
+              for(const query of ["Rolex","Las Vegas","NASA"]){
+                await page.goto(report.url,{waitUntil:"domcontentloaded",timeout:45000});
+                await page.locator("#query").fill(query);
+                await page.locator("#searchForm button[type=submit]").click();
+                await page.locator("#results .eh-result").first().waitFor({state:"visible",timeout:30000});
+                const count=await page.locator("#results .eh-result").count();
+                const titles=await page.locator("#results .eh-result a").allTextContents();
+                report.searches[query]={visibleCards:count,titles:titles.slice(0,5),status:await page.locator("#status").innerText()};
+                if(!count)throw new Error(query+" returned no visible results");
+                await page.screenshot({path:"everythinghub-fallback-"+query.toLowerCase().replace(/\s+/g,"-")+".png",fullPage:true});
+              }
+              await page.setViewportSize({width:390,height:844});
+              await page.goto(report.url,{waitUntil:"domcontentloaded",timeout:45000});
+              report.mobile=await page.evaluate(()=>({viewportWidth:document.documentElement.clientWidth,documentWidth:document.documentElement.scrollWidth,artworkVisible:!!document.querySelector(".art img")?.getClientRects().length,searchVisible:!!document.querySelector("#query")?.getClientRects().length,categories:document.querySelectorAll(".hotspots [data-mode]").length}));
+              await page.screenshot({path:"everythinghub-fallback-mobile.png",fullPage:true});
+              if(report.mobile.documentWidth>report.mobile.viewportWidth+2||!report.mobile.artworkVisible||!report.mobile.searchVisible||report.mobile.categories!==8)throw new Error("Fallback mobile layout failed: "+JSON.stringify(report.mobile));
+              report.pageErrors=errors;
+              report.passed=errors.length===0&&Object.keys(report.searches).length===3;
+              if(errors.length)throw new Error("Fallback page errors: "+errors.join("; "));
+              fs.writeFileSync("fallback-report.json",JSON.stringify(report,null,2));
+              console.log(JSON.stringify(report,null,2));
+            }finally{await browser.close();}
+          })().catch(e=>{console.error(e);process.exit(1);});
+          JS
+          node fallback-check.cjs
+      - name: Save free fallback screenshots and report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: everythinghub-free-fallback-browser-check
+          path: |
+            everythinghub-fallback-home.png
+            everythinghub-fallback-rolex.png
+            everythinghub-fallback-las-vegas.png
+            everythinghub-fallback-nasa.png
+            everythinghub-fallback-mobile.png
+            fallback-report.json
+          if-no-files-found: warn
+          retention-days: 3
