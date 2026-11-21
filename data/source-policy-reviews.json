@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "purpose": "Auditable source-level policy evidence for catalog discovery and safe ingestion. These reviews are not legal advice and do not grant record-level rights clearance.",
-  "reviewed_at": "2026-11-21T00:22:00Z",
+  "reviewed_at": "2026-11-21T01:28:00Z",
   "policy": {
     "default_status": "candidate_only",
     "record_level_clearance": "not_reviewed",
@@ -102,7 +102,35 @@
         "https://www.census.gov/library/video/2026/adrm/requesting-a-census-data-api-key.html",
         "https://www.census.gov/about/policies/citation.html"
       ]
+    },
+    {
+      "host": "opendataportal-lasvegas.opendata.arcgis.com",
+      "status": "source_policy_reviewed_conditional",
+      "discovery_scope": "metadata_and_source_links_only",
+      "content_reuse": "conditional_by_dataset; current portal Terms of Use not located",
+      "findings": [
+        "The City of Las Vegas Open Data Guide states that city-published datasets are placed in the public domain without use or reuse restrictions.",
+        "The same guide states that portal content is subject to separate Information Technology terms of use posted on the portal; those current portal terms were not located in this review.",
+        "The City guide requires review for protected and sensitive information and specifically warns about personally identifying information and mosaic-effect risks.",
+        "The official portal exposes an OGC API Records search interface with catalog, collection, and item endpoints; endpoint availability does not itself authorize automated harvesting or republication."
+      ],
+      "mandatory_checks": [
+        "Locate and verify the current portal Terms of Use before any automated API harvesting.",
+        "Verify robots.txt, API request limits, and any portal-specific access rules before making requests.",
+        "Review every dataset separately for its public-domain status, provenance, attribution, freshness, and any third-party or contractor content.",
+        "Exclude protected, sensitive, and personally identifying fields; assess mosaic-effect risks before combining datasets.",
+        "Keep all records metadata-only and non-commercial until dataset-level terms, privacy, and provenance checks are complete.",
+        "Do not download or republish feature data, attachments, imagery, or other media under this source-level review."
+      ],
+      "api_access": "Not authorized yet: current portal Terms of Use and robots.txt must be verified before any API request.",
+      "commercial_eligibility": false,
+      "record_level_clearance": "not_reviewed",
+      "evidence_urls": [
+        "https://files.lasvegasnevada.gov/open-data/Open_Data_Guide_for_CLV__ODSC_Approved_.pdf",
+        "https://files.lasvegasnevada.gov/open-data/CLVOpenDataPolicy.pdf",
+        "https://opendataportal-lasvegas.opendata.arcgis.com/api/search/definition/"
+      ]
     }
   ],
-  "next_gate": "Implement record-level policy matching against these source rules. Keep all existing candidates preview-only until the record origin, applicable terms, attribution, privacy, and reuse basis are verified."
+  "next_gate": "Locate and verify the current City of Las Vegas portal Terms of Use and robots.txt before any API harvesting. Keep City portal candidates metadata-only until dataset-level terms, provenance, attribution, privacy, and reuse basis are verified. Keep all candidates preview-only until record-level review is complete."
 }

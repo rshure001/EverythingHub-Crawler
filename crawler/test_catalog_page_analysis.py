@@ -1025,5 +1025,33 @@ class PageDerivedCatalogAnalysisTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "deny-by-default"):
                 apply_source_policy_reviews({"records": [], "catalogs": [], "metrics": {}}, policy_path)
 
+
+    def test_las_vegas_open_data_review_is_conditional_and_metadata_only(self):
+        analysis = {
+            "records": [{
+                "record_id": "las-vegas-open-data",
+                "source_urls": [
+                    "https://opendataportal-lasvegas.opendata.arcgis.com/datasets/example"
+                ],
+            }],
+            "catalogs": [],
+            "metrics": {},
+        }
+        apply_source_policy_reviews(analysis)
+        record = analysis["records"][0]
+        self.assertEqual(record["source_policy_review_status"], "conditional_source_review")
+        self.assertEqual(
+            record["source_policy_review_hosts"],
+            ["opendataportal-lasvegas.opendata.arcgis.com"],
+        )
+        self.assertEqual(record["source_policy_review_scope"], "source-level-only")
+        self.assertEqual(record["record_level_clearance"], "not_reviewed")
+        self.assertEqual(record["source_terms_status"], "not_reviewed")
+        self.assertFalse(record["commercial_eligible"])
+        self.assertIn(
+            "https://files.lasvegasnevada.gov/open-data/Open_Data_Guide_for_CLV__ODSC_Approved_.pdf",
+            record["source_policy_review_evidence_urls"],
+        )
+
 if __name__ == "__main__":
     unittest.main()

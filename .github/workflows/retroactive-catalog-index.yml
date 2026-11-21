@@ -11,6 +11,7 @@ on:
       - "crawler/test_product_metadata.py"
       - "project/ledger.py"
       - "project/test_ledger.py"
+      - "data/source-policy-reviews.json"
       - ".github/workflows/retroactive-catalog-index.yml"
   workflow_dispatch:
   schedule:
