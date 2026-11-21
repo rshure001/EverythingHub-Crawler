@@ -1,19 +1,16 @@
 name: EverythingHub first-party catalog search smoke test
 # Verify the Supabase Edge search path after committed corpus or page-derived catalog updates.
 on:
-  push:
+  workflow_run:
+    workflows: ["Retroactive catalog inventory"]
+    types: [completed]
     branches: [main]
-    paths:
-      - "public-search/manifest.json"
-      - "public-search/shard-*.json"
-      - "public-search/shard-*.json.gz"
-      - "public-search/catalog-v1.json.gz"
-      - "data/page-derived-catalogs/**"
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
   smoke-test:
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
     timeout-minutes: 8
     env:
