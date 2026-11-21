@@ -73,3 +73,14 @@ Freshness guard: candidate previews are marked current only when the source-inde
 
 
 Relevance ranking: commerce catalogs with matching product/brand/model records and geographic catalogs with matching place records receive type-aware boosts. Article/resource/media catalogs receive a smaller title-only catalog bonus unless the query explicitly asks for content, reducing incidental mentions in Rolex and Las Vegas searches.
+
+
+## Video search and media rights
+
+- Video search uses the official NASA Image and Video Library search API at images-api.nasa.gov; it does not scrape YouTube HTML, use undocumented YouTube search feeds, or use Bing's undocumented video RSS endpoint.
+- The backend fetches metadata only and never downloads or re-hosts video/audio files.
+- It checks robots.txt for both the NASA API host and the API-provided thumbnail host before using either.
+- Requests are serialized per host, paced at a minimum of two seconds, and bounded to 60 requests per host per runtime hour. Successful results are cached for five minutes.
+- Only API-provided HTTPS preview thumbnails from approved NASA asset hosts are displayed. Items with explicit third-party copyright metadata are excluded.
+- Video cards link to the original NASA detail page and display the listed creator/center credit plus the NASA media-guidelines link. No NASA endorsement is implied.
+- The live preflight is node vercel-search-backend/test/videos-live-smoke.cjs; it checks robots access and requires at least 15 usable NASA video records before a production browser acceptance run.
