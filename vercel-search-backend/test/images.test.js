@@ -12,7 +12,7 @@ test("image search pages through unfiltered Archive metadata before applying loc
   const originalFetch=global.fetch,apiCalls=[];
   global.fetch=async url=>{
     const parsed=new URL(url);
-    if(parsed.pathname==="/robots.txt")return response(200,"User-agent: *\\nDisallow: /control/\\nDisallow: /report/\\n",parsed.href);
+    if(parsed.pathname==="/robots.txt")return response(200,"User-agent: *\nDisallow: /control/\nDisallow: /report/\n",parsed.href);
     if(parsed.pathname==="/advancedsearch.php"){
       apiCalls.push(parsed.href);
       const page=Number(parsed.searchParams.get("page")||"1");
