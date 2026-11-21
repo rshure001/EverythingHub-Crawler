@@ -86,3 +86,10 @@ Relevance ranking: commerce catalogs with matching product/brand/model records a
 - Exact Creative Commons license URLs on the official host are normalized to HTTPS. Cards link to the original Internet Archive item and license and display creator/source attribution.
 - License metadata is not a guarantee of rights. The UI preserves the source link and makes no claim that a record is rights-cleared for redistribution.
 - Wikimedia Commons and Openverse API routes are not used because the relevant API paths fail robots policy checks. Legacy YouTube thumbnail fetching is disabled.
+
+## External link catalogs
+
+- Curated external link-only catalogs are stored separately from page-derived catalog artifacts. The current Rolex collection directory source of truth is `data/external-catalogs/registry.json`; the Vercel runtime snapshot is `src/data/external-catalogs.json`.
+- The search route combines validated external link directories with page-derived catalog previews, while returning separate external catalog and record counts.
+- The Rolex directory contains six official collection-family links only. No Rolex pages, descriptions, specifications, images or videos were fetched or copied. Source terms are not reviewed, record-level rights are not cleared, redistribution is not cleared, and commercial eligibility is false.
+- Do not expand this directory by crawling Rolex pages without a separate source-policy review and authorization.
