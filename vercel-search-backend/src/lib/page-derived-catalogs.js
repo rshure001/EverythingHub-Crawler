@@ -290,7 +290,7 @@ function searchPageDerivedCatalogs(query,network,limit=5){
   const types=new Set(matched.map(x=>String(x.record.record_type||'').toLowerCase()));
   const recordScores=matched.slice(0,5).map(x=>x.score);
   let score=Math.max(...recordScores)+Math.min(30,recordScores.reduce((sum,value)=>sum+value,0)-Math.max(...recordScores));
-  const ct=new Set(tokenize([c.title,c.subject].join(' '));
+  const ct=new Set(tokenize([c.title,c.subject].join(' ')));
   const contentCatalog=['article','resource','media','subject'].includes(String(c.record_type||'').toLowerCase());
   const catalogMatch=terms.every(t=>ct.has(t));
   if(catalogMatch)score+=contentCatalog&&!contentIntent?25+5*terms.length:100+10*terms.length;
@@ -318,6 +318,8 @@ function searchPageDerivedCatalogs(query,network,limit=5){
    if(c.catalog_type==='commerce')score+=['product','brand','model'].some(t=>types.has(t))?50:-20;
    if(c.catalog_type==='business_directory')score+=types.has('business')?40:-15;
    if(c.catalog_type==='service_directory')score+=types.has('service')?40:-15;
+   if(c.catalog_type==='organization_directory')score+=types.has('organization')?60:-15;
+   if(c.catalog_type==='people_directory')score+=types.has('person')?60:-15;
   }
   let relevanceClass='record_match';
   if(productIntent&&['product','brand','model'].some(t=>types.has(t)))relevanceClass='typed_product_match';
@@ -325,6 +327,7 @@ function searchPageDerivedCatalogs(query,network,limit=5){
   else if(geoIntent&&types.has('event'))relevanceClass='related_event_match';
   else if(locationBusinessIntent&&['business','service'].some(t=>types.has(t)))relevanceClass='typed_business_match';
   else if(eventIntent&&types.has('event'))relevanceClass='typed_event_match';
+  else if(types.has('organization'))relevanceClass='typed_organization_match';
   else if(['article','resource','media','subject'].some(t=>types.has(t)))relevanceClass='related_mention';
   else if(catalogMatch)relevanceClass='catalog_match';
   const relevanceLabel={
@@ -332,6 +335,7 @@ function searchPageDerivedCatalogs(query,network,limit=5){
    typed_location_match:'Place or local directory match',
    typed_business_match:'Business or service match',
    typed_event_match:'Event catalog match',
+   typed_organization_match:'Organization match',
    related_event_match:'Related event mention for this location',
    related_mention:'Related mention, not a dedicated catalog match',
    catalog_match:'Catalog title match',
