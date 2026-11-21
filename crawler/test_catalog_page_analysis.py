@@ -1507,7 +1507,8 @@ class CatalogInventoryTriggerTests(unittest.TestCase):
         self.assertEqual(len({item["record_id"] for item in nasa_records}), 3)
         self.assertEqual(len({item["entity_id"] for item in nasa_records}), 1)
         self.assertTrue(all(source_key in row["catalog_group_keys"] for row in page_rows))
-        nasa_hits = search_catalog_network("NASA", {"records": records, "catalogs": catalogs})
+        search_analysis = analyze_pages(pages, source_total=len(pages))
+        nasa_hits = search_catalog_network("NASA", search_analysis)
         self.assertTrue(any(item.get("subject") == "nasa" for item in nasa_hits))
         self.assertFalse(any(item.get("subject") == "mission" for item in nasa_hits))
 
@@ -1543,7 +1544,7 @@ class CatalogInventoryTriggerTests(unittest.TestCase):
             and item.get("catalog_origin") == "derived_from_repeated_records"
             for item in rolex_hits
         ))
-        rolex_evidence = search_source_page_evidence("Rolex", rolex_result)
+        rolex_evidence = search_source_page_evidence("Rolex", rolex_pages)
         self.assertTrue(any("Rolex" in item.get("title", "") for item in rolex_evidence))
 
         vegas_pages = [
