@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-11-21T14:53:29.952343+00:00",
+  "updated_at": "2026-11-21T15:03:55.214167+00:00",
   "target_new_records_per_hour": 60000,
   "runs": [
     {
@@ -985,26 +985,50 @@
         "wall_clock_records_per_minute": 48.33,
         "wall_clock_records_per_hour": 2899.5
       }
+    },
+    {
+      "run_id": "44916366139",
+      "run_number": "340",
+      "timestamp": "2026-11-21T15:02:32Z",
+      "indexed_records_processed": 614,
+      "fetch_attempts": 668,
+      "duration_seconds": 420.69,
+      "commit_sha": "c8f6d3704b88",
+      "manifest_interval": {
+        "valid": true,
+        "reason": null,
+        "before_pages": 154125,
+        "after_pages": 154702,
+        "before_updated_at": "2026-11-21T14:51:52Z",
+        "after_updated_at": "2026-11-21T15:02:32Z",
+        "elapsed_seconds": 640.0,
+        "run_duration_seconds": 420.69,
+        "new_unique_records": 577,
+        "records_per_minute": 82.29,
+        "records_per_hour": 4937.6,
+        "wall_clock_records_per_minute": 54.09,
+        "wall_clock_records_per_hour": 3245.6
+      }
     }
   ],
   "latest_manifest_interval": {
     "valid": true,
     "reason": null,
-    "before_pages": 153620,
-    "after_pages": 154125,
-    "before_updated_at": "2026-11-21T14:41:25Z",
-    "after_updated_at": "2026-11-21T14:51:52Z",
-    "elapsed_seconds": 627.0,
-    "run_duration_seconds": 420.8,
-    "new_unique_records": 505,
-    "records_per_minute": 72.01,
-    "records_per_hour": 4320.3,
-    "wall_clock_records_per_minute": 48.33,
-    "wall_clock_records_per_hour": 2899.5
+    "before_pages": 154125,
+    "after_pages": 154702,
+    "before_updated_at": "2026-11-21T14:51:52Z",
+    "after_updated_at": "2026-11-21T15:02:32Z",
+    "elapsed_seconds": 640.0,
+    "run_duration_seconds": 420.69,
+    "new_unique_records": 577,
+    "records_per_minute": 82.29,
+    "records_per_hour": 4937.6,
+    "wall_clock_records_per_minute": 54.09,
+    "wall_clock_records_per_hour": 3245.6
   },
   "recent_run_activity": {
-    "records_processed": 1060,
-    "fetch_attempts": 1221,
-    "run_count": 2
+    "records_processed": 1674,
+    "fetch_attempts": 1889,
+    "run_count": 3
   }
 }
