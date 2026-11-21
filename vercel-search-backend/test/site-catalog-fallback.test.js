@@ -31,4 +31,10 @@ test("Vercel homepage crawler fallback preserves first-party catalog preview car
   assert.ok(search.includes("catalogResults=(page===1?(d.catalogResults||[]):[])"));
   assert.ok(search.includes("preview_only:true"));
   assert.ok(search.includes("commercial_eligible:false"));
+
+  const apiStart = vercelHomepage.indexOf("const loadApiPage=async(page)=>{");
+  const apiEnd = vercelHomepage.indexOf("const render=()=>", apiStart);
+  assert.ok(apiStart >= 0 && apiEnd > apiStart);
+  const api = vercelHomepage.slice(apiStart, apiEnd);
+  assert.ok(api.includes("catalogResults=(page===1?(d.catalogResults||[]):[])"));
 });
