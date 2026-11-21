@@ -79,7 +79,8 @@ jobs:
             const report = { url: process.env.TARGET_URL, checks: {}, pageErrors, consoleErrors, httpErrors, requestFailures, mediaResponses, mediaFailures };
             const shot = async name => page.screenshot({ path: name, fullPage: true });
             const goHome = async () => {
-              await page.goto(process.env.TARGET_URL, { waitUntil: "domcontentloaded", timeout: 45000 });
+              await page.goto(process.env.TARGET_URL, { waitUntil: "commit", timeout: 45000 });
+              await page.locator("body").waitFor({ state: "attached", timeout: 30000 });
               const release = await page.locator("body").getAttribute("data-release").catch(() => null);
               if (release !== "fallback-2026-11-21-r4") throw new Error("Unexpected live release marker: " + release);
               await page.locator("#query").waitFor({ state: "visible", timeout: 20000 });
@@ -95,12 +96,12 @@ jobs:
               let response = null;
               let release = null;
               for (let attempt = 0; attempt < 24; attempt++) {
-                try { response = await page.goto(report.url, { waitUntil: "domcontentloaded", timeout: 20000 }); } catch {}
+                try { response = await page.goto(report.url, { waitUntil: "commit", timeout: 20000 }); } catch {}
                 release = await page.locator("body").getAttribute("data-release").catch(() => null);
                 if (response && response.status() === 200 && release === "fallback-2026-11-21-r4") return response;
                 await page.waitForTimeout(5000);
               }
-              throw new Error("Vercel fallback did not serve r3 release marker; last release=" + release);
+              throw new Error("Vercel fallback did not serve r4 release marker; last release=" + release);
             };
             const search = async (mode, query, resultSelector, minCount = 1) => {
               await page.locator('.hotspots [data-mode="' + mode + '"]').click();
