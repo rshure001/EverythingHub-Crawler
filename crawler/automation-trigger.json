@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "updated_at": "2026-11-21T09:01:53Z",
-  "reason": "One bounded recovery crawl after scheduled crawl delivery remained stale for more than 25 minutes and the public search manifest was more than 10 minutes old. Latest scheduled crawl was 2026-11-21T04:19:41Z. Latest completed crawler attempt was 2026-11-21T08:11:09Z. The public manifest contained 147526 pages and was last updated 2026-11-21T08:19:04Z. A final read-only check found zero queued or running crawlers before this marker update.",
-  "manifest_before_pages": 147526,
-  "manifest_before_updated_at": "2026-11-21T08:19:04Z"
+  "updated_at": "2026-11-21T09:39:32.116Z",
+  "reason": "One bounded recovery crawl because scheduled crawl delivery remains stale (last confirmed scheduled run 2026-11-21T04:19:41Z), the public manifest is 1543 seconds old, and no queued or running crawler was found. Latest completed crawler run #44887952951 succeeded at 2026-11-21T09:15:52Z. Current manifest: 148438 source pages, updated 2026-11-21T09:13:49.000Z.",
+  "manifest_before_pages": 148438,
+  "manifest_before_updated_at": "2026-11-21T09:13:49.000Z"
 }
