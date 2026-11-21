@@ -56,7 +56,7 @@ services:
     container_name: everythinghub-cloudflared
     restart: unless-stopped
     profiles: ["tunnel"]
-    command: tunnel --no-autoupdate run --token ${EH_CLOUDFLARE_TUNNEL_TOKEN:?Set EH_CLOUDFLARE_TUNNEL_TOKEN in .env}
+    command: ["tunnel", "--no-autoupdate", "run", "--token", "${EH_CLOUDFLARE_TUNNEL_TOKEN:-}"]
     depends_on:
       everythinghub-search:
         condition: service_healthy
