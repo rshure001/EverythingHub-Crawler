@@ -59,6 +59,40 @@ def path_allowed(path: str, prefixes: list[str]) -> bool:
     )
 
 
+def _catalog_path_pattern_allowed(path: str, patterns: object) -> bool:
+    """Match exact path shapes; '*' matches one segment and never crosses '/'. """
+    if not isinstance(patterns, list):
+        return False
+    decoded_path = urllib.parse.unquote(path)
+    if decoded_path.count("/") != path.count("/") or "\\" in decoded_path:
+        return False
+    path_segments = [segment for segment in path.split("/") if segment]
+    if any(segment in {".", ".."} for segment in path_segments):
+        return False
+    for pattern in patterns:
+        if not isinstance(pattern, str) or not pattern.startswith("/"):
+            continue
+        pattern_segments = [segment for segment in pattern.split("/") if segment]
+        if len(pattern_segments) != len(path_segments):
+            continue
+        if all(expected == "*" or expected == actual for expected, actual in zip(pattern_segments, path_segments)):
+            return True
+    return False
+
+
+def _purpose_path_allowed(path: str, policy: dict, purpose: str) -> bool:
+    if purpose == "discovery":
+        return path_allowed(path, policy.get("allowed_api_paths") or [])
+    if purpose == "probe":
+        return path_allowed(path, policy.get("allowed_probe_paths") or [])
+    if purpose == "landing_page":
+        return (
+            path_allowed(path, policy.get("allowed_catalog_paths") or [])
+            or _catalog_path_pattern_allowed(path, policy.get("allowed_catalog_path_patterns"))
+        )
+    return False
+
+
 def authorize_source_url(url: str, purpose: str = "discovery") -> tuple[dict, object, float, list[str]]:
     parsed = urllib.parse.urlsplit(url)
     try:
@@ -94,7 +128,7 @@ def authorize_source_url(url: str, purpose: str = "discovery") -> tuple[dict, ob
         allowed_paths = policy.get("allowed_catalog_paths") or []
     else:
         raise SourcePolicyError("unsupported catalog request purpose")
-    if not path_allowed(parsed.path, allowed_paths):
+    if not _purpose_path_allowed(parsed.path, policy, purpose):
         raise SourcePolicyError(f"path is outside the approved {purpose} allowlist for {host}")
     parser = _ROBOTS_CACHE.get(host)
     if parser is None:
@@ -144,7 +178,7 @@ def request_source_bytes(
     def redirect_allowed(target: str) -> bool:
         return (
             same_origin(url, target)
-            and path_allowed(urllib.parse.urlsplit(target).path, allowed_paths)
+            and _purpose_path_allowed(urllib.parse.urlsplit(target).path, policy, purpose)
             and robots_can_fetch(parser, UA, target)
         )
 
@@ -159,7 +193,7 @@ def request_source_bytes(
         if not same_origin(url, final_url):
             raise SourcePolicyError("cross-origin catalog API redirect blocked")
         final = urllib.parse.urlsplit(final_url)
-        if not path_allowed(final.path, allowed_paths) or not robots_can_fetch(parser, UA, final_url):
+        if not _purpose_path_allowed(final.path, policy, purpose) or not robots_can_fetch(parser, UA, final_url):
             raise SourcePolicyError("catalog API redirect target is outside source policy or robots rules")
         raw = response.read(max_bytes + 1)
         if len(raw) > max_bytes:

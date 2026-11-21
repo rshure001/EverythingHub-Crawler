@@ -23,7 +23,13 @@ class CatalogSourcePolicyTests(unittest.TestCase):
         self.assertTrue(frontiers["metadata_only"])
         self.assertTrue(frontiers["per_dataset_rights_required"])
         self.assertEqual(frontiers["allowed_api_paths"], [])
-        self.assertEqual(frontiers["allowed_catalog_paths"], ["/journals", "/articles"])
+        self.assertEqual(frontiers["allowed_catalog_paths"], [])
+        self.assertEqual(frontiers["allowed_catalog_path_patterns"], [
+            "/articles",
+            "/journals/*/articles",
+            "/journals/*/sections/*",
+            "/journals/*/sections/*/articles",
+        ])
         self.assertEqual(frontiers["min_interval_seconds"], 3)
         self.assertEqual(frontiers["max_response_bytes"], 1500000)
         self.assertIn("doi", frontiers["allowed_metadata_fields"])
@@ -72,9 +78,40 @@ class CatalogSourcePolicyTests(unittest.TestCase):
             )
         self.assertIs(loaded_parser, parser)
         self.assertEqual(delay, 3.5)
-        self.assertEqual(paths, ["/journals", "/articles"])
+        self.assertEqual(paths, [])
         self.assertTrue(source["metadata_only"])
         self.assertEqual(source["rights_scope"], "per_article_license")
+
+
+    def test_frontiers_nested_section_catalog_path_is_allowed(self):
+        parser = object()
+        with patch.object(policy, "load_robots_policy", return_value=parser), \
+             patch.object(policy, "robots_can_fetch", return_value=True), \
+             patch.object(policy, "effective_host_delay", return_value=3.0):
+            source, _, _, _ = policy.authorize_source_url(
+                "https://frontiersin.org/journals/insect-science/sections/plant-pathology/articles",
+                purpose="landing_page",
+            )
+        self.assertTrue(source["metadata_only"])
+
+
+    def test_frontiers_encoded_path_separator_is_rejected_before_robots(self):
+        with patch.object(policy, "load_robots_policy") as load_robots:
+            with self.assertRaises(policy.SourcePolicyError):
+                policy.authorize_source_url(
+                    "https://frontiersin.org/journals/insect%2Fscience/articles",
+                    purpose="landing_page",
+                )
+            load_robots.assert_not_called()
+
+    def test_frontiers_individual_article_fulltext_path_is_rejected_before_robots(self):
+        with patch.object(policy, "load_robots_policy") as load_robots:
+            with self.assertRaises(policy.SourcePolicyError):
+                policy.authorize_source_url(
+                    "https://frontiersin.org/journals/insect-science/articles/10.3389/fmicb.2021.123456/full",
+                    purpose="landing_page",
+                )
+            load_robots.assert_not_called()
 
     def test_frontiers_landing_page_path_outside_allowlist_is_rejected_before_robots(self):
         with patch.object(policy, "load_robots_policy") as load_robots:
@@ -139,7 +176,7 @@ class CatalogSourcePolicyTests(unittest.TestCase):
 
         source = policy.policy_for_host("frontiersin.org")
         parser = object()
-        with patch.object(policy, "authorize_source_url", return_value=(source, parser, 0.0, ["/journals"])), \
+        with patch.object(policy, "authorize_source_url", return_value=(source, parser, 0.0, [])), \
              patch.object(policy, "build_pinned_opener", return_value=Opener()), \
              patch.object(policy, "robots_can_fetch", return_value=True):
             with self.assertRaises(policy.SourcePolicyError):
