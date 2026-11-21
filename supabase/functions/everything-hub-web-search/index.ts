@@ -255,7 +255,7 @@ Deno.serve(async (req: Request) => {
     };
     try {
       const pageDerived = await loadPageDerivedCatalogPreview();
-      pageDerivedCatalogResults = searchPageDerivedCatalogPreview(query, pageDerived, 5);
+      pageDerivedCatalogResults = await searchPageDerivedCatalogPreview(query, pageDerived, 5);
       const freshnessMatch = Boolean(pageDerived.freshnessMatch && !pageDerived.stale);
       pageDerivedCatalogMeta = {
         status: freshnessMatch ? "candidate-preview" : "stale-candidate-preview",
