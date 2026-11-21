@@ -2,7 +2,7 @@
 const https = require('node:https');
 const { loadCatalog } = require('../lib/catalog');
 const { loadPageDerivedCatalogs, searchPageDerivedCatalogs, matchesPageIndexSnapshot } = require('../lib/page-derived-catalogs');
-const { searchExternalCatalogs } = require('../lib/external-catalogs');
+const { searchExternalCatalogs, getExternalCatalogStats } = require('../lib/external-catalogs');
 const { searchCatalog, parseBingRss, buildResponse } = require('../lib/search-core');
 const MAX_QUERY_LENGTH = 160;
 const MAX_LIMIT = 50;
@@ -97,6 +97,7 @@ module.exports = async function handler(req, res) {
   const bingResults = bingResult.status === 'fulfilled' ? bingResult.value : [];
   const pageDerivedNetwork = pageDerivedResult.status === 'fulfilled' ? pageDerivedResult.value : null;
   const externalCatalogResults = searchExternalCatalogs(query);
+  const externalCatalogStats = getExternalCatalogStats();
   let catalogResults = [...externalCatalogResults, ...(pageDerivedNetwork ? searchPageDerivedCatalogs(query, pageDerivedNetwork, 5) : [])].slice(0, 5);
   const catalogPreview = pageDerivedNetwork ? {
     status: 'freshness-unverified',
@@ -118,6 +119,10 @@ module.exports = async function handler(req, res) {
     resultCount: 0,
     error: safeCatalogError(pageDerivedResult.reason || 'page_catalog_unavailable')
   };
+
+  catalogPreview.externalCatalogCount = externalCatalogStats.catalogCount;
+  catalogPreview.externalCatalogRecordCount = externalCatalogStats.recordCount;
+  catalogPreview.externalCatalogResults = externalCatalogResults.length;
 
   if (catalogResult.status !== 'fulfilled') {
     if (pageDerivedNetwork) {
@@ -179,6 +184,7 @@ module.exports = async function handler(req, res) {
     staleCatalog: catalog.stale
   });
   payload.catalogResults = catalogResults;
+  payload.externalCatalogResults = externalCatalogResults;
   payload.catalogPreview = catalogPreview;
   if (catalogResults.length) payload.providers.push('Everything Hub Catalog Preview');
   if (bingResult.status !== 'fulfilled') payload.providers = payload.providers.filter(x => x !== 'Bing Web Search');
