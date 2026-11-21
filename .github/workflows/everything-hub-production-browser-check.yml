@@ -35,7 +35,7 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Verify live AppDeploy homepage, search, categories, news, and mobile layout
         run: |
-                    cat > production-check.cjs <<'JS'
+          cat > production-check.cjs <<'JS'
           const { chromium } = require("playwright");
           const fs = require("fs");
           (async () => {
@@ -117,7 +117,6 @@ jobs:
             if (!report.passed) process.exit(1);
             console.log(JSON.stringify(report, null, 2));
           })();
-          JS
           JS
           node production-check.cjs
       - name: Save production screenshots and report
