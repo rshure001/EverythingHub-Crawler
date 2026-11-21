@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 12
     env:
-      TARGET_URL: https://everythinghub-homepage-fixed.vercel.app/
+      TARGET_URL: https://everythinghub-homepage-fixed-5ejp93con-rshure001-8053.vercel.app/
     steps:
       - uses: actions/setup-node@v4
         with:
@@ -56,14 +56,21 @@ jobs:
               await page.goto(process.env.TARGET_URL, { waitUntil: "domcontentloaded", timeout: 45000 });
               await page.locator("#query").waitFor({ state: "visible", timeout: 20000 });
             };
-            const search = async (mode, query, resultSelector, minCount = 1) => {
+            const search = async (mode, query, resultSelector, minCount = 1, requireCatalog = false) => {
               await page.locator('.hotspots [data-mode="' + mode + '"]').click();
               await page.locator("#query").fill(query);
               await page.locator("#searchForm button[type=submit]").click();
               await page.locator(resultSelector).first().waitFor({ state: "visible", timeout: 60000 });
+              if (requireCatalog) await page.locator("#results .eh-catalog-result").first().waitFor({ state: "visible", timeout: 30000 });
               const count = await page.locator(resultSelector).count();
+              const catalogs = await page.locator("#results .eh-catalog-result").evaluateAll(nodes => nodes.map(node => ({
+                title: node.querySelector("h3")?.textContent?.trim() || "",
+                text: node.textContent?.trim() || "",
+                visible: node.getBoundingClientRect().width > 0 && node.getBoundingClientRect().height > 0
+              })));
               if (count < minCount) throw new Error(mode + " returned only " + count + " results for " + query);
-              return { count, titles: (await page.locator(resultSelector).allTextContents()).slice(0, 6) };
+              if (requireCatalog && !catalogs.length) throw new Error("No visible catalog directory cards for " + query);
+              return { count, titles: (await page.locator(resultSelector).allTextContents()).slice(0, 6), catalogs };
             };
             try {
               const response = await page.goto(report.url, { waitUntil: "domcontentloaded", timeout: 45000 });
@@ -79,16 +86,20 @@ jobs:
               if (modes.length !== 8) throw new Error("Expected eight search categories; got " + modes.length);
               report.checks.home = { http: response.status(), title: await page.title(), artwork: art, modes };
               await shot("everythinghub-home.png");
-              await search("web", "Rolex", "#results .eh-result", 1);
-              report.checks.rolex = { results: await page.locator("#results .eh-result").count(), catalogs: await page.locator("#results .eh-catalog-result").count() };
+              const rolex = await search("web", "Rolex", "#results .eh-result", 1, true);
+              if (!rolex.catalogs.some(card => /Rolex/i.test(card.title + " " + card.text))) throw new Error("Rolex search has no visible relevant catalog directory: " + JSON.stringify(rolex.catalogs));
+              report.checks.rolex = { results: rolex.count, catalogs: rolex.catalogs.length, catalogTitles: rolex.catalogs.map(card => card.title) };
               await shot("everythinghub-rolex.png");
               await goHome();
-              await search("web", "Las Vegas", "#results .eh-result", 1);
-              report.checks.lasVegas = { results: await page.locator("#results .eh-result").count(), catalogs: await page.locator("#results .eh-catalog-result").count() };
+              const vegas = await search("web", "Las Vegas", "#results .eh-result", 1, true);
+              if (!vegas.catalogs.some(card => /Las Vegas/i.test(card.title + " " + card.text))) throw new Error("Las Vegas search has no visible relevant catalog directory: " + JSON.stringify(vegas.catalogs));
+              if (vegas.catalogs.some(card => /Homeland Security Events/i.test(card.title + " " + card.text))) throw new Error("Las Vegas search displayed an unrelated event catalog");
+              report.checks.lasVegas = { results: vegas.count, catalogs: vegas.catalogs.length, catalogTitles: vegas.catalogs.map(card => card.title) };
               await shot("everythinghub-las-vegas.png");
               await goHome();
-              await search("web", "NASA", "#results .eh-result", 1);
-              report.checks.nasa = { results: await page.locator("#results .eh-result").count(), catalogs: await page.locator("#results .eh-catalog-result").count() };
+              const nasa = await search("web", "NASA", "#results .eh-result", 1, true);
+              if (!nasa.catalogs.some(card => /NASA/i.test(card.title + " " + card.text))) throw new Error("NASA search has no visible relevant catalog directory: " + JSON.stringify(nasa.catalogs));
+              report.checks.nasa = { results: nasa.count, catalogs: nasa.catalogs.length, catalogTitles: nasa.catalogs.map(card => card.title) };
               await shot("everythinghub-nasa.png");
               await goHome();
               await page.locator("#news-items .news-item").first().waitFor({ state: "visible", timeout: 45000 });
