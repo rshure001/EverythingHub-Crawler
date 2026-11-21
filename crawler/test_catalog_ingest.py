@@ -5,14 +5,14 @@ class UniversalCatalogIngestTests(unittest.TestCase):
     def test_ckan_datasets_become_catalog_records_not_pages(self):
         result = adapt({
             "updated_at": "2026-11-20T00:00:00Z",
-            "catalogs": [{"id":"test","name":"Test Data","base_url":"https://catalog.data.gov","source_terms_url":"","source_terms_status":"unreviewed","source_terms_reviewed_at":"","attribution_required":"per_dataset","errors":[]}],
+            "catalogs": [{"id":"test","name":"Test Data","base_url":"https://opendata.swiss","source_terms_url":"https://opendata.swiss/en/terms-of-use","source_terms_status":"reviewed_per_dataset","source_terms_reviewed_at":"2026-11-21","attribution_required":"per_dataset","errors":[]}],
             "datasets": [{
                 "catalog_id":"test","id":"test:roads","dataset_id":"roads","title":"Road Network",
-                "description":"Roads and routes","landing_url":"https://catalog.data.gov/dataset/roads",
+                "description":"Roads and routes","landing_url":"https://opendata.swiss/dataset/roads",
                 "organization":"Transport","tags":["roads","maps"],
-                "resources":[{"name":"GeoJSON","format":"GEOJSON","url":"https://catalog.data.gov/roads.geojson"}],
+                "resources":[{"name":"GeoJSON","format":"GEOJSON","url":"https://opendata.swiss/roads.geojson"}],
                 "license":{"id":"cc-by","url":"https://creativecommons.org/licenses/by/4.0/","title":"CC BY"},
-                "source_terms_url":"","source_terms_status":"unreviewed",
+                "source_terms_url":"https://opendata.swiss/en/terms-of-use","source_terms_status":"reviewed_per_dataset",
                 "resource_count":1,"metadata_modified":"2026-11-19"
             }]
         })
