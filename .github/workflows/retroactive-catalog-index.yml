@@ -12,6 +12,7 @@ on:
       - "project/ledger.py"
       - "project/test_ledger.py"
       - "data/source-policy-reviews.json"
+      - "public-search/manifest.json"
       - ".github/workflows/retroactive-catalog-index.yml"
   workflow_dispatch:
   schedule:
