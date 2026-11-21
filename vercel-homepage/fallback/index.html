@@ -107,6 +107,7 @@ function renderCatalogResults(items,q){
   makeHeading(q,'Catalog matches',safeItems.length.toLocaleString()+' candidate previews · preview only');
   const list=document.createElement('div');list.className='catalog-preview-list';
   for(const item of safeItems){
+    const external=String(item.source_kind||'')==='external_link_only';
     const card=document.createElement('article');card.className='eh-catalog-result';
     card.dataset.catalogId=String(item.catalog_id||'');
     card.dataset.sourceKind=String(item.source_kind||'page-derived');
@@ -116,34 +117,42 @@ function renderCatalogResults(items,q){
     card.dataset.commercialEligible='false';
     const meta=document.createElement('div');meta.className='catalog-meta';
     const kind=document.createElement('span');kind.className='catalog-pill';
-    kind.textContent=String(item.catalog_type||item.record_type||'catalog').replace(/_/g,' ');
+    kind.textContent=external?'External directory · links only':String(item.catalog_type||item.record_type||'catalog').replace(/_/g,' ');
     const relevance=document.createElement('span');relevance.className='catalog-relevance';
-    relevance.textContent=String(item.relevance_label||'Catalog record match');
+    relevance.textContent=external?'Curated external links · not page-derived records':String(item.relevance_label||'Catalog record match');
     meta.append(kind,relevance);
     const link=document.createElement('a');link.href=safeUrl(item.url);link.target='_blank';link.rel='noopener noreferrer';
     link.textContent=String(item.catalog_title||item.title||'Untitled catalog');
-    const snippet=document.createElement('p');snippet.textContent=String(item.snippet||item.description||'Candidate catalog preview.');
+    const snippet=document.createElement('p');snippet.textContent=String(item.snippet||item.description||(external?'Links to public resources at their original destinations.':'Candidate catalog preview.'));
     const counts=document.createElement('small');counts.className='catalog-counts';
     const recordCount=Number.isSafeInteger(item.record_count)?item.record_count:0;
     const pageCount=Number.isSafeInteger(item.source_page_count)?item.source_page_count:0;
-    counts.textContent=recordCount.toLocaleString()+' records · '+pageCount.toLocaleString()+' source pages';
+    counts.textContent=external
+      ?'External links only · excluded from page-derived record counts'
+      :recordCount.toLocaleString()+' records · '+pageCount.toLocaleString()+' source pages';
     const matched=document.createElement('small');matched.className='catalog-matched';
     const matchedRecords=Array.isArray(item.matched_records)?item.matched_records.slice(0,3):[];
-    matched.textContent=matchedRecords.length
-      ?'Matched records: '+matchedRecords.map(record=>String(record.record_type||'record')+': '+String(record.title||'Untitled')).join(' · ')
-      :'Matched record titles are not available in this preview.';
+    matched.textContent=external
+      ?'Open each destination at its original public source; no source-page content is republished here.'
+      :matchedRecords.length
+        ?'Matched records: '+matchedRecords.map(record=>String(record.record_type||'record')+': '+String(record.title||'Untitled')).join(' · ')
+        :'Matched record titles are not available in this preview.';
     const rights=document.createElement('p');rights.className='catalog-rights';
-    const terms=String(item.source_terms_status||'not_reviewed');
-    const clearance=String(item.record_level_clearance||'not_reviewed');
-    const termsText=terms==='not_reviewed'?'Source terms not reviewed':
-      terms==='reviewed_per_dataset'?'Source terms reviewed per dataset':
-      'Source policy status: '+terms.replace(/_/g,' ');
-    const rightsText=clearance==='not_reviewed'?'Record rights not cleared':
-      'Record rights: '+clearance.replace(/_/g,' ');
-    const redistribution=String(item.rights_status||'').includes('not_cleared_for_redistribution')
-      ?' · Redistribution not cleared':'';
-    rights.textContent='Candidate preview only · '+termsText+' · '+rightsText+
-      ' · Commercial use not cleared'+redistribution;
+    if(external){
+      rights.textContent='External links only · destination terms and rights apply · no source-page records republished';
+    }else{
+      const terms=String(item.source_terms_status||'not_reviewed');
+      const clearance=String(item.record_level_clearance||'not_reviewed');
+      const termsText=terms==='not_reviewed'?'Source terms not reviewed':
+        terms==='reviewed_per_dataset'?'Source terms reviewed per dataset':
+        'Source policy status: '+terms.replace(/_/g,' ');
+      const rightsText=clearance==='not_reviewed'?'Record rights not cleared':
+        'Record rights: '+clearance.replace(/_/g,' ');
+      const redistribution=String(item.rights_status||'').includes('not_cleared_for_redistribution')
+        ?' · Redistribution not cleared':'';
+      rights.textContent='Candidate preview only · '+termsText+' · '+rightsText+
+        ' · Commercial use not cleared'+redistribution;
+    }
     card.append(meta,link,snippet,counts,matched,rights);
     list.append(card);
   }
@@ -166,7 +175,11 @@ function renderResults(data,q){
   }
   if(!list.children.length&&!catalogCount){const empty=document.createElement('div');empty.className='results-empty';empty.textContent='No matching web results came back. Try another search or category.';list.append(empty);}
   resultsRoot.append(list);
-  if(!catalogCount&&data.catalogPreview&&data.catalogPreview.status!=='ready'){
+  if(data.catalogPreview&&data.catalogPreview.status==='stale-candidate-preview'){
+    const note=document.createElement('p');note.className='results-note';
+    note.textContent='Catalog preview is based on an older source-index snapshot. The latest crawl has not yet been reanalyzed; these candidate matches are provisional.';
+    resultsRoot.append(note);
+  }else if(!catalogCount&&data.catalogPreview&&data.catalogPreview.status!=='ready'){
     const note=document.createElement('p');note.className='results-note';
     note.textContent='No matching candidate catalog records were found in the current preview. Candidate records remain provisional until source terms and record-level rights are reviewed.';
     resultsRoot.append(note);
@@ -272,6 +285,5 @@ void loadNews(activeNewsCategory);
 form.addEventListener('submit',e=>{e.preventDefault();void runSearch();});
 input.addEventListener('input',()=>form.classList.toggle('has-query',input.value.trim().length>0));
 const params=new URLSearchParams(location.search);if(params.get('q')){input.value=params.get('q');void runSearch();}
-
 </script>
 </body></html>

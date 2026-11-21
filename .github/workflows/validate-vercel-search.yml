@@ -25,6 +25,62 @@ jobs:
           node-version: '26'
       - name: Run search integrity and pagination tests
         run: node --test vercel-search-backend/test/*.test.js
+  staging-smoke:
+    if: github.event_name == 'pull_request' && github.head_ref == 'fix/bounded-catalog-search-20261121'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      BASE: https://everythinghub-search-backend-4vdrcia8y-rshure001-8053.vercel.app
+    steps:
+      - name: Verify staging backend health and representative catalog searches
+        run: |
+          set -euo pipefail
+          curl --silent --show-error --fail --max-time 15 "$BASE/api/health" -o /tmp/health.json
+          node -e "const h=require('/tmp/health.json'); if(h.status!=='ok'||h.database_required!==false) throw new Error('staging health failed: '+JSON.stringify(h)); console.log(JSON.stringify({health:h.status,service:h.service,storage:h.storage,databaseRequired:h.database_required}));"
+          for q in "Rolex" "Las Vegas" "NASA"; do
+            out="/tmp/search-$(printf '%s' "$q" | tr '[:upper:] ' '[:lower:]-').json"
+            curl --silent --show-error --fail --max-time 20 -G "$BASE/api/search" --data-urlencode "q=$q" --data-urlencode "limit=10" -o "$out"
+            node - "$out" "$q" <<'NODE'
+          const fs=require('node:fs');
+          const data=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+          const query=process.argv[3];
+          if(!Array.isArray(data.results)||!Array.isArray(data.catalogResults)||!data.catalogPreview) {
+            throw new Error(query+' response schema incomplete: '+JSON.stringify({keys:Object.keys(data)}));
+          }
+          const derived=data.catalogResults.filter(x=>x.catalog_id&&!String(x.catalog_id).startsWith('external:'));
+          const relevant=derived.filter(x=>{
+            const matched=x.matched_records||[];
+            const types=new Set(matched.map(r=>String(r.record_type||'').toLowerCase()));
+            const titles=matched.map(r=>String(r.title||''));
+            const catalogTitle=String(x.catalog_title||x.title||'');
+            if(query==='Rolex') return /rolex/i.test(catalogTitle)||['brand','product','model'].some(t=>types.has(t));
+            if(query==='Las Vegas') return ['place','business','organization','service'].some(t=>types.has(t))&&titles.some(t=>/las vegas/i.test(t));
+            if(query==='NASA') return types.has('organization')&&titles.some(t=>/\\bNASA\\b/i.test(t));
+            return false;
+          });
+          const externalTitles=data.catalogResults.filter(x=>String(x.catalog_id||'').startsWith('external:')).map(x=>String(x.catalog_title||x.title||x.name||''));
+          const webRelevant=data.results.some(r=>(String(r.title||'')+' '+String(r.snippet||'')).toLowerCase().includes(query.toLowerCase()));
+          const summary={
+            query,
+            visibleWebResults:data.results.length,
+            webRelevant,
+            catalogCards:data.catalogResults.length,
+            pageDerivedCatalogs:derived.map(x=>({id:x.catalog_id,title:x.catalog_title||x.title,origin:x.catalog_origin,matchedRecords:(x.matched_records||[]).map(r=>({type:r.record_type,title:r.title}))})),
+            relevantPageDerivedCatalogs:relevant.map(x=>({id:x.catalog_id,title:x.catalog_title||x.title})),
+            externalCatalogs:externalTitles,
+            previewStatus:data.catalogPreview.status,
+            previewError:data.catalogPreview.error||null,
+            previewCount:data.catalogPreview.resultCount,
+            analysisVersion:data.catalogPreview.analysisVersion,
+            sourceIndexPages:data.catalogPreview.sourceIndexPages
+          };
+          console.log(JSON.stringify(summary,null,2));
+          if(data.results.length===0||!webRelevant) throw new Error(query+' returned no relevant visible web results');
+          if(query==='Las Vegas'&&relevant.length===0) throw new Error('Las Vegas returned no relevant typed place/local directory catalog');
+          if(query==='NASA'&&relevant.length===0&&!externalTitles.some(t=>/NASA/i.test(t))) throw new Error('NASA returned neither a relevant organization catalog nor an official directory');
+          if(query==='Rolex'&&relevant.length===0&&!externalTitles.some(t=>/Rolex/i.test(t))) throw new Error('Rolex returned neither a relevant typed catalog nor an official directory');
+          NODE
+          done
   live-smoke:
     # Production freshness is monitored on main and by the schedule; do not fail code PRs because the independent live catalog is stale.
     if: github.event_name != 'pull_request'
