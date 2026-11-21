@@ -550,7 +550,8 @@ def _add_global_subject_catalogs(pages: list[dict], page_rows: list[dict], recor
             record = record_map.setdefault(record_id, {
                 "record_id": record_id,
                 "entity_id": stable_id("entity", entity_key),
-                "canonical_entity_key": entity_key,
+                "canonical_entity_key": record_key,
+                "canonical_subject_key": entity_key,
                 "record_type": "subject",
                 "title": member["title"],
                 "description": member["description"],
@@ -567,10 +568,10 @@ def _add_global_subject_catalogs(pages: list[dict], page_rows: list[dict], recor
                 "source_url": member["url"],
                 "source_page_count": 1,
             })
-            if record.get("canonical_entity_key") not in (None, entity_key, record_key):
-                raise ValueError("global subject record ID maps to a different canonical entity key")
-            # Upgrade legacy per-page entity keys to the canonical topic entity.
-            record["canonical_entity_key"] = entity_key
+            if record.get("canonical_entity_key") not in (None, record_key):
+                raise ValueError("global subject record ID maps to a different canonical record key")
+            record["canonical_entity_key"] = record_key
+            record["canonical_subject_key"] = entity_key
             record["entity_id"] = stable_id("entity", entity_key)
             if not isinstance(record.get("attributes"), dict):
                 record["attributes"] = {}
