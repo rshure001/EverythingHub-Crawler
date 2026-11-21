@@ -919,7 +919,20 @@ async function searchCrawlerIndex(query){
  const response=await fetch(u,{headers:{apikey:EH_PUBLIC_KEY,accept:'application/json'}});
  if(!response.ok)throw Error('Everything Hub crawler index '+response.status);
  const data=await response.json();
- return (data.results||[]).map(x=>({
+ const catalogResults=(data.catalogResults||[]).map(x=>({
+  ...x,
+  title:x.title||x.catalog_title||x.catalog_id||'Catalog candidate',
+  url:x.url||x.source_url||'',
+  snippet:x.snippet||x.description||'Candidate catalog preview; source terms and reuse rights have not been reviewed.',
+  description:x.description||x.snippet||'',
+  source:x.source||'Everything Hub Catalog Preview',
+  origin:x.origin||'Everything Hub Catalog Preview',
+  mediaType:'web',
+  score:Number(x.score)||0,
+  preview_only:true,
+  commercial_eligible:false
+ })).filter(x=>x.url);
+ const pageResults=(data.results||[]).map(x=>({
   title:x.title||x.url,
   url:x.url,
   snippet:x.snippet||x.description||'',
@@ -929,6 +942,7 @@ async function searchCrawlerIndex(query){
   mediaType:'web',
   score:Number(x.relevance??x.score)||0
  }));
+ return catalogResults.concat(pageResults);
 }
 async function searchPublicSources(query){
  const jobs=[
