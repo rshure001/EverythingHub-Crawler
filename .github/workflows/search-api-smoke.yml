@@ -173,6 +173,17 @@ jobs:
           if not previews["NASA"]:
               print("NASA: relevant visible page results verified; no first-party catalog candidate was returned.")
 
+          for query in ("Rolex", "Las Vegas", "NASA"):
+              query_tokens = [token for token in query.casefold().split() if len(token) >= 3]
+              for item in previews[query]:
+                  subject_records = [
+                      record for record in item.get("matched_records", [])
+                      if str(record.get("record_type", "")).casefold() == "subject"
+                  ]
+                  catalog_title = str(item.get("catalog_title", "")).casefold()
+                  if subject_records and not any(token in catalog_title for token in query_tokens):
+                      raise SystemExit(query + ": unrelated derived subject catalog surfaced: " + catalog_title)
+
           las_vegas_typed = [
               item for item in previews["Las Vegas"]
               if item.get("relevance_class") == "typed_location_match"
