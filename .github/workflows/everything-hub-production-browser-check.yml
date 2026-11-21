@@ -711,3 +711,4 @@ jobs:
             fallback-report.json
           if-no-files-found: warn
           retention-days: 30
+# Live fallback acceptance rerun after the current Vercel production deployment.
