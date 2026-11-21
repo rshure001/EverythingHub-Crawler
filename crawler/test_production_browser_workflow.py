@@ -16,8 +16,9 @@ class ProductionBrowserWorkflowContractTests(unittest.TestCase):
         self.assertIn('workflows: ["Publish and verify Everything Hub — in-house Supabase route"]', workflow)
         self.assertIn("types: [completed]", workflow)
         self.assertIn("branches: [main]", workflow)
+        self.assertIn("vars.APPDEPLOY_ACCEPTANCE_ENABLED == 'true'", workflow)
         self.assertIn(
-            "if: github.event_name != 'workflow_run' || "
+            "github.event_name != 'workflow_run' || "
             "github.event.workflow_run.conclusion == 'success'",
             workflow,
         )
