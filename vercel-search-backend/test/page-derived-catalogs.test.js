@@ -1,0 +1,59 @@
+'use strict';
+const test=require('node:test');
+const assert=require('node:assert/strict');
+const crypto=require('node:crypto');
+const zlib=require('node:zlib');
+const {validatePageDerivedCatalogs,loadPageDerivedCatalogsFromManifest,searchPageDerivedCatalogs}=require('../src/lib/page-derived-catalogs');
+const gzip=value=>zlib.gzipSync(Buffer.from(JSON.stringify(value)));
+const hash=buffer=>crypto.createHash('sha256').update(buffer).digest('hex');
+
+function fixture(){
+ const catalogs=[
+  {catalog_id:'catalog-rolex',title:'Rolex Watches',catalog_type:'commerce',record_type:'product',subject:'watches',source_host:'example.com',source_url:'https://example.com/rolex',source_page_ids:['page-rolex'],source_page_count:1,record_ids:['record-rolex'],record_count:1,is_source_declared_catalog:true,catalog_origin:'source_declared_collection',evidence_strength:'high',catalog_status:'candidate_needs_source_validation',source_terms_status:'not_reviewed',rights_status:'publicly_accessible_not_cleared_for_redistribution',commercial_eligible:false,status:'candidate_needs_source_validation'},
+  {catalog_id:'catalog-vegas',title:'Nevada Places',catalog_type:'geographic',record_type:'place',subject:'places',source_host:'example.net',source_url:'https://example.net/nevada',source_page_ids:['page-vegas'],source_page_count:1,record_ids:['record-vegas'],record_count:1,is_source_declared_catalog:true,catalog_origin:'source_declared_collection',evidence_strength:'high',catalog_status:'candidate_needs_source_validation',source_terms_status:'not_reviewed',rights_status:'publicly_accessible_not_cleared_for_redistribution',commercial_eligible:false,status:'candidate_needs_source_validation'},
+  {catalog_id:'catalog-articles',title:'General Articles',catalog_type:'knowledge_base',record_type:'article',subject:'articles',source_host:'example.org',source_url:'https://example.org/articles',source_page_ids:['page-article'],source_page_count:1,record_ids:['record-article'],record_count:1,is_source_declared_catalog:true,catalog_origin:'source_declared_collection',evidence_strength:'high',catalog_status:'candidate_needs_source_validation',source_terms_status:'not_reviewed',rights_status:'publicly_accessible_not_cleared_for_redistribution',commercial_eligible:false,status:'candidate_needs_source_validation'}
+ ];
+ const records=[
+  {record_id:'record-rolex',entity_id:'entity-rolex',canonical_entity_key:'product:rolex-submariner',record_type:'product',title:'Rolex Submariner Date',description:'Swiss dive watch',source_urls:['https://example.com/rolex/submariner'],source_page_ids:['page-rolex'],catalog_ids:['catalog-rolex'],last_seen_at:'2026-11-20T20:00:00Z',attributes:{brand:'Rolex',model:'Submariner Date'},commercial_eligible:false,source_terms_status:'not_reviewed',rights_status:'publicly_accessible_not_cleared_for_redistribution'},
+  {record_id:'record-vegas',entity_id:'entity-vegas',canonical_entity_key:'place:las-vegas-strip',record_type:'place',title:'Las Vegas Strip',description:'Las Vegas, Nevada',source_urls:['https://example.net/places/las-vegas-strip'],source_page_ids:['page-vegas'],catalog_ids:['catalog-vegas'],last_seen_at:'2026-11-20T20:00:00Z',attributes:{},commercial_eligible:false,source_terms_status:'not_reviewed',rights_status:'publicly_accessible_not_cleared_for_redistribution'},
+  {record_id:'record-article',entity_id:'entity-article',canonical_entity_key:'article:general-reference',record_type:'article',title:'General reference article',description:'Mentions Rolex once in passing',source_urls:['https://example.org/articles/general-reference'],source_page_ids:['page-article'],catalog_ids:['catalog-articles'],last_seen_at:'2026-11-20T20:00:00Z',attributes:{},commercial_eligible:false,source_terms_status:'not_reviewed',rights_status:'publicly_accessible_not_cleared_for_redistribution'}
+ ];
+ const registry=gzip({version:1,status:'candidate_staging_not_production',catalogs});
+ const recordsFile=gzip({version:1,records});
+ const manifest={version:1,integrity:'sha256',analysis_version:9,generated_at:'2026-11-20T22:21:02Z',source_index_pages:131899,source_index_updated_at:'2026-11-20T22:00:00Z',source_index_sha256:'a'.repeat(64),catalog_count:catalogs.length,record_count:records.length,metrics:{records_published:0,source_terms_reviewed_records:0},files:[{file:'registry.json.gz',bytes:registry.length,sha256:hash(registry),items:catalogs.length},{file:'records.json.gz',bytes:recordsFile.length,sha256:hash(recordsFile),items:records.length}]};
+ return {manifest,registry,recordsFile,manifestRaw:Buffer.from(JSON.stringify(manifest))};
+}
+
+test('validates the compressed registry and global records against the manifest',()=>{
+ const f=fixture(),network=validatePageDerivedCatalogs(f.manifest,f.registry,f.recordsFile);
+ assert.equal(network.catalogCount,3);assert.equal(network.recordCount,3);assert.equal(network.sourceIndexPages,131899);assert.equal(network.metrics.records_published,0);
+});
+test('loads both artifacts from one commit-pinned GitHub snapshot',async()=>{
+ const f=fixture(),sha='b'.repeat(40),base='https://raw.githubusercontent.com/rshure001/EverythingHub-Crawler/'+sha+'/data/page-derived-catalogs/';
+ const artifacts=new Map([[base+'registry.json.gz',f.registry],[base+'records.json.gz',f.recordsFile]]);
+ const loaded=await loadPageDerivedCatalogsFromManifest(f.manifest,sha,f.manifestRaw,async url=>{assert.ok(artifacts.has(url));return artifacts.get(url);});
+ assert.equal(loaded.catalogCount,3);assert.equal(loaded.records.length,3);
+});
+test('rejects a tampered registry before search',()=>{
+ const f=fixture(),bad=Buffer.from(f.registry);bad[bad.length-1]^=1;
+ assert.throws(()=>validatePageDerivedCatalogs(f.manifest,bad,f.recordsFile),/page_catalog_registry_sha256_mismatch|page_catalog_registry_gzip_invalid/);
+});
+test('rejects duplicate catalog and record IDs',()=>{
+ const f=fixture(),payload=JSON.parse(zlib.gunzipSync(f.registry).toString('utf8'));
+ payload.catalogs.push({...payload.catalogs[0]});
+ const badRegistry=gzip(payload),m1={...f.manifest,catalog_count:4,files:f.manifest.files.map(x=>x.file==='registry.json.gz'?{...x,bytes:badRegistry.length,sha256:hash(badRegistry)}:x)};
+ assert.throws(()=>validatePageDerivedCatalogs(m1,badRegistry,f.recordsFile),/page_catalog_identity_or_membership_invalid/);
+ const recordPayload=JSON.parse(zlib.gunzipSync(f.recordsFile).toString('utf8'));recordPayload.records.push({...recordPayload.records[0]});
+ const badRecords=gzip(recordPayload),m2={...f.manifest,record_count:4,files:f.manifest.files.map(x=>x.file==='records.json.gz'?{...x,bytes:badRecords.length,sha256:hash(badRecords)}:x)};
+ assert.throws(()=>validatePageDerivedCatalogs(m2,f.registry,badRecords),/page_record_identity_or_provenance_invalid/);
+});
+test('Rolex favors the product catalog and excludes weak article-only mentions',()=>{
+ const f=fixture(),network=validatePageDerivedCatalogs(f.manifest,f.registry,f.recordsFile),results=searchPageDerivedCatalogs('Rolex',network,5);
+ assert.equal(results.length,1);assert.equal(results[0].catalog_id,'catalog-rolex');assert.match(results[0].title,/Rolex Submariner Date/);
+ assert.equal(results[0].matched_records[0].record_type,'product');assert.equal(results[0].preview_only,true);assert.equal(results[0].commercial_eligible,false);
+ assert.equal(results[0].source_terms_status,'not_reviewed');assert.equal('description' in results[0].matched_records[0],false);
+});
+test('Las Vegas ranks the geographic place catalog',()=>{
+ const f=fixture(),network=validatePageDerivedCatalogs(f.manifest,f.registry,f.recordsFile),results=searchPageDerivedCatalogs('Las Vegas',network,5);
+ assert.equal(results.length,1);assert.equal(results[0].catalog_id,'catalog-vegas');assert.equal(results[0].matched_records[0].title,'Las Vegas Strip');assert.match(results[0].title,/Place catalog/);
+});
