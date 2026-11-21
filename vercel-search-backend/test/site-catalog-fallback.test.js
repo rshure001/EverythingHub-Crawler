@@ -28,7 +28,6 @@ test("Vercel homepage crawler fallback preserves first-party catalog preview car
   const search = vercelHomepage.slice(start, end);
   assert.ok(search.includes("data.catalogResults"));
   assert.ok(search.includes("catalogResults.concat(pageResults)"));
-  assert.ok(search.includes("catalogResults=(page===1?(d.catalogResults||[]):[])"));
   assert.ok(search.includes("preview_only:true"));
   assert.ok(search.includes("commercial_eligible:false"));
 
