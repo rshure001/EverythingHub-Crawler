@@ -1,5 +1,5 @@
 name: EverythingHub first-party catalog search smoke test
-# Verify the Supabase Edge search path and page-derived catalog preview after each committed corpus update.
+# Verify the Supabase Edge search path after committed corpus or page-derived catalog updates.
 on:
   push:
     branches: [main]
@@ -8,6 +8,7 @@ on:
       - "public-search/shard-*.json"
       - "public-search/shard-*.json.gz"
       - "public-search/catalog-v1.json.gz"
+      - "data/page-derived-catalogs/**"
   workflow_dispatch:
 permissions:
   contents: read
