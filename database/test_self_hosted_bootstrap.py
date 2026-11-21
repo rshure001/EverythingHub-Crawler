@@ -45,7 +45,7 @@ class SelfHostedBootstrapTests(unittest.TestCase):
         self.assertIn("DATABASE_URL=postgresql://everythinghub:", env)
 
     def test_guide_warns_about_existing_volumes(self):
-        guide = (HERE / "SELF_HOSTED.md").read_text(encoding="utf-8")
+        guide = " ".join((HERE / "SELF_HOSTED.md").read_text(encoding="utf-8").split())
         self.assertIn("initialization scripts run only when the data directory is empty", guide)
         self.assertIn("docker compose down -v", guide)
         self.assertIn("managed Supabase database and this self-hosted database remain separate", guide)
