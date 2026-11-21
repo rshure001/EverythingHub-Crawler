@@ -1159,6 +1159,19 @@ class CatalogInventoryTriggerTests(unittest.TestCase):
         self.assertIn("catalog-data-publish-main", workflow)
         self.assertIn("cancel-in-progress: false", workflow)
 
+    def test_search_smokes_run_after_catalog_publication_not_after_crawl(self):
+        repository_root = Path(__file__).resolve().parents[1]
+        search_smoke = (repository_root / ".github" / "workflows" / "search-api-smoke.yml").read_text(encoding="utf-8")
+        crawler = (repository_root / ".github" / "workflows" / "crawl.yml").read_text(encoding="utf-8")
+        vercel_search = (repository_root / ".github" / "workflows" / "validate-vercel-search.yml").read_text(encoding="utf-8")
+        self.assertIn('workflows: ["Retroactive catalog inventory"]', search_smoke)
+        self.assertNotIn("  push:\\n", search_smoke)
+        self.assertIn("github.event.workflow_run.conclusion == 'success'", search_smoke)
+        self.assertNotIn("gh workflow run search-api-smoke.yml", crawler)
+        self.assertIn('workflows: ["Retroactive catalog inventory"]', vercel_search)
+        self.assertIn("github.event.workflow_run.conclusion == 'success'", vercel_search)
+        self.assertNotIn("  schedule:", vercel_search)
+
 
 
 
