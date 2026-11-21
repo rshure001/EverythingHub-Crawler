@@ -62,11 +62,18 @@ Invoke-RestMethod -Headers @{ Authorization = "Bearer $token" } -Uri "http://127
 
 ## Backups
 
-Create a logical backup from PowerShell:
+Create a compressed logical backup without passing the binary dump through
+PowerShell's text pipeline:
 
 ```powershell
 $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
-docker exec everythinghub-db pg_dump -U everythinghub -d everythinghub -Fc | Set-Content -Encoding Byte "everythinghub-$stamp.dump"
+$containerFile = "/tmp/everythinghub-$stamp.dump"
+docker exec everythinghub-db pg_dump -U everythinghub -d everythinghub -Fc -f $containerFile
+if ($LASTEXITCODE -ne 0) { throw "pg_dump failed" }
+docker cp "everythinghub-db:$containerFile" ".\\everythinghub-$stamp.dump"
+if ($LASTEXITCODE -ne 0) { throw "docker cp failed" }
+docker exec everythinghub-db rm -f $containerFile
+Write-Host "Backup created: everythinghub-$stamp.dump"
 ```
 
 Keep backups encrypted and off-host. Test restores before relying on them.
