@@ -40,7 +40,9 @@ test("keeps public search and policy-attributed NASA video integration", () => {
   assert.match(html, /everythinghub-search-backend\.vercel\.app\/api\/search-fast/);
   assert.match(html, /everythinghub-search-backend\.vercel\.app\/api\/videos/);
   assert.match(html, /item\.credit/);
-  assert.match(html, /NASA media guidelines/);
+  assert.match(html, /license and reuse terms/);
+  assert.match(html, /item\\.license/);
+  assert.match(html, /item\\.creator/);
   assert.doesNotMatch(html, /youtube\.com\/watch\?|video-thumbnail/);
 });
 
