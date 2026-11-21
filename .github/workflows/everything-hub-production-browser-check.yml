@@ -1,3 +1,4 @@
+# Live acceptance verifies the low-latency public RSS fallback when the full catalog index is cold.
 name: Everything Hub browser verification
 on:
   push:
