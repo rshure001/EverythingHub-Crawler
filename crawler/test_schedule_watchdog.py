@@ -2,7 +2,7 @@ import unittest
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 
-from crawler.schedule_watchdog import evaluate
+from crawler.schedule_watchdog import evaluate, recovery_dispatch_decision
 
 NOW = datetime(2026, 11, 16, 16, 0, tzinfo=timezone.utc)
 
@@ -230,7 +230,39 @@ class ScheduleWatchdogTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             evaluate([scheduled("2026-11-16T14:00:00Z")], now=NOW, manifest_updated_at="not-a-timestamp")
 
-    def test_workflow_rechecks_runs_manifest_and_commits_marker_with_expected_head(self):
+    def test_recovery_dispatch_occurs_only_when_no_crawler_is_active_or_already_started(self):
+        recovery_sha = "a" * 40
+        result = recovery_dispatch_decision([], recovery_sha)
+        self.assertEqual(result["action"], "dispatch")
+
+        active = recovery_dispatch_decision(
+            [{"name": "Everything Hub crawler", "status": "in_progress", "head_sha": "b" * 40}],
+            recovery_sha,
+        )
+        self.assertEqual(active["action"], "wait")
+
+        already_started = recovery_dispatch_decision(
+            [{
+                "name": "Everything Hub crawler",
+                "status": "completed",
+                "event": "workflow_dispatch",
+                "head_sha": recovery_sha,
+            }],
+            recovery_sha,
+        )
+        self.assertEqual(already_started["action"], "already_started")
+
+        unrelated = recovery_dispatch_decision(
+            [{"name": "Other workflow", "status": "in_progress", "head_sha": recovery_sha}],
+            recovery_sha,
+        )
+        self.assertEqual(unrelated["action"], "dispatch")
+
+    def test_recovery_dispatch_rejects_invalid_commit_sha(self):
+        with self.assertRaisesRegex(ValueError, "40-character hexadecimal SHA"):
+            recovery_dispatch_decision([], "not-a-sha")
+
+    def test_workflow_rechecks_runs_manifest_and_dispatches_once_after_marker_commit(self):
         workflow = (Path(__file__).resolve().parents[1] / ".github" / "workflows" / "crawl-watchdog.yml").read_text(encoding="utf-8")
         self.assertIn("public-search/manifest.json", workflow)
         self.assertIn("base64.b64decode", workflow)
@@ -241,10 +273,13 @@ class ScheduleWatchdogTests(unittest.TestCase):
         self.assertIn("--force-with-lease=", workflow)
         self.assertIn("refs/heads/main:${expected_head}", workflow)
         self.assertIn("status", workflow)
-        self.assertIn("actions: read", workflow)
+        self.assertIn("actions: write", workflow)
         self.assertIn("contents: write", workflow)
         self.assertIn("group: eh-crawler-schedule-watchdog", workflow)
-        self.assertNotIn("gh workflow run crawl.yml", workflow)
+        self.assertIn("recovery_dispatch_decision", workflow)
+        self.assertIn("/tmp/crawl-runs-postpush.json", workflow)
+        self.assertIn("gh workflow run crawl.yml --ref main", workflow)
+        self.assertNotIn("crawl.yml push path will start", workflow)
 
     def test_schedule_health_reports_unobserved_without_schedule_events(self):
         result = evaluate(
