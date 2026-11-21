@@ -1,0 +1,6 @@
+# Local secrets and generated database backups
+.env
+database/.env
+*.dump
+*.dump.gz
+everythinghub-*.dump
