@@ -436,10 +436,18 @@ jobs:
                   return !!image && image.complete && image.naturalWidth > 0;
                 }).length,
                 fallbacks: cards.filter(card => !!card.querySelector(".video-placeholder")).length,
-                sampleTitles: cards.slice(0, 5).map(card => card.querySelector("a.video-title")?.textContent || "")
+                sampleTitles: cards.slice(0, 5).map(card => card.querySelectorAll("a")[1]?.textContent?.trim() || ""),
+                titledCards: cards.filter(card => {
+                  const title = (card.querySelectorAll("a")[1]?.textContent || "").trim();
+                  return title.length > 0;
+                }).length,
+                nonGenericTitles: cards.filter(card => {
+                  const title = (card.querySelectorAll("a")[1]?.textContent || "").trim();
+                  return title.length > 0 && title.toLowerCase() !== "video";
+                }).length
               }));
               const videoLink = await page.locator("#results .video-card > a").first().evaluate(anchor => ({ href: anchor.href, target: anchor.target, rel: anchor.rel }));
-              if (report.videoSearch.cards < 4 || report.videoSearch.loadedThumbnails < 4 || report.videoSearch.fallbacks !== 0 ||
+              if (report.videoSearch.cards < 4 || report.videoSearch.loadedThumbnails < 4 || report.videoSearch.fallbacks !== 0 || report.videoSearch.nonGenericTitles < 4 ||
                   !/^https:\/\/archive\.org\/details\//i.test(videoLink.href)) throw new Error("Video cards or thumbnails failed: " + JSON.stringify(report.videoSearch));
               report.categorySearches.videos = { cards: report.videoSearch.cards, loadedThumbnails: report.videoSearch.loadedThumbnails };
               report.coreLinks.videos = videoLink;
@@ -489,7 +497,7 @@ jobs:
                 report.categorySearchCount === 8 && report.news.topStories >= 5 &&
                 Object.values(report.newsCategories).every(value => value.count > 0) &&
                 report.newsRefresh.http === 200 && report.imageSearch.loadedThumbnails >= 8 &&
-                report.imageSearch.badAttribution === 0 && report.videoSearch.loadedThumbnails >= 4 &&
+                report.imageSearch.badAttribution === 0 && report.videoSearch.loadedThumbnails >= 4 && report.videoSearch.nonGenericTitles >= 4 &&
                 report.mobile.documentWidth <= report.mobile.viewportWidth + 2 &&
                 pageErrors.length === 0 && consoleErrors.length === 0;
               if (!report.passed) throw new Error("One or more live fallback acceptance gates failed.");
@@ -527,3 +535,5 @@ jobs:
           retention-days: 30
 
 # Force free-fallback live browser acceptance rerun 2026-11-21 16:26Z.
+
+# Assert visible non-generic video titles in the live fallback acceptance report.
