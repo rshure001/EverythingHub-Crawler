@@ -23,7 +23,7 @@ kept here so production behavior is reviewable and testable in GitHub.
   the backend loads the bounded shard set and verifies each shard's byte count,
   SHA-256, page count, schema, URL safety, and robots-denied exclusions.
 - Bounds the optional gzip catalog to 16,000,000 bytes and decoded JSON to
-  64,000,000 bytes. The sharded path supports up to 150,000 pages, 640 shards, 350,000 compressed bytes and 500,000 decoded bytes per shard, 80,000,000 aggregate compressed bytes, and 320,000,000 aggregate decoded bytes. Shard
+  64,000,000 bytes. The sharded path supports up to 180,000 pages, 640 shards, 350,000 compressed bytes and 500,000 decoded bytes per shard, 80,000,000 aggregate compressed bytes, and 320,000,000 aggregate decoded bytes. Shard
   downloads use a 32-worker pool and per-request timeouts.
 - Keeps a last-known-good in-memory catalog for up to one hour if GitHub has a
   transient outage; responses identify stale catalog use.
