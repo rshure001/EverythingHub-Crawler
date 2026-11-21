@@ -58,5 +58,6 @@ Deno.serve((req: Request) => {
   responseHeaders.set("cache-control", "public, max-age=300, s-maxage=3600");
   responseHeaders.set("x-content-type-options", "nosniff");
   responseHeaders.set("x-eh-release", "1008-topic-pages-v2");
-  return new Response(req.method==="HEAD"?null:body,{status,headers:responseHeaders});
+  const responseBody = req.method==="HEAD" ? null : new TextEncoder().encode(body);
+  return new Response(responseBody,{status,headers:responseHeaders});
 });
