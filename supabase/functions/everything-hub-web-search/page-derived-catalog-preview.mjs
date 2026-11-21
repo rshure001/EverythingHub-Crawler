@@ -386,25 +386,26 @@ export function searchPageDerivedCatalogPreview(query, network, limit = 5) {
   const eventIntent = terms.some((term) => eventTerms.has(term));
   const productTermIntent = terms.some((term) => productTerms.has(term));
 
-  const prepared = network.records.map((record) => {
+  // Determine typed intent in a lightweight pass without retaining token sets
+  // for the entire record corpus in the Edge isolate.
+  let globalProductMatch = false;
+  let globalPlaceMatch = false;
+  for (const record of network.records) {
     const tokens = recordTokens(record);
     const all = new Set([...tokens.titleTokens, ...tokens.descriptionTokens, ...tokens.attributeTokens]);
-    return { record, ...tokens, all };
-  });
-  const globalProductMatch = prepared.some((item) =>
-    PRODUCT_TYPES.has(String(item.record.record_type || "").toLowerCase()) &&
-    allTermsPresent(terms, item.all));
-  const globalPlaceMatch = prepared.some((item) =>
-    String(item.record.record_type || "").toLowerCase() === "place" &&
-    allTermsPresent(terms, item.all));
+    const type = String(record.record_type || "").toLowerCase();
+    if (!globalProductMatch && PRODUCT_TYPES.has(type) && allTermsPresent(terms, all)) globalProductMatch = true;
+    if (!globalPlaceMatch && type === "place" && allTermsPresent(terms, all)) globalPlaceMatch = true;
+    if (globalProductMatch && globalPlaceMatch) break;
+  }
   const productIntent = !contentIntent && !businessIntent && (productTermIntent || globalProductMatch);
   const geoIntent = terms.length >= 2 && globalPlaceMatch && !contentIntent && !eventIntent && !businessIntent;
   const locationBusinessIntent = businessIntent && !contentIntent;
   const catalogsById = new Map(network.catalogs.map((catalog) => [catalog.catalog_id, catalog]));
   const groups = new Map();
 
-  for (const item of prepared) {
-    const record = item.record;
+  for (const record of network.records) {
+    const item = recordTokens(record);
     if (!record || !Array.isArray(record.catalog_ids) || !record.catalog_ids.length) continue;
     const type = String(record.record_type || "").toLowerCase();
     const title = String(record.title || "").toLowerCase();
