@@ -198,15 +198,16 @@ jobs:
           ];
           for (const item of expected) {
             const body = JSON.parse(fs.readFileSync('/tmp/external-' + item.key + '.json', 'utf8'));
-            const catalog = body.catalogResults?.[0];
+            const catalog = body.externalCatalogResults?.find(candidate => candidate.catalog_id === item.id);
+            const mergedCatalog = body.catalogResults?.find(candidate => candidate.catalog_id === item.id);
             const matched = (catalog?.matched_records || []).map(record => record.title).join(' ');
             if (
               body.status !== 'ok' ||
-              body.indexStatus !== 'external-link-only' ||
-              !Array.isArray(body.results) || body.results.length !== 0 ||
-              !Array.isArray(body.catalogResults) || body.catalogResults.length !== 1 ||
+              body.indexStatus !== 'crawler-catalog-active' ||
+              !Array.isArray(body.results) || body.results.length < 1 ||
+              !Array.isArray(body.catalogResults) || !mergedCatalog ||
               !Array.isArray(body.externalCatalogResults) || body.externalCatalogResults.length !== 1 ||
-              catalog.catalog_id !== item.id ||
+              !catalog ||
               catalog.source_kind !== 'curated_external_link_directory' ||
               catalog.preview_only !== true ||
               catalog.commercial_eligible !== false ||
@@ -222,7 +223,7 @@ jobs:
             ) {
               throw new Error('External link-only catalog contract failed for ' + item.key + ': ' + JSON.stringify(body));
             }
-            console.log(JSON.stringify({ query: item.key, catalogId: catalog.catalog_id, matchedRecords: catalog.matched_record_count, totalExternalCatalogs: body.catalogPreview.externalCatalogCount, totalExternalLinks: body.catalogPreview.externalCatalogRecordCount, rightsStatus: catalog.rights_status }));
+            console.log(JSON.stringify({ query: item.key, catalogId: catalog.catalog_id, merged: !!mergedCatalog, matchedRecords: catalog.matched_record_count, totalExternalCatalogs: body.catalogPreview.externalCatalogCount, totalExternalLinks: body.catalogPreview.externalCatalogRecordCount, rightsStatus: catalog.rights_status }));
           }
           NODE
 
