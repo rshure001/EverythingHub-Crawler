@@ -91,41 +91,6 @@ module.exports = async function handler(req, res) {
     return res.status(400).json({ error: 'pagination_out_of_range' });
   }
   const lane = String(params.get('tentacle') || params.get('lane') || '').trim().toLowerCase();
-  const earlyExternalCatalogResults = searchExternalCatalogs(query);
-  if (earlyExternalCatalogResults.length) {
-    const externalStats = getExternalCatalogStats();
-    return res.status(200).json({
-      status: 'ok',
-      query,
-      lane,
-      count: 0,
-      totalMatches: 0,
-      page: Math.floor(offset / limit) + 1,
-      pageSize: limit,
-      offset,
-      hasMore: false,
-      indexedPages: 0,
-      indexStatus: 'external-link-only',
-      database_required: false,
-      results: [],
-      catalogResults: earlyExternalCatalogResults,
-      externalCatalogResults: earlyExternalCatalogResults,
-      catalogPreview: {
-        status: 'external-link-only',
-        previewOnly: true,
-        resultCount: 0,
-        catalogCount: 0,
-        recordCount: 0,
-        externalCatalogCount: externalStats.catalogCount,
-        externalCatalogRecordCount: externalStats.recordCount,
-        externalCatalogResults: earlyExternalCatalogResults.length,
-        sourcePageCount: 0,
-        rightsClearedRecords: 0,
-        commerciallyEligibleRecords: 0
-      },
-      providers: ['Everything Hub External Catalogs']
-    });
-  }
   const [catalogResult, bingResult, pageDerivedResult] = await Promise.allSettled([
     loadCatalog(), loadBing(query), loadPageDerivedCatalogs(query)
   ]);
