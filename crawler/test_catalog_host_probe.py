@@ -64,13 +64,33 @@ class CumulativeProbeTests(unittest.TestCase):
 
     def test_catalog_landing_page_robots_preflight_never_fetches_page_content(self):
         item = self._landing_candidate()
-        policy = {"max_requests_per_run": 40}
-        with patch.object(catalog_host_probe, "authorize_source_url", return_value=(policy, object(), 3.0, [])) as authorize:
+        item["reviewed_at"] = None
+        policy = {
+            "terms_url": item["terms_url"],
+            "terms_status": item["terms_status"],
+            "reviewed_at": "2026-11-21",
+            "allowed_catalog_path_patterns": item["allowed_catalog_path_patterns"],
+            "metadata_only": True,
+            "allowed_metadata_fields": item["allowed_metadata_fields"],
+            "prohibited_content": item["prohibited_content"],
+            "max_response_bytes": item["max_response_bytes"],
+            "min_interval_seconds": item["min_interval_seconds"],
+            "max_requests_per_run": item["max_requests_per_run"],
+            "discovery_allowed": True,
+        }
+        with patch.object(catalog_host_probe, "policy_for_host", return_value=policy), patch.object(catalog_host_probe, "authorize_source_url", return_value=(policy, object(), 3.0, [])) as authorize:
             with patch.object(catalog_host_probe, "request_source_bytes") as request:
                 result = catalog_host_probe.probe_catalog_landing_page_robots(item)
         authorize.assert_called_once_with(item["source_url"], purpose="landing_page")
         request.assert_not_called()
         self.assertEqual(result["status"], "robots_allowed")
+        self.assertEqual(result["review_status"], item["review_status"])
+        self.assertIsNone(result["candidate_reviewed_at"])
+        self.assertEqual(result["reviewed_at"], "2026-11-21")
+        self.assertEqual(
+            catalog_host_probe._landing_policy_fingerprint(result),
+            result["policy_fingerprint"],
+        )
         self.assertTrue(result["robots_allowed"])
         self.assertFalse(result["fetch_authorized"])
         self.assertFalse(result["page_content_fetched"])
@@ -119,7 +139,20 @@ class CumulativeProbeTests(unittest.TestCase):
                 "source_index_updated_at": "2026-11-21T00:00:00Z",
                 "source_index_sha256": "source-index-sha",
             }), encoding="utf-8")
-            with patch.object(catalog_host_probe, "authorize_source_url", return_value=({"max_requests_per_run": 40}, object(), 3.0, [])) as authorize:
+            policy = {
+                "terms_url": "https://www.frontiersin.org/legal/terms-and-conditions",
+                "terms_status": "reviewed_per_dataset",
+                "reviewed_at": "2026-11-21",
+                "allowed_catalog_path_patterns": ["/articles", "/journals/*/articles"],
+                "metadata_only": True,
+                "allowed_metadata_fields": ["title", "authors", "doi", "license"],
+                "prohibited_content": ["full_text", "images", "supplementary_files", "bulk_assets"],
+                "max_response_bytes": 1_500_000,
+                "min_interval_seconds": 3.0,
+                "max_requests_per_run": 40,
+                "discovery_allowed": True,
+            }
+            with patch.object(catalog_host_probe, "policy_for_host", return_value=policy), patch.object(catalog_host_probe, "authorize_source_url", return_value=(policy, object(), 3.0, [])) as authorize:
                 first = catalog_host_probe.run_landing_page_robots(queue_path, output_path, limit=30, recheck_seconds=86_400, manifest_path=manifest_path)
                 self.assertEqual(first["last_batch_urls_checked"], 30)
                 self.assertEqual(first["urls_checked"], 30)
