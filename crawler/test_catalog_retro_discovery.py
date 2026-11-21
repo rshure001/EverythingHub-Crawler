@@ -1,4 +1,5 @@
 import unittest
+from pathlib import Path
 
 from catalog_retro_discovery import build_candidates, host_key
 
@@ -46,6 +47,20 @@ class RetroCatalogDiscoveryTests(unittest.TestCase):
     def test_rejects_credential_urls_and_normalizes_www(self):
         self.assertEqual(host_key("https://www.example.com/a"), "example.com")
         self.assertIsNone(host_key("https://user:pass@example.com/"))
+
+    def test_inventory_runs_after_successful_main_crawler_completion(self):
+        workflow = (
+            Path(__file__).resolve().parents[1]
+            / ".github" / "workflows" / "retroactive-catalog-index.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            'workflows:\n      - "Everything Hub crawler"\n    types:\n      - completed\n    branches: [main]',
+            workflow,
+        )
+        self.assertIn(
+            "if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'",
+            workflow,
+        )
 
 if __name__ == "__main__":
     unittest.main()
