@@ -163,6 +163,48 @@ def evaluate(
     }
 
 
+def recovery_dispatch_decision(runs: list[dict[str, Any]], recovery_sha: str) -> dict[str, str]:
+    """Fail closed unless one recovery dispatch is safe and has not already started."""
+    if not isinstance(runs, list):
+        raise ValueError("crawler workflow response must contain a workflow_runs list")
+    if (
+        not isinstance(recovery_sha, str)
+        or len(recovery_sha) != 40
+        or any(char not in "0123456789abcdef" for char in recovery_sha.lower())
+    ):
+        raise ValueError("recovery commit SHA must be a 40-character hexadecimal SHA")
+
+    active = [
+        run for run in runs
+        if isinstance(run, dict)
+        and run.get("name") == "Everything Hub crawler"
+        and run.get("status") in ACTIVE_STATUSES
+    ]
+    if active:
+        return {
+            "action": "wait",
+            "reason": "a crawler is queued or running after the recovery marker commit",
+        }
+
+    already_started = any(
+        isinstance(run, dict)
+        and run.get("name") == "Everything Hub crawler"
+        and run.get("head_sha") == recovery_sha
+        and run.get("event") in {"push", "workflow_dispatch"}
+        for run in runs
+    )
+    if already_started:
+        return {
+            "action": "already_started",
+            "reason": "a crawler run already references the recovery marker commit",
+        }
+
+    return {
+        "action": "dispatch",
+        "reason": "no crawler is active and no run has started from the recovery marker commit",
+    }
+
+
 def main() -> None:
     if len(sys.argv) not in (2, 3):
         raise SystemExit("usage: schedule_watchdog.py <workflow-runs.json> [public-manifest.json]")
