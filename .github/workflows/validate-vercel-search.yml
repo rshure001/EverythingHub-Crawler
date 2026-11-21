@@ -63,10 +63,10 @@ jobs:
         run: |
           set -euo pipefail
           curl --silent --show-error --fail --max-time 30 -G "$BASE/api/search" \
-            --data-urlencode "q=NASA" --data-urlencode "limit=50" --data-urlencode "offset=0" \
+            --data-urlencode "q=NASA rover" --data-urlencode "limit=50" --data-urlencode "offset=0" \
             -o /tmp/page-1.json
           curl --silent --show-error --fail --max-time 30 -G "$BASE/api/search" \
-            --data-urlencode "q=NASA" --data-urlencode "limit=50" --data-urlencode "offset=50" \
+            --data-urlencode "q=NASA rover" --data-urlencode "limit=50" --data-urlencode "offset=50" \
             -o /tmp/page-2.json
           node <<'NODE'
           const fs = require('node:fs');
