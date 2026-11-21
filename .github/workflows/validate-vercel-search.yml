@@ -133,5 +133,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '26'
-      - name: Verify Wikimedia Commons robots policy, open-license metadata and preview thumbnails
-        run: node vercel-search-backend/test/videos-live-smoke.cjs
+      - name: Verify Openverse image and Internet Archive video robots policy, licenses and thumbnails
+        run: |
+          node vercel-search-backend/test/images-live-smoke.cjs
+          node vercel-search-backend/test/videos-live-smoke.cjs
