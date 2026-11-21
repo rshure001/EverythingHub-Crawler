@@ -103,7 +103,8 @@
       ],
       "min_interval_seconds": 3,
       "max_requests_per_run": 40,
-      "policy_note": "Frontiers Terms and Conditions section 14 permits text and data mining of public content for the legitimate purpose of enriching external collections of scientific literature. Content remains subject to each article's applicable CC-BY, CC0, or other license and applicable data-protection laws. This policy is limited to bounded landing-page discovery of bibliographic metadata; do not retrieve full text, images, supplementary files, or bulk assets. Runtime robots.txt verification on the exact host is mandatory; honor disallowed paths and any performance restrictions."
+      "policy_note": "Frontiers Terms and Conditions section 14 permits text and data mining of public content for the legitimate purpose of enriching external collections of scientific literature. Content remains subject to each article's applicable CC-BY, CC0, or other license and applicable data-protection laws. This policy is limited to bounded landing-page discovery of bibliographic metadata; do not retrieve full text, images, supplementary files, or bulk assets. Runtime robots.txt verification on the exact host is mandatory; honor disallowed paths and any performance restrictions.",
+      "max_response_bytes": 1500000
     }
   }
 }
