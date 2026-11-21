@@ -16,15 +16,21 @@ class CatalogDiscoveryTests(unittest.TestCase):
             "organization": {"title": "Transport Agency"},
             "tags": [{"name": "transport"}],
             "license_id": "cc-by", "license_title": "Creative Commons Attribution", "license_url": "https://creativecommons.org/licenses/by/4.0/",
+            "rights": "Open use. Must provide the source", "isopen": True, "private": False,
             "resources": [
-                {"name": "CSV download", "format": "csv", "url": "https://downloads.example.org/data.csv", "size": 1200},
+                {"name": "CSV download", "description": "Dataset distribution", "format": "csv", "mimetype": "text/csv", "rights": "Open use. Must provide the source", "url": "https://downloads.example.org/data.csv", "size": 1200},
                 {"name": "Unsafe", "format": "zip", "url": "http://downloads.example.org/data.zip"},
             ],
         }, SOURCES[0])
         self.assertEqual(item["catalog_id"], "canada-open-data")
         self.assertEqual(item["resource_count"], 1)
         self.assertEqual(item["license"]["id"], "cc-by")
+        self.assertEqual(item["license"]["rights"], "Open use. Must provide the source")
+        self.assertTrue(item["license"]["is_open"])
+        self.assertFalse(item["license"]["private"])
         self.assertEqual(item["resources"][0]["format"], "CSV")
+        self.assertEqual(item["resources"][0]["media_type"], "text/csv")
+        self.assertEqual(item["resources"][0]["rights"], "Open use. Must provide the source")
         self.assertTrue(item["landing_url"].startswith("https://open.canada.ca/data/en/dataset/"))
 
     def test_missing_dataset_identifier_is_skipped(self):
