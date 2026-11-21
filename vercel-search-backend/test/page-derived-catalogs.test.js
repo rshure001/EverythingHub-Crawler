@@ -58,6 +58,43 @@ test('Las Vegas ranks the geographic place catalog',()=>{
  assert.equal(results.length,1);assert.equal(results[0].catalog_id,'catalog-vegas');assert.equal(results[0].matched_records[0].title,'Las Vegas Strip');assert.match(results[0].title,/Place catalog/);
 });
 
+test('Las Vegas prioritizes place and local directory catalogs over a large article collection',()=>{
+ const catalogs=[
+  {catalog_id:'articles',title:'National Geographic Articles',catalog_type:'knowledge_base',record_type:'article',source_url:'https://example.org/articles',record_count:1000,source_page_count:1000},
+  {catalog_id:'places',title:'BLM Places',catalog_type:'geographic',record_type:'place',source_url:'https://example.gov/places',record_count:26,source_page_count:8},
+  {catalog_id:'organizations',title:'BLM Organizations',catalog_type:'organization_directory',record_type:'organization',source_url:'https://example.gov/offices',record_count:131,source_page_count:137}
+ ];
+ const records=[
+  ...['Best places to stay in Las Vegas','Las Vegas in Photos','Las Vegas Must-Dos','A guide to Las Vegas','Las Vegas resorts'].map((title,i)=>({
+   record_id:'article-'+i,record_type:'article',title,description:'A Las Vegas travel article.',
+   source_urls:['https://example.org/article-'+i],catalog_ids:['articles'],attributes:{}
+  })),
+  {record_id:'place',record_type:'place',title:'Las Vegas Strip',description:'A destination in Las Vegas.',
+   source_urls:['https://example.gov/las-vegas-strip'],catalog_ids:['places'],attributes:{}},
+  {record_id:'office',record_type:'organization',title:'Las Vegas Field Office',description:'Local public office.',
+   source_urls:['https://example.gov/las-vegas-office'],catalog_ids:['organizations'],attributes:{}}
+ ];
+ const results=searchPageDerivedCatalogs('Las Vegas',{catalogs,records},5);
+ assert.deepEqual(results.slice(0,3).map(x=>x.catalog_id),['places','organizations','articles']);
+ assert.equal(results[0].relevance_class,'typed_location_match');
+ assert.equal(results[1].relevance_class,'typed_location_match');
+ assert.equal(results[2].relevance_class,'related_mention');
+});
+test('Rolex article or subject hits are labeled as related mentions when no product record exists',()=>{
+ const results=searchPageDerivedCatalogs('Rolex',{
+  catalogs:[{catalog_id:'mentions',title:'National Geographic Subjects',catalog_type:'knowledge_base',
+   record_type:'subject',source_url:'https://example.org/subjects',record_count:7,source_page_count:7}],
+  records:[{record_id:'mention',record_type:'subject',
+   title:'National Geographic and Rolex Committed to a Perpetual Planet',
+   description:'A conservation partnership mention.',source_urls:['https://example.org/rolex-mention'],
+   catalog_ids:['mentions'],attributes:{}}]
+ },5);
+ assert.equal(results.length,1);
+ assert.equal(results[0].relevance_class,'related_mention');
+ assert.match(results[0].relevance_label,/not a dedicated catalog match/);
+ assert.equal(results[0].query_intent,'general');
+});
+
 test('freshness requires matching source-page count and update timestamp',()=>{
  const {matchesPageIndexSnapshot}=require('../src/lib/page-derived-catalogs');
  const updatedAt=Date.parse('2026-11-20T22:00:00Z')/1000;
