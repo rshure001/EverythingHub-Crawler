@@ -1284,5 +1284,39 @@ class CatalogInventoryTriggerTests(unittest.TestCase):
         self.assertEqual(metrics["unique_records_by_type"], {"dataset": 2})
         self.assertEqual(metrics["unique_catalogs_discovered"], 1)
 
+
+    def test_invalid_orcid_and_isni_check_digits_do_not_merge_across_hosts(self):
+        pages = []
+        for host in ("retailer-one.example", "retailer-two.example"):
+            pages.append({
+                "url": f"https://{host}/researchers",
+                "title": "Researcher directory",
+                "text": "Browse researcher profiles.",
+                "lane": "general",
+                "robots_allowed": True,
+                "structured_catalog": {"version": 1, "lists": [{
+                    "name": "Researcher directory",
+                    "record_type": "person",
+                    "items": [
+                        {
+                            "record_type": "person",
+                            "name": "Researcher A",
+                            "url": f"https://{host}/researcher-a",
+                            "same_as_ids": ["orcid:0000-0002-1825-0098"],
+                        },
+                        {
+                            "record_type": "person",
+                            "name": "Researcher B",
+                            "url": f"https://{host}/researcher-b",
+                            "same_as_ids": ["isni:0000000122819550"],
+                        },
+                    ],
+                }]},
+            })
+        with tempfile.TemporaryDirectory() as tmp:
+            result = analyze_pages_incremental(pages, source_total=2, cache_dir=Path(tmp))
+        self.assertEqual(result["metrics"]["unique_records"], 4)
+        self.assertEqual(result["metrics"]["cross_host_record_merges"], 0)
+
 if __name__ == "__main__":
     unittest.main()
