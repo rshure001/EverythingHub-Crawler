@@ -152,6 +152,10 @@ def request_source_bytes(
     request = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": accept})
     with opener.open(request, timeout=timeout) as response:
         final_url = response.geturl()
+        if purpose == "landing_page":
+            content_type = response.headers.get("Content-Type") or response.headers.get("content-type") or ""
+            if not str(content_type).lower().startswith("text/html"):
+                raise SourcePolicyError("catalog landing-page response must be text/html")
         if not same_origin(url, final_url):
             raise SourcePolicyError("cross-origin catalog API redirect blocked")
         final = urllib.parse.urlsplit(final_url)
