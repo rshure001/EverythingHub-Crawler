@@ -6,6 +6,9 @@ on:
       - "crawler/catalog_retro_discovery.py"
       - "crawler/catalog_page_analysis.py"
       - "crawler/test_catalog_page_analysis.py"
+      - "crawler/catalog_host_review_queue.py"
+      - "crawler/test_catalog_host_review_queue.py"
+      - "crawler/catalog-source-terms.json"
       - "crawler/test_catalog_retro_discovery.py"
       - "crawler/product_metadata.py"
       - "crawler/test_product_metadata.py"
@@ -25,6 +28,7 @@ on:
     - cron: "23 * * * *"
 
 permissions:
+  actions: write
   contents: write
 
 concurrency:
@@ -79,6 +83,9 @@ jobs:
       - name: Test page-derived catalog analysis
         working-directory: crawler
         run: python -m unittest test_catalog_page_analysis.py -v
+      - name: Test fail-closed catalog source review backlog
+        working-directory: crawler
+        run: python -m unittest test_catalog_host_review_queue.py -v
 
       - name: Test public search publisher limits
         working-directory: publisher
@@ -126,19 +133,25 @@ jobs:
               "throughput": report.get("throughput"),
           }, indent=2))
           PY
+      - name: Build page-derived catalog source review backlog
+        run: python crawler/catalog_host_review_queue.py
       - name: Validate registry and every per-catalog index before publishing
         run: python crawler/catalog_page_analysis.py --validate-only
+      - name: Validate page-derived catalog source review backlog
+        run: python crawler/catalog_host_review_queue.py --validate-only
       - name: Record validated page-derived catalog analysis
         if: github.ref == 'refs/heads/main'
         run: python project/ledger.py --record-page-derived-catalog-analysis
       - name: Publish validated catalog analysis on main
         if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           for attempt in 1 2 3; do
-            git add -f data/host-catalog-candidates.json data/page-catalog-seeds.json.gz data/page-derived-catalogs data/project-ledger.json
+            git add -f data/host-catalog-candidates.json data/page-catalog-seeds.json.gz data/page-derived-catalogs data/page-derived-catalogs/source-host-review-queue.json data/project-ledger.json
             git rm -f --ignore-unmatch data/page-catalog-seeds.json
             if git diff --cached --quiet; then
               echo "No catalog analysis changes."
@@ -146,6 +159,11 @@ jobs:
             fi
             git commit -m "Publish validated page-derived catalog candidates"
             if git push origin HEAD:main; then
+              if gh workflow run search-api-smoke.yml --ref main; then
+                echo "Dispatched first-party catalog search smoke test after publishing the new catalog snapshot."
+              else
+                echo "::warning::Catalog snapshot committed, but first-party search smoke dispatch failed."
+              fi
               exit 0
             fi
             echo "Main advanced during publish; rebuilding from the latest canonical index (attempt $attempt)."
@@ -153,7 +171,9 @@ jobs:
             git reset --hard origin/main
             python crawler/catalog_retro_discovery.py
             python crawler/catalog_page_analysis.py --query Rolex --query "Las Vegas"
+            python crawler/catalog_host_review_queue.py
             python crawler/catalog_page_analysis.py --validate-only
+            python crawler/catalog_host_review_queue.py --validate-only
             python project/ledger.py --record-page-derived-catalog-analysis
           done
           echo "Unable to publish validated catalog analysis after three protected attempts."
