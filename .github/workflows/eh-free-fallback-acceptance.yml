@@ -39,18 +39,21 @@ jobs:
             page.on("pageerror", error => pageErrors.push(error.message));
             page.on("console", message => { if (message.type() === "error") consoleErrors.push(message.text()); });
             const mediaResponses = [];
+            const mediaFailures = [];
             page.on("response", response => {
               const url = response.url();
               if (response.status() >= 400 && isFirstPartyUrl(url)) {
                 httpErrors.push({ status: response.status(), url });
               }
-              try {
-                const parsed = new URL(url);
-                if (parsed.hostname === "archive.org" || parsed.hostname.endsWith(".archive.org")) {
-                  const headers = response.headers();
-                  mediaResponses.push({ status: response.status(), url, contentType: headers["content-type"] || "" });
-                }
-              } catch {}
+              if (url.includes("archive.org")) {
+                const headers = response.headers();
+                mediaResponses.push({ status: response.status(), url, contentType: headers["content-type"] || "" });
+              }
+            });
+            page.on("requestfailed", request => {
+              if (request.url().includes("archive.org")) {
+                mediaFailures.push({ url: request.url(), failure: request.failure()?.errorText || "" });
+              }
             });
             page.on("requestfailed", request => {
               if (isFirstPartyUrl(request.url())) requestFailures.push({ url: request.url(), failure: request.failure()?.errorText || "" });
@@ -72,7 +75,7 @@ jobs:
                 return originalFetch(...args);
               };
             });
-            const report = { url: process.env.TARGET_URL, checks: {}, pageErrors, consoleErrors, httpErrors, requestFailures, mediaResponses };
+            const report = { url: process.env.TARGET_URL, checks: {}, pageErrors, consoleErrors, httpErrors, requestFailures, mediaResponses, mediaFailures };
             const shot = async name => page.screenshot({ path: name, fullPage: true });
             const goHome = async () => {
               await page.goto(process.env.TARGET_URL, { waitUntil: "domcontentloaded", timeout: 45000 });
@@ -258,6 +261,7 @@ jobs:
               await shot("everythinghub-news.png");
               await goHome();
               await search("images", "NASA", "#results .media-card", 8);
+              await page.waitForTimeout(3000);
               const imageStats = await page.locator("#results .media-card").evaluateAll(cards => ({
                 cards: cards.length,
                 loaded: cards.filter(card => { const img=card.querySelector("img"); return img && img.complete && img.naturalWidth > 0; }).length,
@@ -268,7 +272,22 @@ jobs:
                 itemLinks: cards.map(card => card.querySelector("a")?.href || ""),
                 thumbnailUrls: cards.map(card => card.querySelector("img")?.src || "")
               }));
-              report.checks.images = { ...imageStats, mediaResponses };
+              const failedItemLinks = imageStats.itemLinks.filter((_, index) => !imageStats.thumbnailUrls[index]).slice(0, 3);
+              const alternateUrls = failedItemLinks.map(href => {
+                const identifier = new URL(href).pathname.split("/").filter(Boolean).pop();
+                return "https://archive.org/services/img/" + encodeURIComponent(identifier);
+              });
+              const alternateReferrer = await page.evaluate(async urls => Promise.all(urls.map(url => new Promise(resolve => {
+                const img = new Image();
+                img.referrerPolicy = "strict-origin-when-cross-origin";
+                let settled = false;
+                const finish = value => { if (settled) return; settled = true; clearTimeout(timer); resolve(value); };
+                const timer = setTimeout(() => finish({ url, loaded: false, timeout: true }), 9000);
+                img.onload = () => finish({ url, loaded: true, width: img.naturalWidth });
+                img.onerror = () => finish({ url, loaded: false });
+                img.src = url;
+              }))), alternateUrls);
+              report.checks.images = { ...imageStats, mediaResponses, mediaFailures, alternateReferrer };
               if (imageStats.loaded < 8 || imageStats.providers.some(x => !x.includes("Internet Archive")) ||
                   imageStats.licenses.some(x => !x) || imageStats.creators.some(x => !x) ||
                   imageStats.attributions.some(x => !/Source:\s*Internet Archive/i.test(x))) {
@@ -278,7 +297,7 @@ jobs:
               if (!/^https:\/\/archive\.org\/details\//i.test(imageLink.href) || imageLink.target !== "_blank" || !imageLink.rel.includes("noopener")) {
                 throw new Error("Image source link contract failed: " + JSON.stringify(imageLink));
               }
-              report.checks.images = { ...imageStats, mediaResponses };
+              report.checks.images = { ...imageStats, mediaResponses, mediaFailures, alternateReferrer };
               report.checks.coreLinks.images = imageLink;
               await shot("everythinghub-images.png");
               await goHome();
