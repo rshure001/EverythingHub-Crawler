@@ -7,6 +7,7 @@ import { normalizeManifestTimestamp } from "./manifest-time.mjs";
 import { isValidStaticManifest } from "./static-manifest.mjs";
 import { readBoundedText } from "./bounded-stream.mjs";
 import { fetchVercelCatalogFallback } from "./vercel-fallback.mjs";
+import { loadPageDerivedCatalogPreview, searchPageDerivedCatalogPreview } from "./page-derived-catalog-preview.mjs";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -216,7 +217,7 @@ Deno.serve(async (req: Request) => {
 
       if (!allResults.length) return null;
       const pageResults = allResults.slice(offset, offset + limit);
-      return json({
+      return json(attachCatalogPreview({
         results: pageResults,
         count: allResults.length,
         query,
@@ -232,7 +233,7 @@ Deno.serve(async (req: Request) => {
         fallbackReason: reason,
         independentOfDatabase: true,
         crawlerIndexCount,
-      }, 200, "public, max-age=15, stale-while-revalidate=30");
+      }), 200, "public, max-age=15, stale-while-revalidate=30");
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       console.error("Independent web fallback unavailable:", detail);
@@ -241,6 +242,58 @@ Deno.serve(async (req: Request) => {
   };
 
   const staticFallback = async (reason: string) => {
+    // Load the first-party catalog network directly from one SHA-pinned GitHub snapshot.
+    // This path is independent of PostgreSQL and the separately hosted Vercel search project.
+    let pageDerivedCatalogResults: any[] = [];
+    let pageDerivedCatalogMeta: Record<string, any> = {
+      status: "unavailable", previewOnly: true, resultCount: 0, error: "catalog_preview_unavailable",
+    };
+    try {
+      const pageDerived = await loadPageDerivedCatalogPreview();
+      pageDerivedCatalogResults = searchPageDerivedCatalogPreview(query, pageDerived, 5);
+      const freshnessMatch = Boolean(pageDerived.freshnessMatch && !pageDerived.stale);
+      pageDerivedCatalogMeta = {
+        status: freshnessMatch ? "candidate-preview" : "stale-candidate-preview",
+        previewOnly: true,
+        analysisVersion: pageDerived.analysisVersion,
+        generatedAt: pageDerived.generatedAt,
+        sourceIndexPages: pageDerived.sourceIndexPages,
+        sourceIndexUpdatedAt: pageDerived.sourceIndexUpdatedAt,
+        sourceIndexSha256: pageDerived.sourceIndexSha256,
+        pageIndexPages: pageDerived.pageIndexPages,
+        pageIndexUpdatedAt: pageDerived.pageIndexUpdatedAt,
+        catalogCount: pageDerived.catalogCount,
+        recordCount: pageDerived.recordCount,
+        recordsPublished: Number(pageDerived.metrics.records_published) || 0,
+        sourceTermsReviewedRecords: Number(pageDerived.metrics.source_terms_reviewed_records) || 0,
+        resultCount: pageDerivedCatalogResults.length,
+        freshnessMatch,
+        stale: Boolean(pageDerived.stale),
+      };
+      if (!freshnessMatch) {
+        const warning = " Catalog analysis is behind the current page index or freshness could not be verified.";
+        pageDerivedCatalogResults = pageDerivedCatalogResults.map((item) => ({
+          ...item,
+          snippet: String(item.snippet || "") + warning,
+          description: String(item.description || item.snippet || "") + warning,
+        }));
+      }
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      console.error("Page-derived catalog preview unavailable:", detail.slice(0, 160));
+    }
+
+    const attachCatalogPreview = (payload: Record<string, any>) => {
+      const fallbackResults = Array.isArray(payload.catalogResults) ? payload.catalogResults : [];
+      const useDirect = pageDerivedCatalogResults.length > 0 || fallbackResults.length === 0;
+      return {
+        ...payload,
+        catalogResults: useDirect ? pageDerivedCatalogResults : fallbackResults,
+        catalogPreview: useDirect
+          ? pageDerivedCatalogMeta
+          : (payload.catalogPreview || pageDerivedCatalogMeta),
+      };
+    };
     // Prefer the bounded, SHA-verified Vercel catalog. It already serves the
     // current crawler index without loading all shards into this Edge isolate.
     if (reason === "database_unavailable" || reason === "database_empty") {
@@ -253,7 +306,7 @@ Deno.serve(async (req: Request) => {
           fallbackReason: reason,
         });
         if (vercel) {
-          return json(vercel, 200, "public, max-age=15, stale-while-revalidate=30");
+          return json(attachCatalogPreview(vercel), 200, "public, max-age=15, stale-while-revalidate=30");
         }
       } catch (error) {
         const detail = error instanceof Error ? error.message : String(error);
@@ -286,7 +339,7 @@ Deno.serve(async (req: Request) => {
       crawlerIndexCount = found.count;
 
       if (found.results.length) {
-        return json({
+        return json(attachCatalogPreview({
           results: found.results,
           count: found.count,
           query,
@@ -302,7 +355,7 @@ Deno.serve(async (req: Request) => {
           hasMore: found.hasMore,
           fallback: true,
           fallbackReason: reason,
-        }, 200, "public, max-age=30, stale-while-revalidate=60");
+        }), 200, "public, max-age=30, stale-while-revalidate=60");
       }
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
@@ -315,7 +368,7 @@ Deno.serve(async (req: Request) => {
     }
 
     if (catalogLoaded) {
-      return json({
+      return json(attachCatalogPreview({
         results: [],
         count: 0,
         query,
@@ -330,7 +383,25 @@ Deno.serve(async (req: Request) => {
         hasMore: false,
         fallback: true,
         fallbackReason: reason,
-      }, 200, "public, max-age=30, stale-while-revalidate=60");
+      }), 200, "public, max-age=30, stale-while-revalidate=60");
+    }
+
+    if (pageDerivedCatalogResults.length) {
+      return json(attachCatalogPreview({
+        results: [],
+        count: 0,
+        query,
+        tentacle: validLane,
+        requestedTentacle: validLane,
+        laneFallback: false,
+        source: "Everything Hub page-derived catalog preview",
+        offset,
+        limit,
+        hasMore: false,
+        fallback: true,
+        fallbackReason: reason,
+        independentOfDatabase: true,
+      }), 200, "public, max-age=15, stale-while-revalidate=30");
     }
 
     return unavailable();
