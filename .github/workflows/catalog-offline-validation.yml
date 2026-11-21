@@ -1,0 +1,53 @@
+name: Catalog Offline Rebuild Validation
+
+on:
+  push:
+    branches:
+      - "work/catalog-offline-validation-*"
+    paths:
+      - ".github/workflows/catalog-offline-validation.yml"
+      - "crawler/catalog_page_analysis.py"
+      - "crawler/index_store.py"
+      - "crawler/test_catalog_page_analysis.py"
+      - "data/index.json"
+      - "data/source-policy-reviews.json"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: catalog-offline-validation-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  rebuild-and-validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run catalog analyzer unit tests
+        run: python -m unittest discover -s crawler -p 'test_catalog_page_analysis.py' -v
+      - name: Rebuild catalog candidates offline from canonical index
+        run: |
+          python crawler/catalog_page_analysis.py \
+            --no-incremental \
+            --output-dir artifacts/catalog-validation \
+            --query Rolex \
+            --query "Las Vegas" | tee artifacts/catalog-validation-run.json
+      - name: Validate every generated artifact and catalog index
+        run: |
+          python crawler/catalog_page_analysis.py \
+            --validate-only \
+            --output-dir artifacts/catalog-validation | tee artifacts/catalog-integrity-validation.json
+      - name: Upload isolated validation evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: catalog-offline-validation-${{ github.run_number }}
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 14
