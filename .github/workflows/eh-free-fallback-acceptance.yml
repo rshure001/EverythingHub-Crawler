@@ -40,6 +40,13 @@ jobs:
             const goHome = async () => {
               await page.goto(process.env.TARGET_URL, { waitUntil: "domcontentloaded", timeout: 45000 });
               await page.locator("#query").waitFor({ state: "visible", timeout: 20000 });
+              const image = page.locator(".art img").first();
+              await image.waitFor({ state: "visible", timeout: 20000 });
+              await image.scrollIntoViewIfNeeded();
+              await page.waitForFunction(() => {
+                const img = document.querySelector(".art img");
+                return !!img && img.complete && img.naturalWidth >= 800;
+              }, null, { timeout: 30000 });
             };
             const search = async (mode, query, resultSelector, minCount = 1) => {
               await page.locator('.hotspots [data-mode="' + mode + '"]').click();
@@ -65,8 +72,14 @@ jobs:
             try {
               const response = await page.goto(report.url, { waitUntil: "domcontentloaded", timeout: 45000 });
               if (!response || response.status() !== 200) throw new Error("Homepage did not return HTTP 200");
-              await page.locator(".art img").waitFor({ state: "visible", timeout: 20000 });
-              const art = await page.locator(".art img").first().evaluate(img => ({ src: img.currentSrc || img.src, width: img.naturalWidth, height: img.naturalHeight, complete: img.complete }));
+              const artworkImage = page.locator(".art img").first();
+              await artworkImage.waitFor({ state: "visible", timeout: 20000 });
+              await artworkImage.scrollIntoViewIfNeeded();
+              await page.waitForFunction(() => {
+                const img = document.querySelector(".art img");
+                return !!img && img.complete && img.naturalWidth >= 800 && img.naturalHeight >= 800;
+              }, null, { timeout: 30000 });
+              const art = await artworkImage.evaluate(img => ({ src: img.currentSrc || img.src, width: img.naturalWidth, height: img.naturalHeight, complete: img.complete }));
               if (!art.src.includes("everythinghub-approved-octopus.png") || art.width < 800 || art.height < 800) throw new Error("Approved octopus artwork check failed: " + JSON.stringify(art));
               const modes = await page.locator(".hotspots [data-mode]").evaluateAll(nodes => nodes.map(node => node.dataset.mode));
               if (modes.length !== 8) throw new Error("Expected eight search categories; got " + modes.length);
