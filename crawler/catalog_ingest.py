@@ -84,7 +84,8 @@ def adapt(manifest: dict[str, Any]) -> dict[str, Any]:
                 or license_info.get("is_open") is not None
                 or resource_rights_present
             )
-            public_search_allowed = catalog_policy_approved and rights_metadata_present
+            private_dataset = license_info.get("private") is True
+            public_search_allowed = catalog_policy_approved and rights_metadata_present and not private_dataset
             attributes = dataset.get("attributes") or {
                 "organization": dataset.get("organization") or "",
                 "tags": dataset.get("tags") or [],
@@ -102,7 +103,8 @@ def adapt(manifest: dict[str, Any]) -> dict[str, Any]:
                 "source_terms_reviewed_at": source_terms_reviewed_at,
                 "attribution_required": dataset.get("attribution_required", catalog.get("attribution_required")),
                 "rights_status": (
-                    "license_metadata_present" if license_present
+                    "private_dataset" if private_dataset
+                    else "license_metadata_present" if license_present
                     else "dataset_rights_metadata_present" if rights_metadata_present
                     else "review_required"
                 ),
