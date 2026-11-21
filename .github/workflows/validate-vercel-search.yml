@@ -219,7 +219,7 @@ jobs:
               !item.terms.every(term => matched.includes(term)) ||
               body.catalogPreview?.externalCatalogCount !== 3 ||
               body.catalogPreview?.externalCatalogRecordCount !== 18 ||
-              !body.providers?.includes('Everything Hub External Catalogs')
+              !body.providers?.some(provider => ['Everything Hub External Catalogs', 'Everything Hub Catalog Preview'].includes(provider))
             ) {
               throw new Error('External link-only catalog contract failed for ' + item.key + ': ' + JSON.stringify(body));
             }
