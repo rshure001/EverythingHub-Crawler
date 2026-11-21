@@ -1022,8 +1022,13 @@ form.addEventListener('submit',async e=>{
   if(!r.ok)throw Error('Independent Everything Hub search '+r.status);
   const d=await r.json();
   apiHasMore=Boolean(d.hasMore);
-  totalIndexed=Number(d.count)||totalIndexed;
-  return (d.results||[]).map(x=>({...x,description:x.snippet||x.description||'',source:x.source||d.provider||'Web search',mediaType:'web'}));
+  totalIndexed=Number(d.indexedPages)||totalIndexed;
+  const catalogResults=(d.catalogResults||[]).map(x=>{
+   const snippet=x.snippet||x.description||'Candidate catalog preview; source terms and reuse rights have not been reviewed.';
+   return {...x,title:x.title||x.catalog_title||x.catalog_id||'Catalog candidate',url:x.url||x.source_url||'',snippet,description:snippet,source:x.source||'Everything Hub Catalog Preview',origin:x.origin||'Everything Hub Catalog Preview',mediaType:'web',score:Number(x.score)||0};
+  }).filter(x=>x.url);
+  const pageResults=(d.results||[]).map(x=>({...x,description:x.snippet||x.description||'',source:x.source||d.provider||'Web search',mediaType:'web'}));
+  return catalogResults.concat(pageResults);
  };
  const render=()=>{
   const isVideo=x=>x.mediaType==='video'||Boolean(x.video)||/youtube\.com|youtu\.be|vimeo\.com/i.test(String(x.url||''));
@@ -1043,7 +1048,7 @@ form.addEventListener('submit',async e=>{
    return '<article class="result">'+preview+'<div class="result-copy"><a target="_blank" rel="noopener noreferrer" href="'+link+'">'+esc(x.title)+'</a>'+(isVideo(x)?'<span class="media-tag">VIDEO</span>':'')+'<p>'+esc(x.snippet||'')+'</p><div class="source">'+esc(sourceLabel)+'</div></div></article>';
   }).join('');
   const moreAvailable=shown<matches.length||(activeType==='web'&&apiHasMore);
-  const resultLabel=activeType==='web'&&totalIndexed?'Showing '+matches.length.toLocaleString()+' results · '+totalIndexed.toLocaleString()+' provider matches':matches.length.toLocaleString()+' '+activeType+' results';
+  const resultLabel=activeType==='web'&&totalIndexed?'Showing '+matches.length.toLocaleString()+' results · '+totalIndexed.toLocaleString()+' pages indexed':matches.length.toLocaleString()+' '+activeType+' results';
   out.innerHTML=tabs+'<p class="source result-count">'+resultLabel+'</p>'+cards+(moreAvailable?'<button id="moreResults" type="button" style="display:block;margin:22px auto;padding:13px 25px;border:1px solid #39ff79;border-radius:999px;background:#063b2e;color:#fff;font-weight:800">'+(shown<matches.length?'Show 24 more results':'Load next 50 indexed results')+'</button>':'')+(matches.length?'':'<p>No '+activeType+' results found for this search. Try Web or a broader search.</p>');
   out.querySelectorAll('.search-tab').forEach(tab=>tab.addEventListener('click',()=>{activeType=tab.dataset.type;shown=24;render()}));
   const more=document.querySelector('#moreResults');

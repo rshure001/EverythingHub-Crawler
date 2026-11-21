@@ -1104,9 +1104,24 @@ def search_catalog_network(query: str, analysis: dict, limit: int = 10) -> list[
             matched.append((score, record))
         if not matched:
             continue
-        catalog_score = 100 + (10 * len(tokens)) if catalog_match else 0
-        type_bonus = 30 if len(tokens) >= 2 and catalog.get("catalog_type") == "geographic" else 0
         ranked = sorted(matched, key=lambda x: (-x[0], x[1]["title"].casefold()))[:5]
+        matched_types = {str(record.get("record_type", "")).casefold() for _, record in ranked}
+        catalog_type = str(catalog.get("catalog_type", "")).casefold()
+        # Favor matching product/place/business record types; reduce incidental content-title matches.
+        catalog_score = (
+            25 + (5 * len(tokens))
+            if catalog_match and content_record and not content_intent
+            else 100 + (10 * len(tokens)) if catalog_match else 0
+        )
+        type_bonus = 0
+        if catalog_type == "geographic":
+            type_bonus = 70 if len(tokens) >= 2 and "place" in matched_types else -20
+        elif catalog_type == "commerce":
+            type_bonus = 50 if matched_types & {"product", "brand", "model"} else -20
+        elif catalog_type == "business_directory":
+            type_bonus = 40 if "business" in matched_types else -15
+        elif catalog_type == "service_directory":
+            type_bonus = 40 if "service" in matched_types else -15
         results.append({
             "catalog_id": catalog["catalog_id"], "title": catalog["title"],
             "catalog_type": catalog["catalog_type"], "record_type": catalog.get("record_type"),

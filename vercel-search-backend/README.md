@@ -55,3 +55,21 @@ Run from the repository root:
     node --test vercel-search-backend/test/*.test.js
 
 The GitHub workflow runs these tests on pull requests and main-branch changes.
+
+
+## Page-derived catalog search preview
+
+The independent search API reads the commit-pinned data/page-derived-catalogs manifest, registry.json.gz, and records.json.gz artifacts. It verifies each compressed artifact's byte count and SHA-256, checks unique catalog and record IDs, and rejects commercially eligible records in candidate staging.
+
+Matching catalog candidates are returned separately as catalogResults; the homepage renders them ahead of ordinary page results. Cards include catalog type, matched record titles, source-page and record counts, and a source link. Record descriptions and full attributes are not copied into these public preview cards.
+
+These are candidate previews only. Source terms and reuse rights remain unreviewed, commercial_eligible remains false, and recordsPublished remains zero. The preview endpoint does not mark records as production-published or rights-cleared. The Vercel project still requires its existing controlled deployment path; GitHub auto-deployment is not configured.
+
+
+Freshness guard: catalog preview metadata includes the source-index page count and SHA-256. The search API compares both with the active page-search snapshot and labels the preview stale when they differ or when freshness cannot be checked. The homepage's indexed counter uses indexedPages (source pages), not the matching-result count.
+
+
+Freshness guard: candidate previews are marked current only when the source-index page count and update timestamp match the active page-search snapshot within 60 seconds. The source-index SHA and page-search manifest SHA are preserved as separate provenance values; they are not compared as if they represented the same file.
+
+
+Relevance ranking: commerce catalogs with matching product/brand/model records and geographic catalogs with matching place records receive type-aware boosts. Article/resource/media catalogs receive a smaller title-only catalog bonus unless the query explicitly asks for content, reducing incidental mentions in Rolex and Las Vegas searches.
