@@ -512,6 +512,10 @@ def _add_global_subject_catalogs(pages: list[dict], page_rows: list[dict], recor
             }
             topic_hosts[token].add(host)
 
+    records_are_list = isinstance(records, list)
+    catalogs_are_list = isinstance(catalogs, list)
+    original_record_ids = {item["record_id"] for item in records} if records_are_list else set()
+    original_catalog_ids = {item["catalog_id"] for item in catalogs} if catalogs_are_list else set()
     if isinstance(records, dict):
         record_map = records
     else:
@@ -596,6 +600,10 @@ def _add_global_subject_catalogs(pages: list[dict], page_rows: list[dict], recor
             "verified": False,
         }
         created += 1
+    if records_are_list:
+        records.extend(item for key, item in record_map.items() if key not in original_record_ids)
+    if catalogs_are_list:
+        catalogs.extend(item for key, item in catalog_map.items() if key not in original_catalog_ids)
     return created
 
 
