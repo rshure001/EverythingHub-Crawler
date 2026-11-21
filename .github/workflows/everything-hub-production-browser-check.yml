@@ -4,7 +4,8 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/everything-hub-production-browser-check.yml"
-      - "src/**"\n      - "vercel-homepage/**"
+      - "src/**"
+      - "vercel-homepage/**"
   workflow_dispatch:
   workflow_run:
     workflows: ["EverythingHub Publisher"]
@@ -116,6 +117,6 @@ jobs:
             everything-hub-rolex.png
             everything-hub-nasa.png
             everything-hub-failure.png
-            everything-hub-production-report.json
+            production-report.json
           if-no-files-found: warn
           retention-days: 3
