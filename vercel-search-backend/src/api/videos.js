@@ -5,7 +5,7 @@ const API_BASE = "https://images-api.nasa.gov/search";
 const ASSET_HOSTS = new Set(["images-assets.nasa.gov", "images.nasa.gov"]);
 const USER_AGENT = "EverythingHubVideoSearch/1.0 (+https://github.com/rshure001/EverythingHub-Crawler)";
 const DEFAULT_MIN_INTERVAL_MS = 2000;
-const ROBOTS_TTL_MS = 6 * 60 * 60 * 1000;
+const ROBOTS_TTL_MS = 60 * 60 * 1000;
 const MAX_ROBOTS_BYTES = 512000;
 const MAX_API_BYTES = 4 * 1024 * 1024;
 const MAX_RESULTS = 20;
@@ -113,10 +113,9 @@ async function pacedFetch(url, options = {}, delayMs = minIntervalMs) {
     }
     window.count += 1;
     requestWindows.set(host, window);
-    const response = await fetch(url, options);
-    lastRequestAt.set(host, Date.now());
-    return response;
+    return await fetch(url, options);
   } finally {
+    lastRequestAt.set(host, Date.now());
     release();
   }
 }
