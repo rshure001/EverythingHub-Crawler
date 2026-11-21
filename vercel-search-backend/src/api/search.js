@@ -98,7 +98,8 @@ module.exports = async function handler(req, res) {
   const pageDerivedNetwork = pageDerivedResult.status === 'fulfilled' ? pageDerivedResult.value : null;
   const externalCatalogResults = searchExternalCatalogs(query);
   const externalCatalogStats = getExternalCatalogStats();
-  let catalogResults = [...externalCatalogResults, ...(pageDerivedNetwork ? searchPageDerivedCatalogs(query, pageDerivedNetwork, 5) : [])].slice(0, 5);
+  let pageDerivedCatalogResults = pageDerivedNetwork ? searchPageDerivedCatalogs(query, pageDerivedNetwork, 5) : [];
+  let catalogResults = [...externalCatalogResults, ...pageDerivedCatalogResults].slice(0, 5);
   const catalogPreview = pageDerivedNetwork ? {
     status: 'freshness-unverified',
     previewOnly: true,
@@ -111,7 +112,7 @@ module.exports = async function handler(req, res) {
     recordCount: pageDerivedNetwork.recordCount,
     recordsPublished: Number(pageDerivedNetwork.metrics.records_published) || 0,
     sourceTermsReviewedRecords: Number(pageDerivedNetwork.metrics.source_terms_reviewed_records) || 0,
-    resultCount: catalogResults.length,
+    resultCount: pageDerivedCatalogResults.length,
     stale: Boolean(pageDerivedNetwork.stale)
   } : {
     status: 'unavailable',
@@ -128,7 +129,8 @@ module.exports = async function handler(req, res) {
     if (pageDerivedNetwork) {
       catalogPreview.status = 'stale-candidate-preview';
       catalogPreview.freshnessMatch = false;
-      catalogResults = catalogResults.map(item => ({ ...item, snippet: item.snippet + ' Current page-index freshness could not be verified.', description: item.snippet + ' Current page-index freshness could not be verified.' }));
+      pageDerivedCatalogResults = pageDerivedCatalogResults.map(item => ({ ...item, snippet: item.snippet + ' Current page-index freshness could not be verified.', description: item.snippet + ' Current page-index freshness could not be verified.' }));
+      catalogResults = [...externalCatalogResults, ...pageDerivedCatalogResults].slice(0, 5);
     }
     const catalogError = safeCatalogError(catalogResult.reason);
     console.warn('[catalog-load-failed]', catalogError);
@@ -168,7 +170,8 @@ module.exports = async function handler(req, res) {
       ? 'stale-candidate-preview' : 'candidate-preview';
     if (pageDerivedNetwork.stale || !sourceIndexMatches) {
       const warning = !sourceIndexMatches ? ' Catalog analysis is behind the current page index.' : ' Catalog preview is using a cached snapshot.';
-      catalogResults = catalogResults.map(item => ({ ...item, snippet: item.snippet + warning, description: item.snippet + warning }));
+      pageDerivedCatalogResults = pageDerivedCatalogResults.map(item => ({ ...item, snippet: item.snippet + warning, description: item.snippet + warning }));
+      catalogResults = [...externalCatalogResults, ...pageDerivedCatalogResults].slice(0, 5);
     }
   }
   const ranked = searchCatalog(catalog.pages, query, lane);
