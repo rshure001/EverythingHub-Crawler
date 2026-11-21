@@ -198,7 +198,7 @@ function renderImages(data,q){
 function renderVideos(data,q){
   resultsRoot.replaceChildren();
   const items=Array.isArray(data.items)?data.items:[];
-  makeHeading(q,"Video results",items.length.toLocaleString()+" videos · "+(data.provider||"public video search"));
+  makeHeading(q,"Video results",items.length.toLocaleString()+" videos · "+(data.provider||"Internet Archive"));
   const grid=document.createElement("div");grid.className="video-grid";
   for(const item of items){
     const card=document.createElement("article");card.className="video-card";
