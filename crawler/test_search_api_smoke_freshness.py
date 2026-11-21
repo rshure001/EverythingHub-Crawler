@@ -32,7 +32,7 @@ class SearchApiSmokeFreshnessTests(unittest.TestCase):
         script = run_block.split("python - <<'PY'", 1)[1].split("\n          PY", 1)[0]
         ast.parse(textwrap.dedent(script))
 
-    def test_search_smoke_uses_catalog_only_push_paths_and_post_publish_dispatch(self):
+    def test_search_smoke_uses_catalog_only_push_paths_and_post_crawl_dispatch(self):
         smoke = (
             Path(__file__).resolve().parents[1]
             / ".github"
@@ -51,10 +51,10 @@ class SearchApiSmokeFreshnessTests(unittest.TestCase):
             / "workflows"
             / "crawl.yml"
         ).read_text(encoding="utf-8")
-        dispatch = crawl.split("Dispatch catalog publishing and search verification", 1)[1]
-        self.assertIn("gh workflow run publish-site.yml", dispatch)
+        dispatch = crawl.split("Dispatch live search verification (no GitHub Pages deployment)", 1)[1]
+        self.assertNotIn("gh workflow run publish-site.yml", dispatch)
         self.assertIn("gh workflow run search-api-smoke.yml", dispatch)
-        self.assertIn("search smoke test; it waits for the committed catalog", dispatch)
+        self.assertIn("no GitHub Pages deployment was requested", dispatch)
 
 
 if __name__ == "__main__":
