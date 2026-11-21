@@ -105,6 +105,19 @@ test('Rolex article or subject hits are labeled as related mentions when no prod
 });
 
 
+test('catalog preview links to the matching record instead of an unrelated first catalog source',()=>{
+ const results=searchPageDerivedCatalogs('Las Vegas',{
+  catalogs:[{catalog_id:'mixed',title:'Geographic Subject Catalog',catalog_type:'knowledge_base',record_type:'subject',source_url:'https://example.org/unrelated-first-record',record_count:100,source_page_count:100}],
+  records:[
+   {record_id:'other',record_type:'subject',title:'Unrelated catalog starter',description:'General knowledge record',source_urls:['https://example.org/unrelated-first-record'],catalog_ids:['mixed'],attributes:{}},
+   {record_id:'match',record_type:'subject',title:'Las Vegas public resource',description:'A matching Las Vegas resource',source_urls:['https://example.org/las-vegas-match'],catalog_ids:['mixed'],attributes:{}}
+  ]
+ },5);
+ assert.equal(results.length,1);
+ assert.equal(results[0].matched_records[0].source_url,'https://example.org/las-vegas-match');
+ assert.equal(results[0].url,'https://example.org/las-vegas-match');
+});
+
 test('loads only matching sharded catalog indexes for Rolex and Las Vegas queries',async()=>{
  const f=fixture(),sha='c'.repeat(40),artifacts=new Map();
  const add=(file,buffer,items)=>{f.manifest.files.push({file,bytes:buffer.length,sha256:hash(buffer),items});artifacts.set('https://raw.githubusercontent.com/rshure001/EverythingHub-Crawler/'+sha+'/data/page-derived-catalogs/'+file.split('/').map(encodeURIComponent).join('/'),buffer);};
