@@ -61,14 +61,28 @@ def build_candidates(index: dict) -> dict:
         text = " ".join(str(page.get(k) or "") for k in ("title", "description", "text"))[:2500]
         matched = [name for name, pattern in HINTS.items() if pattern.search(text) or pattern.search(url)]
         page_digest = __import__("hashlib").sha256(url.encode("utf-8")).hexdigest()[:24]
+        related_catalogs = page_relationships.get(url, [])
+        related_catalog_ids = [item["catalog_id"] for item in related_catalogs]
+        best_page_count = max((item["source_page_count"] for item in related_catalogs), default=0)
+        best_record_count = max((item["record_count"] for item in related_catalogs), default=0)
+        profile_status = "catalog_associated" if related_catalogs else "pending_catalog_discovery"
+        coverage_status = (
+            "meets_100_page_target" if best_page_count >= 100
+            else "below_100_page_target" if related_catalogs
+            else "not_yet_classified"
+        )
         page_seeds.append({
             "page_id": page_digest,
             "page_profile_id": "page-catalog-profile:" + page_digest,
             "profile_type": "source_page_catalog_profile",
-            "profile_status": "pending_catalog_classification",
-            "related_catalog_ids": [],
+            "profile_status": profile_status,
+            "related_catalog_ids": related_catalog_ids,
+            "related_catalog_count": len(related_catalog_ids),
+            "best_catalog_source_page_count": best_page_count,
+            "best_catalog_record_count": best_record_count,
+            "catalog_coverage_status": coverage_status,
             "discovery_seed_id": "page-seed:" + page_digest,
-            "analysis_status": "pending_page_content_analysis",
+            "analysis_status": "catalogs_associated" if related_catalogs else "pending_expansion",
             "url": url[:2048],
             "host": host,
             "title": str(page.get("title") or "")[:240],
@@ -110,8 +124,12 @@ def build_candidates(index: dict) -> dict:
         "metrics": {
             "pages_as_discovery_seeds": len(page_seeds),
             "page_catalog_profiles_created": len(page_seeds),
-            "profiles_pending_catalog_classification": len(page_seeds),
-            "unique_catalog_candidates": 0,
+            "profiles_associated_with_catalogs": sum(bool(x["related_catalog_ids"]) for x in page_seeds),
+            "profiles_pending_catalog_discovery": sum(not x["related_catalog_ids"] for x in page_seeds),
+            "page_catalog_associations": sum(len(x["related_catalog_ids"]) for x in page_seeds),
+            "profiles_with_catalogs_meeting_100_page_target": sum(x["catalog_coverage_status"] == "meets_100_page_target" for x in page_seeds),
+            "profiles_with_catalogs_below_100_page_target": sum(x["catalog_coverage_status"] == "below_100_page_target" for x in page_seeds),
+            "unique_catalog_candidates": len({catalog_id for x in page_seeds for catalog_id in x["related_catalog_ids"]}),
             "verified_page_catalogs": 0,
             "pages_with_catalog_signals": sum(bool(x["catalog_signals"]) for x in page_seeds),
             "page_catalog_signal_references": sum(len(x["catalog_signals"]) for x in page_seeds),
