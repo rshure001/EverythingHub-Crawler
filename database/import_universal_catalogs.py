@@ -77,7 +77,9 @@ def validate_payload(payload):
     for item in records:
         if not isinstance(item, dict):
             raise ValueError("every catalog record must be an object")
-        attrs = item.get("attributes") or {}
+        attrs = item.get("attributes")
+        if attrs is None:
+            attrs = {}
         if not isinstance(attrs, dict):
             raise ValueError("record attributes must be a JSON object")
         if attrs.get("public_search_allowed") is not True:
