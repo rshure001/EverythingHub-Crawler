@@ -1636,8 +1636,11 @@ def search_catalog_network(query: str, analysis: dict, limit: int = 10) -> list[
         catalog_match = token_set.issubset(catalog_tokens)
         record_type = str(catalog.get("record_type", "")).casefold()
         is_derived_subject = (
-            catalog.get("catalog_origin") == "derived_from_repeated_records"
-            or (record_type == "subject" and catalog.get("source_host") == "__global__")
+            record_type == "subject"
+            and (
+                catalog.get("catalog_origin") == "derived_from_repeated_records"
+                or catalog.get("source_host") == "__global__"
+            )
         )
         if is_derived_subject:
             subject_tokens = set(_norm(catalog.get("subject", "")).split())
