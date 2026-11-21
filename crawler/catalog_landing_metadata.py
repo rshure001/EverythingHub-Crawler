@@ -403,6 +403,8 @@ def _eligible_rows(ledger: dict[str, Any], manifest: dict[str, Any], registry: d
             continue
         if row.get("robots_check_performed") is not True or row.get("source_access_mode") != "catalog_landing_page":
             continue
+        if row.get("review_status") != "policy_preapproved_robots_recheck_required":
+            continue
         if row.get("metadata_only") is not True or row.get("fetch_authorized") is not False:
             continue
         if row.get("page_content_fetched") is not False or row.get("page_requests") != 0:
