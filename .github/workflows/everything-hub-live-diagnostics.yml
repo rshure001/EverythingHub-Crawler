@@ -35,7 +35,7 @@ jobs:
         env:
           BASE: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1
           KEY: sb_publishable_XlIsACWhtVS1jVODWYGTpg_GMs8v3vJ
-          PUBLISHER_BASE: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-publish-static
+          PUBLISHER_BASE: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-site
         run: |
           set -euo pipefail
           echo "=== HOMEPAGE ==="
