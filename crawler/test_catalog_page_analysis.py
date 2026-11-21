@@ -1111,5 +1111,69 @@ class CatalogInventoryTriggerTests(unittest.TestCase):
         self.assertIn('"public-search/manifest.json"', push_paths)
 
 
+
+
+    def test_structured_item_list_creates_nested_catalog_and_direct_record_urls(self):
+        result = analyze_pages([{
+            "url": "https://shop.example/watches",
+            "title": "Watches",
+            "description": "Browse the watch collection.",
+            "text": "Rolex watches and models.",
+            "lane": "shopping",
+            "robots_allowed": True,
+            "fetched_at": 1795250000,
+            "structured_catalog": {
+                "version": 1,
+                "lists": [{
+                    "name": "Rolex Watches",
+                    "record_type": "model",
+                    "items": [
+                        {"record_type": "model", "name": "Submariner", "url": "https://shop.example/watches/submariner", "brand": "Rolex", "sku": "124060"},
+                        {"record_type": "model", "name": "Datejust", "url": "https://shop.example/watches/datejust", "brand": "Rolex", "sku": "126200"},
+                    ],
+                }],
+            },
+        }], source_total=1)
+        metrics = result["metrics"]
+        self.assertEqual(metrics["structured_catalog_pages"], 1)
+        self.assertEqual(metrics["structured_catalog_lists"], 1)
+        self.assertEqual(metrics["structured_catalog_items"], 2)
+        self.assertEqual(metrics["structured_catalog_records"], 2)
+        self.assertEqual(metrics["structured_schema_catalogs"], 1)
+        self.assertEqual(metrics["unique_records_by_type"], {"model": 2})
+        self.assertEqual(metrics["subcatalogs_discovered"], 1)
+        catalog = next(item for item in result["catalogs"] if item["catalog_origin"] == "structured_schema_collection")
+        self.assertEqual(catalog["title"], "Rolex Watches")
+        self.assertEqual(catalog["record_count"], 2)
+        records = {item["title"]: item for item in result["records"]}
+        self.assertEqual(records["Submariner"]["source_urls"], ["https://shop.example/watches/submariner"])
+        self.assertEqual(records["Datejust"]["source_urls"], ["https://shop.example/watches/datejust"])
+        self.assertTrue(records["Submariner"]["structured_catalog_item"])
+        self.assertEqual(len(records["Submariner"]["source_page_ids"]), 1)
+        self.assertTrue(search_catalog_network("Rolex", result))
+
+    def test_structured_item_list_with_one_item_does_not_force_a_catalog(self):
+        result = analyze_pages([{
+            "url": "https://shop.example/about",
+            "title": "About the collection",
+            "text": "One product is described here.",
+            "lane": "general",
+            "robots_allowed": True,
+            "structured_catalog": {
+                "version": 1,
+                "lists": [{
+                    "name": "One watch",
+                    "record_type": "model",
+                    "items": [
+                        {"record_type": "model", "name": "Submariner", "url": "https://shop.example/submariner"},
+                    ],
+                }],
+            },
+        }], source_total=1)
+        self.assertEqual(result["metrics"]["structured_catalog_pages"], 0)
+        self.assertEqual(result["metrics"]["structured_catalog_lists"], 0)
+        self.assertEqual(result["metrics"]["unique_catalogs_discovered"], 0)
+        self.assertEqual(result["metrics"]["unique_records"], 0)
+
 if __name__ == "__main__":
     unittest.main()
