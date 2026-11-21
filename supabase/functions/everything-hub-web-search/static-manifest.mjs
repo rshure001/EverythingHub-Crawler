@@ -1,8 +1,8 @@
-// Structural bound aligned with the 150,000-page publisher and Vercel catalog ceiling.
+// Structural bound aligned with the 180,000-page publisher and first-party catalog ceiling.
 // The Edge Function still refuses shard-only catalogs and retains its separate
 // 6 MB compressed / 30 MB decoded limits.
-export const MAX_STATIC_INDEX_PAGES = 150_000;
-export const MAX_STATIC_INDEX_SHARDS = 640;
+export const MAX_STATIC_INDEX_PAGES = 180_000;
+export const MAX_STATIC_INDEX_SHARDS = 768;
 
 /**
  * Validate the bounded public catalog manifest contract shared by the Edge Function
