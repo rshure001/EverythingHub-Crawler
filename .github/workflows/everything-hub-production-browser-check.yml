@@ -374,16 +374,20 @@ jobs:
               }
               report.imageSearch = await imageCards.evaluateAll(cards => {
                 const ccBy = license => /^cc by(-sa)?\s+/i.test(String(license || ""));
-                const badAttribution = cards.filter(card => {
+                const details = cards.map(card => {
                   const license = card.dataset.license || "";
                   const creator = card.dataset.creator || "";
                   const small = card.querySelector("small");
                   const text = small?.textContent || "";
-                  return !license || !/(Wikimedia Commons|Internet Archive)/i.test(text) || !text.includes(license) ||
-                    (ccBy(license) && (!creator || !small?.querySelector("a")));
-                }).length;
+                  const licenseLink = Array.from(small?.querySelectorAll("a") || []).find(anchor => /^https:\/\/creativecommons\.org\//i.test(anchor.href));
+                  const sourcePresent = /Source:\s*Internet Archive/i.test(text);
+                  const licensePresent = !!license && !!licenseLink && licenseLink.textContent === license && text.includes(license);
+                  const creatorValid = !ccBy(license) || (!!creator && !/^(internet archive|unknown|anonymous|not specified|n\/a)$/i.test(creator));
+                  return { license, creator, sourcePresent, licensePresent, creatorValid, licenseHref: licenseLink?.href || null, text };
+                });
+                const badAttribution = details.filter(item => !item.sourcePresent || !item.licensePresent || !item.creatorValid).length;
                 const ccByCards = cards.filter(card => ccBy(card.dataset.license)).length;
-                const ccByCardsWithLinks = cards.filter(card => ccBy(card.dataset.license) && !!card.querySelector("small a")).length;
+                const ccByCardsWithLinks = cards.filter(card => ccBy(card.dataset.license) && !!Array.from(card.querySelectorAll("small a")).find(anchor => /^https:\/\/creativecommons\.org\//i.test(anchor.href))).length;
                 return {
                   cards: cards.length,
                   loadedThumbnails: cards.filter(card => {
@@ -391,10 +395,11 @@ jobs:
                     return !!image && image.complete && image.naturalWidth > 0;
                   }).length,
                   placeholders: cards.filter(card => !!card.querySelector(".image-placeholder")).length,
-                  attributionCards: cards.filter(card => (card.querySelector("small")?.textContent || "")./Wikimedia Commons|Internet Archive/i.test(card.querySelector("small")?.textContent || "")).length,
+                  attributionCards: details.filter(item => item.sourcePresent && item.licensePresent && item.creatorValid).length,
                   badAttribution,
                   ccByCards,
                   ccByCardsWithLinks,
+                  attributionDetails: details.slice(0, 6),
                   sampleAttributions: cards.slice(0, 4).map(card => card.querySelector("small")?.textContent || "")
                 };
               });
