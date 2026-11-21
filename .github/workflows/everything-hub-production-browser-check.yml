@@ -145,6 +145,7 @@ jobs:
             const page = await browser.newPage({viewport:{width:1440,height:1000}});
             const errors=[];
             page.on("pageerror",e=>errors.push(e.message));
+              page.on("console",m=>{if(m.type()==="error")errors.push("console: "+m.text());});
             const report={url:process.env.TARGET_URL,startedAt:new Date().toISOString(),searches:{}};
             try {
               const response=await page.goto(report.url,{waitUntil:"domcontentloaded",timeout:45000});
@@ -170,11 +171,13 @@ jobs:
                 await page.goto(report.url,{waitUntil:"domcontentloaded",timeout:45000});
                 await page.locator("#query").fill(query);
                 await page.locator("#searchForm button[type=submit]").click();
-                await page.locator("#results .eh-result").first().waitFor({state:"visible",timeout:30000});
+                await page.waitForFunction(()=>!!document.querySelector("#results .eh-result")||!!document.querySelector("#results .results-empty"),null,{timeout:60000});
                 const count=await page.locator("#results .eh-result").count();
                 const titles=await page.locator("#results .eh-result a").allTextContents();
-                report.searches[query]={visibleCards:count,titles:titles.slice(0,5),status:await page.locator("#status").innerText()};
-                if(!count)throw new Error(query+" returned no visible results");
+                const statusText=await page.locator("#status").innerText();
+                const emptyText=await page.locator("#results .results-empty").first().textContent().catch(()=> "");
+                report.searches[query]={visibleCards:count,titles:titles.slice(0,5),status:statusText,emptyMessage:emptyText};
+                if(!count){await page.screenshot({path:"everythinghub-fallback-"+query.toLowerCase().replace(/\s+/g,"-")+"-failure.png",fullPage:true});throw new Error(query+" returned no visible results; status="+statusText+"; detail="+emptyText+"; pageErrors="+errors.join("; "));}
                 await page.screenshot({path:"everythinghub-fallback-"+query.toLowerCase().replace(/\s+/g,"-")+".png",fullPage:true});
               }
               await page.goto(report.url,{waitUntil:"domcontentloaded",timeout:45000});
