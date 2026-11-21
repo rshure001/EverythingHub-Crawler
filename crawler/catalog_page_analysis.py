@@ -670,6 +670,14 @@ def _reconcile_page_record_provenance(page_rows: list[dict], records) -> int:
             # distinct direct record URL.
             record["source_page_ids"] = sorted(set(source_page_ids))
             record["source_page_count"] = len(record["source_page_ids"])
+            source_urls = record.get("source_urls")
+            if isinstance(source_urls, list):
+                direct_urls = sorted({
+                    value for value in source_urls
+                    if isinstance(value, str) and canonical_url(value)
+                })
+                if direct_urls:
+                    record["source_url"] = direct_urls[0]
             if changed:
                 repaired += 1
     return repaired
