@@ -88,5 +88,27 @@ class RetroCatalogDiscoveryTests(unittest.TestCase):
         self.assertNotIn("Everything Hub crawler", workflow)
         self.assertIn("cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}", workflow)
 
+    def test_inventory_cache_checkpoint_is_saved_after_cancelled_analysis(self):
+        workflow = (
+            Path(__file__).resolve().parents[1]
+            / ".github" / "workflows" / "retroactive-catalog-index.yml"
+        ).read_text(encoding="utf-8")
+        analysis_step = workflow.split(
+            "      - name: Analyze every eligible existing indexed page", 1
+        )[1].split(
+            "      - name: Save resumable per-host catalog cache checkpoint", 1
+        )[0]
+        checkpoint_step = workflow.split(
+            "      - name: Save resumable per-host catalog cache checkpoint", 1
+        )[1].split(
+            "      - name: Record persisted catalog and record throughput", 1
+        )[0]
+        self.assertIn("--cache-dir data/.page-derived-catalog-cache", analysis_step)
+        self.assertIn("        if: always()", checkpoint_step)
+        self.assertNotIn("hashFiles", checkpoint_step)
+        self.assertIn("uses: actions/cache/save@v4", checkpoint_step)
+        self.assertIn("path: data/.page-derived-catalog-cache", checkpoint_step)
+
+
 if __name__ == "__main__":
     unittest.main()
