@@ -1892,7 +1892,7 @@ def analyze_pages_incremental(
             "unique_pages": len(pages),
             "cache_files": len(list(cache_dir.glob("*.json.gz"))),
         }
-        all_records, cross_host_record_merges = _merge_cross_host_records(all_records)
+    all_records, cross_host_record_merges = _merge_cross_host_records(all_records)
     global_subject_catalogs = _add_global_subject_catalogs(pages, all_page_rows, all_records, all_catalogs)
     _reconcile_page_record_provenance(all_page_rows, all_records)
     global_typed_catalogs_by_type = _add_global_typed_entity_catalogs(all_page_rows, all_records, all_catalogs)
