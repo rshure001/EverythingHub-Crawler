@@ -6,6 +6,7 @@ import os
 import pathlib
 import tempfile
 import unittest
+from pathlib import Path
 
 os.environ["EH_SKIP_INDEX_LOAD"] = "1"
 MODULE_PATH = pathlib.Path(__file__).with_name("static_search_api.py")
