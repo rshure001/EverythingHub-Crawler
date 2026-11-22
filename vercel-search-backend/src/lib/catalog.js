@@ -27,9 +27,10 @@ const MAX_QUERY_INDEX_TOTAL_COMPRESSED_BYTES = 32000000;
 const MAX_QUERY_INDEX_TOTAL_UNCOMPRESSED_BYTES = 64000000;
 const MAX_QUERY_INDEX_TOKENS = 4000000;
 const MAX_QUERY_INDEX_POSTINGS = 100000000;
-const MAX_QUERY_SCOPED_SHARD_COUNT = 256;
-const MAX_QUERY_SCOPED_SHARD_BYTES = 64000000;
-const MAX_QUERY_SCOPED_SHARD_UNCOMPRESSED_BYTES = 256000000;
+const MAX_QUERY_SCOPED_SHARD_COUNT = 96;
+const MAX_QUERY_SCOPED_SHARD_BYTES = 24000000;
+const MAX_QUERY_SCOPED_SHARD_UNCOMPRESSED_BYTES = 96000000;
+const MAX_QUERY_SCOPED_PAGE_COUNT = 30000;
 const MAX_QUERY_CACHE_ENTRIES = 4;
 const QUERY_INDEX_STOP_TOKENS = new Set([
   'a', 'an', 'and', 'are', 'as', 'at', 'be', 'by', 'for', 'from',
@@ -495,6 +496,10 @@ function emptyQueryScopedCatalog(manifest, manifestSha256, tokenCount) {
     scannedPages: 0,
     candidatePageCount: 0,
     candidateShardCount: 0,
+    totalCandidateShardCount: 0,
+    totalCandidatePageCount: 0,
+    candidateTruncated: false,
+    candidateSelection: 'ranked-query-posting-frequency',
     queryIndexTokensUsed: tokenCount,
     queryIndexPostingCount: 0
   };
@@ -562,17 +567,51 @@ async function loadQueryScopedCatalogFromManifest(manifest, commitSha, manifestR
     }
   }
 
-  const shardIds = Array.from(candidateShardIds).sort((a, b) => a - b);
-  if (shardIds.length > MAX_QUERY_SCOPED_SHARD_COUNT) throw new Error('query_index_too_broad');
-  const candidateShards = shardIds.map(index => ({ index, meta: manifest.shards[index] }));
-  const candidateCompressedBytes = candidateShards.reduce((sum, item) => sum + item.meta.bytes, 0);
-  const candidateUncompressedBytes = candidateShards.reduce((sum, item) => sum + (item.meta.uncompressed_bytes || item.meta.bytes), 0);
-  if (candidateCompressedBytes > MAX_QUERY_SCOPED_SHARD_BYTES ||
-      candidateUncompressedBytes > MAX_QUERY_SCOPED_SHARD_UNCOMPRESSED_BYTES) {
-    throw new Error('query_index_candidate_budget_exceeded');
+  const termWeights = new Map();
+  for (const term of terms) {
+    const counts = postingsByTerm.get(term);
+    let totalTermCount = 0;
+    for (const count of counts.values()) totalTermCount += count;
+    termWeights.set(term, {
+      counts,
+      inverseFrequency: Math.log1p(manifest.total_pages / Math.max(1, totalTermCount))
+    });
   }
-  const candidatePageCount = candidateShards.reduce((sum, item) => sum + item.meta.pages, 0);
-  const loadedShards = await mapLimit(candidateShards, MAX_SHARD_CONCURRENCY, async ({ index, meta }) => {
+  const rankedCandidates = Array.from(candidateShardIds).map(index => {
+    const meta = manifest.shards[index];
+    let score = 0;
+    for (const { counts, inverseFrequency } of termWeights.values()) {
+      score += (counts.get(index) || 0) * inverseFrequency;
+    }
+    return { index, meta, score };
+  }).sort((a, b) => b.score - a.score || a.index - b.index);
+  const totalCandidateShardCount = rankedCandidates.length;
+  const totalCandidatePageCount = rankedCandidates.reduce((sum, item) => sum + item.meta.pages, 0);
+  const candidateShards = [];
+  let candidateCompressedBytes = 0;
+  let candidateUncompressedBytes = 0;
+  let candidatePageCount = 0;
+  for (const item of rankedCandidates) {
+    if (candidateShards.length >= MAX_QUERY_SCOPED_SHARD_COUNT) break;
+    const compressedBytes = item.meta.bytes;
+    const uncompressedBytes = item.meta.uncompressed_bytes || item.meta.bytes;
+    const pageCount = item.meta.pages;
+    if (candidateCompressedBytes + compressedBytes > MAX_QUERY_SCOPED_SHARD_BYTES ||
+        candidateUncompressedBytes + uncompressedBytes > MAX_QUERY_SCOPED_SHARD_UNCOMPRESSED_BYTES ||
+        candidatePageCount + pageCount > MAX_QUERY_SCOPED_PAGE_COUNT) {
+      continue;
+    }
+    candidateShards.push(item);
+    candidateCompressedBytes += compressedBytes;
+    candidateUncompressedBytes += uncompressedBytes;
+    candidatePageCount += pageCount;
+  }
+  if (!candidateShards.length) throw new Error('query_index_candidate_budget_exceeded');
+  const candidateTruncated = candidateShards.length < totalCandidateShardCount;
+  const selectedById = new Map(candidateShards.map(item => [item.index, item]));
+  const shardIds = Array.from(selectedById.keys()).sort((a, b) => a - b);
+  const orderedCandidateShards = shardIds.map(index => selectedById.get(index));
+  const loadedShards = await mapLimit(orderedCandidateShards, MAX_SHARD_CONCURRENCY, async ({ index, meta }) => {
     const raw = await fetchBuffer(baseUrl + encodeURIComponent(meta.file), meta.bytes, SHARD_FETCH_TIMEOUT_MS);
     return { index, pages: validateShardPayload(meta, raw) };
   });
@@ -610,6 +649,10 @@ async function loadQueryScopedCatalogFromManifest(manifest, commitSha, manifestR
     scannedPages: pages.length,
     candidatePageCount,
     candidateShardCount: shardIds.length,
+    totalCandidateShardCount,
+    totalCandidatePageCount,
+    candidateTruncated,
+    candidateSelection: 'ranked-query-posting-frequency',
     queryIndexTokensUsed: terms.length,
     queryIndexTotalQueryTokens: allTerms.length,
     queryIndexPostingCount
