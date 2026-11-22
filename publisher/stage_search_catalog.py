@@ -14,7 +14,7 @@ import zlib
 from urllib.parse import urlsplit
 from typing import Any
 
-MAX_INDEXED_PAGES = 180_000
+MAX_INDEXED_PAGES = 250_000
 MAX_SHARD_COUNT = 768
 MAX_SHARD_BYTES = 350_000
 MAX_SHARD_UNCOMPRESSED_BYTES = 500_000
@@ -72,7 +72,7 @@ def validate_manifest(manifest: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(updated_at, int) or updated_at <= 0:
         raise ValueError("manifest updated_at must be a positive integer")
     if not isinstance(total_pages, int) or not 1 <= total_pages <= MAX_INDEXED_PAGES:
-        raise ValueError("manifest total_pages exceeds the 180,000-page safety limit")
+        raise ValueError("manifest total_pages exceeds the 250,000-page safety limit")
     if not isinstance(shard_count, int) or not 1 <= shard_count <= MAX_SHARD_COUNT:
         raise ValueError("manifest shard_count exceeds the 768-shard safety limit")
     if not isinstance(shards, list) or len(shards) != shard_count:
