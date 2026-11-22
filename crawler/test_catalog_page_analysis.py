@@ -1186,12 +1186,13 @@ class CatalogInventoryTriggerTests(unittest.TestCase):
     def test_catalog_publish_rebuilds_from_latest_main_after_concurrent_updates(self):
         repository_root = Path(__file__).resolve().parents[1]
         workflow = (repository_root / ".github" / "workflows" / "retroactive-catalog-index.yml").read_text(encoding="utf-8")
-        publish = workflow.split("Publish validated catalog analysis on main", 1)[1]
-        self.assertIn("git merge-base --is-ancestor", publish)
-        self.assertIn("git reset --hard origin/main", publish)
-        self.assertIn('python crawler/catalog_page_analysis.py --index public-search/manifest.json --query Rolex --query "Las Vegas"', publish)
-        self.assertIn("python crawler/catalog_page_analysis.py --validate-only", publish)
-        self.assertNotIn("git rebase origin/main", publish)
+        publish = workflow.split("Publish validated catalog snapshot on latest main", 1)[1]
+        self.assertIn("python crawler/publish_catalog_snapshot.py --attempts 4", publish)
+        self.assertNotIn("python crawler/catalog_page_analysis.py", publish)
+        self.assertNotIn("python crawler/catalog_retro_discovery.py", publish)
+        self.assertNotIn("data/host-catalog-candidates.json", publish)
+        self.assertNotIn("data/page-catalog-seeds.json.gz", publish)
+        self.assertNotIn("git push --force", publish)
         self.assertNotIn("git push --force", publish)
 
 
