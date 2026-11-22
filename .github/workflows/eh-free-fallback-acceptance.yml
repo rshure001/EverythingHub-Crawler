@@ -5,6 +5,7 @@ on:
       - main
     paths:
       - ".github/workflows/eh-free-fallback-acceptance.yml"
+      - ".github/workflows/validate-vercel-search.yml"
       - "vercel-search-backend/**"
       - "vercel-homepage/**"
   workflow_dispatch:

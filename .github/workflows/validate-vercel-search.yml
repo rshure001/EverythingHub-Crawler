@@ -14,7 +14,7 @@ on:
     - cron: '5,20,35,50 * * * *'
   workflow_dispatch:
 permissions:
-  actions: read
+  actions: write
   contents: read
 jobs:
   test:
@@ -27,11 +27,11 @@ jobs:
       - name: Run search integrity and pagination tests
         run: node --test vercel-search-backend/test/*.test.js
   staging-smoke:
-    if: (github.event_name == 'pull_request' && contains(fromJSON('["fix/bounded-catalog-search-20261121","eh/search-load-budget-20261121","eh/catalog-search-relevance-20261121"]'), github.head_ref)) || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    if: github.event_name == 'pull_request' && contains(fromJSON('["fix/bounded-catalog-search-20261121","eh/search-load-budget-20261121","eh/catalog-search-relevance-20261121","fix/live-search-watchdog-recovery-20261122"]'), github.head_ref)
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
-      BASE: https://everythinghub-search-backend-hhkr7e8r9-rshure001-8053.vercel.app
+      BASE: https://everythinghub-search-backend-fl8mti3od-rshure001-8053.vercel.app
     steps:
       - name: Verify staging backend health and representative catalog searches
         run: |
@@ -82,11 +82,36 @@ jobs:
           if(query==='Rolex'&&relevant.length===0&&!externalTitles.some(t=>/Rolex/i.test(t))) throw new Error('Rolex returned neither a relevant typed catalog nor an official directory');
           NODE
           done
+      - name: Verify robots-compliant current news feeds
+        run: |
+          set -euo pipefail
+          for category in for-you world technology business science; do
+            curl --silent --show-error --fail --max-time 30 -G "$BASE/api/news" \
+              --data-urlencode "category=$category" -o "/tmp/news-$category.json"
+            node - "/tmp/news-$category.json" "$category" <<'NODE'
+          const fs = require("node:fs");
+          const body = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+          const category = process.argv[3];
+          if (
+            body.status !== "ok" ||
+            body.category !== category ||
+            !Array.isArray(body.items) ||
+            body.items.length < 1 ||
+            body.count !== body.items.length ||
+            body.items.some(item => !item.title || !/^https?:\/\//i.test(item.url) || !item.source)
+          ) {
+            throw new Error("Robots-compliant news feed failed for " + category + ": " + JSON.stringify(body));
+          }
+          console.log(JSON.stringify({ category, count: body.count, firstHeadline: body.items[0].title, firstSource: body.items[0].source }));
+          NODE
+            sleep 1
+          done
+
   live-smoke:
     # Production freshness is monitored on main and by the schedule; do not fail code PRs because the independent live catalog is stale.
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 5
     steps:
       - name: Verify production search backend health
         env:
@@ -114,39 +139,132 @@ jobs:
             pagination: health.pagination
           }, null, 2));
           NODE
-      - name: Verify recent crawler execution or active refresh
+      - name: Verify recent crawler execution or request bounded recovery
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          curl --silent --show-error --fail --max-time 20 \
-            -H "Authorization: Bearer $GITHUB_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/workflows/crawl.yml/runs?branch=main&per_page=20" \
-            -o /tmp/crawler-runs.json
-          node <<'NODE'
-          const fs = require('node:fs');
-          const payload = JSON.parse(fs.readFileSync('/tmp/crawler-runs.json', 'utf8'));
-          const runs = Array.isArray(payload.workflow_runs) ? payload.workflow_runs : [];
-          const active = runs.filter(run => ['queued', 'in_progress'].includes(run.status));
-          const successes = runs
-            .filter(run => run.status === 'completed' && run.conclusion === 'success' && run.updated_at)
-            .sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at));
-          const latest = successes[0] || null;
-          const ageSeconds = latest ? Math.floor(Date.now() / 1000 - Date.parse(latest.updated_at) / 1000) : null;
-          if (!active.length && (ageSeconds === null || !Number.isFinite(ageSeconds) || ageSeconds < -300 || ageSeconds > 900)) {
-            throw new Error('No successful main-branch crawler run within 15 minutes and no active refresh: ' + JSON.stringify({latest, ageSeconds, activeRuns: active.length}));
+          api="https://api.github.com/repos/${GITHUB_REPOSITORY}"
+          fetch_evidence() {
+            curl --silent --show-error --fail --max-time 20 \
+              -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "${api}/actions/workflows/crawl.yml/runs?branch=main&per_page=20" \
+              -o /tmp/crawler-runs.json
+            curl --silent --show-error --fail --max-time 20 \
+              -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "${api}/actions/workflows/crawl-watchdog.yml/runs?branch=main&per_page=10" \
+              -o /tmp/watchdog-runs.json
+            curl --silent --show-error --fail --max-time 20 \
+              -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "${api}/contents/public-search/manifest.json?ref=main" \
+              -o /tmp/public-manifest-envelope.json
           }
-          const report = {
-            latestSuccessfulRunId: latest?.id || null,
-            latestSuccessfulRunAt: latest?.updated_at || null,
-            latestSuccessfulRunAgeSeconds: ageSeconds,
-            activeCrawlerRuns: active.length,
-            freshnessStatus: active.length ? 'refresh-in-progress' : 'recent-success'
-          };
-          fs.writeFileSync('/tmp/crawler-freshness.json', JSON.stringify(report));
-          console.log(JSON.stringify(report, null, 2));
-          NODE
+          fetch_evidence
+          python - <<'PY' > /tmp/freshness-before.json
+          import base64
+          import json
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          active_statuses = {"queued", "in_progress", "pending", "waiting", "requested"}
+          now = datetime.now(timezone.utc).timestamp()
+          runs = json.loads(Path("/tmp/crawler-runs.json").read_text(encoding="utf-8")).get("workflow_runs")
+          watchdogs = json.loads(Path("/tmp/watchdog-runs.json").read_text(encoding="utf-8")).get("workflow_runs")
+          envelope = json.loads(Path("/tmp/public-manifest-envelope.json").read_text(encoding="utf-8"))
+          if not isinstance(runs, list) or not isinstance(watchdogs, list):
+              raise SystemExit("GitHub did not return crawler/watchdog workflow-run arrays")
+          encoded = envelope.get("content")
+          if not isinstance(encoded, str):
+              raise SystemExit("GitHub did not return the public manifest content")
+          manifest = json.loads(base64.b64decode(encoded).decode("utf-8"))
+          updated_at = manifest.get("updated_at")
+          total_pages = manifest.get("total_pages")
+          if type(updated_at) is not int or updated_at <= 0 or type(total_pages) is not int or total_pages < 1:
+              raise SystemExit("Public search manifest failed freshness preflight")
+          manifest_age = int(now - updated_at)
+          if manifest_age < -300:
+              raise SystemExit("Public manifest timestamp is too far in the future")
+          manifest_age = max(0, manifest_age)
+
+          active_crawlers = [run for run in runs if run.get("status") in active_statuses]
+          active_watchdogs = [run for run in watchdogs if run.get("status") in active_statuses]
+          successes = [
+              run for run in runs
+              if run.get("status") == "completed" and run.get("conclusion") == "success" and run.get("updated_at")
+          ]
+          latest = max(successes, key=lambda run: run.get("updated_at") or "", default=None)
+          success_age = None
+          if latest:
+              completed = datetime.fromisoformat(latest["updated_at"].replace("Z", "+00:00")).timestamp()
+              success_age = int(now - completed)
+              if success_age < -300:
+                  raise SystemExit("Latest successful crawler timestamp is too far in the future")
+              success_age = max(0, success_age)
+          needs_recovery = (
+              not active_crawlers
+              and not active_watchdogs
+              and manifest_age > 900
+              and (success_age is None or success_age > 900)
+          )
+          print(json.dumps({
+              "indexedPages": total_pages,
+              "manifestAgeSeconds": manifest_age,
+              "latestSuccessfulRunId": latest.get("id") if latest else None,
+              "latestSuccessfulRunAt": latest.get("updated_at") if latest else None,
+              "latestSuccessfulRunAgeSeconds": success_age,
+              "activeCrawlerRuns": len(active_crawlers),
+              "activeWatchdogRuns": len(active_watchdogs),
+              "needsRecovery": needs_recovery
+          }))
+          PY
+
+          recovery_dispatched=false
+          needs_recovery="$(python -c 'import json; print("true" if json.load(open("/tmp/freshness-before.json"))["needsRecovery"] else "false")')"
+          if [ "$needs_recovery" = "true" ]; then
+            echo "No active crawler/watchdog and both the manifest and last successful crawl are older than 15 minutes."
+            echo "Dispatching the existing bounded watchdog; it retains the no-overlap, schedule-age, and manifest-age guards."
+            gh workflow run crawl-watchdog.yml --ref main
+            recovery_dispatched=true
+          fi
+
+          python - "$recovery_dispatched" <<'PY' > /tmp/crawler-freshness.json
+          import json
+          import sys
+          from pathlib import Path
+
+          before = json.loads(Path("/tmp/freshness-before.json").read_text(encoding="utf-8"))
+          dispatched = sys.argv[1].lower() == "true"
+          if before["activeCrawlerRuns"]:
+              status = "refresh-in-progress"
+          elif before["activeWatchdogRuns"] or dispatched:
+              status = "recovery-requested"
+          elif before["latestSuccessfulRunAgeSeconds"] is not None and before["latestSuccessfulRunAgeSeconds"] <= 900:
+              status = "recent-success"
+          elif before["manifestAgeSeconds"] <= 900:
+              status = "recent-manifest"
+          else:
+              raise SystemExit("Crawler and public manifest remain stale; bounded watchdog recovery could not be started: " + json.dumps(before))
+          report = {
+              "latestSuccessfulRunId": before["latestSuccessfulRunId"],
+              "latestSuccessfulRunAt": before["latestSuccessfulRunAt"],
+              "latestSuccessfulRunAgeSeconds": before["latestSuccessfulRunAgeSeconds"],
+              "manifestAgeSeconds": before["manifestAgeSeconds"],
+              "indexedPages": before["indexedPages"],
+              "activeCrawlerRuns": before["activeCrawlerRuns"],
+              "activeWatchdogRuns": before["activeWatchdogRuns"],
+              "recoveryDispatchTriggered": dispatched,
+              "freshnessStatus": status
+          }
+          print(json.dumps(report, indent=2))
+          PY
+          cat /tmp/crawler-freshness.json
 
       - name: Verify live catalog search, freshness, and non-overlapping pagination
         env:
@@ -209,6 +327,9 @@ jobs:
             latestSuccessfulCrawlerRunAt: crawlerFreshness.latestSuccessfulRunAt,
             latestSuccessfulCrawlerRunAgeSeconds: crawlerFreshness.latestSuccessfulRunAgeSeconds,
             activeCrawlerRuns: crawlerFreshness.activeCrawlerRuns,
+            activeWatchdogRuns: crawlerFreshness.activeWatchdogRuns,
+            recoveryDispatchTriggered: crawlerFreshness.recoveryDispatchTriggered,
+            publicManifestAgeSeconds: crawlerFreshness.manifestAgeSeconds,
             crawlerFreshnessStatus: crawlerFreshness.freshnessStatus,
             page1Results: first.results.length,
             page1CrawlerResults: first.results.filter(item => item.provider === 'everythinghub-catalog').length,

@@ -332,12 +332,17 @@ class ScheduleWatchdogTests(unittest.TestCase):
         self.assertEqual(result["schedule_age_seconds"], 660)
 
 
-    def test_live_search_freshness_uses_recent_crawler_run_or_active_refresh(self):
+    def test_live_search_freshness_requests_bounded_watchdog_recovery(self):
         workflow = (Path(__file__).resolve().parents[1] / ".github" / "workflows" / "validate-vercel-search.yml").read_text(encoding="utf-8")
-        self.assertIn("actions: read", workflow)
+        self.assertIn("actions: write", workflow)
         self.assertIn("actions/workflows/crawl.yml/runs?branch=main", workflow)
+        self.assertIn("actions/workflows/crawl-watchdog.yml/runs?branch=main", workflow)
+        self.assertIn("gh workflow run crawl-watchdog.yml --ref main", workflow)
         self.assertIn("activeCrawlerRuns", workflow)
+        self.assertIn("activeWatchdogRuns", workflow)
         self.assertIn("latestSuccessfulRunAgeSeconds", workflow)
+        self.assertIn("manifestAgeSeconds", workflow)
+        self.assertIn("recoveryDispatchTriggered", workflow)
         self.assertNotIn("Crawler catalog timestamp is outside the 15-minute live-monitor window", workflow)
 
 if __name__ == "__main__":
