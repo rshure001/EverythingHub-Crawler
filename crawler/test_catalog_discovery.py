@@ -50,12 +50,13 @@ class CatalogDiscoveryTests(unittest.TestCase):
 
     def test_default_discovery_batch_is_bounded_by_each_reviewed_host_budget(self):
         max_pages = inspect.signature(build_catalog).parameters["max_pages"].default
-        self.assertEqual(max_pages, 80
+        self.assertEqual(max_pages, 80)
+        self.assertEqual(inspect.signature(build_catalog).parameters["rows"].default, 500)
         for source in SOURCES:
             host = urlsplit(source["base"]).hostname
             policy = policy_for_host(host)
             self.assertTrue(policy["discovery_allowed"], source["id"])
-            self.assertGreaterEqual(policy["max_requests_per_run"], max_pages, source["id"])
+            self.assertEqual(min(max_pages, policy["max_requests_per_run"]), min(80, policy["max_requests_per_run"]), source["id"])
             self.assertGreaterEqual(policy["min_interval_seconds"], 1.0, source["id"])
 
         workflow = (
@@ -64,6 +65,8 @@ class CatalogDiscoveryTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn('default: "80"', workflow)
         self.assertEqual(workflow.count("inputs.max_pages || '80'"), 2)
+        self.assertIn('default: "500"', workflow)
+        self.assertEqual(workflow.count("inputs.rows || '500'"), 2)
 
     def test_discovery_reports_total_available_and_respects_source_request_budget(self):
         policy = {
