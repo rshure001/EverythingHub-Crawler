@@ -171,6 +171,7 @@ module.exports = async function handler(req, res) {
         catalogError,
         database_required: false,
         catalogResults,
+        externalCatalogResults,
         catalogPreview,
         providers
       });
@@ -181,7 +182,7 @@ module.exports = async function handler(req, res) {
       pageSize: limit, offset, hasMore: false,
       indexedPages: 0, indexStatus: 'catalog-unavailable',
       catalogError, database_required: false,
-      results, catalogResults, catalogPreview, providers, fallback: true
+      results, catalogResults, externalCatalogResults, catalogPreview, providers, fallback: true
     });
   }
 
