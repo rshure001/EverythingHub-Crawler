@@ -1,12 +1,13 @@
 import re
 import gzip
+import hashlib
 import json
 import tempfile
 import unittest
 from pathlib import Path
 
 from catalog_page_analysis import (
-    ANALYZER_VERSION, analyze_pages, analyze_pages_incremental,
+    ANALYZER_VERSION, analyze_pages, analyze_pages_incremental, build_search_index,
     search_catalog_network, search_source_page_evidence, write_outputs, validate_outputs, stable_id,
     apply_source_policy_reviews, _reconcile_page_record_provenance,
     _add_global_subject_catalogs, _global_subject_catalog_source_key,
@@ -1648,6 +1649,67 @@ class CatalogInventoryTriggerTests(unittest.TestCase):
 
 
 
+
+    def test_search_index_prioritizes_global_typed_directories_before_bounded_candidate_slice(self):
+        distractors = [
+            {
+                "catalog_id": f"a-distractor-{index:03d}",
+                "title": f"General Las Vegas mention {index}",
+                "catalog_type": "knowledge_base",
+                "catalog_origin": "page_derived_index",
+                "is_source_declared_catalog": False,
+            }
+            for index in range(50)
+        ]
+        global_place = {
+            "catalog_id": "z-global-place",
+            "title": "Global place directory",
+            "subject": "place",
+            "source_host": "__global__",
+            "catalog_type": "geographic",
+            "catalog_origin": "derived_from_global_typed_records",
+            "is_source_declared_catalog": False,
+        }
+        records = [
+            {
+                "record_id": f"distractor-record-{index:03d}",
+                "record_type": "subject",
+                "title": f"Las Vegas mention {index}",
+                "description": "Las Vegas reference",
+                "attributes": {},
+                "catalog_ids": [item["catalog_id"]],
+            }
+            for index, item in enumerate(distractors)
+        ]
+        records.append({
+            "record_id": "global-place-record",
+            "record_type": "place",
+            "title": "Las Vegas Strip",
+            "description": "Las Vegas location",
+            "attributes": {"address_locality": "Las Vegas"},
+            "catalog_ids": [global_place["catalog_id"]],
+        })
+
+        shards = build_search_index({
+            "catalogs": distractors + [global_place],
+            "records": records,
+        })
+        for token in ("las", "vegas"):
+            prefix = hashlib.sha256(token.encode("utf-8")).hexdigest()[:2]
+            postings = shards[prefix]["tokens"][token]
+            self.assertEqual(postings[0], global_place["catalog_id"])
+            self.assertIn(global_place["catalog_id"], postings[:40])
+
+        reversed_shards = build_search_index({
+            "catalogs": [global_place] + list(reversed(distractors)),
+            "records": list(reversed(records)),
+        })
+        for token in ("las", "vegas"):
+            prefix = hashlib.sha256(token.encode("utf-8")).hexdigest()[:2]
+            self.assertEqual(
+                shards[prefix]["tokens"][token],
+                reversed_shards[prefix]["tokens"][token],
+            )
 
     def test_global_typed_directories_aggregate_cross_host_records_and_are_searchable(self):
         pages = []
