@@ -8,6 +8,7 @@ const assert = require('node:assert/strict');
 const {
   MAX_INDEXED_PAGES,
   MAX_SHARD_COUNT,
+  MAX_PAGES_PER_SHARD,
   MAX_TOTAL_SHARD_BYTES,
   MAX_TOTAL_COMPRESSED_SHARD_BYTES,
   validateShardManifest,
@@ -63,9 +64,30 @@ test('current repository manifest fits the bounded shard reader without gzip met
   const compressed = result.shardFormat === 'gzip';
   assert.ok(result.totalBytes <= (compressed ? MAX_TOTAL_COMPRESSED_SHARD_BYTES : MAX_TOTAL_SHARD_BYTES));
   assert.ok(result.shards.length <= MAX_SHARD_COUNT);
+  assert.ok(result.shards.every(shard => shard.pages <= MAX_PAGES_PER_SHARD));
   assert.ok(manifest.total_pages <= MAX_INDEXED_PAGES);
   assert.ok(manifest.total_pages >= 20000);
 });
+
+test('rejects shard page counts above the 2,000-page bounded limit', () => {
+  const pages = MAX_PAGES_PER_SHARD + 1;
+  const manifest = {
+    version: 1,
+    integrity: 'sha256',
+    updated_at: Math.floor(Date.now() / 1000),
+    total_pages: pages,
+    shard_count: 1,
+    shards: [{
+      file: 'shard-0001.json.gz',
+      pages,
+      bytes: 1,
+      uncompressed_bytes: 1,
+      sha256: 'a'.repeat(64)
+    }]
+  };
+  assert.throws(() => validateShardManifest(manifest), /manifest_shard_page_count_invalid/);
+});
+
 
 test('legacy raw shards remain readable during rollout', () => {
   const shard = makeShard('shard-0001.json', [page('https://example.com/legacy')], false);
