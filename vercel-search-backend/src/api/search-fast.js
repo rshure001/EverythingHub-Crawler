@@ -119,4 +119,4 @@ module.exports = async function handler(req, res) {
   return res.status(200).json(payload);
 };
 
-module.exports._test = { queryTerms, selectFeeds, searchNewsItems };
+module.exports._test = { queryTerms, selectFeeds, searchNewsItems, clearCacheForTests: () => cache.clear() };
