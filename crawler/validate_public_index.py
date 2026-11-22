@@ -2,6 +2,7 @@
 """Validate public search shards and the compressed catalog against the crawler index."""
 from __future__ import annotations
 
+import re
 import zlib
 import hashlib
 import json
@@ -11,6 +12,7 @@ from urllib.parse import urlsplit
 
 from lane_classifier import VALID_LANES
 from index_store import load_index
+from build_search_shards import query_tokens
 
 ROOT = Path(__file__).resolve().parents[1]
 MAX_SHARD_BYTES = 350_000
@@ -30,6 +32,12 @@ MAX_CATALOG_UNCOMPRESSED_BYTES = 64_000_000
 RECOMMENDED_CANONICAL_INDEX_BYTES = 50_000_000
 MAX_CANONICAL_INDEX_BYTES = 90_000_000
 CATALOG_NAME = "catalog-v1.json.gz"
+QUERY_INDEX_DIR_NAME = "query-index"
+MAX_QUERY_INDEX_SHARDS = 256
+MAX_QUERY_INDEX_SHARD_COMPRESSED_BYTES = 2_000_000
+MAX_QUERY_INDEX_SHARD_UNCOMPRESSED_BYTES = 8_000_000
+MAX_QUERY_INDEX_TOTAL_COMPRESSED_BYTES = 32_000_000
+MAX_QUERY_INDEX_TOTAL_UNCOMPRESSED_BYTES = 64_000_000
 
 
 def bounded_gzip_decompress(raw: bytes, max_bytes: int = MAX_CATALOG_UNCOMPRESSED_BYTES) -> bytes:
@@ -75,6 +83,171 @@ def canonical_index_size_warning(root: Path = ROOT) -> str | None:
         f"data/index.json is {size_bytes:,} bytes; GitHub recommends keeping "
         f"individual files at or below {RECOMMENDED_CANONICAL_INDEX_BYTES:,} bytes."
     )
+
+
+def validate_query_index(
+    manifest: dict,
+    search_dir: Path,
+    shard_records: list[dict],
+    page_shard_by_url: dict[str, int],
+) -> list[str]:
+    """Validate every query posting against the exact verified page-shard contents."""
+    errors: list[str] = []
+    query_dir = search_dir / QUERY_INDEX_DIR_NAME
+    actual_files = (
+        {path.relative_to(search_dir).as_posix() for path in query_dir.glob("*.json.gz")}
+        if query_dir.is_dir() else set()
+    )
+    metadata = manifest.get("query_index")
+    if metadata is None:
+        if actual_files:
+            errors.append("unlisted query-index files exist without manifest metadata")
+        return errors
+    if not isinstance(metadata, dict) or metadata.get("version") != 1:
+        return ["query-index metadata schema is invalid"]
+
+    entries = metadata.get("shards")
+    if not isinstance(entries, list):
+        return errors + ["query-index shards must be an array"]
+    if metadata.get("shard_count") != len(entries):
+        errors.append("query-index shard_count does not match its shard list")
+    if len(entries) > MAX_QUERY_INDEX_SHARDS:
+        errors.append("query index exceeds the fixed 256-shard safety limit")
+
+    expected_postings: dict[str, dict[int, int]] = {}
+    for page in shard_records:
+        shard_index = page_shard_by_url.get(page.get("url"))
+        if shard_index is None:
+            continue
+        for token in query_tokens(page):
+            token_shards = expected_postings.setdefault(token, {})
+            token_shards[shard_index] = token_shards.get(shard_index, 0) + 1
+    declared_shard_count = len(manifest.get("shards", []))
+    expected_shard_indexes = {
+        shard_index for postings in expected_postings.values() for shard_index in postings
+    }
+    if any(
+        not isinstance(shard_index, int) or isinstance(shard_index, bool)
+        or shard_index < 0 or shard_index >= declared_shard_count
+        for shard_index in expected_shard_indexes
+    ):
+        errors.append("query-index source references a page-shard ordinal outside the verified manifest")
+    expected_prefixes = {
+        hashlib.sha256(token.encode("utf-8")).hexdigest()[:2]
+        for token in expected_postings
+    }
+
+    seen_files: set[str] = set()
+    seen_prefixes: set[str] = set()
+    total_compressed = 0
+    total_uncompressed = 0
+    token_count = 0
+    posting_count = 0
+
+    for entry in entries:
+        if not isinstance(entry, dict):
+            errors.append("query-index contains a non-object shard entry")
+            continue
+        name = entry.get("file")
+        match = re.fullmatch(r"query-index/([0-9a-f]{2})\.json\.gz", name) if isinstance(name, str) else None
+        if not match:
+            errors.append(f"unsafe query-index filename: {name!r}")
+            continue
+        prefix = match.group(1)
+        if name in seen_files or prefix in seen_prefixes:
+            errors.append(f"duplicate query-index shard: {name}")
+            continue
+        seen_files.add(name)
+        seen_prefixes.add(prefix)
+        path = search_dir / name
+        if not path.is_file():
+            errors.append(f"missing query-index shard: {name}")
+            continue
+        raw = path.read_bytes()
+        if not 1 <= len(raw) <= MAX_QUERY_INDEX_SHARD_COMPRESSED_BYTES:
+            errors.append(f"query-index shard exceeds its compressed size limit: {name}")
+            continue
+        if entry.get("bytes") != len(raw):
+            errors.append(f"query-index byte-size mismatch: {name}")
+            continue
+        declared_uncompressed = entry.get("uncompressed_bytes")
+        if (
+            not isinstance(declared_uncompressed, int)
+            or isinstance(declared_uncompressed, bool)
+            or not 2 <= declared_uncompressed <= MAX_QUERY_INDEX_SHARD_UNCOMPRESSED_BYTES
+        ):
+            errors.append(f"invalid query-index decoded byte count: {name}")
+            continue
+        digest = entry.get("sha256")
+        if (
+            not isinstance(digest, str)
+            or len(digest) != 64
+            or any(char not in "0123456789abcdef" for char in digest)
+        ):
+            errors.append(f"invalid query-index SHA-256: {name}")
+            continue
+        if hashlib.sha256(raw).hexdigest() != digest:
+            errors.append(f"query-index SHA-256 mismatch: {name}")
+            continue
+        try:
+            decoded = bounded_gzip_decompress(raw, MAX_QUERY_INDEX_SHARD_UNCOMPRESSED_BYTES)
+            payload = json.loads(decoded.decode("utf-8"))
+        except Exception as exc:
+            errors.append(f"query-index shard is invalid: {name}: {exc}")
+            continue
+        if len(decoded) != declared_uncompressed:
+            errors.append(f"query-index decoded byte-size mismatch: {name}")
+        tokens = payload.get("tokens") if isinstance(payload, dict) else None
+        if (
+            not isinstance(payload, dict)
+            or payload.get("version") != 1
+            or payload.get("prefix") != prefix
+            or not isinstance(tokens, dict)
+            or len(tokens) != entry.get("items")
+        ):
+            errors.append(f"query-index shard schema or item count is invalid: {name}")
+            continue
+
+        expected_for_prefix = {
+            token: [
+                [shard_index, page_hits]
+                for shard_index, page_hits in sorted(expected_postings[token].items())
+            ]
+            for token in sorted(expected_postings)
+            if hashlib.sha256(token.encode("utf-8")).hexdigest()[:2] == prefix
+        }
+        if tokens != expected_for_prefix:
+            errors.append(f"query-index postings do not match verified page shards: {name}")
+
+        token_count += len(tokens)
+        posting_count += sum(len(postings) for postings in tokens.values() if isinstance(postings, list))
+        total_compressed += len(raw)
+        total_uncompressed += len(decoded)
+        if total_compressed > MAX_QUERY_INDEX_TOTAL_COMPRESSED_BYTES:
+            errors.append("query index exceeds the aggregate compressed safety limit")
+        if total_uncompressed > MAX_QUERY_INDEX_TOTAL_UNCOMPRESSED_BYTES:
+            errors.append("query index exceeds the aggregate decoded safety limit")
+
+    if seen_files != actual_files:
+        errors.append(
+            f"query-index file set mismatch; unlisted={sorted(actual_files - seen_files)}, "
+            f"missing={sorted(seen_files - actual_files)}"
+        )
+    if seen_prefixes != expected_prefixes:
+        errors.append(
+            f"query-index prefixes do not match expected tokens; "
+            f"missing={sorted(expected_prefixes - seen_prefixes)}, "
+            f"extra={sorted(seen_prefixes - expected_prefixes)}"
+        )
+    if metadata.get("token_count") != token_count or token_count != len(expected_postings):
+        errors.append("query-index token count does not match verified postings")
+    if metadata.get("posting_count") != posting_count:
+        errors.append("query-index posting count does not match verified postings")
+    if metadata.get("compressed_bytes") != total_compressed:
+        errors.append("query-index compressed byte total does not match verified files")
+    if metadata.get("uncompressed_bytes") != total_uncompressed:
+        errors.append("query-index decoded byte total does not match verified files")
+    return errors
 
 
 def validate(root: Path = ROOT) -> list[str]:
@@ -151,6 +324,7 @@ def validate(root: Path = ROOT) -> list[str]:
     }
 
     seen_urls: set[str] = set()
+    page_shard_by_url: dict[str, int] = {}
     declared_files: set[str] = set()
     shard_records: list[dict] = []
     total_pages = 0
@@ -158,7 +332,7 @@ def validate(root: Path = ROOT) -> list[str]:
     total_uncompressed_bytes = 0
     shard_format = None
 
-    for entry in shards:
+    for shard_index, entry in enumerate(shards):
         if not isinstance(entry, dict):
             errors.append("manifest contains a non-object shard entry")
             continue
@@ -239,11 +413,11 @@ def validate(root: Path = ROOT) -> list[str]:
         total_shard_bytes += len(raw)
         total_uncompressed_bytes += len(decoded)
         if compressed and total_shard_bytes > MAX_TOTAL_COMPRESSED_SHARD_BYTES:
-            errors.append("compressed public shards exceed the 80 MB aggregate safety limit")
+            errors.append("compressed public shards exceed the 100 MB aggregate safety limit")
         if not compressed and total_shard_bytes > MAX_TOTAL_LEGACY_SHARD_BYTES:
             errors.append("legacy raw public shards exceed the 100 MB aggregate safety limit")
         if total_uncompressed_bytes > MAX_TOTAL_SHARD_UNCOMPRESSED_BYTES:
-            errors.append("public shards exceed the 320 MB aggregate decompression safety limit")
+            errors.append("public shards exceed the 400 MB aggregate decompression safety limit")
 
 
         try:
@@ -279,7 +453,9 @@ def validate(root: Path = ROOT) -> list[str]:
                 errors.append(f"missing or invalid search lane in {name}: {lane!r}")
             if url in seen_urls:
                 errors.append(f"duplicate URL across public shards: {url[:160]}")
-            seen_urls.add(url)
+            else:
+                seen_urls.add(url)
+                page_shard_by_url[url] = shard_index
 
     if manifest.get("total_pages") != total_pages:
         errors.append("manifest total_pages does not match actual shard records")
@@ -297,6 +473,10 @@ def validate(root: Path = ROOT) -> list[str]:
             f"shard file set mismatch; unlisted={sorted(actual_files - declared_files)}, "
             f"missing={sorted(declared_files - actual_files)}"
         )
+
+    errors.extend(validate_query_index(
+        manifest, search_dir, shard_records, page_shard_by_url
+    ))
 
     catalog = manifest.get("catalog_gzip")
     # Older manifests remain valid and are served through the verified shard fallback.
@@ -352,6 +532,14 @@ def validation_summary(manifest: dict) -> str:
         f"{manifest['total_pages']:,} pages across {manifest['shard_count']:,} shards; "
         "all shard sizes, SHA-256 digests, URLs, and records match data/index.json; "
     )
+    query_index = manifest.get("query_index")
+    if isinstance(query_index, dict):
+        summary += (
+            f"query-scoped page index verified ({query_index['token_count']:,} tokens, "
+            f"{query_index['posting_count']:,} token-to-shard postings); "
+        )
+    else:
+        summary += "query-scoped page index omitted; "
     catalog = manifest.get("catalog_gzip")
     if isinstance(catalog, dict):
         return summary + f"compressed catalog verified ({catalog['bytes']:,} bytes)."
