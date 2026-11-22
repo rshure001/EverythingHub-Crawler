@@ -354,6 +354,30 @@ def _structured_container_relationships(obj):
     return relationships
 
 
+def _schema_reference_id(value, base_url):
+    """Resolve a JSON-LD @id reference to a safe absolute HTTP(S) identifier."""
+    raw = value.get("@id") if isinstance(value, dict) else value
+    raw = _text(raw, 2048)
+    if not raw:
+        return ""
+    try:
+        resolved = urljoin(base_url, raw)
+        parsed = urlsplit(resolved)
+    except ValueError:
+        return ""
+    if (
+        parsed.scheme.lower() not in ("http", "https")
+        or not parsed.hostname
+        or parsed.username is not None
+        or parsed.password is not None
+    ):
+        return ""
+    return parsed._replace(
+        scheme=parsed.scheme.lower(),
+        netloc=parsed.netloc.lower(),
+    ).geturl()
+
+
 def extract_structured_catalog_metadata(html, page_url):
     """Extract bounded, typed schema.org collections with direct item URLs.
 
@@ -377,7 +401,16 @@ def extract_structured_catalog_metadata(html, page_url):
             payload = json.loads(raw)
         except (ValueError, TypeError, RecursionError):
             continue
-        for obj in _walk_schema_objects(payload):
+        schema_objects = list(_walk_schema_objects(payload))
+        objects_by_id = {}
+        for schema_obj in schema_objects:
+            if not isinstance(schema_obj, dict):
+                continue
+            object_id = _schema_reference_id(schema_obj.get("@id"), page_url)
+            if object_id and object_id not in objects_by_id:
+                objects_by_id[object_id] = schema_obj
+
+        for obj in schema_objects:
             if not isinstance(obj, dict):
                 continue
             list_name = _text(obj.get("name") or obj.get("headline"), 120)
@@ -389,14 +422,29 @@ def extract_structured_catalog_metadata(html, page_url):
                     continue
                 items = []
                 seen_items = set()
+                elements = elements if isinstance(elements, list) else [elements]
                 for element in elements[:100]:
                     wrapper = element if isinstance(element, dict) else {}
                     item = None
+                    if isinstance(element, str):
+                        item = objects_by_id.get(_schema_reference_id(element, page_url))
                     for item_key in ("item", "itemOffered", "dataset", "mainEntity"):
                         candidate = wrapper.get(item_key)
                         if isinstance(candidate, dict):
-                            item = candidate
+                            candidate_id = _schema_reference_id(candidate.get("@id"), page_url)
+                            resolved = objects_by_id.get(candidate_id)
+                            if resolved and not (
+                                candidate.get("name") or candidate.get("headline") or candidate.get("url")
+                            ):
+                                item = resolved
+                            else:
+                                item = candidate
                             break
+                        if isinstance(candidate, str):
+                            resolved = objects_by_id.get(_schema_reference_id(candidate, page_url))
+                            if resolved:
+                                item = resolved
+                                break
                     if item is None:
                         item = wrapper
                     item_name = _text(
