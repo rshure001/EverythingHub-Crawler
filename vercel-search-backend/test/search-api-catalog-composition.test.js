@@ -14,9 +14,10 @@ test('curated external catalogs do not bypass the indexed catalog loader', async
   const httpsGet = https.get;
   let pageDerivedCalls = 0;
   let externalCalls = 0;
+  const pageSearchQueries = [];
 
   require.cache[modulePaths[0]] = { id: modulePaths[0], filename: modulePaths[0], loaded: true, exports: {
-    loadCatalog: async () => ({ pages: [], indexedPages: 1, updatedAt: 1795290000, sha256: 'a'.repeat(64), source: 'test', integrity: 'sha256', shardCount: 1, transport: 'test', stale: false })
+    loadCatalog: async (query) => { pageSearchQueries.push(query); return { pages: [], indexedPages: 100, candidatePages: 2, candidateShardCount: 1, candidateShardTotal: 1, candidateShardsTruncated: false, queryIndexTermsRequested: 1, queryIndexTermsMatched: 1, updatedAt: 1795290000, sha256: 'a'.repeat(64), source: 'test', integrity: 'sha256', shardCount: 10, transport: 'query-indexed-shards', stale: false }; }
   }};
   require.cache[modulePaths[1]] = { id: modulePaths[1], filename: modulePaths[1], loaded: true, exports: {
     loadPageDerivedCatalogs: async (query) => { pageDerivedCalls++; return { catalogs: [], records: [], generatedAt: '2026-11-21T00:00:00Z', sourceIndexPages: 1, sourceIndexUpdatedAt: '2026-11-21T00:00:00Z', sourceIndexSha256: 'b'.repeat(64), catalogCount: 1, recordCount: 1, metrics: {}, stale: false, query }; },
@@ -47,6 +48,12 @@ test('curated external catalogs do not bypass the indexed catalog loader', async
     await handler({ method: 'GET', url: '/api/search?q=Rolex&limit=10' }, response);
     assert.equal(response.statusCode, 200);
     assert.equal(pageDerivedCalls, 1, 'query-scoped catalog loader should run');
+    assert.deepEqual(pageSearchQueries, ['Rolex'], 'public page index must be loaded for the requested query');
+    assert.equal(response.body.matchScope, 'query-index-candidate-shards');
+    assert.equal(response.body.indexedPages, 100);
+    assert.equal(response.body.candidatePages, 2);
+    assert.equal(response.body.candidateShardCount, 1);
+    assert.equal(response.body.candidateShardsTruncated, false);
     assert.equal(externalCalls, 1, 'curated external catalog should still be included');
     assert.equal(response.body.externalCatalogResults[0].catalog_id, 'external:rolex');
     assert.equal(response.body.catalogPreview.status, 'candidate-preview');
