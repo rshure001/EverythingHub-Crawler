@@ -93,3 +93,22 @@ Relevance ranking: commerce catalogs with matching product/brand/model records a
 - The search route combines validated external link directories with page-derived catalog previews, while returning separate external catalog and record counts.
 - The Rolex directory contains six official collection-family links only. No Rolex pages, descriptions, specifications, images or videos were fetched or copied. Source terms are not reviewed, record-level rights are not cleared, redistribution is not cleared, and commercial eligibility is false.
 - Do not expand this directory by crawling Rolex pages without a separate source-policy review and authorization.
+
+## Current public-index capacity envelope
+
+The independent search readers share these hard safety bounds:
+
+- 250,000 indexed pages
+- 768 shards
+- 350,000 compressed bytes per shard
+- 500,000 uncompressed bytes per shard
+- 100,000,000 aggregate compressed bytes
+- 400,000,000 aggregate uncompressed bytes
+- 256,000 bytes for the manifest
+
+These limits were aligned across the browser client, independent Python loader, recovery search service, Vercel backend, and Supabase Edge Function. They are capacity ceilings, not targets. Do not raise them without a query-scoped shard index, cold-start measurements, and memory-bound regression tests.
+
+## Production deployment verification
+
+GitHub auto-deployment is not configured for this project. The controlled direct-upload path sends the 13 backend files from `vercel-search-backend/src/` as the matching `src/src/` deployment paths. Keep the file set and paths aligned with the existing production deployment; do not deploy the repository's full public-search corpus into the Vercel function bundle.
+
