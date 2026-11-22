@@ -116,7 +116,7 @@ module.exports = async function handler(req, res) {
   const feeds = NEWS_FEEDS[category];
   if (!feeds) return res.status(400).json({ error: "Unsupported news category" });
 
-  const settled = await Promise.allSettled(feeds.map(fetchFeed));
+  const settled = await Promise.allSettled(feeds.map(feed => fetchFeed(feed)));
   const successful = settled.filter(result => result.status === "fulfilled").map(result => result.value);
   const unavailable = settled
     .map((result, index) => result.status === "rejected" ? feeds[index].source : null)
