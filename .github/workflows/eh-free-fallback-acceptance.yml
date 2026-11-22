@@ -24,7 +24,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: eh-free-fallback-acceptance
+  group: eh-free-fallback-acceptance-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   browser-acceptance:
