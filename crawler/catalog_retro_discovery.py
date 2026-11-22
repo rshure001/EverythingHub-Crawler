@@ -45,6 +45,8 @@ def host_key(url: str) -> str | None:
 
 def build_candidates(index: dict) -> dict:
     page_seeds = []
+    seen_page_urls = set()
+    duplicate_page_rows = 0
     grouped = defaultdict(lambda: {"source_pages": 0, "hint_pages": 0, "examples": [], "hint_counts": defaultdict(int), "lanes": defaultdict(int)})
     for page in index.get("pages", []):
         if not isinstance(page, dict):
@@ -53,6 +55,10 @@ def build_candidates(index: dict) -> dict:
         host = host_key(url) if isinstance(url, str) else None
         if not host:
             continue
+        if url in seen_page_urls:
+            duplicate_page_rows += 1
+            continue
+        seen_page_urls.add(url)
         item = grouped[host]
         item["source_pages"] += 1
         lane = page.get("lane")
@@ -122,6 +128,7 @@ def build_candidates(index: dict) -> dict:
         "page_catalog_seeds": page_seeds,
         "metrics": {
             "pages_as_discovery_seeds": len(page_seeds),
+            "duplicate_source_page_rows_skipped": duplicate_page_rows,
             "page_catalog_profiles_created": len(page_seeds),
             "page_backed_catalog_seed_candidates": len(page_seeds),
             "page_backed_catalogs_pending_classification": len(page_seeds),
