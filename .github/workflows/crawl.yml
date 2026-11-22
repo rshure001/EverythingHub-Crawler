@@ -44,7 +44,7 @@ concurrency:
 jobs:
   crawl:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -104,6 +104,53 @@ jobs:
       - name: Crawl configured sites
         if: steps.freshness.outputs.current == 'true'
         run: python crawler/crawl.py
+      - name: Checkpoint canonical crawl state before index validation
+        if: steps.freshness.outputs.current == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/index.json data/index-shards/ data/frontier.json data/media-discovery.json
+          if git diff --cached --quiet; then
+            echo "No raw crawler state changed; no checkpoint commit is needed."
+            exit 0
+          fi
+          git commit -m "Checkpoint raw crawler state before search validation"
+          for attempt in 1 2 3 4 5 6 7 8; do
+            if git push origin HEAD:main; then
+              echo "Raw crawler state checkpoint committed. Public search shards and manifest remain unchanged until validation passes."
+              {
+                echo "### Raw crawler checkpoint"
+                echo "- Persisted canonical page index, raw page shards, frontier, and media discovery state."
+                echo "- Public search manifest and catalog registries were not published by this checkpoint."
+              } >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+
+            git fetch origin main
+            if git merge-base --is-ancestor HEAD origin/main; then
+              echo "Checkpoint commit is already present on main."
+              exit 0
+            fi
+            if git merge-base --is-ancestor origin/main HEAD; then
+              echo "Push failed without a remote branch advance; check repository write permission or branch protection."
+              exit 1
+            fi
+
+            if [ "$attempt" -eq 8 ]; then
+              echo "main kept advancing during eight bounded checkpoint rebase attempts; leaving the remote untouched."
+              exit 1
+            fi
+
+            echo "main advanced during crawl; rebasing the raw checkpoint (attempt $((attempt + 1))/8)."
+            if ! git rebase origin/main; then
+              git rebase --abort || true
+              echo "Raw checkpoint conflicts with newer main data; no remote changes were made."
+              exit 1
+            fi
+            sleep 1
+          done
       - name: Build small public search shards
         if: steps.freshness.outputs.current == 'true'
         run: python crawler/build_search_shards.py
