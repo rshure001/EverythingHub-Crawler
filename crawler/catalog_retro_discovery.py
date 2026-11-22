@@ -61,9 +61,22 @@ def build_candidates(index: dict) -> dict:
         text = " ".join(str(page.get(k) or "") for k in ("title", "description", "text"))[:2500]
         matched = [name for name, pattern in HINTS.items() if pattern.search(text) or pattern.search(url)]
         page_digest = __import__("hashlib").sha256(url.encode("utf-8")).hexdigest()[:24]
+        title = str(page.get("title") or "")[:240]
         page_seeds.append({
             "page_id": page_digest,
             "page_profile_id": "page-catalog-profile:" + page_digest,
+            "catalog_seed_id": "page-catalog:" + page_digest,
+            "catalog_title": title or (host + urlsplit(url).path[:160]),
+            "catalog_type": "general",
+            "catalog_status": "pending_catalog_classification",
+            "catalog_origin": "one_page_one_catalog_seed",
+            "source_page_id": page_digest,
+            "source_url": url[:2048],
+            "initial_record_count": 0,
+            "expanded_record_count": 0,
+            "expansion_status": "pending_child_record_discovery",
+            "verified": False,
+            "source_rights_status": "not_reviewed",
             "profile_type": "source_page_catalog_profile",
             "profile_status": "pending_catalog_classification",
             "related_catalog_ids": [],
@@ -71,7 +84,7 @@ def build_candidates(index: dict) -> dict:
             "analysis_status": "pending_page_content_analysis",
             "url": url[:2048],
             "host": host,
-            "title": str(page.get("title") or "")[:240],
+            "title": title,
             "lane": lane if isinstance(lane, str) else None,
             "catalog_signals": matched,
         })
@@ -110,6 +123,9 @@ def build_candidates(index: dict) -> dict:
         "metrics": {
             "pages_as_discovery_seeds": len(page_seeds),
             "page_catalog_profiles_created": len(page_seeds),
+            "page_backed_catalog_seed_candidates": len(page_seeds),
+            "page_backed_catalogs_pending_classification": len(page_seeds),
+            "page_backed_catalogs_verified": 0,
             "profiles_pending_catalog_classification": len(page_seeds),
             "unique_catalog_candidates": 0,
             "verified_page_catalogs": 0,
