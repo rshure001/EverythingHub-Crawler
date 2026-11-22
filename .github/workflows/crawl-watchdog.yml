@@ -184,6 +184,7 @@ jobs:
           scheduled_payload = json.loads(Path("/tmp/crawl-scheduled-final.json").read_text(encoding="utf-8"))
           scheduled = scheduled_payload.get("workflow_runs")
           schedule_age = None
+          created_at = None
           now = datetime.now(timezone.utc)
           if isinstance(scheduled, list) and scheduled:
               latest = max(scheduled, key=lambda row: row.get("created_at") or "")
