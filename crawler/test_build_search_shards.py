@@ -191,7 +191,7 @@ class SearchShardBatchBoundaryTests(unittest.TestCase):
             "url": "https://example.com/las-vegas",
             "title": "ＮＡＳＡ Las Vegas",
             "description": "The Space Center",
-            "text": "Rolex model collection",
+            "text": "Rolex model 5 collection",
             "product": {
                 "type": "product", "name": "Explorer Watch",
                 "brand": "Rolex", "sku": "RX-42",
@@ -199,7 +199,7 @@ class SearchShardBatchBoundaryTests(unittest.TestCase):
             },
         })
         tokens = query_tokens(page)
-        self.assertTrue({"nasa", "las", "vegas", "space", "center", "rolex", "explorer", "rx", "42"}.issubset(tokens))
+        self.assertTrue({"nasa", "las", "vegas", "space", "center", "rolex", "explorer", "rx", "42", "5"}.issubset(tokens))
         self.assertNotIn("the", tokens)
 
     def test_query_index_is_deterministic_and_tracks_distinct_page_counts(self):
