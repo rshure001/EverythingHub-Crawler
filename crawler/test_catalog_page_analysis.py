@@ -1177,11 +1177,13 @@ class PageDerivedCatalogAnalysisTests(unittest.TestCase):
         )
 
 class CatalogInventoryTriggerTests(unittest.TestCase):
-    def test_new_public_search_manifest_triggers_retroactive_inventory(self):
+    def test_catalog_inventory_runs_hourly_without_manifest_push_storms(self):
         repository_root = Path(__file__).resolve().parents[1]
         workflow = (repository_root / ".github" / "workflows" / "retroactive-catalog-index.yml").read_text(encoding="utf-8")
-        push_paths = workflow.split("  push:\n", 1)[1].split("  workflow_dispatch:", 1)[0]
-        self.assertIn('"public-search/manifest.json"', push_paths)
+        push_paths = workflow.split("  push:\\n", 1)[1].split("  workflow_dispatch:", 1)[0]
+        self.assertNotIn('"public-search/manifest.json"', push_paths)
+        self.assertIn('    - cron: "23 * * * *"', workflow)
+        self.assertIn("  workflow_dispatch:", workflow)
 
     def test_catalog_publish_reuses_validated_snapshot_after_concurrent_updates(self):
         repository_root = Path(__file__).resolve().parents[1]
