@@ -271,10 +271,20 @@ jobs:
                   (query === "NASA" && nasaResourcesVisible && externalDirectoryVisible) ||
                   catalogMatched.some(text => pattern.test(text)) || catalogTitles.some(title => pattern.test(title));
                 if (!catalogCount || !relevantCatalog) throw new Error(query + " returned no relevant visible catalog preview: " + JSON.stringify({catalogCount,catalogTitles,catalogMatched}));
+                const isExternalDirectory = index => catalogSources[index] === "curated_external_link_directory" || catalogDisplaySources[index] === "external_link_only";
+                const rightsValid = catalogRights.every((text, index) => {
+                  if (isExternalDirectory(index)) {
+                    return /External links only/.test(text) && /destination terms and rights apply/.test(text) && /no source-page records republished/.test(text);
+                  }
+                  return /Candidate preview only/.test(text) && /Record rights not cleared/.test(text) && /Commercial use not cleared/.test(text);
+                });
+                const pageDerivedCatalogVisible = catalogDisplaySources.some((source, index) => !isExternalDirectory(index) && source === "page-derived");
+                if (query !== "Rolex" && !pageDerivedCatalogVisible) {
+                  throw new Error(query + " must show at least one page-derived catalog as well as any external directory: " + JSON.stringify({catalogDisplaySources,catalogSources}));
+                }
                 if (!catalogFlags.every(item => item.id && item.previewOnly === "true" && item.commercialEligible === "false") ||
-                    !catalogRelevance.every(text => text.trim().length > 0) ||
-                    !catalogRights.every(text => /Candidate preview only/.test(text) && /Record rights not cleared/.test(text) && /Commercial use not cleared/.test(text))) {
-                  throw new Error(query + " catalog preview rights or identity labels failed: " + JSON.stringify({catalogFlags,catalogRelevance,catalogRights}));
+                    !catalogRelevance.every(text => text.trim().length > 0) || !rightsValid) {
+                  throw new Error(query + " catalog preview rights or identity labels failed: " + JSON.stringify({catalogFlags,catalogRelevance,catalogRights,catalogSources,catalogDisplaySources}));
                 }
                 report.searches[query] = {...result,status:await page.locator("#status").textContent(),catalogPreview:{count:catalogCount,titles:catalogTitles,matched:catalogMatched,relevance:catalogRelevance,rights:catalogRights,sources:catalogSources,familyLinksVisible,lasVegasResourcesVisible,nasaResourcesVisible,externalDirectoryVisible,displaySources:catalogDisplaySources}};
 
