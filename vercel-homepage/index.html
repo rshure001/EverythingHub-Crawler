@@ -994,7 +994,7 @@ form.addEventListener('submit',async e=>{
  e.preventDefault();
  const q=input.value.trim();if(!q)return;
  out.innerHTML="<p>Searching Everything Hub's own index and connected sources…</p>";
- let apiPage=1,apiHasMore=false,totalIndexed=0,loadingMore=false,shown=24;
+ let apiPage=1,apiHasMore=false,totalIndexed=0,searchScan=null,loadingMore=false,shown=24;
  let activeType=['news','images','videos','shopping','places','business','research'].includes(selectedMode)?selectedMode:'web';
  const seenUrls=new Set(),items=[],itemByUrl=new Map();
  const isCrawlerOrigin=value=>/Everything Hub (?:public crawler|eh_quad) index/i.test(String(value||''));
@@ -1035,6 +1035,7 @@ form.addEventListener('submit',async e=>{
   const r=await fetch(u,{headers:{accept:'application/json'}});
   if(!r.ok)throw Error('Independent Everything Hub search '+r.status);
   const d=await r.json();
+  if(page===1)searchScan=d.indexScan||null;
   apiHasMore=Boolean(d.hasMore);
   totalIndexed=Number(d.indexedPages)||totalIndexed;
   const catalogResults=(page===1?(d.catalogResults||[]):[]).map(x=>{
@@ -1063,7 +1064,10 @@ form.addEventListener('submit',async e=>{
   }).join('');
   const moreAvailable=shown<matches.length||(activeType==='web'&&apiHasMore);
   const resultLabel=activeType==='web'&&totalIndexed?'Showing '+matches.length.toLocaleString()+' results · '+totalIndexed.toLocaleString()+' pages indexed':matches.length.toLocaleString()+' '+activeType+' results';
-  out.innerHTML=tabs+'<p class="source result-count">'+resultLabel+'</p>'+cards+(moreAvailable?'<button id="moreResults" type="button" style="display:block;margin:22px auto;padding:13px 25px;border:1px solid #39ff79;border-radius:999px;background:#063b2e;color:#fff;font-weight:800">'+(shown<matches.length?'Show 24 more results':'Load next 50 indexed results')+'</button>':'')+(matches.length?'':'<p>No '+activeType+' results found for this search. Try Web or a broader search.</p>');
+  const scanNote=activeType==='web'&&searchScan?.candidateTruncated
+   ? '<p class="source result-count" role="status">Partial index scan: searched '+Number(searchScan.candidateShardCount||0).toLocaleString()+' of '+Number(searchScan.totalCandidateShardCount||0).toLocaleString()+' matching shards ('+Number(searchScan.candidatePageCount||0).toLocaleString()+' of '+Number(searchScan.totalCandidatePageCount||0).toLocaleString()+' candidate pages). Results may be incomplete.</p>'
+   : '';
+  out.innerHTML=tabs+'<p class="source result-count">'+resultLabel+'</p>'+scanNote+cards+(moreAvailable?'<button id="moreResults" type="button" style="display:block;margin:22px auto;padding:13px 25px;border:1px solid #39ff79;border-radius:999px;background:#063b2e;color:#fff;font-weight:800">'+(shown<matches.length?'Show 24 more results':'Load next 50 indexed results')+'</button>':'')+(matches.length?'':'<p>No '+activeType+' results found for this search. Try Web or a broader search.</p>');
   out.querySelectorAll('.search-tab').forEach(tab=>tab.addEventListener('click',()=>{activeType=tab.dataset.type;shown=24;render()}));
   const more=document.querySelector('#moreResults');
   if(more)more.addEventListener('click',async()=>{
