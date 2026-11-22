@@ -403,12 +403,25 @@ def extract_structured_catalog_metadata(html, page_url):
             continue
         schema_objects = list(_walk_schema_objects(payload))
         objects_by_id = {}
+        object_priorities = {}
         for schema_obj in schema_objects:
             if not isinstance(schema_obj, dict):
                 continue
             object_id = _schema_reference_id(schema_obj.get("@id"), page_url)
-            if object_id and object_id not in objects_by_id:
+            if not object_id:
+                continue
+            # JSON-LD graphs commonly contain a small @id-only reference before
+            # the fully-described node. Prefer the richer typed node so a stub
+            # cannot shadow the actual Product, Dataset, Place, or other record.
+            priority = (
+                1 if _schema_record_type(schema_obj) else 0,
+                1 if _text(schema_obj.get("name") or schema_obj.get("headline"), 120) else 0,
+                1 if _absolute_http(schema_obj.get("url"), page_url) else 0,
+                len(schema_obj),
+            )
+            if object_id not in object_priorities or priority > object_priorities[object_id]:
                 objects_by_id[object_id] = schema_obj
+                object_priorities[object_id] = priority
 
         for obj in schema_objects:
             if not isinstance(obj, dict):
