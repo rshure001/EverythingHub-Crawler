@@ -73,6 +73,10 @@ function searchCatalog(pages, query, lane) {
     });
   }
   ranked.sort((a, b) => b.score - a.score || a.url.localeCompare(b.url));
+  // A requested vertical is a ranking preference, not a dead end: if the
+  // indexed corpus has no records in that lane for this query, return the
+  // relevant general-index matches rather than an empty results page.
+  if (!ranked.length && laneFilter) return searchCatalog(pages, query, '');
   return ranked;
 }
 function decodeCodePoint(value, radix) {
