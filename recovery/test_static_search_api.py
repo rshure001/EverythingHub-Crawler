@@ -62,43 +62,35 @@ class StaticSearchTests(unittest.TestCase):
         return manifest
 
     def test_capacity_bounds_cover_current_public_catalog(self):
-        # Verified public-search snapshot at 2026-11-21T12:09:31Z: 151,584 rows across 586 shards.
-        # The recovery service matches the publisher's 180k pages, 768 shards, 256 KB manifest, 100 MB compressed, and 400 MB decoded bounds.
-        self.assertEqual(
-            api._manifest_int(181_887, "total_pages", 1, api.MAX_PAGES),
-            151_584,
+        root = Path(__file__).resolve().parents[1]
+        manifest_path = root / "public-search" / "manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        shards = manifest["shards"]
+        pages = api._manifest_int(manifest["total_pages"], "total_pages", 1, api.MAX_PAGES)
+        shard_count = api._manifest_int(manifest["shard_count"], "shard_count", 1, api.MAX_SHARDS)
+        compressed_bytes = sum(
+            api._manifest_int(item["bytes"], "shard bytes", 1, api.MAX_SHARD_BYTES)
+            for item in shards
         )
-        self.assertEqual(
-            api._manifest_int(
-                291_973_398,
-                "total uncompressed bytes",
-                1,
-                api.MAX_TOTAL_UNCOMPRESSED_BYTES,
-            ),
-            291_973_398,
+        uncompressed_bytes = sum(
+            api._manifest_int(item["uncompressed_bytes"], "shard uncompressed bytes", 1, api.MAX_SHARD_UNCOMPRESSED_BYTES)
+            for item in shards
         )
+        manifest_bytes = manifest_path.stat().st_size
+
+        self.assertGreater(pages, 180_000)
+        self.assertEqual(shard_count, len(shards))
+        self.assertLessEqual(compressed_bytes, api.MAX_TOTAL_COMPRESSED_BYTES)
+        self.assertLessEqual(uncompressed_bytes, api.MAX_TOTAL_UNCOMPRESSED_BYTES)
         self.assertEqual(
-            api._manifest_int(
-                72_608_773,
-                "total compressed bytes",
-                1,
-                api.MAX_TOTAL_COMPRESSED_BYTES,
-            ),
-            72_608_773,
-        )
-        self.assertEqual(
-            api._manifest_int(586, "shard_count", 1, api.MAX_SHARDS),
-            586,
+            api._manifest_int(manifest_bytes, "manifest bytes", 1, api.MAX_MANIFEST_BYTES),
+            manifest_bytes,
         )
         self.assertEqual(api.MAX_PAGES, 250_000)
         self.assertEqual(api.MAX_SHARDS, 768)
         self.assertEqual(api.MAX_MANIFEST_BYTES, 256_000)
         self.assertEqual(api.MAX_TOTAL_COMPRESSED_BYTES, 100_000_000)
         self.assertEqual(api.MAX_TOTAL_UNCOMPRESSED_BYTES, 400_000_000)
-        self.assertEqual(
-            api._manifest_int(123_819, "manifest bytes", 1, api.MAX_MANIFEST_BYTES),
-            123_819,
-        )
 
     def test_capacity_rejects_values_above_publisher_envelope(self):
         limits = [
