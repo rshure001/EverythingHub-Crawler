@@ -305,12 +305,16 @@ class CrawlerTests(unittest.TestCase):
                 "availability": "InStock",
                 "image": "https://shop.example/ring.jpg",
                 "url": "https://shop.example/item",
+                "same_as_ids": ["wikidata:Q12345"],
+                "brand_same_as_ids": ["wikidata:Q67890"],
             },
         )
         self.assertEqual(record["product"]["name"], "18K Diamond Pinky Ring")
         self.assertEqual(record["product"]["brand"], "Example Jewelers")
         self.assertEqual(record["product"]["price"], "1299.00")
         self.assertEqual(record["product"]["image"], "https://shop.example/ring.jpg")
+        self.assertEqual(record["product"]["same_as_ids"], ["wikidata:Q12345"])
+        self.assertEqual(record["product"]["brand_same_as_ids"], ["wikidata:Q67890"])
 
     def test_build_page_record_preserves_structured_catalog_items_and_blocks_noindex(self):
         metadata = {
@@ -319,7 +323,7 @@ class CrawlerTests(unittest.TestCase):
                 "name": "Rolex Watches",
                 "record_type": "product",
                 "items": [
-                    {"record_type": "product", "name": "Submariner", "url": "https://shop.example/submariner", "brand": "Rolex", "sku": "124060"},
+                    {"record_type": "product", "name": "Submariner", "url": "https://shop.example/submariner", "brand": "Rolex", "sku": "124060", "same_as_ids": ["wikidata:Q12345"], "brand_same_as_ids": ["wikidata:Q67890"]},
                     {"record_type": "product", "name": "Datejust", "url": "https://shop.example/datejust", "brand": "Rolex", "sku": "126200"},
                 ],
             }],
@@ -331,6 +335,8 @@ class CrawlerTests(unittest.TestCase):
         self.assertEqual(record["structured_catalog"]["lists"][0]["name"], "Rolex Watches")
         self.assertEqual(len(record["structured_catalog"]["lists"][0]["items"]), 2)
         self.assertEqual(record["structured_catalog"]["lists"][0]["items"][0]["url"], "https://shop.example/submariner")
+        self.assertEqual(record["structured_catalog"]["lists"][0]["items"][0]["same_as_ids"], ["wikidata:Q12345"])
+        self.assertEqual(record["structured_catalog"]["lists"][0]["items"][0]["brand_same_as_ids"], ["wikidata:Q67890"])
         noindex = crawl.build_page_record(
             "https://shop.example/private", "Private", "", "", 1, {"noindex"},
             structured_catalog_metadata=metadata,
@@ -1038,5 +1044,45 @@ class CrawlerTests(unittest.TestCase):
             )
             pretty = crawl.json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
             self.assertLess(len(raw), len(pretty))
+
+    def test_build_page_record_preserves_safe_structured_entity_metadata(self):
+        metadata = [{
+            "record_type": "place",
+            "name": "Rainbow Family Park",
+            "description": "Public family park.",
+            "entity_url": "https://city.example/parks/rainbow-family-park",
+            "attributes": {
+                "address_locality": "Las Vegas",
+                "address_region": "NV",
+                "address_country": "US",
+                "same_as_ids": ["wikidata:Q12345"],
+                "street_address": "100 Private Street",
+                "telephone": "+1-555-0100",
+                "email": "private@example.com",
+            },
+        }, {
+            "record_type": "business",
+            "name": "Unsafe URL",
+            "entity_url": "javascript:alert(1)",
+            "attributes": {},
+        }]
+        record = crawl.build_page_record(
+            "https://city.example/parks", "Parks", "", "Public parks", 1, set(),
+            structured_entity_metadata=metadata,
+        )
+        self.assertEqual(len(record["structured_entities"]), 1)
+        entity = record["structured_entities"][0]
+        self.assertEqual(entity["attributes"]["address_locality"], "Las Vegas")
+        self.assertIn("wikidata:Q12345", entity["attributes"]["same_as_ids"])
+        self.assertNotIn("street_address", entity["attributes"])
+        self.assertNotIn("telephone", entity["attributes"])
+        self.assertNotIn("email", entity["attributes"])
+        noindex = crawl.build_page_record(
+            "https://city.example/private", "Private", "", "", 1, {"noindex"},
+            structured_entity_metadata=metadata,
+        )
+        self.assertTrue(noindex["_eh_noindex"])
+        self.assertNotIn("structured_entities", noindex)
+
 if __name__ == "__main__":
     unittest.main()
