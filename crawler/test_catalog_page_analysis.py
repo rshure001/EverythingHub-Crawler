@@ -1923,7 +1923,7 @@ class CatalogInventoryTriggerTests(unittest.TestCase):
                     "record_type": "place", "name": "Rainbow Family Park",
                     "description": "Public recreation park.",
                     "attributes": {"address_locality": "Las Vegas", "address_region": "NV",
-                                   "address_country": "US", "same_as_ids": ["https://www.wikidata.org/entity/Q12345"]},
+                                   "address_country": "US", "same_as_ids": ["wikidata:Q12345"]},
                 }],
             },
             {
@@ -1939,8 +1939,8 @@ class CatalogInventoryTriggerTests(unittest.TestCase):
             },
             {
                 "url": "https://www.visitlasvegas.com/things-to-do/las-vegas-strip/",
-                "title": "Las Vegas Strip", "description": "Visitor destination.",
-                "text": "Explore the Las Vegas Strip.", "lane": "general",
+                "title": "Strip", "description": "Visitor destination.",
+                "text": "Explore the resort district.", "lane": "general",
                 "robots_allowed": True, "fetched_at": 102,
                 "structured_entities": [{
                     "record_type": "place", "name": "Las Vegas Strip",
@@ -1950,7 +1950,7 @@ class CatalogInventoryTriggerTests(unittest.TestCase):
             },
             {
                 "url": "https://www.visitlasvegas.com/listing/golden-nugget/",
-                "title": "Golden Nugget", "description": "Las Vegas hotel.",
+                "title": "Golden Nugget", "description": "Hotel and resort.",
                 "text": "Hotel and resort information.", "lane": "general",
                 "robots_allowed": True, "fetched_at": 103,
                 "structured_entities": [{
