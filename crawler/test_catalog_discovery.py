@@ -163,6 +163,7 @@ class CatalogDiscoveryTests(unittest.TestCase):
                 previous_pages_requested_total=1,
             )
         self.assertIn("start=2", request.call_args.args[0])
+        self.assertIn("sort=id+asc", request.call_args.args[0])
         self.assertEqual(result["pages_requested"], 1)
         self.assertEqual(result["pages_requested_total"], 2)
         self.assertTrue(result["scan_complete"])
@@ -224,7 +225,7 @@ class CatalogDiscoveryTests(unittest.TestCase):
         self.assertEqual(result["datasets_discovered"], 2)
         self.assertTrue(any("offset 2" in error for error in result["errors"]))
 
-    def test_build_catalog_migrates_legacy_snapshot_to_resumable_offset(self):
+    def test_build_catalog_restarts_legacy_sort_before_resuming(self):
         source = SOURCES[0]
         previous = {
             "schema_version": 1,
@@ -242,7 +243,47 @@ class CatalogDiscoveryTests(unittest.TestCase):
                 self._previous_dataset("two", 0),
             ],
         }
-        page_two = {
+        first_page = {
+            "success": True,
+            "result": {"count": 4, "results": [
+                {"name": "one", "title": "One refreshed"},
+                {"name": "two", "title": "Two refreshed"},
+            ]},
+        }
+        with patch("catalog_discovery.SOURCES", (source,)), patch(
+            "catalog_discovery.policy_for_host", return_value=self._reviewed_policy()
+        ), patch("catalog_discovery._request_json", return_value=first_page) as request:
+            result = build_catalog(rows=2, max_pages=1, previous=previous)
+        self.assertIn("start=0", request.call_args.args[0])
+        self.assertIn("sort=id+asc", request.call_args.args[0])
+        self.assertEqual(result["datasets_discovered"], 2)
+        progress = result["scan_progress"][source["id"]]
+        self.assertFalse(progress["scan_complete"])
+        self.assertEqual(progress["next_start"], 2)
+
+    def test_build_catalog_resumes_cursor_when_sort_order_matches(self):
+        source = SOURCES[0]
+        previous = {
+            "schema_version": 1,
+            "strategy": "catalog-first-policy-gated-resumable",
+            "catalogs": [{
+                "id": source["id"],
+                "pages_requested": 1,
+                "pages_requested_total": 1,
+                "available_dataset_count": 4,
+                "datasets_discovered": 2,
+                "resources_discovered": 0,
+                "scan_generation": 1,
+                "sort_order": "id asc",
+                "next_start": 2,
+                "scan_complete": False,
+            }],
+            "datasets": [
+                self._previous_dataset("one", 1),
+                self._previous_dataset("two", 1),
+            ],
+        }
+        second_page = {
             "success": True,
             "result": {"count": 4, "results": [
                 {"name": "three", "title": "Three"},
@@ -251,13 +292,52 @@ class CatalogDiscoveryTests(unittest.TestCase):
         }
         with patch("catalog_discovery.SOURCES", (source,)), patch(
             "catalog_discovery.policy_for_host", return_value=self._reviewed_policy()
-        ), patch("catalog_discovery._request_json", return_value=page_two) as request:
+        ), patch("catalog_discovery._request_json", return_value=second_page) as request:
             result = build_catalog(rows=2, max_pages=1, previous=previous)
         self.assertIn("start=2", request.call_args.args[0])
         self.assertEqual(result["datasets_discovered"], 4)
         progress = result["scan_progress"][source["id"]]
         self.assertTrue(progress["scan_complete"])
         self.assertEqual(progress["next_start"], 0)
+
+    def test_count_shrink_restarts_scan_without_pruning_previous_snapshot(self):
+        from catalog_discovery import discover_source
+        previous = [self._previous_dataset("one", 1), self._previous_dataset("two", 1)]
+        shrunken = {"success": True, "result": {"count": 1, "results": []}}
+        with patch("catalog_discovery.policy_for_host", return_value=self._reviewed_policy()), patch(
+            "catalog_discovery._request_json", return_value=shrunken
+        ):
+            result = discover_source(
+                SOURCES[0], rows=2, max_pages=1, start_offset=2,
+                previous_datasets=previous, scan_generation=1,
+                previous_available_dataset_count=4,
+            )
+        self.assertFalse(result["scan_complete"])
+        self.assertEqual(result["next_start"], 0)
+        self.assertEqual(result["scan_generation"], 2)
+        self.assertEqual(result["datasets_discovered"], 2)
+        self.assertTrue(any("restarting from offset zero" in error for error in result["errors"]))
+
+
+    def test_count_shrink_during_scan_restarts_generation(self):
+        from catalog_discovery import discover_source
+        previous = [self._previous_dataset("one", 1)]
+        response = {
+            "success": True,
+            "result": {"count": 3, "results": [{"name": "two", "title": "Two"}]},
+        }
+        with patch("catalog_discovery.policy_for_host", return_value=self._reviewed_policy()), patch(
+            "catalog_discovery._request_json", return_value=response
+        ):
+            result = discover_source(
+                SOURCES[0], rows=1, max_pages=1, start_offset=2,
+                previous_datasets=previous, scan_generation=1,
+                previous_available_dataset_count=5,
+            )
+        self.assertFalse(result["scan_complete"])
+        self.assertEqual(result["next_start"], 0)
+        self.assertEqual(result["scan_generation"], 2)
+        self.assertEqual(result["datasets_discovered"], 1)
 
     def test_previous_manifest_loader_fails_closed_on_corrupt_snapshot(self):
         import tempfile
