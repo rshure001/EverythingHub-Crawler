@@ -1180,7 +1180,7 @@ class CatalogInventoryTriggerTests(unittest.TestCase):
     def test_catalog_inventory_runs_hourly_without_manifest_push_storms(self):
         repository_root = Path(__file__).resolve().parents[1]
         workflow = (repository_root / ".github" / "workflows" / "retroactive-catalog-index.yml").read_text(encoding="utf-8")
-        push_paths = workflow.split("  push:\\n", 1)[1].split("  workflow_dispatch:", 1)[0]
+        push_paths = workflow.split("  push:\n", 1)[1].split("  workflow_dispatch:", 1)[0]
         self.assertNotIn('"public-search/manifest.json"', push_paths)
         self.assertIn('    - cron: "23 * * * *"', workflow)
         self.assertIn("  workflow_dispatch:", workflow)
