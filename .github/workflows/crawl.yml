@@ -32,8 +32,8 @@ on:
       - "crawler/test_hourly_production.py"
       - "crawler/test_live_diagnostics_schedule.py"
   schedule:
-    # Queue a fresh crawl every five minutes. The concurrency group serializes runs without cancelling active work, reducing idle gaps between bounded crawl batches.
-    - cron: "*/5 * * * *"
+    # Queue one bounded crawl every five minutes, staggered away from the top-of-hour Actions load peak.
+    - cron: "2-57/5 * * * *"
   workflow_dispatch:
 permissions:
   actions: write
