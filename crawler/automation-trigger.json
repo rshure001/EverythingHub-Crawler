@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "updated_at": "2026-11-22T06:14:37.602Z",
-  "reason": "One bounded recovery crawl requested after the scheduled crawler and watchdog events were unobserved: the latest public-search manifest contains 174035 pages, was updated at 2026-11-22T05:20:19Z, and is more than 50 minutes old; no crawler run is queued or running. Normal schedule unchanged.",
-  "manifest_before_pages": 174035,
-  "manifest_before_updated_at": "2026-11-22T05:20:19Z"
+  "updated_at": "2026-11-22T07:01:07.375Z",
+  "reason": "Explicit workflow_dispatch fallback after scheduled crawl delivery was 22793s old (>25 minutes); no queued or running crawler; public manifest was 2316s old (>10 minutes). One bounded recovery crawl; normal schedule unchanged.",
+  "manifest_before_pages": 175037,
+  "manifest_before_updated_at": "2026-11-22T06:22:31Z"
 }
