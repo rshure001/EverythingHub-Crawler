@@ -239,7 +239,7 @@ def publish_snapshot(
             local_head = _git(root, "rev-parse", "HEAD", env=child_env).stdout.strip()
             pushed = _git(root, "push", "origin", "HEAD:main", env=child_env, check=False)
             if pushed.returncode == 0:
-                current_pages = _current_index_pages(root)
+                current_index = _current_index_snapshot(root)
                 return {
                     **{key: value for key, value in snapshot.items() if key != "report" and key != "generated_time"},
                     "published": True,
@@ -255,16 +255,17 @@ def publish_snapshot(
             _git(root, "fetch", "origin", "main", env=child_env)
             remote_after = _git(root, "rev-parse", "origin/main", env=child_env).stdout.strip()
             if remote_after == local_head:
-                current_pages = _current_index_pages(root)
+                current_index = _current_index_snapshot(root)
                 return {
                     **{key: value for key, value in snapshot.items() if key != "report" and key != "generated_time"},
                     "published": True,
                     "attempts_used": attempt,
                     "commit": local_head,
                     "already_present": True,
-                    "current_index_pages": current_pages,
+                    "current_index_pages": current_index["pages"] if current_index else None,
+                    "current_index_sha256": current_index["sha256"] if current_index else None,
                     "stale_against_current_index": (
-                        current_pages is not None and current_pages != snapshot["analyzed_unique_pages"]
+                        current_index is not None and current_index["sha256"] != snapshot["source_index_sha256"]
                     ),
                 }
             if remote_after == remote_base:
