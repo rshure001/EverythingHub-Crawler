@@ -75,7 +75,7 @@ main{min-height:100svh;width:100%;display:flex;flex-direction:column;align-items
 .search:focus-within input,.search.has-query input{background:linear-gradient(90deg,transparent 0 12%,#fff 12% 100%);}
 </style>
 </head>
-<body data-release="fallback-2026-11-21-r2">
+<body data-release="fallback-2026-11-22-r5">
 <main><section class="art" aria-label="Everything Hub search">
 <img src="https://everythinghub-search-engine-4x25f8.v2.appdeploy.ai/resources/everythinghub-approved-octopus.png" alt="Approved original Everything Hub octopus artwork with the eight search categories">
 <form class="search" id="searchForm" aria-label="Search Everything Hub">
@@ -270,8 +270,25 @@ async function loadNews(category){
   document.querySelectorAll('[data-news]').forEach(b=>b.classList.toggle('active',b.dataset.news===category));
   try{
     const u=new URL('https://everythinghub-search-backend.vercel.app/api/news');u.searchParams.set('category',category);
-    const response=await fetch(u,{signal:AbortSignal.timeout(15000)});const data=await response.json();
-    if(!response.ok||data.status!=='ok'||!Array.isArray(data.items)||!data.items.length)throw new Error(data.message||'No news stories returned');
+    let data=null,lastError=null;
+    for(let attempt=0;attempt<2;attempt++){
+      try{
+        const response=await fetch(u,{signal:AbortSignal.timeout(15000),cache:'no-store'});
+        let payload={};
+        try{payload=await response.json();}catch{}
+        if(!response.ok){const error=new Error(payload.message||'News service '+response.status);error.status=response.status;throw error;}
+        if(payload.status!=='ok'||!Array.isArray(payload.items)||!payload.items.length)throw new Error(payload.message||'No news stories returned');
+        data=payload;break;
+      }catch(error){
+        lastError=error;
+        const status=Number(error.status)||0;
+        const transient=(status>=500&&status<=599)||error.name==='AbortError'||error.name==='TimeoutError'||/Failed to fetch|NetworkError|Load failed|timed out/i.test(error.message||'');
+        if(!transient||attempt===1)throw error;
+        newsStatus.textContent='News feed reconnecting…';
+        await new Promise(resolve=>setTimeout(resolve,750));
+      }
+    }
+    if(!data)throw lastError||new Error('No news stories returned');
     newsStatus.textContent='Updated '+new Date(data.updatedAt).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})+' · '+data.count+' stories';
     for(const item of data.items){
       const card=document.createElement('article');card.className='news-item';
