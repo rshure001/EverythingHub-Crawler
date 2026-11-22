@@ -4,7 +4,7 @@ from unittest.mock import patch
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from catalog_discovery import build_catalog, normalize_dataset, SOURCES, EXCLUDED_SOURCES
+from catalog_discovery import build_catalog, normalize_dataset, SOURCES, EXCLUDED_SOURCES, DEFAULT_MAX_PAGES
 from catalog_source_policy import policy_for_host
 
 class CatalogDiscoveryTests(unittest.TestCase):
@@ -50,7 +50,7 @@ class CatalogDiscoveryTests(unittest.TestCase):
 
     def test_default_discovery_batch_is_bounded_by_each_reviewed_host_budget(self):
         max_pages = inspect.signature(build_catalog).parameters["max_pages"].default
-        self.assertEqual(max_pages, 40)
+        self.assertEqual(max_pages, 80
         for source in SOURCES:
             host = urlsplit(source["base"]).hostname
             policy = policy_for_host(host)
@@ -62,8 +62,8 @@ class CatalogDiscoveryTests(unittest.TestCase):
             Path(__file__).resolve().parents[1]
             / ".github" / "workflows" / "catalog-first-discovery.yml"
         ).read_text(encoding="utf-8")
-        self.assertIn('default: "40"', workflow)
-        self.assertEqual(workflow.count("inputs.max_pages || '40'"), 2)
+        self.assertIn('default: "80"', workflow)
+        self.assertEqual(workflow.count("inputs.max_pages || '80'"), 2)
 
     def test_discovery_reports_total_available_and_respects_source_request_budget(self):
         policy = {
