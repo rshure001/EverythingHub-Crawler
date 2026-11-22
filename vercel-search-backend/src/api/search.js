@@ -107,7 +107,7 @@ module.exports = async function handler(req, res) {
   const externalCatalogResults = searchExternalCatalogs(query);
   const externalCatalogStats = getExternalCatalogStats();
   const [catalogResult, bingResult, pageDerivedResult] = await Promise.allSettled([
-    withTimeout(loadCatalog(), CATALOG_LOAD_BUDGET_MS, 'catalog_load_budget_exceeded'),
+    withTimeout(loadCatalog(query), CATALOG_LOAD_BUDGET_MS, 'catalog_load_budget_exceeded'),
     loadBing(query),
     withTimeout(loadPageDerivedCatalogs(query), PAGE_DERIVED_LOAD_BUDGET_MS, 'page_catalog_load_budget_exceeded')
   ]);
@@ -195,6 +195,12 @@ module.exports = async function handler(req, res) {
     indexTransport: catalog.transport,
     staleCatalog: catalog.stale
   });
+  payload.indexScan = {
+    mode: catalog.queryScoped ? 'query-scoped' : 'full-index',
+    indexedPages: catalog.indexedPages,
+    scannedPages: Number.isSafeInteger(catalog.scannedPages) ? catalog.scannedPages : catalog.indexedPages,
+    candidateShardCount: Number.isSafeInteger(catalog.candidateShardCount) ? catalog.candidateShardCount : catalog.shardCount
+  };
   payload.catalogResults = catalogResults;
   payload.externalCatalogResults = externalCatalogResults;
   payload.catalogPreview = catalogPreview;
