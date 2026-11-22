@@ -37,7 +37,7 @@ test('marks a matching fresh catalog preview as current', () => {
   assert.equal(preview.stale, false);
   assert.equal(preview.status, 'candidate-preview');
   assert.equal(preview.pageIndexPages, 100);
-  assert.equal(preview.pageIndexUpdatedAt, snapshotAt);
+  assert.equal(preview.pageIndexUpdatedAt, snapshotAt.replace('Z', '.000Z'));
 });
 
 test('marks a page-count mismatch as stale, not merely freshness-unverified', () => {
