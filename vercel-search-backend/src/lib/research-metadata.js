@@ -117,7 +117,7 @@ function providerUrls(query) {
   const crossref = new URL('https://api.crossref.org/works');
   crossref.searchParams.set('query.bibliographic', value);
   crossref.searchParams.set('rows', String(MAX_RESULTS_PER_SOURCE));
-  crossref.searchParams.set('select', 'DOI,title,author,publisher,type,created,updated,published,URL,subject,license');
+  crossref.searchParams.set('select', 'DOI,title,author,publisher,type,created,issued,URL,subject,license');
   const dataCite = new URL('https://api.datacite.org/dois');
   dataCite.searchParams.set('query', value);
   dataCite.searchParams.set('page[size]', String(MAX_RESULTS_PER_SOURCE));
