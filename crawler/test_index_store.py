@@ -304,6 +304,10 @@ class CanonicalIndexStoreTests(unittest.TestCase):
 
     def test_public_search_page_limit_matches_the_250k_publisher_ceiling(self):
         self.assertEqual(index_store.MAX_PUBLIC_SEARCH_PAGES, 250_000)
+        self.assertEqual(index_store.MAX_PUBLIC_SEARCH_SHARDS, 900)
+        self.assertEqual(index_store.MAX_PUBLIC_SEARCH_SHARD_UNCOMPRESSED_BYTES, 600_000)
+        self.assertEqual(index_store.MAX_PUBLIC_SEARCH_TOTAL_COMPRESSED_BYTES, 150_000_000)
+        self.assertEqual(index_store.MAX_PUBLIC_SEARCH_TOTAL_UNCOMPRESSED_BYTES, 540_000_000)
         public_dir = self.root / "public-search"
         public_dir.mkdir()
         manifest_path = public_dir / "manifest.json"
