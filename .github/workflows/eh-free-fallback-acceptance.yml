@@ -205,10 +205,16 @@ jobs:
                 try {
                   const response = await linkPage.goto(url.href, { waitUntil: "domcontentloaded", timeout: 30000 });
                   const status = response ? response.status() : 0;
+                  const externalRateLimit = !!response && status === 429 && !isCoreUrl(url.href);
+                  if (externalRateLimit) {
+                    report.networkErrors.externalHttpErrors.push({ url: url.href, status, context: label });
+                    coreLinks[label] = { url: linkPage.url(), status, rateLimited: true };
+                    return;
+                  }
                   if (!response || status < 200 || status >= 400) {
                     throw new Error("Core link navigation failed for " + label + ": HTTP " + status + " " + url.href);
                   }
-                  coreLinks[label] = { url: linkPage.url(), status };
+                  coreLinks[label] = { url: linkPage.url(), status, rateLimited: false };
                 } finally {
                   await linkPage.close();
                 }
