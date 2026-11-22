@@ -239,7 +239,7 @@ test('public search shard envelope accepts the observed 1008-page shard within b
   assert.equal(MAX_SHARD_COUNT, 900);
   assert.equal(MAX_PAGES_PER_SHARD, 2000);
   assert.equal(MAX_TOTAL_COMPRESSED_SHARD_BYTES, 150000000);
-  assert.equal(MAX_TOTAL_SHARD_UNCOMPRESSED_BYTES, 600000000);
+  assert.equal(MAX_TOTAL_SHARD_UNCOMPRESSED_BYTES, 540000000);
   const pages = Array.from({ length: 1008 }, (_, index) =>
     makePage('https://nasa.gov/page/' + index, 'NASA page ' + index, 'NASA public information', 'NASA public information')
   );
