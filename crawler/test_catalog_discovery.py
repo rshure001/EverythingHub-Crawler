@@ -120,5 +120,153 @@ class CatalogDiscoveryTests(unittest.TestCase):
         self.assertIn("us-data-gov", excluded)
         self.assertIn("free personal API key", excluded["us-data-gov"]["reason"])
 
+
+    @staticmethod
+    def _previous_dataset(name, generation):
+        item = normalize_dataset({"name": name, "title": name}, SOURCES[0])
+        item["last_seen_generation"] = generation
+        return item
+
+    @staticmethod
+    def _reviewed_policy():
+        return {
+            "discovery_allowed": True,
+            "terms_url": "https://example.org/terms",
+            "terms_status": "reviewed_per_dataset",
+            "reviewed_at": "2026-11-21",
+            "attribution_required": "per_dataset",
+            "per_dataset_rights_required": True,
+            "max_requests_per_run": 80,
+            "min_interval_seconds": 1,
+        }
+
+    def test_discovery_resumes_from_saved_offset_and_merges_previous_records(self):
+        from catalog_discovery import discover_source
+        previous = [
+            self._previous_dataset("one", 1),
+            self._previous_dataset("two", 1),
+        ]
+        page_two = {
+            "success": True,
+            "result": {"count": 4, "results": [
+                {"name": "three", "title": "Three"},
+                {"name": "four", "title": "Four"},
+            ]},
+        }
+        with patch("catalog_discovery.policy_for_host", return_value=self._reviewed_policy()), patch(
+            "catalog_discovery._request_json", return_value=page_two
+        ) as request:
+            result = discover_source(
+                SOURCES[0], rows=2, max_pages=1, start_offset=2,
+                previous_datasets=previous, scan_generation=1,
+                previous_available_dataset_count=4,
+                previous_pages_requested_total=1,
+            )
+        self.assertIn("start=2", request.call_args.args[0])
+        self.assertEqual(result["pages_requested"], 1)
+        self.assertEqual(result["pages_requested_total"], 2)
+        self.assertTrue(result["scan_complete"])
+        self.assertEqual(result["next_start"], 0)
+        self.assertEqual(result["datasets_discovered"], 4)
+        self.assertEqual(
+            {item["dataset_id"] for item in result["datasets"]},
+            {"one", "two", "three", "four"},
+        )
+
+    def test_completed_scan_prunes_records_not_seen_in_new_generation(self):
+        from catalog_discovery import discover_source
+        previous = [
+            self._previous_dataset("one", 1),
+            self._previous_dataset("two", 1),
+            self._previous_dataset("removed", 1),
+        ]
+        refreshed_page = {
+            "success": True,
+            "result": {"count": 2, "results": [
+                {"name": "one", "title": "One refreshed"},
+                {"name": "two", "title": "Two refreshed"},
+            ]},
+        }
+        with patch("catalog_discovery.policy_for_host", return_value=self._reviewed_policy()), patch(
+            "catalog_discovery._request_json", return_value=refreshed_page
+        ):
+            result = discover_source(
+                SOURCES[0], rows=2, max_pages=1, start_offset=0,
+                previous_datasets=previous, scan_generation=2,
+                previous_available_dataset_count=3,
+            )
+        self.assertTrue(result["scan_complete"])
+        self.assertEqual(
+            {item["dataset_id"] for item in result["datasets"]},
+            {"one", "two"},
+        )
+        self.assertEqual(result["datasets_discovered"], 2)
+
+    def test_failed_page_advances_only_past_successful_pages(self):
+        from catalog_discovery import discover_source
+        first_page = {
+            "success": True,
+            "result": {"count": 6, "results": [
+                {"name": "one", "title": "One"},
+                {"name": "two", "title": "Two"},
+            ]},
+        }
+        with patch("catalog_discovery.policy_for_host", return_value=self._reviewed_policy()), patch(
+            "catalog_discovery._request_json", side_effect=[first_page, TimeoutError("temporary timeout")]
+        ):
+            result = discover_source(
+                SOURCES[0], rows=2, max_pages=2, start_offset=0,
+                scan_generation=2,
+            )
+        self.assertEqual(result["pages_requested"], 1)
+        self.assertEqual(result["next_start"], 2)
+        self.assertFalse(result["scan_complete"])
+        self.assertEqual(result["datasets_discovered"], 2)
+        self.assertTrue(any("offset 2" in error for error in result["errors"]))
+
+    def test_build_catalog_migrates_legacy_snapshot_to_resumable_offset(self):
+        source = SOURCES[0]
+        previous = {
+            "schema_version": 1,
+            "strategy": "catalog-first-policy-gated",
+            "catalogs": [{
+                "id": source["id"],
+                "pages_requested": 1,
+                "available_dataset_count": 4,
+                "datasets_discovered": 2,
+                "resources_discovered": 0,
+                "scan_complete": False,
+            }],
+            "datasets": [
+                self._previous_dataset("one", 0),
+                self._previous_dataset("two", 0),
+            ],
+        }
+        page_two = {
+            "success": True,
+            "result": {"count": 4, "results": [
+                {"name": "three", "title": "Three"},
+                {"name": "four", "title": "Four"},
+            ]},
+        }
+        with patch("catalog_discovery.SOURCES", (source,)), patch(
+            "catalog_discovery.policy_for_host", return_value=self._reviewed_policy()
+        ), patch("catalog_discovery._request_json", return_value=page_two) as request:
+            result = build_catalog(rows=2, max_pages=1, previous=previous)
+        self.assertIn("start=2", request.call_args.args[0])
+        self.assertEqual(result["datasets_discovered"], 4)
+        progress = result["scan_progress"][source["id"]]
+        self.assertTrue(progress["scan_complete"])
+        self.assertEqual(progress["next_start"], 0)
+
+    def test_previous_manifest_loader_fails_closed_on_corrupt_snapshot(self):
+        import tempfile
+        from catalog_discovery import load_previous_manifest
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "catalogs.json.gz"
+            path.write_bytes(b"not-a-gzip-file")
+            with self.assertRaisesRegex(ValueError, "refusing to overwrite"):
+                load_previous_manifest(path)
+
 if __name__ == "__main__":
     unittest.main()
