@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const https = require('node:https');
+const { resetRobotsForTests } = require('../src/lib/robots');
 
 test('curated external catalogs do not bypass the indexed catalog loader', async () => {
   const modulePaths = [
@@ -11,12 +11,12 @@ test('curated external catalogs do not bypass the indexed catalog loader', async
     '../src/lib/search-core'
   ].map((path) => require.resolve(path));
   const originals = modulePaths.map((path) => require.cache[path]);
-  const httpsGet = https.get;
+  const originalFetch = global.fetch;
   let pageDerivedCalls = 0;
   let externalCalls = 0;
 
   require.cache[modulePaths[0]] = { id: modulePaths[0], filename: modulePaths[0], loaded: true, exports: {
-    loadCatalog: async () => ({ pages: [], indexedPages: 1, updatedAt: 1795290000, sha256: 'a'.repeat(64), source: 'test', integrity: 'sha256', shardCount: 1, transport: 'test', stale: false })
+    loadCatalogForQuery: async () => ({ pages: [], indexedPages: 1, updatedAt: 1795290000, sha256: 'a'.repeat(64), source: 'test', integrity: 'sha256', shardCount: 1, transport: 'test', stale: false })
   }};
   require.cache[modulePaths[1]] = { id: modulePaths[1], filename: modulePaths[1], loaded: true, exports: {
     loadPageDerivedCatalogs: async (query) => { pageDerivedCalls++; return { catalogs: [], records: [], generatedAt: '2026-11-21T00:00:00Z', sourceIndexPages: 1, sourceIndexUpdatedAt: '2026-11-21T00:00:00Z', sourceIndexSha256: 'b'.repeat(64), catalogCount: 1, recordCount: 1, metrics: {}, stale: false, query }; },
@@ -32,7 +32,7 @@ test('curated external catalogs do not bypass the indexed catalog loader', async
     parseBingRss: () => [],
     buildResponse: () => ({ status: 'ok', providers: [], results: [], count: 0, totalMatches: 0 })
   }};
-  https.get = () => { throw new Error('bing_disabled_for_test'); };
+  global.fetch = async url => ({ status: 200, ok: true, url: String(url), async text() { return 'User-agent: *\\nDisallow: /search\\n'; } });
 
   try {
     const handlerPath = require.resolve('../src/api/search');
@@ -51,7 +51,8 @@ test('curated external catalogs do not bypass the indexed catalog loader', async
     assert.equal(response.body.externalCatalogResults[0].catalog_id, 'external:rolex');
     assert.equal(response.body.catalogPreview.status, 'candidate-preview');
   } finally {
-    https.get = httpsGet;
+    global.fetch = originalFetch;
+    resetRobotsForTests();
     delete require.cache[require.resolve('../src/api/search')];
     modulePaths.forEach((path, index) => {
       if (originals[index]) require.cache[path] = originals[index];
@@ -69,11 +70,11 @@ test('fallback responses keep curated external catalogs visible when either inde
     '../src/lib/search-core'
   ].map((path) => require.resolve(path));
   const originals = modulePaths.map((path) => require.cache[path]);
-  const httpsGet = https.get;
+  const originalFetch = global.fetch;
   const consoleWarn = console.warn;
   const external = [{ catalog_id: 'external:rolex', catalog_title: 'Official Rolex links', source_kind: 'curated_external_link_directory', preview_only: true, commercial_eligible: false, url: 'https://www.rolex.com/' }];
   require.cache[modulePaths[0]] = { id: modulePaths[0], filename: modulePaths[0], loaded: true, exports: {
-    loadCatalog: async () => { throw new Error('catalog_load_budget_exceeded'); }
+    loadCatalogForQuery: async () => { throw new Error('catalog_load_budget_exceeded'); }
   }};
   require.cache[modulePaths[1]] = { id: modulePaths[1], filename: modulePaths[1], loaded: true, exports: {
     loadPageDerivedCatalogs: async () => { throw new Error('page_catalog_load_budget_exceeded'); },
@@ -89,7 +90,7 @@ test('fallback responses keep curated external catalogs visible when either inde
     parseBingRss: () => [],
     buildResponse: () => ({ status: 'ok', providers: [], results: [], count: 0, totalMatches: 0 })
   }};
-  https.get = () => { throw new Error('bing_disabled_for_test'); };
+  global.fetch = async url => ({ status: 200, ok: true, url: String(url), async text() { return 'User-agent: *\\nDisallow: /search\\n'; } });
   console.warn = () => {};
   try {
     const handlerPath = require.resolve('../src/api/search');
@@ -107,7 +108,8 @@ test('fallback responses keep curated external catalogs visible when either inde
     assert.equal(response.body.catalogResults[0].catalog_id, 'external:rolex');
     assert.equal(response.body.externalCatalogResults[0].catalog_id, 'external:rolex');
   } finally {
-    https.get = httpsGet;
+    global.fetch = originalFetch;
+    resetRobotsForTests();
     console.warn = consoleWarn;
     delete require.cache[require.resolve('../src/api/search')];
     modulePaths.forEach((path, index) => {
