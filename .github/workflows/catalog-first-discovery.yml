@@ -138,9 +138,10 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "Record catalog discovery and project history"
-          # Compressed manifests are binary: never rebase them across a concurrent
-          # catalog publication. If main advanced, restart the bounded discovery
-          # batch from the new main tip and regenerate a coherent snapshot.
+          # First try a path-safe rebase. Crawler checkpoints often advance only
+          # data/index* and public-search files, which do not overlap these catalog
+          # manifests. Git will reject a rebase if another catalog writer changed
+          # the same binary snapshot or ledger; only then rebuild the bounded batch.
           for attempt in 1 2 3; do
             base_commit="$(git rev-parse HEAD^)"
             if git push origin HEAD:main; then
@@ -152,7 +153,29 @@ jobs:
               echo "Push failed without a main-branch race; check repository write permission."
               exit 1
             fi
-            echo "Main advanced during catalog publication; rebuilding snapshot from $remote_head (retry $attempt)."
+
+            echo "Main advanced during catalog publication; trying a path-safe rebase (attempt $attempt/3)."
+            if git rebase origin/main; then
+              if git push origin HEAD:main; then
+                echo "Validated catalog snapshot safely rebased over non-overlapping main changes."
+                exit 0
+              fi
+              git fetch origin main
+              remote_head="$(git rev-parse origin/main)"
+              if git merge-base --is-ancestor origin/main HEAD; then
+                echo "Push failed after rebase without another remote advance; check repository write permission."
+                exit 1
+              fi
+              if [ "$attempt" -eq 3 ]; then
+                echo "main kept advancing during three safe rebase attempts; leaving the remote untouched."
+                exit 1
+              fi
+              echo "main advanced again; retrying the same validated catalog snapshot."
+              continue
+            fi
+
+            git rebase --abort || true
+            echo "Overlapping catalog paths changed; rebuilding the bounded discovery batch from $remote_head."
             git reset --hard origin/main
             python crawler/catalog_discovery.py --rows "${{ inputs.rows || '250' }}" --max-pages "${{ inputs.max_pages || '40' }}"
             python crawler/catalog_openlibrary.py --pause 1
@@ -166,5 +189,5 @@ jobs:
             fi
             git commit -m "Record catalog discovery and project history"
           done
-          echo "Unable to publish a coherent catalog snapshot after three safe rebuilds."
+          echo "Unable to publish a coherent catalog snapshot after three bounded attempts."
           exit 1
