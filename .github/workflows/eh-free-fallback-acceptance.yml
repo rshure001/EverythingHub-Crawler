@@ -28,7 +28,7 @@ jobs:
     timeout-minutes: 12
     env:
       # Always test the stable public alias, never a deployment-specific deployment URL.
-      TARGET_URL: https://everythinghub-homepage-fixed.vercel.app/
+      TARGET_URL: https://everythinghub-homepage-fixed-ci1337tiz-rshure001-8053.vercel.app/
     steps:
       - uses: actions/setup-node@v4
         with:
