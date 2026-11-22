@@ -48,7 +48,7 @@ test("catalog result merge deduplicates stable IDs and respects the five-card li
 });
 
 test("page-derived search is query-scoped and bounded", () => {
-  assert.match(source, /withTimeout\(loadCatalog\(\), CATALOG_LOAD_BUDGET_MS/);
+  assert.match(source, /withTimeout\(loadCatalog\(query\), CATALOG_LOAD_BUDGET_MS/);
   assert.match(source, /withTimeout\(loadPageDerivedCatalogs\(query\), PAGE_DERIVED_LOAD_BUDGET_MS/);
   assert.match(source, /mergeCatalogResults\(externalCatalogResults, pageDerivedCatalogResults\)/);
   assert.doesNotMatch(source, /earlyExternalCatalogResults/);
