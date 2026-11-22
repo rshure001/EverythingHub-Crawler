@@ -79,6 +79,7 @@ jobs:
               const count = await page.locator(resultSelector).count();
               const catalogs = await page.locator("#results .eh-catalog-result").evaluateAll(nodes => nodes.map(node => ({
                 title: node.querySelector("a")?.textContent?.trim() || "",
+                href: node.querySelector("a")?.href || "",
                 text: node.textContent?.trim() || "",
                 sourceKind: node.dataset.sourceKind || "page-derived",
                 relevanceClass: node.dataset.relevanceClass || "",
@@ -123,6 +124,36 @@ jobs:
               if (!nasaPageDerived && !nasaExternal) throw new Error("NASA search has no visible organization catalog or official link-only directory: " + JSON.stringify(nasa.catalogs));
               report.checks.nasa = { results: nasa.count, catalogs: nasa.catalogs.length, pageDerivedOrganization: nasaPageDerived, externalDirectory: nasaExternal, catalogTitles: nasa.catalogs.map(card => card.title) };
               await shot("everythinghub-nasa.png");
+              const coreLinks = {};
+              const openCoreLink = async (label, href) => {
+                if (!href) throw new Error("Missing href for core link: " + label);
+                const url = new URL(href);
+                if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) {
+                  throw new Error("Unsafe core link for " + label + ": " + href);
+                }
+                const linkPage = await browser.newPage();
+                try {
+                  const response = await linkPage.goto(url.href, { waitUntil: "domcontentloaded", timeout: 30000 });
+                  const status = response ? response.status() : 0;
+                  if (!response || status < 200 || status >= 400) {
+                    throw new Error("Core link navigation failed for " + label + ": HTTP " + status + " " + url.href);
+                  }
+                  coreLinks[label] = { url: linkPage.url(), status };
+                } finally {
+                  await linkPage.close();
+                }
+              };
+              const nasaWebHrefs = await page.locator("#results .eh-result").evaluateAll(nodes => nodes.map(node =>
+                node.tagName.toLowerCase() === "a" ? node.href : node.querySelector("a")?.href || ""
+              ).filter(Boolean));
+              const nasaWebHref = nasaWebHrefs.find(href => {
+                try { return new URL(href).hostname.toLowerCase().endsWith("nasa.gov"); } catch { return false; }
+              });
+              const nasaCatalogHref = nasa.catalogs.find(card =>
+                card.sourceKind !== "external_link_only" && card.relevanceClass === "typed_organization_match" && card.href
+              )?.href;
+              await openCoreLink("nasaWebResult", nasaWebHref);
+              await openCoreLink("nasaPageDerivedCatalog", nasaCatalogHref);
               const categoryChecks = {};
               for (const [category, query] of [["news", "NASA"], ["shopping", "Rolex"], ["places", "Las Vegas"], ["business", "Las Vegas hotels"], ["research", "NASA climate data"]]) {
                 const result = await search(category, query, "#results .eh-result, #results .eh-catalog-result", 1, false);
@@ -171,6 +202,9 @@ jobs:
               imageStats.thumbnailResponses = mediaResponses.slice();
               imageStats.thumbnailFailures = mediaFailures.slice();
               report.checks.images = imageStats;
+              const imageHrefs = await imageCards.evaluateAll(cards => cards.map(card => card.tagName.toLowerCase() === "a" ? card.href : card.querySelector("a")?.href || "").filter(Boolean));
+              await openCoreLink("imageSource", imageHrefs.find(href => { try { return new URL(href).hostname.toLowerCase() === "archive.org"; } catch { return false; } }));
+              report.checks.coreLinks = coreLinks;
               if (imageStats.loaded < 8 || imageStats.providers.some(x => !x.includes("Internet Archive")) || imageStats.licenses.some(x => !x)) throw new Error("Internet Archive image checks failed: " + JSON.stringify(imageStats));
               await shot("everythinghub-images.png");
               await goHome();
@@ -196,6 +230,9 @@ jobs:
               videoStats.thumbnailResponses = mediaResponses.slice();
               videoStats.thumbnailFailures = mediaFailures.slice();
               report.checks.videos = videoStats;
+              const videoHrefs = await videoCards.evaluateAll(cards => cards.map(card => card.tagName.toLowerCase() === "a" ? card.href : card.querySelector("a")?.href || "").filter(Boolean));
+              await openCoreLink("videoSource", videoHrefs.find(href => { try { return new URL(href).hostname.toLowerCase() === "archive.org"; } catch { return false; } }));
+              report.checks.coreLinks = coreLinks;
               if (videoStats.loaded < 5 || videoStats.providers.some(x => !x.includes("Internet Archive")) || videoStats.links.some(x => !x.startsWith("https://archive.org/details/"))) throw new Error("Internet Archive video checks failed: " + JSON.stringify(videoStats));
               await shot("everythinghub-videos.png");
               await page.setViewportSize({ width: 390, height: 844 });
