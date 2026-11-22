@@ -1381,7 +1381,7 @@ def analyze_pages(
             # already assigned this entity to their evidence-backed groups.
             # Do not create a second catalog association for the same page.
             if entity_record_id not in page_record_ids:
-                target_keys = explicit_keys_by_kind.get(entity_kind)
+                target_keys = []
                 if entity_record_id == product_record_id and product_targets:
                     target_keys = product_targets
                 elif entity_record_id == brand_record_id and brand_targets:
