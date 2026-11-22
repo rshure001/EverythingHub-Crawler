@@ -1,10 +1,10 @@
 {
   "version": 1,
-  "updated_at": "2026-11-21T17:36:16.462Z",
-  "reason": "Request one bounded recovery crawl because the public-search manifest is older than 15 minutes and no independent crawler or schedule-watchdog run has appeared since the 2026-11-21 17:46 UTC watchdog check. The last completed crawler run was 44930968313, which updated the manifest at 2026-11-21T17:44:33Z. Keep robots.txt, source terms, per-host pacing, provider rate limits, and GitHub API/file limits enforced.",
-  "manifest_before_pages": 157393,
-  "manifest_before_updated_at": "2026-11-21T17:44:33Z",
-  "requested_at": "2026-11-21T18:56:15Z",
+  "updated_at": "2026-11-21T23:58:31Z",
+  "reason": "Request one bounded recovery crawl because the public-search manifest is 85 minutes old and no scheduled crawler or schedule-watchdog run has appeared since 2026-11-21 22:35 UTC. The latest observed crawler run was 44956652534. No active crawler run is present. Preserve robots.txt, source terms, per-host pacing, provider rate limits, and GitHub API/file limits.",
+  "manifest_before_pages": 165030,
+  "manifest_before_updated_at": "2026-11-21T22:33:14Z",
+  "requested_at": "2026-11-21T23:58:31Z",
   "requested_by": "Everything Hub Build automation",
-  "previous_run_id": "44930968313"
+  "previous_run_id": "44956652534"
 }
