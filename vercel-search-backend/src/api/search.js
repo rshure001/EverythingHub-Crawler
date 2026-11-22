@@ -107,7 +107,7 @@ module.exports = async function handler(req, res) {
   const externalCatalogResults = searchExternalCatalogs(query);
   const externalCatalogStats = getExternalCatalogStats();
   const [catalogResult, bingResult, pageDerivedResult] = await Promise.allSettled([
-    withTimeout(loadCatalog(), CATALOG_LOAD_BUDGET_MS, 'catalog_load_budget_exceeded'),
+    withTimeout(loadCatalog(query), CATALOG_LOAD_BUDGET_MS, 'catalog_load_budget_exceeded'),
     loadBing(query),
     withTimeout(loadPageDerivedCatalogs(query), PAGE_DERIVED_LOAD_BUDGET_MS, 'page_catalog_load_budget_exceeded')
   ]);
@@ -195,6 +195,19 @@ module.exports = async function handler(req, res) {
     indexTransport: catalog.transport,
     staleCatalog: catalog.stale
   });
+  payload.matchScope = catalog.transport === 'query-indexed-shards' || catalog.transport === 'query-index-no-postings'
+    ? 'query-index-candidate-shards'
+    : 'full-public-index';
+  payload.candidatePages = Number.isSafeInteger(catalog.candidatePages) ? catalog.candidatePages : catalog.indexedPages;
+  payload.candidateShardCount = Number.isSafeInteger(catalog.candidateShardCount) ? catalog.candidateShardCount : catalog.shardCount;
+  payload.candidateShardTotal = Number.isSafeInteger(catalog.candidateShardTotal) ? catalog.candidateShardTotal : catalog.shardCount;
+  payload.candidateShardsTruncated = Boolean(catalog.candidateShardsTruncated);
+  payload.queryIndexTermsRequested = Number(catalog.queryIndexTermsRequested) || 0;
+  payload.queryIndexTermsMatched = Number(catalog.queryIndexTermsMatched) || 0;
+  if (payload.candidateShardsTruncated) {
+    payload.partial = true;
+    payload.hasMore = true;
+  }
   payload.catalogResults = catalogResults;
   payload.externalCatalogResults = externalCatalogResults;
   payload.catalogPreview = catalogPreview;
