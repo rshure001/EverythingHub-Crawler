@@ -110,5 +110,13 @@ These limits were aligned across the browser client, independent Python loader, 
 
 ## Production deployment verification
 
-GitHub auto-deployment is not configured for this project. The controlled direct-upload path sends the 13 backend files from `vercel-search-backend/src/` as the matching `src/src/` deployment paths. Keep the file set and paths aligned with the existing production deployment; do not deploy the repository's full public-search corpus into the Vercel function bundle.
+GitHub auto-deployment is not configured for this project. The controlled direct-upload path sends the 13 backend files from `vercel-search-backend/src/` using these payload paths:
 
+- `src/api/*.js`
+- `src/lib/*.js`
+- `src/data/external-catalogs.json`
+- `src/package.json`
+
+Vercel applies the project's configured `src` root prefix, so the deployed file listing shows `src/src/api`, `src/src/lib`, `src/src/data`, and `src/src/package.json`, plus the compiled `out/api/*` lambdas. Do **not** include a second `src/` in the upload payload: that produces `src/src/src/api` and leaves the API routes returning 404.
+
+After each production upload, verify that the deployment file listing contains all seven `out/api/*` lambdas and that `/api/health` and representative `/api/search` requests return HTTP 200 before considering the backend live. Keep the payload limited to these 13 files; do not upload the repository's full public-search corpus into the Vercel function bundle.
