@@ -12,6 +12,8 @@ const {
 } = require('../src/lib/catalog');
 const { searchCatalog } = require('../src/lib/search-core');
 
+test.beforeEach(() => clearCatalogCache());
+
 const COMMIT = 'a'.repeat(40);
 const BASE = 'https://raw.githubusercontent.com/rshure001/EverythingHub-Crawler/' + COMMIT + '/public-search/';
 
@@ -155,7 +157,8 @@ test('query-index compressed payload SHA-256 is verified before decoding', async
   const fixture = makeFixture([
     [makePage('https://nasa.gov/mars', 'NASA Mars Mission', 'NASA Mars science', 'NASA Mars science')]
   ]);
-  const entry = fixture.manifest.query_index.shards[0];
+  const prefix = digest(Buffer.from('nasa')).slice(0, 2);
+  const entry = fixture.manifest.query_index.shards.find(item => item.file.endsWith(prefix + '.json.gz'));
   const tampered = Buffer.from(fixture.buffers.get(entry.file));
   tampered[0] ^= 1;
   fixture.buffers.set(entry.file, tampered);
