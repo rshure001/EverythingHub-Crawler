@@ -208,16 +208,34 @@ test('query-index metadata rejects unsafe paths and mismatched aggregate sizes',
   assert.throws(() => validateQueryIndexMetadata(badTotals), /query_index_manifest_totals_invalid/);
 });
 
-test('broad queries fail closed before loading more than the bounded candidate shard count', async () => {
-  const pages = Array.from({ length: MAX_QUERY_SCOPED_SHARD_COUNT + 1 }, (_, index) => [
-    makePage('https://example.gov/item/' + index, 'Common catalog item ' + index, 'Common public catalog', 'Common catalog entry')
-  ]);
-  const fixture = makeFixture(pages);
-  await assert.rejects(
-    loadQueryScopedCatalogFromManifest(fixture.manifest, COMMIT, fixture.manifestRaw, 'common', fixture.fetchBuffer),
-    /query_index_too_broad/
+test('broad queries rank candidate shards and stay within the bounded page and byte budgets', async () => {
+  const pages = Array.from({ length: MAX_QUERY_SCOPED_SHARD_COUNT + 1 }, (_, index) =>
+    Array.from({ length: index === MAX_QUERY_SCOPED_SHARD_COUNT ? 40 : 1 }, (_, pageIndex) =>
+      makePage(
+        'https://example.gov/item/' + index + '/' + pageIndex,
+        'Common catalog item ' + index,
+        'Common public catalog',
+        'Common catalog entry'
+      )
+    )
   );
-  assert.equal(fixture.calls.some(url => /shard-\d{4}\.json/.test(url)), false);
+  const fixture = makeFixture(pages);
+  const loaded = await loadQueryScopedCatalogFromManifest(
+    fixture.manifest, COMMIT, fixture.manifestRaw, 'common', fixture.fetchBuffer
+  );
+  assert.equal(loaded.queryScoped, true);
+  assert.equal(loaded.candidateTruncated, true);
+  assert.equal(loaded.candidateShardCount, MAX_QUERY_SCOPED_SHARD_COUNT);
+  assert.equal(loaded.totalCandidateShardCount, MAX_QUERY_SCOPED_SHARD_COUNT + 1);
+  assert.equal(loaded.candidatePageCount, MAX_QUERY_SCOPED_SHARD_COUNT - 1 + 40);
+  assert.equal(loaded.totalCandidatePageCount, MAX_QUERY_SCOPED_SHARD_COUNT + 40);
+  assert.equal(loaded.scannedPages, loaded.candidatePageCount);
+  assert.equal(loaded.pages.length, loaded.candidatePageCount);
+  assert.equal(loaded.candidateSelection, 'ranked-query-posting-frequency');
+  assert.ok(loaded.pages.some(page => page.url === 'https://example.gov/item/' + MAX_QUERY_SCOPED_SHARD_COUNT + '/39'));
+  const pageShardCalls = fixture.calls.filter(url => url.includes('/shard-') && url.endsWith('.json.gz'));
+  assert.equal(pageShardCalls.length, MAX_QUERY_SCOPED_SHARD_COUNT);
+  assert.ok(pageShardCalls.some(url => url.endsWith('/shard-' + String(MAX_QUERY_SCOPED_SHARD_COUNT + 1).padStart(4, '0') + '.json.gz')));
 });
 
 test('query-index-free manifests retain the verified full-index fallback contract', async () => {

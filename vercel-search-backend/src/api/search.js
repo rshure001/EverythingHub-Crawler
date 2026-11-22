@@ -268,7 +268,13 @@ module.exports = async function handler(req, res) {
     mode: catalog.queryScoped ? 'query-scoped' : 'full-index',
     indexedPages: catalog.indexedPages,
     scannedPages: Number.isSafeInteger(catalog.scannedPages) ? catalog.scannedPages : catalog.indexedPages,
-    candidateShardCount: Number.isSafeInteger(catalog.candidateShardCount) ? catalog.candidateShardCount : catalog.shardCount
+    candidateShardCount: Number.isSafeInteger(catalog.candidateShardCount) ? catalog.candidateShardCount : catalog.shardCount,
+    candidatePageCount: Number.isSafeInteger(catalog.candidatePageCount) ? catalog.candidatePageCount : null,
+    totalCandidateShardCount: Number.isSafeInteger(catalog.totalCandidateShardCount) ? catalog.totalCandidateShardCount : catalog.shardCount,
+    totalCandidatePageCount: Number.isSafeInteger(catalog.totalCandidatePageCount) ? catalog.totalCandidatePageCount : null,
+    candidateTruncated: Boolean(catalog.candidateTruncated),
+    candidateSelection: catalog.candidateSelection || null,
+    queryIndexPostingCount: Number.isSafeInteger(catalog.queryIndexPostingCount) ? catalog.queryIndexPostingCount : null
   };
   payload.catalogResults = catalogResults;
   payload.externalCatalogResults = externalCatalogResults;
