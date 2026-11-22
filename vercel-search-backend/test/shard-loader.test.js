@@ -169,7 +169,7 @@ test('query-indexed loader fetches only candidate page shards and preserves full
   assert.equal(calls.length, 2, 'one query-index file and one candidate page shard are fetched');
 });
 
-test('multi-term query uses shard intersection when every term has postings', async () => {
+test('multi-term query uses a complete union and ranks shards by term coverage', async () => {
   const first = makeShard('shard-0001.json', [page('https://example.com/las-only')]);
   const second = makeShard('shard-0002.json', [page('https://example.com/las-vegas')]);
   const third = makeShard('shard-0003.json', [page('https://example.com/vegas-only')]);
@@ -185,13 +185,19 @@ test('multi-term query uses shard intersection when every term has postings', as
     async (url) => {
       if (url.endsWith('/query-index/' + tokenPrefix('las') + '.json.gz')) return las.buffer;
       if (url.endsWith('/query-index/' + tokenPrefix('vegas') + '.json.gz')) return vegas.buffer;
+      if (url.endsWith('/shard-0001.json.gz')) return first.buffer;
       if (url.endsWith('/shard-0002.json.gz')) return second.buffer;
+      if (url.endsWith('/shard-0003.json.gz')) return third.buffer;
       throw new Error('unexpected_fetch:' + url);
     }
   );
-  assert.equal(loaded.candidateSelection, 'intersection');
-  assert.equal(loaded.candidateShardTotal, 1);
-  assert.deepEqual(loaded.pages.map(item => item.url), ['https://example.com/las-vegas']);
+  assert.equal(loaded.candidateSelection, 'union-ranked-by-token-coverage');
+  assert.equal(loaded.candidateShardTotal, 3);
+  assert.deepEqual(loaded.pages.map(item => item.url).sort(), [
+    'https://example.com/las-only',
+    'https://example.com/las-vegas',
+    'https://example.com/vegas-only'
+  ]);
 });
 
 test('query-indexed loader falls back to a bounded union when terms have no shared shard', async () => {
@@ -214,7 +220,7 @@ test('query-indexed loader falls back to a bounded union when terms have no shar
       throw new Error('unexpected_fetch:' + url);
     }
   );
-  assert.equal(loaded.candidateSelection, 'union');
+  assert.equal(loaded.candidateSelection, 'union-ranked-by-token-coverage');
   assert.equal(loaded.candidateShardTotal, 2);
   assert.equal(loaded.pages.length, 2);
 });
