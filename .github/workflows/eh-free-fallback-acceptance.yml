@@ -8,6 +8,11 @@ on:
       - ".github/workflows/validate-vercel-search.yml"
       - "vercel-search-backend/**"
       - "vercel-homepage/**"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/eh-free-fallback-acceptance.yml"
   workflow_dispatch:
   workflow_run:
     workflows:
@@ -19,7 +24,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: eh-free-fallback-acceptance
+  group: eh-free-fallback-acceptance-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   browser-acceptance:
@@ -50,22 +55,41 @@ jobs:
             const consoleErrors = [];
             const mediaResponses = [];
             const mediaFailures = [];
+            const criticalHttpErrors = [];
+            const externalHttpErrors = [];
+            const criticalRequestFailures = [];
+            const externalRequestFailures = [];
+            const targetOrigin = new URL(process.env.TARGET_URL).origin;
+            const isCoreUrl = raw => {
+              try {
+                const url = new URL(raw);
+                return url.origin === targetOrigin ||
+                  url.hostname === "everythinghub-search-backend.vercel.app" ||
+                  url.hostname.startsWith("everythinghub-search-backend-") ||
+                  url.hostname.startsWith("everythinghub-homepage-fixed-");
+              } catch { return false; }
+            };
             page.on("pageerror", error => pageErrors.push(error.message));
             page.on("console", message => { if (message.type() === "error") consoleErrors.push(message.text()); });
             page.on("response", response => {
               try {
                 const url = new URL(response.url());
+                if (response.status() >= 400) {
+                  const item = { url: response.url(), status: response.status() };
+                  (isCoreUrl(response.url()) ? criticalHttpErrors : externalHttpErrors).push(item);
+                }
                 if (url.hostname === "archive.org" && url.pathname.startsWith("/services/img/")) {
                   mediaResponses.push({ url: response.url(), status: response.status() });
                 }
               } catch {}
             });
             page.on("requestfailed", request => {
-              if (request.url().includes("archive.org/services/img/")) {
-                mediaFailures.push({ url: request.url(), error: request.failure()?.errorText || "request failed" });
-              }
+              const item = { url: request.url(), error: request.failure()?.errorText || "request failed" };
+              (isCoreUrl(request.url()) ? criticalRequestFailures : externalRequestFailures).push(item);
+              if (request.url().includes("archive.org/services/img/")) mediaFailures.push(item);
             });
-            const report = { url: process.env.TARGET_URL, checks: {}, pageErrors, consoleErrors, mediaNetwork: { responses: mediaResponses, failures: mediaFailures } };
+            const networkErrors = { criticalHttpErrors, externalHttpErrors, criticalRequestFailures, externalRequestFailures };
+            const report = { url: process.env.TARGET_URL, checks: {}, pageErrors, consoleErrors, networkErrors, mediaNetwork: { responses: mediaResponses, failures: mediaFailures } };
             const layoutSnapshot = async () => page.evaluate(() => {
               const categories = [...document.querySelectorAll(".hotspots [data-mode]")];
               const categoryRects = categories.map(node => {
@@ -181,10 +205,16 @@ jobs:
                 try {
                   const response = await linkPage.goto(url.href, { waitUntil: "domcontentloaded", timeout: 30000 });
                   const status = response ? response.status() : 0;
+                  const externalRateLimit = !!response && status === 429 && !isCoreUrl(url.href);
+                  if (externalRateLimit) {
+                    report.networkErrors.externalHttpErrors.push({ url: url.href, status, context: label });
+                    coreLinks[label] = { url: linkPage.url(), status, rateLimited: true };
+                    return;
+                  }
                   if (!response || status < 200 || status >= 400) {
                     throw new Error("Core link navigation failed for " + label + ": HTTP " + status + " " + url.href);
                   }
-                  coreLinks[label] = { url: linkPage.url(), status };
+                  coreLinks[label] = { url: linkPage.url(), status, rateLimited: false };
                 } finally {
                   await linkPage.close();
                 }
@@ -311,7 +341,17 @@ jobs:
               assertLayout("Mobile", mobile);
               report.checks.mobile = mobile;
               await shot("everythinghub-mobile.png");
-              if (pageErrors.length || consoleErrors.length) throw new Error("Browser errors: " + JSON.stringify({ pageErrors, consoleErrors }));
+              const unexplainedConsoleErrors = consoleErrors.filter(message => {
+                const resourceFailure = message.startsWith("Failed to load resource:");
+                return !resourceFailure || (externalHttpErrors.length === 0 && externalRequestFailures.length === 0);
+              });
+              if (pageErrors.length || criticalHttpErrors.length || criticalRequestFailures.length || unexplainedConsoleErrors.length) {
+                throw new Error("Core browser errors: " + JSON.stringify({
+                  pageErrors, consoleErrors, criticalHttpErrors, criticalRequestFailures,
+                  externalHttpErrors, externalRequestFailures
+                }));
+              }
+              report.networkErrors = networkErrors;
               report.passed = true;
             } catch (error) {
               report.error = error.message || String(error);
