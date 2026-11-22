@@ -312,7 +312,7 @@ jobs:
               print("Public manifest became fresh before push; aborting marker commit.")
               raise SystemExit(0)
           if schedule_age is None and manifest_age <= 10 * 60:
-              print("No scheduled crawl is observable, but the manifest is not beyond the 25-minute recovery window; aborting marker commit.")
+              print("No scheduled crawl is observable, but the manifest is not beyond the 10-minute recovery window; aborting marker commit.")
               raise SystemExit(0)
           Path("/tmp/prepush-eligible").write_text("yes", encoding="utf-8")
           print("Final no-overlap and freshness recheck passed.")
