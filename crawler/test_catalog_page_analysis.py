@@ -1911,5 +1911,92 @@ class CatalogInventoryTriggerTests(unittest.TestCase):
             self.assertEqual(validated["catalogs"], result["metrics"]["unique_catalogs_discovered"])
             self.assertEqual(validated["records_validated"], result["metrics"]["unique_records"])
 
+
+    def test_structured_place_and_business_entities_form_relevant_global_directories(self):
+        pages = [
+            {
+                "url": "https://www.lasvegasnevada.gov/Residents/Parks-Facilities/Rainbow-Family-Park",
+                "title": "Rainbow Family Park", "description": "Public recreation park.",
+                "text": "Park facilities and public recreation.", "lane": "general",
+                "robots_allowed": True, "fetched_at": 100,
+                "structured_entities": [{
+                    "record_type": "place", "name": "Rainbow Family Park",
+                    "description": "Public recreation park.",
+                    "attributes": {"address_locality": "Las Vegas", "address_region": "NV",
+                                   "address_country": "US", "same_as_ids": ["https://www.wikidata.org/entity/Q12345"]},
+                }],
+            },
+            {
+                "url": "https://www.lasvegasnevada.gov/Residents/Parks-Facilities/Desert-Breeze-Park",
+                "title": "Desert Breeze Park", "description": "Public park.",
+                "text": "Park facilities and public recreation.", "lane": "general",
+                "robots_allowed": True, "fetched_at": 101,
+                "structured_entities": [{
+                    "record_type": "place", "name": "Desert Breeze Park",
+                    "description": "Public park.",
+                    "attributes": {"address_locality": "Las Vegas", "address_region": "NV", "address_country": "US"},
+                }],
+            },
+            {
+                "url": "https://www.visitlasvegas.com/things-to-do/las-vegas-strip/",
+                "title": "Las Vegas Strip", "description": "Visitor destination.",
+                "text": "Explore the Las Vegas Strip.", "lane": "general",
+                "robots_allowed": True, "fetched_at": 102,
+                "structured_entities": [{
+                    "record_type": "place", "name": "Las Vegas Strip",
+                    "description": "Visitor destination.",
+                    "attributes": {"address_locality": "Las Vegas", "address_region": "NV", "address_country": "US"},
+                }],
+            },
+            {
+                "url": "https://www.visitlasvegas.com/listing/golden-nugget/",
+                "title": "Golden Nugget", "description": "Las Vegas hotel.",
+                "text": "Hotel and resort information.", "lane": "general",
+                "robots_allowed": True, "fetched_at": 103,
+                "structured_entities": [{
+                    "record_type": "business", "name": "Golden Nugget",
+                    "description": "Hotel in Las Vegas.",
+                    "attributes": {"address_locality": "Las Vegas", "address_region": "NV", "address_country": "US"},
+                }],
+            },
+        ]
+        result = analyze_pages(pages, source_total=len(pages))
+        self.assertEqual(result["metrics"]["structured_entity_pages"], 4)
+        self.assertEqual(result["metrics"]["structured_entity_occurrences"], 4)
+        self.assertEqual(result["metrics"]["unique_records_by_type"]["place"], 3)
+        self.assertEqual(result["metrics"]["unique_records_by_type"]["business"], 1)
+        self.assertEqual(result["metrics"]["structured_entity_records_by_type"]["place"], 3)
+        global_places = [
+            item for item in result["catalogs"]
+            if item.get("catalog_origin") == "derived_from_global_typed_records"
+            and item.get("record_type") == "place"
+        ]
+        self.assertEqual(len(global_places), 1)
+        hits = search_catalog_network("Las Vegas", result)
+        matching = [item for item in hits if item.get("catalog_id") == global_places[0]["catalog_id"]]
+        self.assertTrue(matching)
+        self.assertTrue(any(
+            item.get("attributes", {}).get("address_locality") == "Las Vegas"
+            for item in matching[0].get("matched_records", [])
+        ))
+        self.assertTrue(all(
+            item.get("source_urls") and item.get("source_page_ids")
+            for item in result["records"] if item.get("structured_entity")
+        ))
+
+    def test_one_structured_place_entity_does_not_create_a_fake_catalog(self):
+        result = analyze_pages([{
+            "url": "https://city.example/parks/rainbow-family-park",
+            "title": "Rainbow Family Park", "description": "Public park.",
+            "text": "Public recreation.", "lane": "general", "robots_allowed": True,
+            "structured_entities": [{
+                "record_type": "place", "name": "Rainbow Family Park",
+                "attributes": {"address_locality": "Las Vegas", "address_region": "NV"},
+            }],
+        }], source_total=1)
+        self.assertEqual(result["metrics"]["unique_records"], 1)
+        self.assertEqual(result["metrics"]["unique_catalogs_discovered"], 0)
+        self.assertEqual(result["metrics"]["structured_entity_records"], 1)
+
 if __name__ == "__main__":
     unittest.main()
