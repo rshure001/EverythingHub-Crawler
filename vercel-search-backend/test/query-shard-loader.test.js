@@ -148,7 +148,7 @@ test('a missing query token returns a verified empty result without fetching pag
   assert.equal(loaded.scannedPages, 0);
   assert.equal(loaded.candidateShardCount, 0);
   assert.deepEqual(loaded.pages, []);
-  assert.equal(fixture.calls.some(url => /shard-\\d{4}\\.json/.test(url)), false);
+  assert.equal(fixture.calls.some(url => /shard-\d{4}\.json/.test(url)), false);
 });
 
 test('query-index compressed payload SHA-256 is verified before decoding', async () => {
@@ -213,7 +213,7 @@ test('broad queries fail closed before loading more than the bounded candidate s
     loadQueryScopedCatalogFromManifest(fixture.manifest, COMMIT, fixture.manifestRaw, 'common', fixture.fetchBuffer),
     /query_index_too_broad/
   );
-  assert.equal(fixture.calls.some(url => /shard-\\d{4}\\.json/.test(url)), false);
+  assert.equal(fixture.calls.some(url => /shard-\d{4}\.json/.test(url)), false);
 });
 
 test('query-index-free manifests retain the verified full-index fallback contract', async () => {
