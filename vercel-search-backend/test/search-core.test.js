@@ -79,6 +79,22 @@ test('search ranks title matches and filters the requested lane', () => {
   assert.equal(results[0].provider, 'everythinghub-catalog');
 });
 
+test('falls back to relevant general results when a requested lane has no matches', () => {
+  const pages = [
+    {
+      url: 'https://example.com/rolex-collection',
+      title: 'Rolex watch collection',
+      description: 'Explore Rolex watch models and collections',
+      text: 'Rolex watches and watchmaking history',
+      lane: 'general'
+    }
+  ];
+  const results = searchCatalog(pages, 'Rolex', 'business');
+  assert.equal(results.length, 1);
+  assert.equal(results[0].url, 'https://example.com/rolex-collection');
+  assert.equal(results[0].lane, 'general');
+});
+
 test('first and later pages do not repeat crawler results', () => {
   const ranked = Array.from({ length: 120 }, (_, index) => ({
     url: 'https://example.com/result/' + index,
