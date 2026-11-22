@@ -191,8 +191,18 @@ def run_batch(seed_path: Path = SEEDS, state_path: Path = STATE, limit: int = MA
     cursor = int(state.get("next_seed_offset", 0) or 0)
     if eligible:
         cursor %= len(eligible)
-        batch = [eligible[(cursor + i) % len(eligible)] for i in range(min(limit, len(eligible)))]
-        next_cursor = (cursor + len(batch)) % len(eligible)
+        batch = []
+        scanned = 0
+        while scanned < len(eligible) and len(batch) < limit:
+            seed = eligible[(cursor + scanned) % len(eligible)]
+            seed_id = seed.get("catalog_seed_id") if isinstance(seed, dict) else None
+            prior = outcomes.get(seed_id) if isinstance(seed_id, str) else None
+            # Successful listing pages are immutable inputs to this staging run;
+            # don't re-request them on every scheduled cycle. Failed attempts remain retryable.
+            if not isinstance(prior, dict) or prior.get("status") != "metadata_listing_processed":
+                batch.append(seed)
+            scanned += 1
+        next_cursor = (cursor + scanned) % len(eligible)
     else:
         batch, next_cursor = [], 0
 
