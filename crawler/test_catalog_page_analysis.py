@@ -437,6 +437,32 @@ class PageDerivedCatalogAnalysisTests(unittest.TestCase):
         self.assertEqual(len(hits), 1)
         self.assertEqual(hits[0]["matched_records"][0]["title"], "Business Licenses")
 
+    def test_structured_catalog_expands_more_than_eight_items_without_truncation(self):
+        items = [{
+            "record_type": "dataset",
+            "name": f"Dataset {index}",
+            "url": f"https://data.example/datasets/{index}",
+        } for index in range(1, 41)]
+        result = analyze_pages([{
+            "url": "https://data.example/catalog",
+            "title": "Public Datasets",
+            "description": "Official dataset directory.",
+            "text": "",
+            "lane": "research",
+            "robots_allowed": True,
+            "fetched_at": 1234567890,
+            "structured_catalog": {
+                "version": 1,
+                "lists": [{"name": "Public Datasets", "record_type": "dataset", "items": items}],
+            },
+        }], source_total=1)
+        self.assertEqual(result["metrics"]["structured_catalog_items"], 40)
+        self.assertEqual(result["metrics"]["structured_catalog_records"], 40)
+        self.assertEqual(result["metrics"]["unique_records_by_type"], {"dataset": 40})
+        catalog = next(x for x in result["catalogs"] if x["catalog_origin"] == "structured_schema_collection")
+        self.assertEqual(catalog["record_count"], 40)
+        self.assertEqual(len(result["records"]), 40)
+
     def test_single_list_item_does_not_force_a_catalog(self):
         result = analyze_pages([{
             "url": "https://example.org/about",
