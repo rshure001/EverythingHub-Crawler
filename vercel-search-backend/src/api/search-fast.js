@@ -40,8 +40,9 @@ function searchNewsItems(items, query) {
   const terms = queryTerms(query);
   const matching = terms.length
     ? items.filter(item => {
-        const text = [item.title, item.summary, item.source].join(" ").toLowerCase();
-        return terms.some(term => text.includes(term));
+        const tokens = new Set([item.title, item.summary, item.source]
+          .join(" ").toLowerCase().match(/[a-z0-9]{2,}/g) || []);
+        return terms.some(term => tokens.has(term));
       })
     : items;
   const queryMatchFallback = terms.length > 0 && matching.length === 0;
