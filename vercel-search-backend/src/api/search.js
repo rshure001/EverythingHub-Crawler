@@ -164,10 +164,10 @@ module.exports = async function handler(req, res) {
     }
     const catalogError = safeCatalogError(catalogResult.reason);
     console.warn('[catalog-load-failed]', catalogError);
-    const results = offset === 0
-      ? (researchSearch ? researchResults.slice(0, limit) : bingResults.slice(0, Math.min(10, limit)))
-      : [];
-    if (researchSearch && results.length < limit) results.push(...bingResults.slice(0, limit - results.length));
+    const results = researchSearch
+      ? researchResults.slice(offset, offset + limit)
+      : (offset === 0 ? bingResults.slice(0, Math.min(10, limit)) : []);
+    if (researchSearch && offset === 0 && results.length < limit) results.push(...bingResults.slice(0, limit - results.length));
     const providers = [];
     if (bingResults.length) providers.push('Bing Web Search');
     for (const source of new Set(researchResults.map(item => item.source))) if (source) providers.push(source);
@@ -187,7 +187,7 @@ module.exports = async function handler(req, res) {
     return res.status(200).json({
       query, count: researchSearch ? researchResults.length : 0, totalMatches: researchSearch ? researchResults.length : 0,
       page: Math.floor(offset / limit) + 1,
-      pageSize: limit, offset, hasMore: false,
+      pageSize: limit, offset, hasMore: researchSearch && offset + results.length < researchResults.length,
       indexedPages: 0, indexStatus: 'catalog-unavailable',
       catalogError, database_required: false,
       results, catalogResults, catalogPreview, researchResults, providers, fallback: true
@@ -224,12 +224,13 @@ module.exports = async function handler(req, res) {
   payload.catalogResults = catalogResults;
   payload.researchResults = researchResults;
   if (researchSearch) {
+    const selectedResearchResults = researchResults.slice(offset, offset + limit);
     payload.results = offset === 0
-      ? [...researchResults.slice(0, limit), ...payload.results].slice(0, limit)
-      : [];
+      ? [...selectedResearchResults, ...payload.results].slice(0, limit)
+      : selectedResearchResults;
     payload.count = researchResults.length;
     payload.totalMatches = researchResults.length;
-    payload.hasMore = false;
+    payload.hasMore = offset + selectedResearchResults.length < researchResults.length;
   }
   for (const source of new Set(researchResults.map(item => item.source))) {
     if (source && !payload.providers.includes(source)) payload.providers.push(source);
