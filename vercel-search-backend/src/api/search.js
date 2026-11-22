@@ -62,6 +62,51 @@ function mergeCatalogResults(externalCatalogResults, pageDerivedCatalogResults, 
   return merged;
 }
 
+function buildCatalogPreviewRecordResults(catalogs, limit = 10) {
+  const results = [];
+  const seen = new Set();
+  const max = Number.isSafeInteger(limit) ? Math.max(0, Math.min(20, limit)) : 10;
+  for (const card of Array.isArray(catalogs) ? catalogs : []) {
+    const records = Array.isArray(card?.matched_records) ? card.matched_records : [];
+    for (const record of records) {
+      const url = String(record?.source_url || card?.url || '').trim();
+      let parsed;
+      try { parsed = new URL(url); } catch { continue; }
+      if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password) continue;
+      const key = String(record?.record_id || url).toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const recordType = String(record?.record_type || 'record').slice(0, 64);
+      const title = String(record?.title || card?.catalog_title || card?.title || 'Catalog record').slice(0, 240);
+      const snippet = String(card?.snippet || card?.description || 'Candidate catalog record preview. Preview only.').slice(0, 700);
+      results.push({
+        title,
+        url: parsed.toString(),
+        snippet,
+        description: snippet,
+        source: 'Everything Hub Catalog Preview · ' + recordType,
+        origin: 'Everything Hub Catalog Preview',
+        provider: 'everythinghub-catalog-preview',
+        mediaType: 'web',
+        catalog_id: String(card?.catalog_id || ''),
+        catalog_title: String(card?.catalog_title || card?.title || ''),
+        record_id: String(record?.record_id || ''),
+        record_type: recordType,
+        relevance_class: String(card?.relevance_class || 'record_match'),
+        relevance_label: String(card?.relevance_label || 'Catalog record match'),
+        preview_only: true,
+        source_terms_status: String(card?.source_terms_status || 'not_reviewed'),
+        source_policy_review_status: String(record?.source_policy_review_status || card?.source_policy_review_status || 'not_reviewed'),
+        record_level_clearance: String(record?.record_level_clearance || 'not_reviewed'),
+        rights_status: String(card?.rights_status || 'publicly_accessible_not_cleared_for_redistribution'),
+        commercial_eligible: false
+      });
+      if (results.length >= max) return results;
+    }
+  }
+  return results;
+}
+
 function markCatalogPreviewStale(catalogPreview, freshnessMatch = false) {
   catalogPreview.status = 'stale-candidate-preview';
   catalogPreview.freshnessMatch = freshnessMatch;
@@ -148,14 +193,28 @@ module.exports = async function handler(req, res) {
     }
     const catalogError = safeCatalogError(catalogResult.reason);
     console.warn('[catalog-load-failed]', catalogError);
-    const results = offset === 0 ? bingResults.slice(0, Math.min(10, limit)) : [];
+    const catalogPreviewRecordResults = offset === 0
+      ? buildCatalogPreviewRecordResults(pageDerivedCatalogResults, Math.min(10, limit))
+      : [];
+    const combinedResults = offset === 0 ? [...bingResults, ...catalogPreviewRecordResults] : [];
+    const seenResultUrls = new Set();
+    const results = combinedResults.filter((item) => {
+      const key = String(item?.url || item?.title || '').toLowerCase();
+      if (!key || seenResultUrls.has(key)) return false;
+      seenResultUrls.add(key);
+      return true;
+    }).slice(0, Math.min(10, limit));
+    if (catalogPreview) catalogPreview.recordPreviewResults = catalogPreviewRecordResults.length;
     const providers = [];
     if (bingResults.length) providers.push('Bing Web Search');
-    if (catalogResults.length) providers.push('Everything Hub Catalog Preview');
+    if (catalogPreviewRecordResults.length || catalogResults.length) providers.push('Everything Hub Catalog Preview');
+    if (externalCatalogResults.length) providers.push('Curated External Catalog Directory');
+    const fallbackMode = catalogPreviewRecordResults.length ? 'catalog-preview-fallback' : 'unavailable';
     if (!results.length && !catalogResults.length) {
       return res.status(503).json({
         error: 'search_temporarily_unavailable',
         indexStatus: 'catalog-unavailable',
+        indexScan: { mode: 'unavailable', indexedPages: 0, scannedPages: 0, candidateShardCount: 0, error: catalogError },
         catalogError,
         database_required: false,
         catalogResults,
@@ -165,10 +224,20 @@ module.exports = async function handler(req, res) {
       });
     }
     return res.status(200).json({
-      query, count: 0, totalMatches: 0,
+      query, count: results.length, totalMatches: results.length,
       page: Math.floor(offset / limit) + 1,
       pageSize: limit, offset, hasMore: false,
-      indexedPages: 0, indexStatus: 'catalog-unavailable',
+      indexedPages: 0,
+      indexStatus: catalogPreviewRecordResults.length ? 'catalog-preview-fallback' : 'catalog-unavailable',
+      searchScope: catalogPreviewRecordResults.length ? 'page-derived-catalog-preview' : 'external-fallback',
+      indexScan: {
+        mode: fallbackMode,
+        indexedPages: 0,
+        scannedPages: 0,
+        candidateShardCount: 0,
+        previewRecords: catalogPreviewRecordResults.length,
+        error: catalogError
+      },
       catalogError, database_required: false,
       results, catalogResults, externalCatalogResults, catalogPreview, providers, fallback: true
     });
@@ -211,5 +280,5 @@ module.exports = async function handler(req, res) {
   return res.status(200).json(payload);
 };
 
-module.exports._test = { mergeCatalogResults, markCatalogPreviewStale, applyCatalogPreviewFreshness, loadBing };
+module.exports._test = { mergeCatalogResults, markCatalogPreviewStale, applyCatalogPreviewFreshness, buildCatalogPreviewRecordResults, loadBing };
 
