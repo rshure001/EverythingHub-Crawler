@@ -37,8 +37,9 @@ test('research lane federates Crossref and DataCite records into visible search 
       researchCalls++;
       assert.equal(query, 'ocean temperature');
       return [
-        { doi: '10.1/crossref', title: 'Ocean temperatures', url: 'https://doi.org/10.1/crossref', source: 'Crossref', provider: 'crossref-metadata' },
-        { doi: '10.2/datacite', title: 'Ocean temperature dataset', url: 'https://doi.org/10.2/datacite', source: 'DataCite', provider: 'datacite-metadata' }
+        { doi: '10.0/openalex', title: 'Ocean temperature study', url: 'https://doi.org/10.0/openalex', source: 'OpenAlex', provider: 'openalex-metadata', mediaType: 'research' },
+        { doi: '10.1/crossref', title: 'Ocean temperatures', url: 'https://doi.org/10.1/crossref', source: 'Crossref', provider: 'crossref-metadata', mediaType: 'research' },
+        { doi: '10.2/datacite', title: 'Ocean temperature dataset', url: 'https://doi.org/10.2/datacite', source: 'DataCite', provider: 'datacite-metadata', mediaType: 'research' }
       ];
     }
   }};
@@ -57,8 +58,9 @@ test('research lane federates Crossref and DataCite records into visible search 
     await handler({ method: 'GET', url: '/api/search?q=ocean%20temperature&lane=research&limit=10' }, response);
     assert.equal(response.statusCode, 200);
     assert.equal(researchCalls, 1);
-    assert.equal(response.body.researchResults.length, 2);
-    assert.deepEqual(response.body.results.map(item => item.provider), ['crossref-metadata', 'datacite-metadata']);
+    assert.equal(response.body.researchResults.length, 3);
+    assert.deepEqual(response.body.results.map(item => item.provider), ['openalex-metadata', 'crossref-metadata', 'datacite-metadata']);
+    assert.ok(response.body.providers.includes('OpenAlex'));
     assert.ok(response.body.providers.includes('Crossref'));
     assert.ok(response.body.providers.includes('DataCite'));
   } finally {
