@@ -230,7 +230,7 @@ jobs:
           if [ "$needs_recovery" = "true" ]; then
             echo "No active crawler/watchdog and both the manifest and last successful crawl are older than 15 minutes."
             echo "Dispatching the existing bounded watchdog; it retains the no-overlap, schedule-age, and manifest-age guards."
-            gh workflow run crawl-watchdog.yml --ref main
+            gh workflow run crawl-watchdog.yml --repo "$GITHUB_REPOSITORY" --ref main
             recovery_dispatched=true
           fi
 
