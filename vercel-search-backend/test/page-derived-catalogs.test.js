@@ -217,3 +217,44 @@ test('type-aware ranking puts product and place catalogs ahead of incidental con
  assert.equal(searchPageDerivedCatalogs('Rolex',network,5)[0].catalog_id,'rolex-models');
  assert.equal(searchPageDerivedCatalogs('Las Vegas',network,5)[0].catalog_id,'vegas-places');
 });
+
+
+test('loads the live catalog manifest after index files exceed twenty thousand and four megabytes', async () => {
+ const f=fixture();
+ const extraFiles=Array.from({length:20124},(_,index)=>({
+  file:'search-index/extra-'+String(index).padStart(5,'0')+'-'+'x'.repeat(120)+'.json.gz',
+  bytes:1,sha256:'a'.repeat(64),items:0
+ }));
+ f.manifest.files.push(...extraFiles);
+ const manifestRaw=Buffer.from(JSON.stringify(f.manifest));
+ assert.ok(manifestRaw.length>4000000 && manifestRaw.length<8000000);
+ const sha='e'.repeat(40);
+ const loaded=await loadPageDerivedCatalogsFromManifest(f.manifest,sha,manifestRaw,async url=>{
+  if(url.endsWith('/registry.json.gz'))return f.registry;
+  if(url.endsWith('/records.json.gz'))return f.recordsFile;
+  throw new Error('unexpected_test_url '+url);
+ });
+ assert.equal(loaded.catalogCount,3);
+ assert.equal(loaded.records.length,3);
+});
+
+test('rejects a page-catalog manifest beyond the forty-thousand-file safety ceiling', () => {
+ const f=fixture();
+ f.manifest.files=Array.from({length:40001},(_,index)=>({
+  file:'search-index/overflow-'+String(index)+'.json.gz',
+  bytes:1,sha256:'a'.repeat(64),items:0
+ }));
+ assert.throws(
+  ()=>validatePageDerivedCatalogs(f.manifest,f.registry,f.recordsFile),
+  /page_catalog_manifest_invalid/
+ );
+});
+
+test('rejects page-catalog manifest bytes beyond the eight-megabyte safety ceiling', async () => {
+ const f=fixture();
+ const oversized=Buffer.from(JSON.stringify(f.manifest).padEnd(8000001,' '));
+ await assert.rejects(
+  loadPageDerivedCatalogsFromManifest(f.manifest,'f'.repeat(40),oversized,async()=>f.registry),
+  /page_catalog_manifest_raw_size_invalid/
+ );
+});

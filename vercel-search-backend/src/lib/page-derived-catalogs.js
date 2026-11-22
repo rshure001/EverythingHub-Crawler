@@ -9,7 +9,7 @@ const REF='https://api.github.com/repos/rshure001/EverythingHub-Crawler/git/ref/
 const CACHE_MS=300000, STALE_MS=3600000;
 const MAX_QUERY_CANDIDATES=12, MAX_CATALOG_INDEX_GZIP=8000000, MAX_CATALOG_INDEX_JSON=40000000;
 let manifestCache=null; const queryCache=new Map();
-const MAX_MANIFEST=4000000, MAX_REGISTRY_GZIP=5000000, MAX_RECORDS_GZIP=16000000;
+const MAX_MANIFEST=8000000, MAX_REGISTRY_GZIP=5000000, MAX_RECORDS_GZIP=16000000;
 const MAX_REGISTRY_JSON=32000000, MAX_RECORDS_JSON=96000000;
 const CONTENT_INTENT=new Set(['article','articles','news','research','study','studies','report','reports','guide','guides','tutorial','documentation','paper','papers','dataset','datasets','video','videos','image','images','photo','photos','media','book','books']);
 const ATTRIBUTE_KEYS=new Set(['brand','model','sku','mpn','gtin','manufacturer','category','address_locality','address_region','address_country','city','state','region','country','postal_code','location_name','area_served','service_type']);
@@ -40,7 +40,7 @@ function validateManifest(m){
  if(!m||m.version!==1||m.integrity!=='sha256')throw new Error('page_catalog_manifest_schema_invalid');
  if(!Number.isSafeInteger(m.source_index_pages)||m.source_index_pages<1||m.source_index_pages>180000)throw new Error('page_catalog_source_count_invalid');
  if(!Number.isSafeInteger(m.catalog_count)||m.catalog_count<1||m.catalog_count>25000||!Number.isSafeInteger(m.record_count)||m.record_count<1||m.record_count>1200000)throw new Error('page_catalog_counts_invalid');
- if(typeof m.generated_at!=='string'||!Number.isFinite(Date.parse(m.generated_at))||!Array.isArray(m.files)||m.files.length<2||m.files.length>20000)throw new Error('page_catalog_manifest_invalid');
+ if(typeof m.generated_at!=='string'||!Number.isFinite(Date.parse(m.generated_at))||!Array.isArray(m.files)||m.files.length<2||m.files.length>40000)throw new Error('page_catalog_manifest_invalid');
  const files=new Map();
  for(const f of m.files){
   if(!f||typeof f.file!=='string'||f.file.startsWith('/')||f.file.includes('\\')||f.file.split('/').some(p=>!p||p==='.'||p==='..')||!Number.isSafeInteger(f.bytes)||f.bytes<1||typeof f.sha256!=='string'||!/^[a-f0-9]{64}$/i.test(f.sha256))throw new Error('page_catalog_file_entry_invalid');
