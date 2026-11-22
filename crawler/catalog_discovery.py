@@ -14,6 +14,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import zlib
 from datetime import datetime, timezone
 from typing import Any
 from catalog_source_policy import policy_for_host, request_source_bytes
@@ -234,6 +235,7 @@ def discover_source(
 
     page_limit_applied = min(max_pages, request_budget, MAX_PAGES_PER_SOURCE)
     scan_complete = False
+    current_available_dataset_count = None
     observed_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
     for page in range(page_limit_applied):
@@ -247,13 +249,13 @@ def discover_source(
         url = source["base"].rstrip("/") + source["api_path"] + "?" + params
         try:
             payload = _request_json(url)
-            pages_requested += 1
             result = payload.get("result")
             if payload.get("success") is not True or not isinstance(result, dict):
                 raise ValueError("CKAN package_search did not return success")
             batch = result.get("results")
             if not isinstance(batch, list):
                 raise ValueError("CKAN package_search results were missing")
+            pages_requested += 1
             count = result.get("count")
             if isinstance(count, int) and not isinstance(count, bool) and count >= 0:
                 if start_offset > 0 and (
@@ -273,6 +275,7 @@ def discover_source(
                         next_start=0,
                     )
                 available_dataset_count = count
+                current_available_dataset_count = count
             source_meta = {
                 **source,
                 "source_terms_url": policy.get("terms_url", ""),
@@ -297,8 +300,8 @@ def discover_source(
                 datasets_by_id[item["id"]] = item
 
             if not batch or (
-                available_dataset_count is not None
-                and page_start + rows >= available_dataset_count
+                current_available_dataset_count is not None
+                and page_start + rows >= current_available_dataset_count
             ):
                 scan_complete = True
                 break
@@ -309,7 +312,7 @@ def discover_source(
             time.sleep(pause)
 
     next_start = start_offset + pages_requested * rows
-    if available_dataset_count is not None and next_start >= available_dataset_count:
+    if current_available_dataset_count is not None and next_start >= current_available_dataset_count:
         scan_complete = True
     return finish(
         page_limit_applied=page_limit_applied,
@@ -438,7 +441,7 @@ def load_previous_manifest(path: pathlib.Path) -> dict[str, Any] | None:
         raw = path.read_bytes()
         decoded = gzip.decompress(raw) if path.suffix == ".gz" else raw
         payload = json.loads(decoded.decode("utf-8"))
-    except (OSError, EOFError, gzip.BadGzipFile, json.JSONDecodeError, UnicodeDecodeError) as exc:
+    except (OSError, EOFError, gzip.BadGzipFile, zlib.error, json.JSONDecodeError, UnicodeDecodeError) as exc:
         raise ValueError("previous catalog snapshot is unreadable; refusing to overwrite it") from exc
     if (
         not isinstance(payload, dict)
