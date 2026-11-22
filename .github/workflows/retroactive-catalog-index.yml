@@ -9,7 +9,6 @@ on:
       - "crawler/catalog_source_policy.py"
       - "crawler/catalog-source-terms.json"
       - "crawler/product_metadata.py"
-      - "project/test_ledger.py"
       - "data/source-policy-reviews.json"
       - "public-search/manifest.json"
   workflow_dispatch:
