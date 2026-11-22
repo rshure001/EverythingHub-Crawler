@@ -28,6 +28,18 @@ class ProductionBrowserWorkflowContractTests(unittest.TestCase):
         self.assertNotIn('"public-search/**"', workflow)
         self.assertIn('vercel-homepage/**', workflow)
 
+    def test_free_fallback_discloses_partial_query_scan_coverage(self):
+        homepage = (
+            Path(__file__).resolve().parents[1]
+            / "vercel-homepage"
+            / "index.html"
+        ).read_text(encoding="utf-8")
+        self.assertIn("candidateTruncated", homepage)
+        self.assertIn("Partial index scan", homepage)
+        self.assertIn("totalCandidateShardCount", homepage)
+        self.assertIn("totalCandidatePageCount", homepage)
+        self.assertIn("Results may be incomplete.", homepage)
+
     def test_free_fallback_search_exposes_candidate_catalog_previews(self):
         workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
         self.assertIn('#results .eh-catalog-result', workflow)
