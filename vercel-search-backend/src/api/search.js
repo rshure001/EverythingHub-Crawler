@@ -92,6 +92,25 @@ function mergeCatalogResults(externalCatalogResults, pageDerivedCatalogResults, 
   return merged;
 }
 
+function markCatalogPreviewStale(catalogPreview, freshnessMatch = false) {
+  catalogPreview.status = 'stale-candidate-preview';
+  catalogPreview.freshnessMatch = freshnessMatch;
+  catalogPreview.stale = true;
+  return catalogPreview;
+}
+
+function applyCatalogPreviewFreshness(catalogPreview, pageDerivedNetwork, catalog) {
+  const sourceIndexMatches = matchesPageIndexSnapshot(pageDerivedNetwork, catalog);
+  const stale = Boolean(pageDerivedNetwork.stale || !sourceIndexMatches);
+  catalogPreview.freshnessMatch = sourceIndexMatches;
+  catalogPreview.pageIndexPages = catalog.indexedPages;
+  catalogPreview.pageIndexUpdatedAt = new Date(catalog.updatedAt * 1000).toISOString();
+  catalogPreview.pageIndexManifestSha256 = catalog.sha256;
+  catalogPreview.stale = stale;
+  catalogPreview.status = stale ? 'stale-candidate-preview' : 'candidate-preview';
+  return { sourceIndexMatches, stale };
+}
+
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -153,8 +172,7 @@ module.exports = async function handler(req, res) {
 
   if (catalogResult.status !== 'fulfilled') {
     if (pageDerivedNetwork) {
-      catalogPreview.status = 'stale-candidate-preview';
-      catalogPreview.freshnessMatch = false;
+      markCatalogPreviewStale(catalogPreview, false);
       pageDerivedCatalogResults = pageDerivedCatalogResults.map(item => ({ ...item, snippet: item.snippet + ' Current page-index freshness could not be verified.', description: item.snippet + ' Current page-index freshness could not be verified.' }));
       catalogResults = mergeCatalogResults(externalCatalogResults, pageDerivedCatalogResults);
     }
@@ -188,14 +206,8 @@ module.exports = async function handler(req, res) {
 
   const catalog = catalogResult.value;
   if (pageDerivedNetwork) {
-    const sourceIndexMatches = matchesPageIndexSnapshot(pageDerivedNetwork, catalog);
-    catalogPreview.freshnessMatch = sourceIndexMatches;
-    catalogPreview.pageIndexPages = catalog.indexedPages;
-    catalogPreview.pageIndexUpdatedAt = new Date(catalog.updatedAt * 1000).toISOString();
-    catalogPreview.pageIndexManifestSha256 = catalog.sha256;
-    catalogPreview.status = pageDerivedNetwork.stale || !sourceIndexMatches
-      ? 'stale-candidate-preview' : 'candidate-preview';
-    if (pageDerivedNetwork.stale || !sourceIndexMatches) {
+    const { sourceIndexMatches, stale } = applyCatalogPreviewFreshness(catalogPreview, pageDerivedNetwork, catalog);
+    if (stale) {
       const warning = !sourceIndexMatches ? ' Catalog analysis is behind the current page index.' : ' Catalog preview is using a cached snapshot.';
       pageDerivedCatalogResults = pageDerivedCatalogResults.map(item => ({ ...item, snippet: item.snippet + warning, description: item.snippet + warning }));
       catalogResults = [...externalCatalogResults, ...pageDerivedCatalogResults].slice(0, 5);
@@ -223,5 +235,5 @@ module.exports = async function handler(req, res) {
   return res.status(200).json(payload);
 };
 
-module.exports._test = { mergeCatalogResults };
+module.exports._test = { mergeCatalogResults, markCatalogPreviewStale, applyCatalogPreviewFreshness };
 
