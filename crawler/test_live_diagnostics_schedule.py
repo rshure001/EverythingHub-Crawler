@@ -86,5 +86,23 @@ class LiveDiagnosticsScheduleTests(unittest.TestCase):
         )
 
 
+    def test_live_search_recovery_dispatch_supplies_repository_without_checkout(self):
+        workflow = (
+            Path(__file__).resolve().parents[1]
+            / ".github"
+            / "workflows"
+            / "validate-vercel-search.yml"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn(
+            'gh workflow run crawl-watchdog.yml --repo "$GITHUB_REPOSITORY" --ref main',
+            workflow,
+        )
+        self.assertNotIn(
+            'gh workflow run crawl-watchdog.yml --ref main',
+            workflow,
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
