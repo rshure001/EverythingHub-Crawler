@@ -24,7 +24,7 @@ from index_store import load_index, save_index
 from catalog_frontier import load_catalog_seed_urls, plan_catalog_seed_enqueue
 from product_metadata import (
     extract_product_metadata, extract_structured_catalog_metadata,
-    has_structured_catalog_markup,
+    extract_structured_entity_metadata, has_structured_catalog_markup,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -219,8 +219,18 @@ def extract_page_structured_catalog_metadata(html, page_url):
         return {}
 
 
+def extract_page_structured_entity_metadata(html, page_url):
+    """Extract bounded typed schema.org entities without following entity links."""
+    try:
+        return extract_structured_entity_metadata(html, page_url)
+    except (ValueError, TypeError, RecursionError):
+        # Entity metadata is additive; malformed JSON-LD must not fail the page.
+        return []
+
+
 def build_page_record(url, title, description, text, depth, directives, published_at=None,
-                      product_metadata=None, structured_catalog_metadata=None):
+                      product_metadata=None, structured_catalog_metadata=None,
+                      structured_entity_metadata=None):
     """Build a page record while retaining crawl depth for noindex pages."""
     if "noindex" in directives:
         # noindex suppresses publication, not link discovery; keep depth so
@@ -250,6 +260,26 @@ def build_page_record(url, title, description, text, depth, directives, publishe
             if isinstance(product_metadata.get(key), (str, int, float))
             and str(product_metadata.get(key)).strip()
         }
+        for key in ("same_as_ids", "brand_same_as_ids"):
+            values = product_metadata.get(key)
+            if isinstance(values, list):
+                safe_ids = []
+                for value in values[:5]:
+                    identity = normalize_text(value, 2048)
+                    try:
+                        parsed_identity = urllib.parse.urlsplit(identity)
+                    except ValueError:
+                        continue
+                    if (
+                        parsed_identity.scheme.lower() == "https"
+                        and parsed_identity.hostname
+                        and parsed_identity.username is None
+                        and parsed_identity.password is None
+                        and identity not in safe_ids
+                    ):
+                        safe_ids.append(identity)
+                if safe_ids:
+                    product[key] = safe_ids
         if product.get("name"):
             record["product"] = {"type": "product", **product}
     if isinstance(structured_catalog_metadata, dict) and structured_catalog_metadata.get("version") == 1:
@@ -288,6 +318,26 @@ def build_page_record(url, title, description, text, depth, directives, publishe
                     value = normalize_text(raw_item.get(key), limit)
                     if value:
                         item[key] = value
+                for key in ("same_as_ids", "brand_same_as_ids"):
+                    values = raw_item.get(key)
+                    if isinstance(values, list):
+                        safe_ids = []
+                        for value in values[:5]:
+                            identity = normalize_text(value, 2048)
+                            try:
+                                parsed_identity = urllib.parse.urlsplit(identity)
+                            except ValueError:
+                                continue
+                            if (
+                                parsed_identity.scheme.lower() == "https"
+                                and parsed_identity.hostname
+                                and parsed_identity.username is None
+                                and parsed_identity.password is None
+                                and identity not in safe_ids
+                            ):
+                                safe_ids.append(identity)
+                        if safe_ids:
+                            item[key] = safe_ids
                 position = raw_item.get("position")
                 if isinstance(position, int) and not isinstance(position, bool) and position > 0:
                     item["position"] = position
@@ -296,6 +346,89 @@ def build_page_record(url, title, description, text, depth, directives, publishe
                 safe_lists.append({"name": list_name, "record_type": record_type, "items": safe_items})
         if safe_lists:
             record["structured_catalog"] = {"version": 1, "lists": safe_lists}
+    allowed_entity_types = {
+        "product", "model", "brand", "business", "place", "organization",
+        "person", "event", "service", "dataset", "software", "article",
+    }
+    attribute_limits = {
+        "schema_type": 120, "entity_url": 2048, "address_locality": 120,
+        "address_region": 80, "address_country": 80, "postal_code": 24,
+        "location_name": 120, "category": 120, "brand": 120, "model_number": 80,
+        "sku": 64, "mpn": 64, "gtin": 32, "price": 64, "currency": 8,
+        "availability": 80, "service_type": 120, "area_served": 120,
+        "provider_name": 120, "organizer_name": 120, "author_name": 120,
+        "publisher_name": 120, "job_title": 120, "affiliation": 120,
+        "works_for": 120, "parent_organization": 120, "founding_date": 40,
+        "start_date": 40, "end_date": 40, "date_published": 40,
+        "date_modified": 40, "event_status": 100, "attendance_mode": 100,
+        "identifier": 120, "license": 300, "temporal_coverage": 100,
+        "spatial_coverage": 120, "measurement_technique": 120,
+        "application_category": 120, "operating_system": 120,
+        "software_version": 80, "programming_language": 80,
+    }
+    safe_entities = []
+    for raw_entity in (structured_entity_metadata or [])[:8]:
+        if not isinstance(raw_entity, dict):
+            continue
+        entity_type = normalize_text(raw_entity.get("record_type"), 40).casefold()
+        entity_name = normalize_text(raw_entity.get("name"), 160)
+        if entity_type not in allowed_entity_types or not entity_name:
+            continue
+        entity_url = normalize_text(raw_entity.get("entity_url"), 2048)
+        if entity_url:
+            try:
+                parsed_entity_url = urllib.parse.urlsplit(entity_url)
+            except ValueError:
+                continue
+            if (
+                parsed_entity_url.scheme.lower() not in ("http", "https")
+                or not parsed_entity_url.hostname
+                or parsed_entity_url.username is not None
+                or parsed_entity_url.password is not None
+            ):
+                entity_url = ""
+        attributes = {}
+        raw_attributes = raw_entity.get("attributes")
+        if isinstance(raw_attributes, dict):
+            for key in ("same_as_ids", "brand_same_as_ids"):
+                values = raw_attributes.get(key)
+                if isinstance(values, list):
+                    safe_ids = []
+                    for value in values[:5]:
+                        identity = normalize_text(value, 2048)
+                        try:
+                            parsed_identity = urllib.parse.urlsplit(identity)
+                        except ValueError:
+                            continue
+                        if (
+                            parsed_identity.scheme.lower() == "https"
+                            and parsed_identity.hostname
+                            and parsed_identity.username is None
+                            and parsed_identity.password is None
+                            and identity not in safe_ids
+                        ):
+                            safe_ids.append(identity)
+                    if safe_ids:
+                        attributes[key] = safe_ids
+            for key, limit in attribute_limits.items():
+                value = raw_attributes.get(key)
+                if isinstance(value, (str, int, float)) and not isinstance(value, bool):
+                    normalized = normalize_text(value, limit)
+                    if normalized:
+                        attributes[key] = normalized
+        if entity_url:
+            attributes["entity_url"] = entity_url
+        safe_entities.append({
+            "record_type": entity_type,
+            "name": entity_name,
+            "description": normalize_text(raw_entity.get("description"), 500),
+            "entity_url": entity_url,
+            "attributes": attributes,
+        })
+    while safe_entities and len(json.dumps(safe_entities, ensure_ascii=False, separators=(",", ":")).encode("utf-8")) > 12_000:
+        safe_entities.pop()
+    if safe_entities:
+        record["structured_entities"] = safe_entities
     return record
 
 
@@ -1298,6 +1431,7 @@ def main():
             text, description = apply_snippet_policy(text, description, directives)
             product_metadata = {}
             structured_catalog_metadata = {}
+            structured_entity_metadata = []
             if "noindex" not in directives:
                 try:
                     product_metadata = extract_product_metadata(html, final)
@@ -1306,9 +1440,11 @@ def main():
                     # must never make an otherwise valid page fail to index.
                     product_metadata = {}
                 structured_catalog_metadata = extract_page_structured_catalog_metadata(html, final)
+                structured_entity_metadata = extract_page_structured_entity_metadata(html, final)
             record = build_page_record(
                 final, title, description, text, depth, directives,
                 parser.published_at, product_metadata, structured_catalog_metadata,
+                structured_entity_metadata,
             )
             links = []
             if depth < MAX_DEPTH and "nofollow" not in directives:
