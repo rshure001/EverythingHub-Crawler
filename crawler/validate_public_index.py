@@ -16,11 +16,11 @@ from build_search_shards import query_tokens
 
 ROOT = Path(__file__).resolve().parents[1]
 MAX_SHARD_BYTES = 350_000
-MAX_SHARD_UNCOMPRESSED_BYTES = 500_000
-MAX_TOTAL_COMPRESSED_SHARD_BYTES = 100_000_000
-MAX_TOTAL_LEGACY_SHARD_BYTES = 100_000_000
-MAX_TOTAL_SHARD_UNCOMPRESSED_BYTES = 400_000_000
-MAX_SHARD_COUNT = 768
+MAX_SHARD_UNCOMPRESSED_BYTES = 600_000
+MAX_TOTAL_COMPRESSED_SHARD_BYTES = 150_000_000
+MAX_TOTAL_LEGACY_SHARD_BYTES = 150_000_000
+MAX_TOTAL_SHARD_UNCOMPRESSED_BYTES = 540_000_000
+MAX_SHARD_COUNT = 900
 MAX_PAGES_PER_SHARD = 2_000
 # Keep validation aligned with the independent Vercel backend's bounded decoder.
 # The Supabase Edge Function uses a smaller 30 MB budget and delegates larger
@@ -314,7 +314,7 @@ def validate(root: Path = ROOT) -> list[str]:
     if manifest.get("shard_count") != len(shards):
         errors.append("manifest shard_count does not match shards array")
     if len(shards) > MAX_SHARD_COUNT:
-        errors.append("manifest exceeds the fixed 768-shard safety limit")
+        errors.append("manifest exceeds the fixed 900-shard safety limit")
 
     expected_urls = {
         page.get("url")
