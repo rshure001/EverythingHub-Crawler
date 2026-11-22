@@ -80,14 +80,60 @@ class PipelineHealthTests(unittest.TestCase):
         self.assertEqual(result["search_smoke"]["status"], "healthy")
         self.assertEqual(result["overall_status"], "healthy")
 
-    def test_downstream_health_is_checked_on_schedule_not_every_workflow_completion(self):
+    def test_downstream_health_is_checked_on_schedule_and_catalog_completion(self):
         workflow = (
             Path(__file__).resolve().parents[1]
             / ".github" / "workflows" / "crawl-watchdog.yml"
         ).read_text(encoding="utf-8")
         workflow_run = workflow.split("  workflow_run:" + chr(10), 1)[1].split("  workflow_dispatch:", 1)[0]
-        self.assertEqual(workflow_run.count('- "'), 1)
-        self.assertIn('- "Everything Hub crawler"', workflow_run)
+        workflow_names = re.findall(r'^\s*- "([^"]+)"
+    def test_search_manifest_at_fifteen_minute_boundary_is_fresh(self):
+        updated_at = int(datetime(2026, 11, 18, 20, 55, tzinfo=timezone.utc).timestamp())
+        result = evaluate_manifest_freshness({"updated_at": updated_at}, now=NOW)
+        self.assertEqual(result["status"], "fresh")
+        self.assertEqual(result["age_seconds"], 900)
+
+    def test_search_manifest_older_than_fifteen_minutes_is_stale(self):
+        updated_at = int(datetime(2026, 11, 18, 20, 54, 59, tzinfo=timezone.utc).timestamp())
+        result = evaluate_manifest_freshness({"updated_at": updated_at}, now=NOW)
+        self.assertEqual(result["status"], "stale")
+        self.assertEqual(result["age_seconds"], 901)
+
+    def test_search_manifest_small_future_clock_skew_is_clamped(self):
+        updated_at = int(datetime(2026, 11, 18, 21, 10, 30, tzinfo=timezone.utc).timestamp())
+        result = evaluate_manifest_freshness({"updated_at": updated_at}, now=NOW)
+        self.assertEqual(result["status"], "fresh")
+        self.assertEqual(result["age_seconds"], 0)
+
+    def test_search_manifest_future_timestamp_beyond_tolerance_is_rejected(self):
+        updated_at = int(datetime(2026, 11, 18, 21, 11, 1, tzinfo=timezone.utc).timestamp())
+        with self.assertRaisesRegex(ValueError, "too far in the future"):
+            evaluate_manifest_freshness({"updated_at": updated_at}, now=NOW)
+
+    def test_search_manifest_invalid_timestamps_fail_closed(self):
+        for updated_at in ("invalid", True, 0, -1, None):
+            with self.subTest(updated_at=updated_at):
+                with self.assertRaises(ValueError):
+                    evaluate_manifest_freshness({"updated_at": updated_at}, now=NOW)
+
+    def test_search_api_smoke_enforces_manifest_freshness(self):
+        workflow = (
+            Path(__file__).resolve().parents[1]
+            / ".github" / "workflows" / "search-api-smoke.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn("from crawler.pipeline_health import evaluate_manifest_freshness", workflow)
+        self.assertIn("freshness = evaluate_manifest_freshness(manifest)", workflow)
+        self.assertIn('if freshness["status"] != "fresh":', workflow)
+
+
+if __name__ == "__main__":
+    unittest.main()
+, workflow_run, re.MULTILINE)
+        self.assertEqual(workflow_names, [
+            "Everything Hub crawler",
+            "Retroactive catalog inventory",
+            "Catalog-first discovery",
+        ])
         self.assertNotIn("EverythingHub Publisher", workflow_run)
         self.assertNotIn("EverythingHub search API smoke test", workflow_run)
         self.assertNotIn("github.event.workflow_run.name", workflow)
