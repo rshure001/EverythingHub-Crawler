@@ -246,7 +246,13 @@ class CanonicalIndexStoreTests(unittest.TestCase):
         public_dir = self.root / "public-search"
         public_dir.mkdir()
         manifest_path = public_dir / "manifest.json"
-        pages = self.pages(3)
+        pages = [{
+            "url": f"https://example.test/public/{number}",
+            "title": f"P{number}",
+            "description": "d",
+            "text": "x",
+            "robots_allowed": True,
+        } for number in range(1008)]
         payload = {"version": 1, "pages": pages}
         decoded = (json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n").encode("utf-8")
         raw = gzip.compress(decoded, compresslevel=9, mtime=0)
@@ -271,7 +277,30 @@ class CanonicalIndexStoreTests(unittest.TestCase):
         loaded = index_store.load_index(manifest_path)
         self.assertEqual(loaded["total_pages"], len(pages))
         self.assertEqual(loaded["updated_at"], 1700000000)
+        self.assertEqual(len(loaded["pages"]), 1008)
         self.assertEqual(loaded["pages"], pages)
+
+    def test_public_search_shard_page_count_limit_matches_backend(self):
+        self.assertEqual(index_store.MAX_PUBLIC_SEARCH_SHARD_PAGES, 2_000)
+        public_dir = self.root / "public-search"
+        public_dir.mkdir()
+        manifest_path = public_dir / "manifest.json"
+        pages = self.pages(1)
+        decoded = (json.dumps({"version": 1, "pages": pages}, separators=(",", ":")) + "\n").encode("utf-8")
+        raw = gzip.compress(decoded, compresslevel=9, mtime=0)
+        shard_name = "shard-0001.json.gz"
+        (public_dir / shard_name).write_bytes(raw)
+        manifest = {
+            "version": 1, "integrity": "sha256", "updated_at": 1700000000,
+            "total_pages": 2_001, "shard_count": 1,
+            "shards": [{
+                "file": shard_name, "pages": 2_001, "bytes": len(raw),
+                "uncompressed_bytes": len(decoded), "sha256": hashlib.sha256(raw).hexdigest(),
+            }],
+        }
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "page count is invalid"):
+            index_store.load_index(manifest_path)
 
     def test_public_search_page_limit_matches_the_250k_publisher_ceiling(self):
         self.assertEqual(index_store.MAX_PUBLIC_SEARCH_PAGES, 250_000)
