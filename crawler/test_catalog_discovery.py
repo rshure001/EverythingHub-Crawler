@@ -339,6 +339,24 @@ class CatalogDiscoveryTests(unittest.TestCase):
         self.assertEqual(result["scan_generation"], 2)
         self.assertEqual(result["datasets_discovered"], 1)
 
+
+    def test_invalid_api_page_does_not_advance_cursor_or_prune(self):
+        from catalog_discovery import discover_source
+        previous = [self._previous_dataset("one", 1)]
+        invalid = {"success": False, "result": None}
+        with patch("catalog_discovery.policy_for_host", return_value=self._reviewed_policy()), patch(
+            "catalog_discovery._request_json", return_value=invalid
+        ):
+            result = discover_source(
+                SOURCES[0], rows=2, max_pages=1, start_offset=2,
+                previous_datasets=previous, scan_generation=1,
+                previous_available_dataset_count=4,
+            )
+        self.assertEqual(result["pages_requested"], 0)
+        self.assertEqual(result["next_start"], 2)
+        self.assertFalse(result["scan_complete"])
+        self.assertEqual(result["datasets_discovered"], 1)
+
     def test_previous_manifest_loader_fails_closed_on_corrupt_snapshot(self):
         import tempfile
         from catalog_discovery import load_previous_manifest
