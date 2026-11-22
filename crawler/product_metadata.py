@@ -618,7 +618,17 @@ def _entity_schema_name(value, objects_by_id, base_url, limit=120):
             resolved.get("identifier"),
             limit,
         )
-    return _text(value, limit)
+    raw = _text(value, limit)
+    if raw.startswith(("http://", "https://", "#", "/")):
+        resolved = objects_by_id.get(_schema_reference_id(raw, base_url))
+        if isinstance(resolved, dict):
+            return _text(
+                resolved.get("name") or resolved.get("headline") or resolved.get("legalName"),
+                limit,
+            )
+        if raw.startswith(("http://", "https://")):
+            return ""
+    return raw
 
 
 def extract_structured_entity_metadata(html, page_url):
@@ -682,9 +692,10 @@ def extract_structured_entity_metadata(html, page_url):
             if not name:
                 continue
 
-            offers = _resolve_entity_schema_object(obj.get("offers"), objects_by_id, page_url)
-            if isinstance(offers, list):
-                offers = offers[0] if offers else {}
+            raw_offers = obj.get("offers")
+            if isinstance(raw_offers, list):
+                raw_offers = raw_offers[0] if raw_offers else {}
+            offers = _resolve_entity_schema_object(raw_offers, objects_by_id, page_url)
             if not isinstance(offers, dict):
                 offers = {}
             sku = _text(obj.get("sku") or obj.get("mpn"), 64)
@@ -727,17 +738,14 @@ def extract_structured_entity_metadata(html, page_url):
                     if value:
                         attributes[target_key] = value
 
-            location = _resolve_entity_schema_object(
-                obj.get("location") or obj.get("containedInPlace"), objects_by_id, page_url
-            )
-            location_name = _entity_schema_name(location, objects_by_id, page_url)
+            location_value = obj.get("location") or obj.get("containedInPlace")
+            location_name = _entity_schema_name(location_value, objects_by_id, page_url)
             if location_name:
                 attributes["location_name"] = location_name
 
-            brand_value = _resolve_entity_schema_object(
-                obj.get("brand") or obj.get("manufacturer"), objects_by_id, page_url
-            )
-            brand_name = _entity_schema_name(brand_value, objects_by_id, page_url, limit=120)
+            brand_raw = obj.get("brand") or obj.get("manufacturer")
+            brand_value = _resolve_entity_schema_object(brand_raw, objects_by_id, page_url)
+            brand_name = _entity_schema_name(brand_raw, objects_by_id, page_url, limit=120)
             if brand_name:
                 attributes["brand"] = brand_name
             if isinstance(brand_value, dict):
@@ -770,7 +778,11 @@ def extract_structured_entity_metadata(html, page_url):
                 ("identifier", "identifier", 120),
             )
             for source_key, target_key, limit in simple_fields:
-                value = _text(obj.get(source_key), limit)
+                value = (
+                    _entity_schema_name(obj.get(source_key), objects_by_id, page_url, limit=limit)
+                    if source_key in {"category", "identifier"}
+                    else _text(obj.get(source_key), limit)
+                )
                 if value:
                     attributes[target_key] = value
             if sku:
