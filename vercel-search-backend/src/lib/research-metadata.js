@@ -14,6 +14,8 @@ const cache = new Map();
 const inFlight = new Map();
 let crossrefQueue = Promise.resolve();
 let lastCrossrefRequestAt = 0;
+let openAlexQueue = Promise.resolve();
+let lastOpenAlexRequestAt = 0;
 
 function clean(value, limit = 320) {
   return String(value || '').replace(/<[^>]*>/g, ' ').replace(/\\s+/g, ' ').trim().slice(0, limit);
@@ -27,6 +29,43 @@ function firstTitle(value) {
 function yearFromParts(value) {
   const parts = value && Array.isArray(value['date-parts']) ? value['date-parts'][0] : null;
   return Array.isArray(parts) && Number.isInteger(Number(parts[0])) ? String(parts[0]) : '';
+}
+
+function mapOpenAlexItem(item) {
+  if (!item || typeof item !== 'object') return null;
+  const openAlexId = clean(item.id, 240);
+  const doi = clean(item.doi, 240).replace(/^https?:\\/\\/doi\\.org\\//i, '').toLowerCase();
+  const title = clean(item.display_name || item.title);
+  if (!title || (!doi && !openAlexId)) return null;
+  const authors = (Array.isArray(item.authorships) ? item.authorships : [])
+    .slice(0, 4)
+    .map(entry => clean(entry && entry.author && entry.author.display_name, 100))
+    .filter(Boolean);
+  const primaryLocation = item.primary_location && typeof item.primary_location === 'object' ? item.primary_location : {};
+  const sourceName = clean(primaryLocation.source && primaryLocation.source.display_name, 180);
+  const resourceLicense = clean(primaryLocation.license, 120);
+  const year = clean(item.publication_year, 12);
+  const resourceType = clean(item.type, 80);
+  return {
+    id: 'openalex:' + (doi || openAlexId.toLowerCase()),
+    doi: doi || null,
+    externalId: openAlexId,
+    title,
+    url: doi ? 'https://doi.org/' + doi : openAlexId,
+    snippet: [authors.join(', '), sourceName, year, resourceType].filter(Boolean).join(' · '),
+    source: 'OpenAlex',
+    origin: 'OpenAlex Works Metadata',
+    provider: 'openalex-metadata',
+    mediaType: 'research',
+    resourceType,
+    publisher: sourceName,
+    authors,
+    year,
+    rights: [],
+    resourceRights: resourceLicense ? [{ label: resourceLicense, scope: 'primary_location' }] : [],
+    metadataLicense: 'CC0 1.0 OpenAlex metadata; linked works retain their own resource rights',
+    abstractIncluded: false
+  };
 }
 
 function mapCrossrefItem(item) {
@@ -100,21 +139,31 @@ function mapDataCiteItem(item) {
   };
 }
 
-function mergeResearchResults(crossrefItems, dataCiteItems, limit = 20) {
+function mergeResearchResults(openAlexItems, crossrefItems, dataCiteItems, limit = 20) {
+  const buckets = [openAlexItems || [], crossrefItems || [], dataCiteItems || []];
   const seen = new Set();
   const merged = [];
-  for (const item of [...(crossrefItems || []), ...(dataCiteItems || [])]) {
-    const doi = String(item && item.doi || '').trim().toLowerCase();
-    if (!doi || seen.has(doi)) continue;
-    seen.add(doi);
-    merged.push({ ...item, doi });
-    if (merged.length >= limit) break;
+  const maxLength = Math.max(0, ...buckets.map(items => items.length));
+  for (let index = 0; index < maxLength && merged.length < limit; index++) {
+    for (const items of buckets) {
+      const item = items[index];
+      if (!item || merged.length >= limit) continue;
+      const doi = String(item.doi || '').trim().toLowerCase();
+      const identity = doi ? 'doi:' + doi : 'id:' + String(item.id || '').trim().toLowerCase();
+      if (identity === 'id:' || seen.has(identity)) continue;
+      seen.add(identity);
+      merged.push({ ...item, doi: doi || null });
+    }
   }
   return merged;
 }
 
 function providerUrls(query) {
   const value = String(query || '').trim().slice(0, MAX_QUERY_LENGTH);
+  const openAlex = new URL('https://api.openalex.org/works');
+  openAlex.searchParams.set('search', value);
+  openAlex.searchParams.set('per-page', String(MAX_RESULTS_PER_SOURCE));
+  openAlex.searchParams.set('select', 'id,doi,display_name,publication_year,type,authorships,primary_location');
   const crossref = new URL('https://api.crossref.org/works');
   crossref.searchParams.set('query.bibliographic', value);
   crossref.searchParams.set('rows', String(MAX_RESULTS_PER_SOURCE));
@@ -123,7 +172,7 @@ function providerUrls(query) {
   dataCite.searchParams.set('query', value);
   dataCite.searchParams.set('page[size]', String(MAX_RESULTS_PER_SOURCE));
   dataCite.searchParams.set('fields[dois]', 'doi,titles,creators,publisher,publicationYear,types,subjects,dates,rightsList,url');
-  return { crossref: crossref.toString(), dataCite: dataCite.toString() };
+  return { openAlex: openAlex.toString(), crossref: crossref.toString(), dataCite: dataCite.toString() };
 }
 
 function requestJson(url, provider) {
@@ -174,6 +223,17 @@ function requestJson(url, provider) {
   });
 }
 
+function requestOpenAlex(url) {
+  const task = openAlexQueue.then(async () => {
+    const wait = Math.max(0, 120 - (Date.now() - lastOpenAlexRequestAt));
+    if (wait) await new Promise(resolve => setTimeout(resolve, wait));
+    lastOpenAlexRequestAt = Date.now();
+    return requestJson(url, 'openalex');
+  });
+  openAlexQueue = task.catch(() => {});
+  return task;
+}
+
 function requestCrossref(url) {
   const task = crossrefQueue.then(async () => {
     const wait = Math.max(0, 1000 - (Date.now() - lastCrossrefRequestAt));
@@ -200,18 +260,22 @@ async function loadResearchMetadata(query) {
   if (inFlight.has(key)) return inFlight.get(key);
   const urls = providerUrls(value);
   const task = Promise.allSettled([
+    requestOpenAlex(urls.openAlex),
     requestCrossref(urls.crossref),
     requestJson(urls.dataCite, 'datacite')
-  ]).then(([crossrefResult, dataCiteResult]) => {
+  ]).then(([openAlexResult, crossrefResult, dataCiteResult]) => {
+    const openAlexItems = openAlexResult.status === 'fulfilled'
+      ? (Array.isArray(openAlexResult.value.results) ? openAlexResult.value.results : []).map(mapOpenAlexItem).filter(Boolean)
+      : [];
     const crossrefItems = crossrefResult.status === 'fulfilled'
       ? ((crossrefResult.value.message || {}).items || []).map(mapCrossrefItem).filter(Boolean)
       : [];
     const dataCiteItems = dataCiteResult.status === 'fulfilled'
       ? (Array.isArray(dataCiteResult.value.data) ? dataCiteResult.value.data : []).map(mapDataCiteItem).filter(Boolean)
       : [];
-    const merged = mergeResearchResults(crossrefItems, dataCiteItems);
-    if (crossrefResult.status === 'fulfilled' && dataCiteResult.status === 'fulfilled') return remember(key, merged);
-    if (crossrefResult.status === 'fulfilled' || dataCiteResult.status === 'fulfilled') {
+    const merged = mergeResearchResults(openAlexItems, crossrefItems, dataCiteItems);
+    if (openAlexResult.status === 'fulfilled' && crossrefResult.status === 'fulfilled' && dataCiteResult.status === 'fulfilled') return remember(key, merged);
+    if (openAlexResult.status === 'fulfilled' || crossrefResult.status === 'fulfilled' || dataCiteResult.status === 'fulfilled') {
       cache.set(key, { loadedAt: Date.now(), results: merged, ttl: PARTIAL_CACHE_TTL_MS });
       while (cache.size > MAX_CACHE_ENTRIES) cache.delete(cache.keys().next().value);
     }
@@ -226,10 +290,13 @@ function resetForTests() {
   inFlight.clear();
   crossrefQueue = Promise.resolve();
   lastCrossrefRequestAt = 0;
+  openAlexQueue = Promise.resolve();
+  lastOpenAlexRequestAt = 0;
 }
 
 module.exports = {
   loadResearchMetadata,
+  mapOpenAlexItem,
   mapCrossrefItem,
   mapDataCiteItem,
   mergeResearchResults,
