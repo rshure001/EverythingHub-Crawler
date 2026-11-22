@@ -207,6 +207,15 @@ def normalize_text(value, limit):
     return re.sub(r"\s+", " ", str(value or "").replace("\x00", "")).strip()[:limit]
 
 
+def safe_stable_entity_id(value):
+    """Accept only canonical identifiers emitted by product_metadata._stable_same_as_ids."""
+    identity = normalize_text(value, 128)
+    return bool(re.fullmatch(
+        r"(?:wikidata:Q[1-9]\\d*|orcid:\\d{4}-\\d{4}-\\d{4}-\\d{3}[\\dX]|viaf:\\d+|isni:\\d{15}[\\dX]|geonames:\\d+|osm:(?:node|way|relation):\\d+)",
+        identity,
+    ))
+
+
 def extract_page_structured_catalog_metadata(html, page_url):
     """Extract bounded metadata for every supported schema.org collection type."""
     if not has_structured_catalog_markup(html):
@@ -266,17 +275,7 @@ def build_page_record(url, title, description, text, depth, directives, publishe
                 safe_ids = []
                 for value in values[:5]:
                     identity = normalize_text(value, 2048)
-                    try:
-                        parsed_identity = urllib.parse.urlsplit(identity)
-                    except ValueError:
-                        continue
-                    if (
-                        parsed_identity.scheme.lower() == "https"
-                        and parsed_identity.hostname
-                        and parsed_identity.username is None
-                        and parsed_identity.password is None
-                        and identity not in safe_ids
-                    ):
+                    if safe_stable_entity_id(identity) and identity not in safe_ids:
                         safe_ids.append(identity)
                 if safe_ids:
                     product[key] = safe_ids
@@ -324,17 +323,7 @@ def build_page_record(url, title, description, text, depth, directives, publishe
                         safe_ids = []
                         for value in values[:5]:
                             identity = normalize_text(value, 2048)
-                            try:
-                                parsed_identity = urllib.parse.urlsplit(identity)
-                            except ValueError:
-                                continue
-                            if (
-                                parsed_identity.scheme.lower() == "https"
-                                and parsed_identity.hostname
-                                and parsed_identity.username is None
-                                and parsed_identity.password is None
-                                and identity not in safe_ids
-                            ):
+                            if safe_stable_entity_id(identity) and identity not in safe_ids:
                                 safe_ids.append(identity)
                         if safe_ids:
                             item[key] = safe_ids
@@ -386,7 +375,7 @@ def build_page_record(url, title, description, text, depth, directives, publishe
                 or parsed_entity_url.username is not None
                 or parsed_entity_url.password is not None
             ):
-                entity_url = ""
+                continue
         attributes = {}
         raw_attributes = raw_entity.get("attributes")
         if isinstance(raw_attributes, dict):
@@ -396,17 +385,7 @@ def build_page_record(url, title, description, text, depth, directives, publishe
                     safe_ids = []
                     for value in values[:5]:
                         identity = normalize_text(value, 2048)
-                        try:
-                            parsed_identity = urllib.parse.urlsplit(identity)
-                        except ValueError:
-                            continue
-                        if (
-                            parsed_identity.scheme.lower() == "https"
-                            and parsed_identity.hostname
-                            and parsed_identity.username is None
-                            and parsed_identity.password is None
-                            and identity not in safe_ids
-                        ):
+                        if safe_stable_entity_id(identity) and identity not in safe_ids:
                             safe_ids.append(identity)
                     if safe_ids:
                         attributes[key] = safe_ids
