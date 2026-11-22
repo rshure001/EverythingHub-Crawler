@@ -1,24 +1,18 @@
 import unittest
-from urllib.parse import urlsplit
 
 from seed_coverage import DEFAULT_SEED_RETRY_SECONDS, schedule_missing_seed_urls
 
 
-def host_key(url: str) -> str:
-    return (urlsplit(url).hostname or "").lower()
-
-
 class SeedCoverageTests(unittest.TestCase):
-    def test_schedules_only_unrepresented_seed_hosts_and_sets_cooldown(self):
+    def test_schedules_only_unindexed_seed_urls_and_sets_cooldown(self):
         seeds = ["https://covered.example/", "https://missing.example/"]
         retry_after = {}
         scheduled = schedule_missing_seed_urls(
             seeds,
-            {"covered.example"},
+            {"https://covered.example/"},
             set(),
             retry_after,
             now=1_000,
-            host_key=host_key,
         )
         self.assertEqual(scheduled, [("https://missing.example/", 0)])
         self.assertEqual(
@@ -26,12 +20,26 @@ class SeedCoverageTests(unittest.TestCase):
             1_000 + DEFAULT_SEED_RETRY_SECONDS,
         )
 
-    def test_represented_host_clears_stale_retry_state(self):
-        seed = "https://covered.example/"
+    def test_secondary_seed_path_is_scheduled_when_sibling_homepage_is_indexed(self):
+        homepage = "https://city.example/"
+        visitor_page = "https://city.example/visitors"
+        retry_after = {}
+        scheduled = schedule_missing_seed_urls(
+            [homepage, visitor_page],
+            {homepage},
+            set(),
+            retry_after,
+            now=1_000,
+        )
+        self.assertEqual(scheduled, [(visitor_page, 0)])
+        self.assertEqual(retry_after[visitor_page], 1_000 + DEFAULT_SEED_RETRY_SECONDS)
+        self.assertNotIn(homepage, retry_after)
+
+    def test_indexed_url_clears_stale_retry_state(self):
+        seed = "https://covered.example/visitors"
         retry_after = {seed: 9_999}
         scheduled = schedule_missing_seed_urls(
-            [seed], {"covered.example"}, set(), retry_after,
-            now=1_000, host_key=host_key,
+            [seed], {seed}, set(), retry_after, now=1_000,
         )
         self.assertEqual(scheduled, [])
         self.assertNotIn(seed, retry_after)
@@ -40,8 +48,7 @@ class SeedCoverageTests(unittest.TestCase):
         seed = "https://missing.example/"
         retry_after = {}
         scheduled = schedule_missing_seed_urls(
-            [seed], set(), {seed}, retry_after,
-            now=1_000, host_key=host_key,
+            [seed], set(), {seed}, retry_after, now=1_000,
         )
         self.assertEqual(scheduled, [])
         self.assertEqual(retry_after[seed], 1_000 + DEFAULT_SEED_RETRY_SECONDS)
@@ -50,8 +57,7 @@ class SeedCoverageTests(unittest.TestCase):
         seed = "https://missing.example/"
         retry_after = {seed: 5_000}
         scheduled = schedule_missing_seed_urls(
-            [seed], set(), set(), retry_after,
-            now=1_000, host_key=host_key,
+            [seed], set(), set(), retry_after, now=1_000,
         )
         self.assertEqual(scheduled, [])
         self.assertEqual(retry_after[seed], 1_000 + DEFAULT_SEED_RETRY_SECONDS)
@@ -60,8 +66,7 @@ class SeedCoverageTests(unittest.TestCase):
         seed = "https://missing.example/"
         retry_after = {seed: 90_000}
         scheduled = schedule_missing_seed_urls(
-            [seed], set(), set(), retry_after,
-            now=1_000, host_key=host_key,
+            [seed], set(), set(), retry_after, now=1_000,
         )
         self.assertEqual(scheduled, [])
         self.assertEqual(retry_after[seed], 1_000 + DEFAULT_SEED_RETRY_SECONDS)
@@ -70,8 +75,7 @@ class SeedCoverageTests(unittest.TestCase):
         seed = "https://missing.example/"
         retry_after = {seed: 900}
         scheduled = schedule_missing_seed_urls(
-            [seed], set(), set(), retry_after,
-            now=1_000, host_key=host_key,
+            [seed], set(), set(), retry_after, now=1_000,
         )
         self.assertEqual(scheduled, [(seed, 0)])
         self.assertEqual(retry_after[seed], 1_000 + DEFAULT_SEED_RETRY_SECONDS)
@@ -81,7 +85,7 @@ class SeedCoverageTests(unittest.TestCase):
         retry_after = {}
         scheduled = schedule_missing_seed_urls(
             seeds, set(), {"https://already-queued.example/"},
-            retry_after, now=1_000, queue_limit=2, host_key=host_key,
+            retry_after, now=1_000, queue_limit=2,
         )
         self.assertEqual(scheduled, [("https://one.example/", 0)])
         self.assertNotIn("https://two.example/", retry_after)
@@ -90,8 +94,7 @@ class SeedCoverageTests(unittest.TestCase):
         seed = "https://missing.example/"
         retry_after = {}
         scheduled = schedule_missing_seed_urls(
-            [seed, seed], set(), set(), retry_after,
-            now=1_000, host_key=host_key,
+            [seed, seed], set(), set(), retry_after, now=1_000,
         )
         self.assertEqual(scheduled, [(seed, 0)])
 
@@ -99,8 +102,7 @@ class SeedCoverageTests(unittest.TestCase):
         seed = "https://missing.example/"
         retry_after = {seed: "not-a-timestamp"}
         scheduled = schedule_missing_seed_urls(
-            [seed], set(), set(), retry_after,
-            now=1_000, host_key=host_key,
+            [seed], set(), set(), retry_after, now=1_000,
         )
         self.assertEqual(scheduled, [(seed, 0)])
         self.assertEqual(retry_after[seed], 1_000 + DEFAULT_SEED_RETRY_SECONDS)
