@@ -16,6 +16,7 @@ from typing import Any
 
 MAX_INDEXED_PAGES = 250_000
 MAX_SHARD_COUNT = 768
+MAX_PAGES_PER_SHARD = 2_000
 MAX_SHARD_BYTES = 350_000
 MAX_SHARD_UNCOMPRESSED_BYTES = 500_000
 MAX_TOTAL_COMPRESSED_SHARD_BYTES = 100_000_000
@@ -99,8 +100,8 @@ def validate_manifest(manifest: dict[str, Any]) -> dict[str, Any]:
         pages = shard.get("pages")
         byte_count = shard.get("bytes")
         digest = shard.get("sha256")
-        if not isinstance(pages, int) or not 1 <= pages <= 1000:
-            raise ValueError(f"{name}: shard page count is invalid")
+        if type(pages) is not int or not 1 <= pages <= MAX_PAGES_PER_SHARD:
+            raise ValueError(f"{name}: shard page count must be within 1..{MAX_PAGES_PER_SHARD}")
         if not isinstance(byte_count, int) or not 1 <= byte_count <= MAX_SHARD_BYTES:
             raise ValueError(f"{name}: shard byte count exceeds the 350 KB file limit")
         if not isinstance(digest, str) or not SHA256.fullmatch(digest):
