@@ -114,14 +114,14 @@ def validate_query_index(
     if len(entries) > MAX_QUERY_INDEX_SHARDS:
         errors.append("query index exceeds the fixed 256-shard safety limit")
 
-    expected_postings: dict[str, dict[str, int]] = {}
+    expected_postings: dict[str, dict[int, int]] = {}
     for page in shard_records:
-        filename = page_shard_by_url.get(page.get("url"))
-        if not filename:
+        shard_index = page_shard_by_url.get(page.get("url"))
+        if shard_index is None:
             continue
         for token in query_tokens(page):
-            token_files = expected_postings.setdefault(token, {})
-            token_files[filename] = token_files.get(filename, 0) + 1
+            token_shards = expected_postings.setdefault(token, {})
+            token_shards[shard_index] = token_shards.get(shard_index, 0) + 1
     declared_shard_count = len(manifest.get("shards", []))
     expected_shard_indexes = {
         shard_index for postings in expected_postings.values() for shard_index in postings
