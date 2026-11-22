@@ -2229,20 +2229,33 @@ def _search_tokens(value: object) -> set[str]:
 
 
 def _search_catalog_priority(catalog: dict) -> tuple[int, str]:
-    """Keep typed global directories inside the bounded query-candidate window."""
+    """Keep query-relevant typed global directories inside the bounded candidate window."""
     catalog_id = str(catalog.get("catalog_id") or "")
     if catalog.get("catalog_origin") == "derived_from_global_typed_records":
-        rank = 0
+        typed_rank = {
+            "geographic": 0,
+            "commerce": 1,
+            "organization_directory": 2,
+            "business_directory": 3,
+            "service_directory": 4,
+            "people_directory": 5,
+            "events": 6,
+            "open_data": 7,
+            "media": 8,
+            "resource_library": 9,
+            "software": 10,
+        }
+        rank = typed_rank.get(str(catalog.get("catalog_type") or ""), 11)
     elif catalog.get("is_source_declared_catalog") is True:
-        rank = 1
+        rank = 20
     elif catalog.get("catalog_type") in {
         "commerce", "geographic", "business_directory", "service_directory",
         "organization_directory", "people_directory", "events", "open_data",
         "media", "resource_library", "software",
     }:
-        rank = 2
+        rank = 30
     else:
-        rank = 3
+        rank = 40
     return rank, catalog_id
 
 
