@@ -5,6 +5,7 @@ on:
     paths:
       - "crawler/catalog_retro_discovery.py"
       - "crawler/catalog_page_analysis.py"
+      - "crawler/automation-trigger.json"
       - "crawler/catalog_host_review_queue.py"
       - "crawler/catalog_source_policy.py"
       - "crawler/catalog-source-terms.json"
@@ -19,13 +20,13 @@ permissions:
   contents: write
 
 concurrency:
-  group: catalog-data-publish-${{ github.ref }}
+  group: catalog-data-publish-v2-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   inventory:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
         with:
