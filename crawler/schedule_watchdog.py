@@ -10,7 +10,7 @@ from typing import Any
 
 MAX_MANIFEST_AGE_SECONDS = 10 * 60
 MAX_MANIFEST_FUTURE_SKEW_SECONDS = 60
-MAX_SCHEDULE_AGE_SECONDS = 25 * 60
+MAX_SCHEDULE_AGE_SECONDS = 10 * 60
 ACTIVE_STATUSES = {"queued", "in_progress", "pending", "waiting", "requested"}
 
 
@@ -153,25 +153,25 @@ def evaluate(
         if manifest_age <= max_schedule_age_seconds:
             return {
                 "action": "wait",
-                "reason": "no scheduled crawl event is observable, but the public manifest is not older than the 25-minute recovery window",
+                "reason": "no scheduled crawl event is observable, but the public manifest is not older than the 10-minute recovery window",
                 **common,
             }
         return {
             "action": "mark",
-            "reason": "no scheduled crawl event is observable, the public manifest is more than 25 minutes old, and no crawler is queued or running",
+            "reason": "no scheduled crawl event is observable, the public manifest is more than 10 minutes old, and no crawler is queued or running",
             **common,
         }
 
     if schedule["schedule_status"] != "stale":
         return {
             "action": "wait",
-            "reason": "the latest scheduled crawl is not more than 25 minutes old; do not update the recovery marker",
+            "reason": "the latest scheduled crawl is not more than 10 minutes old; do not update the recovery marker",
             **common,
         }
 
     return {
         "action": "mark",
-        "reason": "scheduled crawl delivery is more than 25 minutes stale, the public manifest is more than 10 minutes stale, and no crawler is queued or running",
+        "reason": "scheduled crawl delivery is more than 10 minutes stale, the public manifest is more than 10 minutes stale, and no crawler is queued or running",
         **common,
     }
 
