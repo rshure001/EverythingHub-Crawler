@@ -1419,8 +1419,8 @@ def analyze_pages(
                 records[record_id]["catalog_ids"].append(catalog_id)
 
     global_subject_catalogs = _add_global_subject_catalogs(pages, page_rows, records, catalogs)
-    global_typed_catalogs_by_type = _add_global_typed_entity_catalogs(page_rows, records, catalogs)
     _reconcile_page_record_provenance(page_rows, records)
+    global_typed_catalogs_by_type = _add_global_typed_entity_catalogs(page_rows, records, catalogs)
 
     for item in records.values():
         item["source_urls"] = sorted(item["source_urls"])
