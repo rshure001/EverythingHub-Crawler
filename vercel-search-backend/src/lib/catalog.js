@@ -150,7 +150,8 @@ function validateQueryIndexMetadata(manifest) {
       totalUncompressedBytes !== meta.uncompressed_bytes ||
       totalItems !== meta.token_count ||
       (meta.token_count === 0) !== (meta.shard_count === 0) ||
-      (meta.token_count === 0) !== (meta.posting_count === 0)) {
+      (meta.token_count === 0) !== (meta.posting_count === 0) ||
+      (meta.token_count > 0 && meta.posting_count < meta.token_count)) {
     throw new Error('manifest_query_index_totals_mismatch');
   }
   return meta;
@@ -188,7 +189,8 @@ function validateQueryIndexPayload(meta, buffer, expectedPrefix, pageShards) {
   if (entries.length !== meta.items) throw new Error('query_index_token_count_mismatch');
   for (const [token, postings] of entries) {
     if (typeof token !== 'string' || !token || token.length > 256 ||
-        queryIndexPrefix(token) !== expectedPrefix || !Array.isArray(postings)) {
+        queryIndexPrefix(token) !== expectedPrefix || !Array.isArray(postings) ||
+        postings.length < 1 || postings.length > pageShards.length) {
       throw new Error('query_index_token_invalid');
     }
     let previousShard = -1;
@@ -524,15 +526,8 @@ async function loadQueryIndexedCatalog(manifest, commitSha, manifestSha256, quer
       scores.set(shardIndex, score);
     }
   }
-  let candidateSelection = 'union';
-  let candidates = Array.from(scores.entries());
-  if (postingsByToken.size > 1 && postingsByToken.size === terms.length) {
-    const intersection = candidates.filter(([, score]) => score.matchedTokens === postingsByToken.size);
-    if (intersection.length) {
-      candidates = intersection;
-      candidateSelection = 'intersection';
-    }
-  }
+  const candidateSelection = 'union-ranked-by-token-coverage';
+  const candidates = Array.from(scores.entries());
   candidates.sort((left, right) =>
     right[1].matchedTokens - left[1].matchedTokens ||
     right[1].pageCount - left[1].pageCount ||
