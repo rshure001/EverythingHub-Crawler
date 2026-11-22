@@ -324,7 +324,7 @@ def validate(root: Path = ROOT) -> list[str]:
     }
 
     seen_urls: set[str] = set()
-    page_shard_by_url: dict[str, str] = {}
+    page_shard_by_url: dict[str, int] = {}
     declared_files: set[str] = set()
     shard_records: list[dict] = []
     total_pages = 0
