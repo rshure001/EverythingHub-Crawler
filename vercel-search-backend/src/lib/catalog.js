@@ -102,7 +102,7 @@ function queryIndexPrefix(token) {
 
 function tokenizeQueryIndex(query) {
   const normalized = String(query || '').normalize('NFKC').toLowerCase();
-  const tokens = normalized.match(/[\\p{L}\\p{N}\\p{M}]+/gu) || [];
+  const tokens = normalized.match(/[\p{L}\p{N}\p{M}]+/gu) || [];
   return Array.from(new Set(tokens.filter(token => token && !QUERY_STOP_TOKENS.has(token))))
     .slice(0, MAX_QUERY_TERMS);
 }
@@ -130,7 +130,7 @@ function validateQueryIndexMetadata(manifest) {
   let totalItems = 0;
   for (const shard of meta.shards) {
     if (!shard || typeof shard.file !== 'string' ||
-        !/^query-index\\/[0-9a-f]{2}\\.json\\.gz$/.test(shard.file) ||
+        !/^query-index\/[0-9a-f]{2}\.json\.gz$/.test(shard.file) ||
         !Number.isSafeInteger(shard.items) || shard.items < 1 ||
         shard.items > MAX_QUERY_INDEX_SHARD_TOKENS ||
         !Number.isSafeInteger(shard.bytes) || shard.bytes < 1 ||
