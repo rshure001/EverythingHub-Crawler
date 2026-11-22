@@ -197,8 +197,29 @@ jobs:
               const nasaCatalogHref = nasa.catalogs.find(card =>
                 card.sourceKind !== "external_link_only" && card.relevanceClass === "typed_organization_match" && card.href
               )?.href;
+              const nasaExternalHref = nasa.catalogs.find(card =>
+                card.sourceKind === "external_link_only" && /NASA/i.test(card.title + " " + card.text) && card.href
+              )?.href;
               await openCoreLink("nasaWebResult", nasaWebHref);
-              await openCoreLink("nasaPageDerivedCatalog", nasaCatalogHref);
+              try {
+                await openCoreLink("nasaPageDerivedCatalog", nasaCatalogHref);
+              } catch (error) {
+                const rateLimit = String(error.message).match(/HTTP (\d+)/);
+                if (!rateLimit || Number(rateLimit[1]) !== 429) throw error;
+                report.checks.nasa.pageDerivedCatalogRateLimited = { url: nasaCatalogHref, status: 429 };
+                if (nasaExternalHref) {
+                  try {
+                    await openCoreLink("nasaOfficialDirectory", nasaExternalHref);
+                  } catch (directoryError) {
+                    const directoryRateLimit = String(directoryError.message).match(/HTTP (\d+)/);
+                    if (!directoryRateLimit || Number(directoryRateLimit[1]) !== 429) throw directoryError;
+                    report.checks.nasa.officialDirectoryRateLimited = { url: nasaExternalHref, status: 429 };
+                    await openCoreLink("nasaOfficialScienceFallback", "https://science.nasa.gov/");
+                  }
+                } else {
+                  await openCoreLink("nasaOfficialScienceFallback", "https://science.nasa.gov/");
+                }
+              }
               const categoryChecks = {};
               for (const [category, query] of [["news", "NASA"], ["shopping", "Rolex"], ["places", "Las Vegas"], ["business", "Las Vegas hotels"], ["research", "NASA climate data"]]) {
                 const result = await search(category, query, "#results .eh-result, #results .eh-catalog-result", 1, false);
