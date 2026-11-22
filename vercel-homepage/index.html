@@ -1027,7 +1027,6 @@ form.addEventListener('submit',async e=>{
   u.searchParams.set('q',q);
   u.searchParams.set('limit','50');
   u.searchParams.set('offset',String((page-1)*50));
-  if(mode==='research')u.searchParams.set('lane','research');
   if(lane==='research')u.searchParams.set('lane','research');
   const r=await fetch(u,{headers:{accept:'application/json'}});
   if(!r.ok)throw Error('Independent Everything Hub search '+r.status);
