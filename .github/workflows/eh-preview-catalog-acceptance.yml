@@ -1,0 +1,86 @@
+name: Everything Hub Vercel preview catalog acceptance
+
+on:
+  push:
+    branches:
+      - eh/federated-research-metadata
+    paths:
+      - ".github/workflows/eh-preview-catalog-acceptance.yml"
+      - "vercel-homepage/**"
+      - "vercel-search-backend/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preview-catalog-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      TARGET_URL: https://everythinghub-homepage-fixed-5ejp93con-rshure001-8053.vercel.app/
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install Playwright and Chromium
+        run: |
+          npm init -y
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+      - name: Validate ready main preview catalog search
+        run: |
+          cat > preview-acceptance.cjs <<'JS'
+          const { chromium } = require("playwright");
+          (async () => {
+            const browser = await chromium.launch({ headless: true });
+            const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+            const errors = [];
+            page.on("pageerror", error => errors.push(error.message));
+            try {
+              const response = await page.goto(process.env.TARGET_URL, { waitUntil: "domcontentloaded", timeout: 45000 });
+              if (!response || response.status() !== 200) throw new Error("Preview homepage did not return HTTP 200");
+              await page.locator("#query").waitFor({ state: "visible", timeout: 20000 });
+              const modes = await page.locator(".hotspots [data-mode]").evaluateAll(nodes => nodes.map(node => node.dataset.mode));
+              if (modes.length !== 8) throw new Error("Expected eight search categories; got " + modes.length);
+              const search = async (mode, query, predicate) => {
+                await page.locator('.hotspots [data-mode="' + mode + '"]').click();
+                await page.locator("#query").fill(query);
+                await page.locator("#searchForm button[type=submit]").click();
+                await page.locator("#results .eh-result").first().waitFor({ state: "visible", timeout: 60000 });
+                await page.locator("#results .eh-catalog-result").first().waitFor({ state: "visible", timeout: 30000 });
+                const cards = await page.locator("#results .eh-catalog-result").evaluateAll(nodes => nodes.map(node => ({
+                  title: node.querySelector("a")?.textContent?.trim() || "",
+                  text: node.textContent?.trim() || "",
+                  sourceKind: node.dataset.sourceKind || "page-derived",
+                  relevanceClass: node.dataset.relevanceClass || "",
+                  catalogId: node.dataset.catalogId || "",
+                  visible: node.getBoundingClientRect().width > 0 && node.getBoundingClientRect().height > 0
+                })));
+                if (!cards.some(predicate)) throw new Error(query + " catalog cards failed validation: " + JSON.stringify(cards));
+                return cards;
+              };
+              const rolex = await search("web", "Rolex", card =>
+                card.visible && (
+                  (card.sourceKind !== "external_link_only" && card.relevanceClass === "typed_product_match" && /Rolex/i.test(card.title + " " + card.text)) ||
+                  (card.sourceKind === "external_link_only" && /Rolex/i.test(card.title + " " + card.text))
+                )
+              );
+              await page.goto(process.env.TARGET_URL, { waitUntil: "domcontentloaded" });
+              const vegas = await search("web", "Las Vegas", card =>
+                card.visible && card.sourceKind !== "external_link_only" &&
+                card.relevanceClass === "typed_location_match" && /Las Vegas/i.test(card.title + " " + card.text)
+              );
+              await page.goto(process.env.TARGET_URL, { waitUntil: "domcontentloaded" });
+              const nasa = await search("web", "NASA", card =>
+                card.visible && card.sourceKind !== "external_link_only" &&
+                card.relevanceClass === "typed_organization_match" && /NASA/i.test(card.title + " " + card.text)
+              );
+              if (errors.length) throw new Error("Browser page errors: " + errors.join(" | "));
+              console.log(JSON.stringify({ preview: process.env.TARGET_URL, modes: modes.length, rolex: rolex.length, lasVegas: vegas.length, nasa: nasa.length }, null, 2));
+            } finally {
+              await browser.close();
+            }
+          })().catch(error => { console.error(error); process.exit(1); });
+          JS
+          node preview-acceptance.cjs
