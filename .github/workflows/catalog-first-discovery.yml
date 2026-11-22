@@ -40,14 +40,14 @@ permissions:
   contents: write
 
 concurrency:
-  group: catalog-first-discovery-${{ github.ref }}
+  group: catalog-data-publish-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
   discover:
     if: github.event_name != 'push' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
         with:
