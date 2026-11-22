@@ -121,7 +121,7 @@ function providerUrls(query) {
   const dataCite = new URL('https://api.datacite.org/dois');
   dataCite.searchParams.set('query', value);
   dataCite.searchParams.set('page[size]', String(MAX_RESULTS_PER_SOURCE));
-  dataCite.searchParams.set('fields[dois]', 'doi,titles,creators,publisher,publicationYear,types,subjects,dates,rightsList,url,created,updated');
+  dataCite.searchParams.set('fields[dois]', 'doi,titles,creators,publisher,publicationYear,types,subjects,dates,rightsList,url');
   return { crossref: crossref.toString(), dataCite: dataCite.toString() };
 }
 
@@ -204,7 +204,10 @@ async function loadResearchMetadata(query) {
     const dataCiteItems = dataCiteResult.status === 'fulfilled'
       ? (Array.isArray(dataCiteResult.value.data) ? dataCiteResult.value.data : []).map(mapDataCiteItem).filter(Boolean)
       : [];
-    return remember(key, mergeResearchResults(crossrefItems, dataCiteItems));
+    const merged = mergeResearchResults(crossrefItems, dataCiteItems);
+    return crossrefResult.status === 'fulfilled' || dataCiteResult.status === 'fulfilled'
+      ? remember(key, merged)
+      : merged;
   }).finally(() => inFlight.delete(key));
   inFlight.set(key, task);
   return task;
