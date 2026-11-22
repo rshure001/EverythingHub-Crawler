@@ -552,3 +552,289 @@ def extract_structured_catalog_metadata(html, page_url):
             return {}
         result = {"version": 1, "lists": lists}
     return result if lists else {}
+
+
+_ENTITY_SCHEMA_RELATIONSHIPS = (
+    "@graph", "mainEntity", "mainEntityOfPage", "hasPart", "itemListElement",
+    "item", "itemOffered", "dataset", "hasVariant", "about", "author",
+    "publisher", "organizer", "location", "address", "brand", "manufacturer",
+    "provider", "containedInPlace", "containedIn", "department", "member",
+    "worksFor", "areaServed", "serviceArea", "offers",
+)
+_ENTITY_RECORD_LIMIT = 8
+_ENTITY_JSON_BYTES_LIMIT = 12_000
+
+
+def _walk_entity_schema_objects(value, depth=0, seen=None, budget=None):
+    """Walk a bounded allowlist of JSON-LD entity relationships."""
+    if seen is None:
+        seen = set()
+    if budget is None:
+        budget = [0]
+    if depth > 8 or budget[0] >= 600:
+        return
+    if isinstance(value, list):
+        for item in value[:120]:
+            yield from _walk_entity_schema_objects(item, depth + 1, seen, budget)
+        return
+    if not isinstance(value, dict):
+        return
+    marker = id(value)
+    if marker in seen:
+        return
+    seen.add(marker)
+    budget[0] += 1
+    yield value
+    for key in _ENTITY_SCHEMA_RELATIONSHIPS:
+        if key in value:
+            yield from _walk_entity_schema_objects(value[key], depth + 1, seen, budget)
+
+
+def _resolve_entity_schema_object(value, objects_by_id, base_url):
+    if isinstance(value, str):
+        return objects_by_id.get(_schema_reference_id(value, base_url), {})
+    if not isinstance(value, dict):
+        return {}
+    object_id = _schema_reference_id(value.get("@id"), base_url)
+    resolved = objects_by_id.get(object_id) if object_id else None
+    if isinstance(resolved, dict) and _schema_record_type(resolved) and len(resolved) >= len(value):
+        return resolved
+    return value
+
+
+def _entity_schema_name(value, objects_by_id, base_url, limit=120):
+    if isinstance(value, list):
+        names = []
+        for item in value[:3]:
+            name = _entity_schema_name(item, objects_by_id, base_url, limit=limit)
+            if name and name not in names:
+                names.append(name)
+        return "; ".join(names)[:limit]
+    if isinstance(value, dict):
+        resolved = _resolve_entity_schema_object(value, objects_by_id, base_url)
+        return _text(
+            resolved.get("name") or resolved.get("headline") or
+            resolved.get("legalName") or resolved.get("value") or
+            resolved.get("identifier"),
+            limit,
+        )
+    raw = _text(value, limit)
+    if raw.startswith(("http://", "https://", "#", "/")):
+        resolved = objects_by_id.get(_schema_reference_id(raw, base_url))
+        if isinstance(resolved, dict):
+            return _text(
+                resolved.get("name") or resolved.get("headline") or resolved.get("legalName"),
+                limit,
+            )
+        if raw.startswith(("http://", "https://")):
+            return ""
+    return raw
+
+
+def extract_structured_entity_metadata(html, page_url):
+    """Extract a small, typed set of schema.org entities from one crawled page.
+
+    This is metadata-only. It never fetches entity URLs, follows sameAs links,
+    or copies contact details or street addresses. Product records require a
+    commerce identifier/offer; place and business records retain locality-level
+    location metadata so searches can distinguish real geographic matches.
+    """
+    if not isinstance(html, str) or not html or "application/ld+json" not in html.casefold():
+        return []
+    if not _absolute_http(page_url, page_url):
+        return []
+    lowered = html.casefold()
+    if not any(marker in lowered for marker in _SCHEMA_RECORD_TYPES):
+        return []
+
+    parser = _MetadataParser()
+    parser.feed(html[:2_000_000])
+    candidates = []
+    seen_entities = set()
+    priority_by_type = {
+        "place": 0, "business": 1, "product": 2, "model": 3, "brand": 4,
+        "organization": 5, "service": 6, "dataset": 7, "software": 8,
+        "event": 9, "person": 10, "article": 11,
+    }
+
+    for raw in parser.json_blocks:
+        try:
+            payload = json.loads(raw)
+        except (ValueError, TypeError, RecursionError):
+            continue
+        schema_objects = list(_walk_entity_schema_objects(payload))
+        objects_by_id = {}
+        object_priorities = {}
+        for schema_obj in schema_objects:
+            if not isinstance(schema_obj, dict):
+                continue
+            object_id = _schema_reference_id(schema_obj.get("@id"), page_url)
+            if not object_id:
+                continue
+            priority = (
+                1 if _schema_record_type(schema_obj) else 0,
+                1 if _text(schema_obj.get("name") or schema_obj.get("headline") or schema_obj.get("legalName"), 160) else 0,
+                1 if _absolute_http(schema_obj.get("url"), page_url) else 0,
+                len(schema_obj),
+            )
+            if object_id not in object_priorities or priority > object_priorities[object_id]:
+                objects_by_id[object_id] = schema_obj
+                object_priorities[object_id] = priority
+
+        for raw_obj in schema_objects:
+            if not isinstance(raw_obj, dict):
+                continue
+            obj = _resolve_entity_schema_object(raw_obj, objects_by_id, page_url)
+            record_type = _schema_record_type(obj)
+            if record_type not in priority_by_type:
+                continue
+            name = _text(obj.get("name") or obj.get("headline") or obj.get("legalName"), 160)
+            if not name:
+                continue
+
+            raw_offers = obj.get("offers")
+            if isinstance(raw_offers, list):
+                raw_offers = raw_offers[0] if raw_offers else {}
+            offers = _resolve_entity_schema_object(raw_offers, objects_by_id, page_url)
+            if not isinstance(offers, dict):
+                offers = {}
+            sku = _text(obj.get("sku") or obj.get("mpn"), 64)
+            gtin = _text(
+                obj.get("gtin14") or obj.get("gtin13") or
+                obj.get("gtin12") or obj.get("gtin8") or obj.get("gtin"),
+                32,
+            )
+            model_number = _text(obj.get("modelNumber") or obj.get("model"), 80)
+            price = _text(offers.get("price") or obj.get("price"), 64)
+            availability = _text(offers.get("availability") or obj.get("availability"), 80)
+            if record_type == "product" and not any((sku, gtin, price, availability)):
+                continue
+            if record_type == "model" and not any((model_number, sku, gtin)):
+                continue
+
+            attributes = {}
+            schema_types = sorted(_schema_type_names(obj))
+            if schema_types:
+                attributes["schema_type"] = ", ".join(schema_types[:4])
+
+            same_as_ids = _stable_same_as_ids([obj.get("sameAs"), obj.get("@id")])
+            if same_as_ids:
+                attributes["same_as_ids"] = same_as_ids[:5]
+
+            entity_url_raw = obj.get("url") or obj.get("@id")
+            entity_url = _absolute_http(entity_url_raw, page_url) if entity_url_raw else ""
+            if entity_url:
+                attributes["entity_url"] = entity_url
+
+            address = _resolve_entity_schema_object(obj.get("address"), objects_by_id, page_url)
+            if isinstance(address, dict):
+                for source_key, target_key, limit in (
+                    ("addressLocality", "address_locality", 120),
+                    ("addressRegion", "address_region", 80),
+                    ("addressCountry", "address_country", 80),
+                    ("postalCode", "postal_code", 24),
+                ):
+                    value = _text(address.get(source_key), limit)
+                    if value:
+                        attributes[target_key] = value
+
+            location_value = obj.get("location") or obj.get("containedInPlace")
+            location_name = _entity_schema_name(location_value, objects_by_id, page_url)
+            if location_name:
+                attributes["location_name"] = location_name
+
+            brand_raw = obj.get("brand") or obj.get("manufacturer")
+            brand_value = _resolve_entity_schema_object(brand_raw, objects_by_id, page_url)
+            brand_name = _entity_schema_name(brand_raw, objects_by_id, page_url, limit=120)
+            if brand_name:
+                attributes["brand"] = brand_name
+            if isinstance(brand_value, dict):
+                brand_ids = _stable_same_as_ids([brand_value.get("sameAs"), brand_value.get("@id")])
+                if brand_ids:
+                    attributes["brand_same_as_ids"] = brand_ids[:5]
+
+            simple_fields = (
+                ("category", "category", 120),
+                ("serviceType", "service_type", 120),
+                ("jobTitle", "job_title", 120),
+                ("foundingDate", "founding_date", 40),
+                ("startDate", "start_date", 40),
+                ("endDate", "end_date", 40),
+                ("datePublished", "date_published", 40),
+                ("dateModified", "date_modified", 40),
+                ("eventStatus", "event_status", 100),
+                ("eventAttendanceMode", "attendance_mode", 100),
+                ("temporalCoverage", "temporal_coverage", 100),
+                ("spatialCoverage", "spatial_coverage", 120),
+                ("measurementTechnique", "measurement_technique", 120),
+                ("applicationCategory", "application_category", 120),
+                ("operatingSystem", "operating_system", 120),
+                ("softwareVersion", "software_version", 80),
+                ("programmingLanguage", "programming_language", 80),
+                ("sku", "sku", 64),
+                ("mpn", "mpn", 64),
+                ("gtin", "gtin", 32),
+                ("priceCurrency", "currency", 8),
+                ("identifier", "identifier", 120),
+            )
+            for source_key, target_key, limit in simple_fields:
+                value = (
+                    _entity_schema_name(obj.get(source_key), objects_by_id, page_url, limit=limit)
+                    if source_key in {"category", "identifier"}
+                    else _text(obj.get(source_key), limit)
+                )
+                if value:
+                    attributes[target_key] = value
+            if sku:
+                attributes["sku"] = sku
+            if gtin:
+                attributes["gtin"] = gtin
+            if model_number:
+                attributes["model_number"] = model_number
+            if price:
+                attributes["price"] = price
+            if availability:
+                availability = availability.rsplit("/", 1)[-1]
+                attributes["availability"] = availability
+
+            for source_key, target_key in (
+                ("areaServed", "area_served"),
+                ("provider", "provider_name"),
+                ("organizer", "organizer_name"),
+                ("author", "author_name"),
+                ("publisher", "publisher_name"),
+                ("affiliation", "affiliation"),
+                ("worksFor", "works_for"),
+                ("parentOrganization", "parent_organization"),
+                ("license", "license"),
+            ):
+                value = _entity_schema_name(obj.get(source_key), objects_by_id, page_url)
+                if value:
+                    attributes[target_key] = value
+
+            identity = (
+                record_type,
+                (same_as_ids[0] if same_as_ids else entity_url or name.casefold().strip()),
+            )
+            if identity in seen_entities:
+                continue
+            seen_entities.add(identity)
+
+            description = _text(obj.get("description"), 500)
+            candidates.append((
+                priority_by_type[record_type],
+                name.casefold(),
+                {
+                    "record_type": record_type,
+                    "name": name,
+                    "description": description,
+                    "entity_url": entity_url,
+                    "attributes": attributes,
+                },
+            ))
+
+    candidates.sort(key=lambda item: (item[0], item[1]))
+    entities = [item[2] for item in candidates[:_ENTITY_RECORD_LIMIT]]
+    while entities and len(json.dumps(entities, ensure_ascii=False, separators=(",", ":")).encode("utf-8")) > _ENTITY_JSON_BYTES_LIMIT:
+        entities.pop()
+    return entities
