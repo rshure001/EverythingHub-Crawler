@@ -965,17 +965,12 @@ async function searchPublicSources(query){
    const u=new URL('https://openlibrary.org/search.json');u.searchParams.set('q',query);u.searchParams.set('limit','40');
    u.searchParams.set('fields','key,title,author_name,first_publish_year,cover_i');
    const r=await fetch(u);if(!r.ok)throw Error('Open Library');const d=await r.json();
-   return (d.docs||[]).map(p=>({title:p.title||'Book',url:'https://openlibrary.org'+p.key,snippet:[(p.author_name||[]).slice(0,3).join(', '),p.first_publish_year].filter(Boolean).join(' · '),image:p.cover_i?'https://covers.openlibrary.org/b/id/'+p.cover_i+'-M.jpg':'',source:'Open Library',score:0}));
-  })(),
-  (async()=>{
-   const u=new URL('https://api.crossref.org/works');u.searchParams.set('query',query);u.searchParams.set('rows','40');u.searchParams.set('select','DOI,title,author,published,container-title,URL');
-   const r=await fetch(u);if(!r.ok)throw Error('Crossref');const d=await r.json();
-   return (d.message?.items||[]).map(p=>({title:Array.isArray(p.title)?p.title[0]:'Research publication',url:p.URL||('https://doi.org/'+p.DOI),snippet:[(p.author||[]).slice(0,3).map(a=>[a.given,a.family].filter(Boolean).join(' ')).join(', '),(p['container-title']||[])[0],p.published?.['date-parts']?.[0]?.[0]].filter(Boolean).join(' · '),image:'',source:'Crossref research',score:0}));
+   return (d.docs||[]).map(p=>({title:p.title||'Book',url:'https://openlibrary.org'+p.key,snippet:[(p.author_name||[]).slice(0,3).join(', '),p.first_publish_year].filter(Boolean).join(' · '),image:p.cover_i?'https://covers.openlibrary.org/b/id/'+p.cover_i+'-M.jpg':'',source:'Open Library',mediaType:selectedMode==='research'?'research':'web',score:0}));
   })(),
   (async()=>{
    const u=new URL('https://www.googleapis.com/books/v1/volumes');u.searchParams.set('q',query);u.searchParams.set('maxResults','40');
    const r=await fetch(u);if(!r.ok)throw Error('Google Books');const d=await r.json();
-   return (d.items||[]).map(p=>{const v=p.volumeInfo||{};return {title:v.title||'Book',url:v.infoLink||('https://books.google.com/books?id='+p.id),snippet:[(v.authors||[]).slice(0,3).join(', '),v.publishedDate,v.description].filter(Boolean).join(' · ').slice(0,360),image:(v.imageLinks&&(v.imageLinks.thumbnail||v.imageLinks.smallThumbnail)||'').replace('http://','https://'),source:'Google Books',score:0};});
+   return (d.items||[]).map(p=>{const v=p.volumeInfo||{};return {title:v.title||'Book',url:v.infoLink||('https://books.google.com/books?id='+p.id),snippet:[(v.authors||[]).slice(0,3).join(', '),v.publishedDate,v.description].filter(Boolean).join(' · ').slice(0,360),image:(v.imageLinks&&(v.imageLinks.thumbnail||v.imageLinks.smallThumbnail)||'').replace('http://','https://'),source:'Google Books',mediaType:selectedMode==='research'?'research':'web',score:0};});
   })(),
   (async()=>{
    const u=new URL('https://commons.wikimedia.org/w/api.php');
@@ -987,7 +982,7 @@ async function searchPublicSources(query){
  const settled=await Promise.allSettled(jobs);
  if(selectedMode==='images'||selectedMode==='videos')return settled[0].status==='fulfilled'?settled[0].value:[];
  if(selectedMode==='news')return [];
- if(selectedMode==='research')return settled.slice(2,5).flatMap(x=>x.status==='fulfilled'?x.value:[]);
+ if(selectedMode==='research')return settled.slice(2,4).flatMap(x=>x.status==='fulfilled'?x.value:[]);
  return settled.flatMap(x=>x.status==='fulfilled'?x.value:[]);
 }
 form.addEventListener('submit',async e=>{
@@ -1027,11 +1022,12 @@ form.addEventListener('submit',async e=>{
    items.push(item);itemByUrl.set(url,item);
   }
  };
- const loadApiPage=async(page)=>{
+ const loadApiPage=async(page, lane=activeType)=>{
   const u=new URL('https://everythinghub-search-backend.vercel.app/api/search');
   u.searchParams.set('q',q);
   u.searchParams.set('limit','50');
   u.searchParams.set('offset',String((page-1)*50));
+  if(lane==='research')u.searchParams.set('lane','research');
   const r=await fetch(u,{headers:{accept:'application/json'}});
   if(!r.ok)throw Error('Independent Everything Hub search '+r.status);
   const d=await r.json();
@@ -1041,12 +1037,12 @@ form.addEventListener('submit',async e=>{
    const snippet=x.snippet||x.description||'Candidate catalog preview; source terms and reuse rights have not been reviewed.';
    return {...x,title:x.title||x.catalog_title||x.catalog_id||'Catalog candidate',url:x.url||x.source_url||'',snippet,description:snippet,source:x.source||'Everything Hub Catalog Preview',origin:x.origin||'Everything Hub Catalog Preview',mediaType:'web',score:Number(x.score)||0};
   }).filter(x=>x.url);
-  const pageResults=(d.results||[]).map(x=>({...x,description:x.snippet||x.description||'',source:x.source||d.provider||'Web search',mediaType:'web'}));
+  const pageResults=(d.results||[]).map(x=>({...x,description:x.snippet||x.description||'',source:x.source||d.provider||'Web search',mediaType:x.mediaType||'web'}));
   return catalogResults.concat(pageResults);
  };
  const render=()=>{
   const isVideo=x=>x.mediaType==='video'||Boolean(x.video)||/youtube\.com|youtu\.be|vimeo\.com/i.test(String(x.url||''));
-  const matches=items.filter(x=>activeType==='images'?Boolean(safe(x.image)!=='#'):activeType==='videos'?isVideo(x):activeType==='news'?/news|reuters|apnews|bbc|cnn|nytimes|theguardian/i.test(String(x.url||'')+' '+String(x.source||'')):activeType==='shopping'?/shop|store|amazon|walmart|ebay|product/i.test(String(x.url||'')+' '+String(x.title||'')):activeType==='places'?/maps|place|travel|visit|location/i.test(String(x.url||'')+' '+String(x.title||'')):activeType==='business'?/company|business|corporate|linkedin|crunchbase/i.test(String(x.url||'')+' '+String(x.title||'')):activeType==='research'?/research|study|journal|paper|scholar|arxiv/i.test(String(x.url||'')+' '+String(x.title||'')):!isVideo(x));
+  const matches=items.filter(x=>activeType==='images'?Boolean(safe(x.image)!=='#'):activeType==='videos'?isVideo(x):activeType==='news'?/news|reuters|apnews|bbc|cnn|nytimes|theguardian/i.test(String(x.url||'')+' '+String(x.source||'')):activeType==='shopping'?/shop|store|amazon|walmart|ebay|product/i.test(String(x.url||'')+' '+String(x.title||'')):activeType==='places'?/maps|place|travel|visit|location/i.test(String(x.url||'')+' '+String(x.title||'')):activeType==='business'?/company|business|corporate|linkedin|crunchbase/i.test(String(x.url||'')+' '+String(x.title||'')):activeType==='research'?(x.mediaType==='research'||/research|study|journal|paper|scholar|arxiv/i.test(String(x.url||'')+' '+String(x.title||''))):!isVideo(x));
   const visible=matches.slice(0,shown);
   out.className=activeType==='images'?'image-mode':activeType==='videos'?'video-mode':'';
   const tabs='<nav class="search-tabs" aria-label="Search categories">'+[['web','All'],['news','News'],['images','Images'],['videos','Videos'],['shopping','Shopping'],['places','Maps'],['business','Business'],['research','Research']].map(([key,label])=>'<button type="button" class="search-tab" data-type="'+key+'" aria-pressed="'+(activeType===key)+'">'+label+'</button>').join('')+'</nav>';
@@ -1064,7 +1060,7 @@ form.addEventListener('submit',async e=>{
   const moreAvailable=shown<matches.length||(activeType==='web'&&apiHasMore);
   const resultLabel=activeType==='web'&&totalIndexed?'Showing '+matches.length.toLocaleString()+' results · '+totalIndexed.toLocaleString()+' pages indexed':matches.length.toLocaleString()+' '+activeType+' results';
   out.innerHTML=tabs+'<p class="source result-count">'+resultLabel+'</p>'+cards+(moreAvailable?'<button id="moreResults" type="button" style="display:block;margin:22px auto;padding:13px 25px;border:1px solid #39ff79;border-radius:999px;background:#063b2e;color:#fff;font-weight:800">'+(shown<matches.length?'Show 24 more results':'Load next 50 indexed results')+'</button>':'')+(matches.length?'':'<p>No '+activeType+' results found for this search. Try Web or a broader search.</p>');
-  out.querySelectorAll('.search-tab').forEach(tab=>tab.addEventListener('click',()=>{activeType=tab.dataset.type;shown=24;render()}));
+  out.querySelectorAll('.search-tab').forEach(tab=>tab.addEventListener('click',async()=>{activeType=tab.dataset.type;shown=24;if(activeType==='research'&&!items.some(x=>x.mediaType==='research')){try{addItems(await loadApiPage(1,'research'));}catch(error){}}render()}));
   const more=document.querySelector('#moreResults');
   if(more)more.addEventListener('click',async()=>{
    if(loadingMore)return;loadingMore=true;more.disabled=true;more.textContent='Loading more results…';
@@ -1080,7 +1076,7 @@ form.addEventListener('submit',async e=>{
   // It is the primary index, not a last-resort fallback when outside sources fail.
   const [catalogResult,apiResult,publicResult]=await Promise.allSettled([
    searchCrawlerIndex(q),
-   loadApiPage(1),
+   loadApiPage(1,activeType),
    searchPublicSources(q)
   ]);
   // Independent live web search is the primary provider; the published static crawler catalog adds supplemental coverage.
