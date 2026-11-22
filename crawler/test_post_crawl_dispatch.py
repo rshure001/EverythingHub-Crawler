@@ -16,7 +16,7 @@ class PostCrawlDispatchTests(unittest.TestCase):
         self.assertNotIn("gh workflow run publish-site.yml --ref main", crawler)
         self.assertNotIn("  workflow_run:", search)
         self.assertIn("  workflow_dispatch:", search)
-        self.assertIn("dispatch_search_smoke()", catalog)
+        self.assertIn("python crawler/publish_catalog_snapshot.py --attempts 4", catalog)
         self.assertIn("gh workflow run search-api-smoke.yml --ref main", catalog)
 
 
