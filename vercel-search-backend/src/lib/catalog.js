@@ -360,7 +360,7 @@ async function loadCatalogFromManifest(manifest, commitSha, manifestRaw, fetchBu
 
 function normalizeQueryIndexTokens(value) {
   const normalized = String(value || '').normalize('NFKC').toLowerCase();
-  const raw = normalized.match(/[\\p{L}\\p{N}]+/gu) || [];
+  const raw = normalized.match(/[\p{L}\p{N}]+/gu) || [];
   const seen = new Set();
   const tokens = [];
   for (const token of raw) {
@@ -407,7 +407,7 @@ function validateQueryIndexMetadata(manifest) {
   let tokenCount = 0;
   for (const entry of index.shards) {
     const match = entry && typeof entry.file === 'string'
-      ? /^query-index\\/([a-f0-9]{2})\\.json\\.gz$/i.exec(entry.file)
+      ? /^query-index\/([a-f0-9]{2})\.json\.gz$/i.exec(entry.file)
       : null;
     if (!match || entries.has(match[1].toLowerCase()) ||
         !Number.isSafeInteger(entry.bytes) || entry.bytes < 1 ||
