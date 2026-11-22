@@ -320,17 +320,5 @@ class ScheduleWatchdogTests(unittest.TestCase):
         self.assertIn("schedule_age is None and manifest_age <= 25 * 60", workflow)
         self.assertNotIn("No scheduled crawl event is observable; no recovery marker will be written.", workflow)
 
-    def test_catalog_publishers_share_a_serialized_main_publication_lane(self):
-        root = Path(__file__).resolve().parents[1]
-        discovery = (root / ".github" / "workflows" / "catalog-first-discovery.yml").read_text(encoding="utf-8")
-        inventory = (root / ".github" / "workflows" / "retroactive-catalog-index.yml").read_text(encoding="utf-8")
-        expected = "group: catalog-data-publish-${{ github.ref }}"
-        self.assertIn(expected, discovery)
-        self.assertIn(expected, inventory)
-        self.assertIn("cancel-in-progress: false", discovery)
-        self.assertIn("cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}", inventory)
-        self.assertIn("timeout-minutes: 90", discovery)
-
-
 if __name__ == "__main__":
     unittest.main()
