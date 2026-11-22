@@ -965,12 +965,12 @@ async function searchPublicSources(query){
    const u=new URL('https://openlibrary.org/search.json');u.searchParams.set('q',query);u.searchParams.set('limit','40');
    u.searchParams.set('fields','key,title,author_name,first_publish_year,cover_i');
    const r=await fetch(u);if(!r.ok)throw Error('Open Library');const d=await r.json();
-   return (d.docs||[]).map(p=>({title:p.title||'Book',url:'https://openlibrary.org'+p.key,snippet:[(p.author_name||[]).slice(0,3).join(', '),p.first_publish_year].filter(Boolean).join(' · '),image:p.cover_i?'https://covers.openlibrary.org/b/id/'+p.cover_i+'-M.jpg':'',source:'Open Library',score:0}));
+   return (d.docs||[]).map(p=>({title:p.title||'Book',url:'https://openlibrary.org'+p.key,snippet:[(p.author_name||[]).slice(0,3).join(', '),p.first_publish_year].filter(Boolean).join(' · '),image:p.cover_i?'https://covers.openlibrary.org/b/id/'+p.cover_i+'-M.jpg':'',source:'Open Library',mediaType:selectedMode==='research'?'research':'web',score:0}));
   })(),
   (async()=>{
    const u=new URL('https://www.googleapis.com/books/v1/volumes');u.searchParams.set('q',query);u.searchParams.set('maxResults','40');
    const r=await fetch(u);if(!r.ok)throw Error('Google Books');const d=await r.json();
-   return (d.items||[]).map(p=>{const v=p.volumeInfo||{};return {title:v.title||'Book',url:v.infoLink||('https://books.google.com/books?id='+p.id),snippet:[(v.authors||[]).slice(0,3).join(', '),v.publishedDate,v.description].filter(Boolean).join(' · ').slice(0,360),image:(v.imageLinks&&(v.imageLinks.thumbnail||v.imageLinks.smallThumbnail)||'').replace('http://','https://'),source:'Google Books',score:0};});
+   return (d.items||[]).map(p=>{const v=p.volumeInfo||{};return {title:v.title||'Book',url:v.infoLink||('https://books.google.com/books?id='+p.id),snippet:[(v.authors||[]).slice(0,3).join(', '),v.publishedDate,v.description].filter(Boolean).join(' · ').slice(0,360),image:(v.imageLinks&&(v.imageLinks.thumbnail||v.imageLinks.smallThumbnail)||'').replace('http://','https://'),source:'Google Books',mediaType:selectedMode==='research'?'research':'web',score:0};});
   })(),
   (async()=>{
    const u=new URL('https://commons.wikimedia.org/w/api.php');
