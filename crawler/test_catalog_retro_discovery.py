@@ -55,6 +55,7 @@ class RetroCatalogDiscoveryTests(unittest.TestCase):
         page_derived = (root / ".github" / "workflows" / "retroactive-catalog-index.yml").read_text(encoding="utf-8")
         self.assertIn("group: catalog-first-discovery-${{ github.ref }}", catalog_first)
         self.assertIn("group: catalog-data-publish-${{ github.ref }}", page_derived)
+        self.assertIn("timeout-minutes: 90", catalog_first)
 
     def test_full_catalog_inventory_runs_hourly_not_after_every_crawler_cycle(self):
         workflow = (
