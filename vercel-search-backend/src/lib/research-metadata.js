@@ -209,7 +209,7 @@ async function loadResearchMetadata(query) {
       ? (Array.isArray(dataCiteResult.value.data) ? dataCiteResult.value.data : []).map(mapDataCiteItem).filter(Boolean)
       : [];
     const merged = mergeResearchResults(crossrefItems, dataCiteItems);
-    return crossrefResult.status === 'fulfilled' || dataCiteResult.status === 'fulfilled'
+    return crossrefResult.status === 'fulfilled' && dataCiteResult.status === 'fulfilled'
       ? remember(key, merged)
       : merged;
   }).finally(() => inFlight.delete(key));
