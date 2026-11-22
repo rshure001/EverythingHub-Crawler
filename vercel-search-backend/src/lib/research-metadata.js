@@ -103,9 +103,10 @@ function mergeResearchResults(crossrefItems, dataCiteItems, limit = 20) {
   const seen = new Set();
   const merged = [];
   for (const item of [...(crossrefItems || []), ...(dataCiteItems || [])]) {
-    if (!item || !item.doi || seen.has(item.doi)) continue;
-    seen.add(item.doi);
-    merged.push(item);
+    const doi = String(item && item.doi || '').trim().toLowerCase();
+    if (!doi || seen.has(doi)) continue;
+    seen.add(doi);
+    merged.push({ ...item, doi });
     if (merged.length >= limit) break;
   }
   return merged;
