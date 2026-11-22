@@ -38,7 +38,7 @@ function safeUrl(value){
 }
 function validateManifest(m){
  if(!m||m.version!==1||m.integrity!=='sha256')throw new Error('page_catalog_manifest_schema_invalid');
- if(!Number.isSafeInteger(m.source_index_pages)||m.source_index_pages<1||m.source_index_pages>180000)throw new Error('page_catalog_source_count_invalid');
+ if(!Number.isSafeInteger(m.source_index_pages)||m.source_index_pages<1||m.source_index_pages>250000)throw new Error('page_catalog_source_count_invalid');
  if(!Number.isSafeInteger(m.catalog_count)||m.catalog_count<1||m.catalog_count>25000||!Number.isSafeInteger(m.record_count)||m.record_count<1||m.record_count>1200000)throw new Error('page_catalog_counts_invalid');
  if(typeof m.generated_at!=='string'||!Number.isFinite(Date.parse(m.generated_at))||!Array.isArray(m.files)||m.files.length<2||m.files.length>40000)throw new Error('page_catalog_manifest_invalid');
  const files=new Map();
