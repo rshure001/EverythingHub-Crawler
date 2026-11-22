@@ -12,7 +12,7 @@ let manifestCache=null; const queryCache=new Map();
 const MAX_MANIFEST=4000000, MAX_REGISTRY_GZIP=5000000, MAX_RECORDS_GZIP=16000000;
 const MAX_REGISTRY_JSON=32000000, MAX_RECORDS_JSON=96000000;
 const CONTENT_INTENT=new Set(['article','articles','news','research','study','studies','report','reports','guide','guides','tutorial','documentation','paper','papers','dataset','datasets','video','videos','image','images','photo','photos','media','book','books']);
-const ATTRIBUTE_KEYS=new Set(['brand','model','sku','mpn','gtin','manufacturer','category']);
+const ATTRIBUTE_KEYS=new Set(['brand','model','sku','mpn','gtin','manufacturer','category','address_locality','address_region','address_country','city','state','region','country','postal_code','location_name','area_served','service_type']);
 const agent=new https.Agent({keepAlive:true,maxSockets:4});
 let cache=null;
 
@@ -242,7 +242,14 @@ function searchPageDerivedCatalogs(query,network,limit=5){
  };
  const queryMatchesRecord=record=>terms.every(t=>recordTokens(record).all.has(t));
  const globalProductMatch=network.records.some(r=>['product','brand','model'].includes(String(r.record_type||'').toLowerCase())&&queryMatchesRecord(r));
- const globalPlaceMatch=network.records.some(r=>String(r.record_type||'').toLowerCase()==='place'&&queryMatchesRecord(r));
+ const globalPlaceMatch=network.records.some(r=>{
+  const type=String(r.record_type||'').toLowerCase();
+  if(type==='place')return queryMatchesRecord(r);
+  if(!['business','service','organization'].includes(type))return false;
+  const attrs=r.attributes&&typeof r.attributes==='object'?r.attributes:{};
+  const hasLocation=['address_locality','address_region','address_country','city','state','region','country','postal_code','location_name','area_served'].some(key=>typeof attrs[key]==='string'&&attrs[key].trim());
+  return hasLocation&&queryMatchesRecord(r);
+ });
  const productIntent=!contentIntent&&!businessIntent&&(productTermIntent||globalProductMatch);
  const geoIntent=terms.length>=2&&globalPlaceMatch&&!contentIntent&&!eventIntent&&!businessIntent;
  const locationBusinessIntent=businessIntent&&!contentIntent;
