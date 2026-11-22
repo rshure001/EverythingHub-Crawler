@@ -1895,6 +1895,16 @@ class CatalogInventoryTriggerTests(unittest.TestCase):
             hits = search_catalog_network("Alpha Widget", result)
             self.assertTrue(any(item.get("catalog_id") == directory["catalog_id"] for item in hits))
 
+            invalid_origins = [
+                (item.get("catalog_id"), item.get("catalog_origin"), item.get("source_key"))
+                for item in result["catalogs"]
+                if item.get("catalog_origin") not in {
+                    "source_declared_collection", "content_list_declared_collection",
+                    "structured_schema_collection", "derived_from_repeated_records",
+                    "derived_from_global_typed_records",
+                }
+            ]
+            self.assertEqual(invalid_origins, [])
             output = root / "output"
             write_outputs(result, output)
             validated = validate_outputs(output)
