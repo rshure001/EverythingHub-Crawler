@@ -28,22 +28,22 @@ test("Vercel catalog loader retains a bounded optional gzip envelope", () => {
 
 test("Vercel catalog loader exposes the 250,000-page bounded shard envelope", () => {
   assert.equal(MAX_INDEXED_PAGES, 250_000);
-  assert.equal(MAX_SHARD_COUNT, 768);
+  assert.equal(MAX_SHARD_COUNT, 900);
   assert.equal(MAX_PAGES_PER_SHARD, 2000);
   assert.equal(MAX_SHARD_BYTES, 350_000);
-  assert.equal(MAX_SHARD_UNCOMPRESSED_BYTES, 500_000);
+  assert.equal(MAX_SHARD_UNCOMPRESSED_BYTES, 600_000);
   assert.equal(MAX_TOTAL_SHARD_BYTES, 150_000_000);
   assert.equal(MAX_TOTAL_COMPRESSED_SHARD_BYTES, 150_000_000);
-  assert.equal(MAX_TOTAL_SHARD_UNCOMPRESSED_BYTES, 600_000_000);
+  assert.equal(MAX_TOTAL_SHARD_UNCOMPRESSED_BYTES, 540_000_000);
   assert.equal(MAX_SHARD_CONCURRENCY, 48);
 });
 
 test("Vercel shard validator accepts the full 250,000-page capacity envelope", () => {
-  const shards = Array.from({ length: 768 }, (_, index) => ({
+  const shards = Array.from({ length: 900 }, (_, index) => ({
     file: "shard-" + String(index + 1).padStart(4, "0") + ".json.gz",
-    pages: index < 400 ? 326 : 325,
-    bytes: 130_208,
-    uncompressed_bytes: 500_000,
+    pages: index < 700 ? 278 : 277,
+    bytes: 166_666,
+    uncompressed_bytes: 600_000,
     sha256: "a".repeat(64)
   }));
   const manifest = {
@@ -51,11 +51,11 @@ test("Vercel shard validator accepts the full 250,000-page capacity envelope", (
     integrity: "sha256",
     updated_at: Math.floor(Date.now() / 1000),
     total_pages: 250_000,
-    shard_count: 768,
+    shard_count: 900,
     shards
   };
   const checked = validateShardManifest(manifest);
   assert.equal(checked.totalPages, 250_000);
-  assert.equal(checked.totalBytes, 99_999_744);
-  assert.equal(checked.totalUncompressedBytes, 384_000_000);
+  assert.equal(checked.totalBytes, 149_999_400);
+  assert.equal(checked.totalUncompressedBytes, 540_000_000);
 });
