@@ -262,7 +262,7 @@ jobs:
                   .filter(Number.isFinite);
                 const latestPublishedAt = publishedTimes.length ? Math.max(...publishedTimes) : 0;
                 const latestPublishedAgeHours = latestPublishedAt ? (Date.now() - latestPublishedAt) / 3600000 : null;
-                const maxAgeHours = category === "for-you" ? 72 : 168;
+                const maxAgeHours = category === "for-you" ? 24 : 168;
                 report.checks.newsFreshness[category] = {
                   http: newsApi.status(),
                   itemCount: Array.isArray(newsPayload.items) ? newsPayload.items.length : 0,
@@ -317,15 +317,15 @@ jobs:
               await shot("everythinghub-images.png");
               await goHome();
               // NASA has a stable, rights-attributed Internet Archive video set.
-              // The animation query currently returns four valid cards, so it is
-              // not a reliable five-card acceptance threshold.
-              await search("videos", "NASA", "#results .video-card", 4);
+              // Require three genuinely relevant NASA videos after filtering out
+              // unrelated Internet Archive keyword collisions; do not pad the set.
+              await search("videos", "NASA", "#results .video-card", 3);
               const videoCards = page.locator("#results .video-card");
               const videoCardCount = await videoCards.count();
-              for (let i = 0; i < Math.min(4, videoCardCount); i++) await videoCards.nth(i).scrollIntoViewIfNeeded();
+              for (let i = 0; i < Math.min(3, videoCardCount); i++) await videoCards.nth(i).scrollIntoViewIfNeeded();
               await page.waitForFunction(() => {
-                const cards = [...document.querySelectorAll("#results .video-card")].slice(0, 4);
-                return cards.length >= 4 && cards.every(card => {
+                const cards = [...document.querySelectorAll("#results .video-card")].slice(0, 3);
+                return cards.length >= 3 && cards.every(card => {
                   const img = card.querySelector("img");
                   return !!(img && img.complete && img.naturalWidth > 0) || !!card.querySelector(".video-placeholder");
                 });
@@ -334,21 +334,33 @@ jobs:
                 cards: cards.length,
                 loaded: cards.filter(card => { const img=card.querySelector("img"); return img && img.complete && img.naturalWidth > 0; }).length,
                 failed: cards.filter(card => !!card.querySelector(".video-placeholder")).length,
-                thumbnailUrls: cards.slice(0, 4).map(card => card.querySelector("img")?.currentSrc || card.querySelector("img")?.src || ""),
+                thumbnailUrls: cards.slice(0, 3).map(card => card.querySelector("img")?.currentSrc || card.querySelector("img")?.src || ""),
                 providers: cards.map(card => card.querySelector("small")?.textContent || ""),
                 links: cards.map(card => card.querySelector("a")?.href || ""),
-                titles: cards.map(card => (card.querySelector("h3, h4, strong")?.textContent || card.textContent || "").replace(/\s+/g, " ").trim())
+                titles: cards.map(card => (card.querySelector("h3, h4, strong")?.textContent || card.textContent || "").trim()),
+                cardTexts: cards.map(card => (card.textContent || "").trim())
               }));
               videoStats.thumbnailResponses = mediaResponses.slice();
               videoStats.thumbnailFailures = mediaFailures.slice();
               report.checks.videos = videoStats;
-              const unrelatedVideoTitles = videoStats.titles.filter(title => /\b(?:now voyager|curiosity company|two sides same coin)\b/i.test(title));
-              const hasNASAContext = videoStats.titles.some(title => /\b(?:nasa|apollo|artemis|hubble|space shuttle|international space station|mars rover|perseverance|voyager|james webb)\b/i.test(title));
-              if (unrelatedVideoTitles.length || !hasNASAContext) throw new Error("NASA video relevance checks failed: " + JSON.stringify({ titles: videoStats.titles, unrelated: unrelatedVideoTitles }));
+              const unrelatedVideoTitles = videoStats.titles.filter(title => {
+                const lower = title.toLowerCase();
+                return ["now voyager", "curiosity company", "two sides same coin"].some(term => lower.includes(term));
+              });
+              const irrelevantVideoCards = videoStats.cardTexts.filter((cardText, index) => {
+                const fullText = cardText.toLowerCase();
+                const title = videoStats.titles[index].toLowerCase();
+                const hasNASA = fullText.includes("nasa");
+                const hasMissionTitle = ["apollo", "artemis", "hubble", "space shuttle", "international space station", "mars rover", "perseverance", "voyager", "james webb"].some(term => title.includes(term));
+                return !hasNASA && !hasMissionTitle;
+              });
+              videoStats.relevance = { unrelatedVideoTitles, irrelevantVideoCards };
+              report.checks.videos = videoStats;
+              if (unrelatedVideoTitles.length || irrelevantVideoCards.length) throw new Error("NASA video relevance checks failed: " + JSON.stringify(videoStats.relevance));
               const videoHrefs = await videoCards.evaluateAll(cards => cards.map(card => card.tagName.toLowerCase() === "a" ? card.href : card.querySelector("a")?.href || "").filter(Boolean));
               await openCoreLink("videoSource", videoHrefs.find(href => { try { return new URL(href).hostname.toLowerCase() === "archive.org"; } catch { return false; } }));
               report.checks.coreLinks = coreLinks;
-              if (videoStats.loaded < 4 || videoStats.providers.some(x => !x.includes("Internet Archive")) || videoStats.links.some(x => !x.startsWith("https://archive.org/details/"))) throw new Error("Internet Archive video checks failed: " + JSON.stringify(videoStats));
+              if (videoStats.loaded < 3 || videoStats.providers.some(x => !x.includes("Internet Archive")) || videoStats.links.some(x => !x.startsWith("https://archive.org/details/"))) throw new Error("Internet Archive video checks failed: " + JSON.stringify(videoStats));
               await shot("everythinghub-videos.png");
               await page.setViewportSize({ width: 390, height: 844 });
               await goHome();
