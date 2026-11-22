@@ -21,10 +21,11 @@ test("homepage loads the tested media preview policy before its search code", ()
 });
 
 test("research mode calls the federated API and retains research result types", () => {
-  assert.match(html, /u\\.searchParams\\.set\\('lane','research'\\)/);
-  assert.match(html, /mediaType:x\\.mediaType\\|\\|'web'/);
-  assert.match(html, /x\\.mediaType==='research'/);
-  assert.match(html, /loadApiPage\\(1,'research'\\)/);
+  assert.match(html, /u\.searchParams\.set\('lane','research'\)/);
+  assert.match(html, /mediaType:x\.mediaType\|\|'web'/);
+  assert.match(html, /x\.mediaType==='research'/);
+  assert.match(html, /loadApiPage\(1,activeType\)/);
+  assert.doesNotMatch(html, /api\.crossref\.org\/works/);
 });
 
 test("homepage keeps one search form and eight category modes", () => {
