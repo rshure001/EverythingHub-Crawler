@@ -1603,6 +1603,7 @@ def analyze_pages_incremental(
 
     Catalog IDs remain host-scoped; records with vetted external identifiers can
     merge across host partitions without merging generic same-title entities.
+    Global typed directories are built only after all host partitions are merged.
     """
     source_page_rows = len(pages)
     pages, duplicate_source_page_rows = _dedupe_source_pages(pages)
@@ -1654,6 +1655,7 @@ def analyze_pages_incremental(
     all_records, cross_host_record_merges = _merge_cross_host_records(all_records)
     global_subject_catalogs = _add_global_subject_catalogs(pages, all_page_rows, all_records, all_catalogs)
     _reconcile_page_record_provenance(all_page_rows, all_records)
+    global_typed_catalogs_by_type = _add_global_typed_entity_catalogs(all_page_rows, all_records, all_catalogs)
     all_catalogs.sort(key=lambda x: (x["catalog_type"], x["title"].casefold(), x["catalog_id"]))
     all_records.sort(key=lambda x: (x["record_type"], x["title"].casefold(), x["record_id"]))
     all_page_rows.sort(key=lambda x: (x.get("url") or "", x.get("page_id") or ""))
@@ -1683,10 +1685,15 @@ def analyze_pages_incremental(
         "source_row_deduplication_percentage": round(source_row_deduplication, 4),
         "eligible_page_coverage_status": "complete" if source_set_complete else "unknown_incomplete_source_set",
         "global_subject_catalogs": global_subject_catalogs,
+        "global_typed_catalogs": sum(global_typed_catalogs_by_type.values()),
+        "global_typed_catalogs_by_type": global_typed_catalogs_by_type,
+        "global_typed_catalog_page_associations": sum(len(x.get("source_page_ids", [])) for x in all_catalogs if x.get("catalog_origin") == "derived_from_global_typed_records"),
+        "global_typed_catalog_record_associations": sum(len(x.get("record_ids", [])) for x in all_catalogs if x.get("catalog_origin") == "derived_from_global_typed_records"),
+        "catalogs_by_origin": dict(sorted(Counter(x.get("catalog_origin") or "unknown" for x in all_catalogs).items())),
         "unique_catalogs_discovered": len(all_catalogs),
         "unique_catalogs_by_type": dict(sorted(Counter(x["catalog_type"] for x in all_catalogs).items())),
         "source_declared_catalogs": sum(bool(x.get("is_source_declared_catalog")) for x in all_catalogs),
-        "derived_catalogs": sum(x.get("catalog_origin") == "derived_from_repeated_records" for x in all_catalogs),
+        "derived_catalogs": sum(x.get("catalog_origin") in {"derived_from_repeated_records", "derived_from_global_typed_records"} for x in all_catalogs),
         "content_list_catalogs": sum(x.get("catalog_origin") == "content_list_declared_collection" for x in all_catalogs),
         "structured_schema_catalogs": sum(x.get("catalog_origin") == "structured_schema_collection" for x in all_catalogs),
         "catalogs_with_records": sum(bool(x.get("record_ids")) for x in all_catalogs),
