@@ -1676,6 +1676,22 @@ class CatalogInventoryTriggerTests(unittest.TestCase):
                 })
                 fetched_at += 1
 
+            brand_slug = re.sub(r"[^a-z0-9]+", "-", brand.lower()).strip("-")
+            for record_type, url_path, title in (
+                ("brand", "brands", brand),
+                ("product", "products", f"{brand} Watch Collection"),
+            ):
+                pages.append({
+                    "url": f"https://{host}/{url_path}/{brand_slug}",
+                    "title": title,
+                    "description": f"{brand} watch brand and product collection",
+                    "text": f"Official {brand} watch brand and product information.",
+                    "lane": "general",
+                    "robots_allowed": True,
+                    "fetched_at": fetched_at,
+                })
+                fetched_at += 1
+
         place_sources = [
             ("visitlasvegas.com", ["Las Vegas Strip", "Fremont Street"]),
             ("travel.example", ["Downtown Las Vegas", "Red Rock Canyon"]),
