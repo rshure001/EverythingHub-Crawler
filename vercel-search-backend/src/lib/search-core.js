@@ -3,9 +3,16 @@ const VALID_LANES = new Set([
   'general', 'science', 'news', 'technology',
   'business', 'government', 'culture', 'nature'
 ]);
+const STOP_TOKENS = new Set([
+  'a', 'an', 'and', 'are', 'as', 'at', 'be', 'by', 'for', 'from',
+  'in', 'into', 'is', 'it', 'of', 'on', 'or', 'our', 'the', 'to',
+  'with', 'your', 'you', 'we', 'this', 'that', 'these', 'those'
+]);
 function tokenize(value) {
-  return String(value || '').toLowerCase().match(/[a-z0-9]{2,}/g) || [];
+  const normalized = String(value || '').normalize('NFKC').toLowerCase();
+  return (normalized.match(/[a-z0-9]{2,}/g) || []).filter(token => !STOP_TOKENS.has(token));
 }
+
 function frequencies(value) {
   const counts = Object.create(null);
   for (const token of tokenize(value)) counts[token] = (counts[token] || 0) + 1;
@@ -18,15 +25,21 @@ function searchCatalog(pages, query, lane) {
   const terms = Array.from(new Set(tokenize(query)));
   if (!terms.length) return [];
   const requestedLane = String(lane || '').toLowerCase();
-  const laneFilter = VALID_LANES.has(requestedLane) ? requestedLane : '';
+  const laneFilter = VALID_LANES.has(requestedLane) && requestedLane !== 'general' ? requestedLane : '';
   const ranked = [];
   for (const page of pages) {
     const pageLane = String(page.lane || page.tentacle || 'general').toLowerCase();
-    if (laneFilter && pageLane !== laneFilter) continue;
+    if (laneFilter && pageLane !== laneFilter && pageLane !== 'general') continue;
+    const product = page.product && typeof page.product === 'object' ? page.product : {};
     const title = frequencies(page.title);
     const description = frequencies(page.description);
     const body = frequencies(String(page.text || '').slice(0, 12000));
     const url = frequencies(page.url);
+    const productName = frequencies(product.name);
+    const productBrand = frequencies(product.brand);
+    const productSku = frequencies(product.sku);
+    const productPrice = frequencies(product.price);
+    const productAvailability = frequencies(product.availability);
     let score = 0;
     let matched = 0;
     let strongMatched = 0;
@@ -35,21 +48,31 @@ function searchCatalog(pages, query, lane) {
       const descriptionHits = description[term] || 0;
       const urlHits = url[term] || 0;
       const bodyHits = body[term] || 0;
+      const productNameHits = productName[term] || 0;
+      const productBrandHits = productBrand[term] || 0;
+      const productSkuHits = productSku[term] || 0;
+      const productPriceHits = productPrice[term] || 0;
+      const productAvailabilityHits = productAvailability[term] || 0;
       const strongPoints = titleHits * 20 + descriptionHits * 10 + urlHits * 8;
-      const points = strongPoints + Math.min(bodyHits, 8);
+      const productPoints = productNameHits * 26 + productBrandHits * 22 + productSkuHits * 18;
+      const points = strongPoints + productPoints + productPriceHits * 3 +
+        productAvailabilityHits * 2 + Math.min(bodyHits, 8);
       if (points > 0) {
         matched += 1;
         score += points;
       }
-      if (strongPoints > 0) strongMatched += 1;
+      if (strongPoints > 0 || productPoints > 0) strongMatched += 1;
     }
     if (!matched) continue;
     score += matched * 5;
     // Exact multi-word phrases are a stronger relevance signal than scattered
     // token mentions. This is especially important for place and brand queries.
-    const phrase = String(query || '').trim().toLowerCase().replace(/\s+/g, ' ');
+    const phrase = String(query || '').normalize('NFKC').trim().toLowerCase().replace(/\s+/g, ' ');
+    const productNameText = String(product.name || '').normalize('NFKC').toLowerCase();
+    const productBrandText = String(product.brand || '').normalize('NFKC').toLowerCase();
     if (phrase.length >= 3) {
-      if (String(page.title || '').toLowerCase().includes(phrase)) score += 80;
+      if (productNameText.includes(phrase) || productBrandText.includes(phrase)) score += 90;
+      else if (String(page.title || '').toLowerCase().includes(phrase)) score += 80;
       else if (String(page.description || '').toLowerCase().includes(phrase)) score += 35;
       else if (String(page.url || '').toLowerCase().includes(phrase.replace(/ /g, '-'))) score += 25;
     }
@@ -59,11 +82,19 @@ function searchCatalog(pages, query, lane) {
     // A single weak body mention is discovery evidence, not a useful result.
     if (strongMatched === 0 && score < 18) continue;
     const summary = clean(page.description);
+    const productSummary = [
+      clean(product.name),
+      clean(product.brand),
+      product.sku ? 'SKU ' + clean(product.sku) : '',
+      clean(product.price),
+      clean(product.availability)
+    ].filter(Boolean).join(' · ');
+    const snippet = summary || productSummary || clean(page.text).slice(0, 320);
     ranked.push({
-      title: clean(page.title) || page.url,
+      title: clean(product.name) || clean(page.title) || page.url,
       url: page.url,
-      snippet: summary || clean(page.text).slice(0, 320),
-      description: summary || clean(page.text).slice(0, 320),
+      snippet,
+      description: snippet,
       source: 'Everything Hub Crawler',
       origin: 'Everything Hub Index',
       mediaType: 'web',
@@ -164,5 +195,5 @@ function buildResponse(options) {
   };
 }
 module.exports = {
-  VALID_LANES, tokenize, clean, searchCatalog, parseBingRss, buildResponse
+  VALID_LANES, STOP_TOKENS, tokenize, clean, searchCatalog, parseBingRss, buildResponse
 };
