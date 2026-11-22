@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "updated_at": "2026-11-22T05:12:15.569Z",
-  "reason": "One bounded recovery crawl requested by the project freshness check: no scheduled crawler event has been observed since 2026-11-22T00:41:14Z; the latest public-search manifest is 172,928 pages, updated at 2026-11-22T04:14:19Z, and is more than 50 minutes old; no crawler run is currently queued or running. Normal schedule unchanged.",
-  "manifest_before_pages": 172928,
-  "manifest_before_updated_at": "2026-11-22T04:14:19Z"
+  "updated_at": "2026-11-22T06:14:37.602Z",
+  "reason": "One bounded recovery crawl requested after the scheduled crawler and watchdog events were unobserved: the latest public-search manifest contains 174035 pages, was updated at 2026-11-22T05:20:19Z, and is more than 50 minutes old; no crawler run is queued or running. Normal schedule unchanged.",
+  "manifest_before_pages": 174035,
+  "manifest_before_updated_at": "2026-11-22T05:20:19Z"
 }
