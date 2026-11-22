@@ -2,6 +2,7 @@
 const https = require('node:https');
 const zlib = require('node:zlib');
 const crypto = require('node:crypto');
+const { tokenize } = require('./search-core');
 
 const CATALOG_BASE_URL = 'https://raw.githubusercontent.com/rshure001/EverythingHub-Crawler/';
 const GIT_REF_URL = 'https://api.github.com/repos/rshure001/EverythingHub-Crawler/git/ref/heads/main';
@@ -19,8 +20,19 @@ const MAX_TOTAL_COMPRESSED_SHARD_BYTES = 100000000;
 const MAX_TOTAL_SHARD_UNCOMPRESSED_BYTES = 400000000;
 const MAX_SHARD_CONCURRENCY = 48;
 const SHARD_FETCH_TIMEOUT_MS = 8500;
+const MAX_QUERY_INDEX_SHARDS = 256;
+const MAX_QUERY_INDEX_SHARD_BYTES = 2000000;
+const MAX_QUERY_INDEX_SHARD_UNCOMPRESSED_BYTES = 8000000;
+const MAX_QUERY_INDEX_TOTAL_COMPRESSED_BYTES = 32000000;
+const MAX_QUERY_INDEX_TOTAL_UNCOMPRESSED_BYTES = 64000000;
+const MAX_QUERY_INDEX_TOKENS = 1000000;
+const MAX_QUERY_INDEX_POSTINGS = 20000000;
+const MAX_QUERY_INDEX_CONCURRENCY = 12;
+const MAX_QUERY_CACHE_ENTRIES = 12;
 const agent = new https.Agent({ keepAlive: true, maxSockets: MAX_SHARD_CONCURRENCY });
 let cache = null;
+let snapshotCache = null;
+const queryCache = new Map();
 
 function getBuffer(url, maxBytes, timeoutMs = 10000) {
   return new Promise((resolve, reject) => {
@@ -248,6 +260,235 @@ function validateShardPayload(meta, buffer) {
   }
   for (const page of payload.pages) validatePage(page, 'shard');
   return payload.pages;
+}
+
+
+function validateQueryIndexManifest(manifest) {
+  const meta = manifest && manifest.query_index;
+  if (meta == null) return null;
+  if (!meta || typeof meta !== 'object' || Array.isArray(meta) || meta.version !== 1 ||
+      !Number.isSafeInteger(meta.shard_count) || meta.shard_count < 1 ||
+      meta.shard_count > MAX_QUERY_INDEX_SHARDS ||
+      !Array.isArray(meta.shards) || meta.shards.length !== meta.shard_count ||
+      !Number.isSafeInteger(meta.token_count) || meta.token_count < 1 ||
+      meta.token_count > MAX_QUERY_INDEX_TOKENS ||
+      !Number.isSafeInteger(meta.posting_count) || meta.posting_count < 1 ||
+      meta.posting_count > MAX_QUERY_INDEX_POSTINGS ||
+      !Number.isSafeInteger(meta.compressed_bytes) || meta.compressed_bytes < 1 ||
+      meta.compressed_bytes > MAX_QUERY_INDEX_TOTAL_COMPRESSED_BYTES ||
+      !Number.isSafeInteger(meta.uncompressed_bytes) || meta.uncompressed_bytes < 1 ||
+      meta.uncompressed_bytes > MAX_QUERY_INDEX_TOTAL_UNCOMPRESSED_BYTES) {
+    throw new Error('manifest_query_index_metadata_invalid');
+  }
+
+  const seen = new Set();
+  let totalBytes = 0;
+  let totalUncompressedBytes = 0;
+  let totalTokens = 0;
+  const shards = meta.shards.map(entry => {
+    const match = entry && typeof entry.file === 'string'
+      ? entry.file.match(/^query-index\/([a-f0-9]{2})\.json\.gz$/)
+      : null;
+    if (!match) throw new Error('manifest_query_index_file_invalid');
+    const prefix = match[1];
+    if (seen.has(prefix)) throw new Error('manifest_query_index_duplicate_prefix');
+    seen.add(prefix);
+    if (!Number.isSafeInteger(entry.bytes) || entry.bytes < 1 ||
+        entry.bytes > MAX_QUERY_INDEX_SHARD_BYTES ||
+        !Number.isSafeInteger(entry.uncompressed_bytes) || entry.uncompressed_bytes < 1 ||
+        entry.uncompressed_bytes > MAX_QUERY_INDEX_SHARD_UNCOMPRESSED_BYTES ||
+        !Number.isSafeInteger(entry.items) || entry.items < 1 ||
+        entry.items > MAX_QUERY_INDEX_TOKENS ||
+        typeof entry.sha256 !== 'string' || !/^[a-f0-9]{64}$/i.test(entry.sha256)) {
+      throw new Error('manifest_query_index_shard_metadata_invalid');
+    }
+    totalBytes += entry.bytes;
+    totalUncompressedBytes += entry.uncompressed_bytes;
+    totalTokens += entry.items;
+    return { ...entry, prefix };
+  });
+  if (totalBytes !== meta.compressed_bytes ||
+      totalUncompressedBytes !== meta.uncompressed_bytes ||
+      totalTokens !== meta.token_count) {
+    throw new Error('manifest_query_index_totals_mismatch');
+  }
+  return { ...meta, shards };
+}
+
+function validateQueryIndexPayload(meta, prefix, buffer, pageShardCount) {
+  if (!Buffer.isBuffer(buffer) || buffer.length !== meta.bytes) {
+    throw new Error('query_index_size_mismatch');
+  }
+  const digest = crypto.createHash('sha256').update(buffer).digest('hex');
+  if (digest.toLowerCase() !== String(meta.sha256 || '').toLowerCase()) {
+    throw new Error('query_index_integrity_mismatch');
+  }
+  let decoded;
+  try {
+    decoded = zlib.gunzipSync(buffer, {
+      maxOutputLength: MAX_QUERY_INDEX_SHARD_UNCOMPRESSED_BYTES
+    });
+  } catch {
+    throw new Error('query_index_gzip_invalid');
+  }
+  if (decoded.length !== meta.uncompressed_bytes) {
+    throw new Error('query_index_uncompressed_size_mismatch');
+  }
+  let payload;
+  try { payload = JSON.parse(decoded.toString('utf8')); } catch {
+    throw new Error('query_index_json_invalid');
+  }
+  if (!payload || payload.version !== 1 || payload.prefix !== prefix ||
+      !payload.tokens || typeof payload.tokens !== 'object' || Array.isArray(payload.tokens)) {
+    throw new Error('query_index_payload_schema_invalid');
+  }
+  const entries = Object.entries(payload.tokens);
+  if (entries.length !== meta.items) throw new Error('query_index_token_count_mismatch');
+  let postingCount = 0;
+  for (const [token, postings] of entries) {
+    if (typeof token !== 'string' || !token || token.length > 256 ||
+        crypto.createHash('sha256').update(token).digest('hex').slice(0, 2) !== prefix ||
+        !Array.isArray(postings) || postings.length < 1 || postings.length > pageShardCount) {
+      throw new Error('query_index_token_or_postings_invalid');
+    }
+    let previousShard = -1;
+    for (const posting of postings) {
+      if (!Array.isArray(posting) || posting.length !== 2) {
+        throw new Error('query_index_posting_invalid');
+      }
+      const shardIndex = posting[0];
+      const pageCount = posting[1];
+      if (!Number.isSafeInteger(shardIndex) || shardIndex < 0 ||
+          shardIndex >= pageShardCount || shardIndex <= previousShard ||
+          !Number.isSafeInteger(pageCount) || pageCount < 1 || pageCount > 1000) {
+        throw new Error('query_index_posting_out_of_range');
+      }
+      previousShard = shardIndex;
+      postingCount += 1;
+      if (postingCount > MAX_QUERY_INDEX_POSTINGS) {
+        throw new Error('query_index_posting_limit_exceeded');
+      }
+    }
+  }
+  return { tokens: payload.tokens, postingCount };
+}
+
+function emptyQueryScopedResult(manifest, manifestSha256, checked, terms, prefixCount = 0) {
+  return {
+    pages: [],
+    updatedAt: manifest.updated_at,
+    sha256: manifestSha256,
+    indexedPages: manifest.total_pages,
+    source: 'git-commit-pinned-query-scoped-public-search-shards',
+    integrity: 'sha256',
+    shardCount: checked.shards.length,
+    shardBytes: checked.totalBytes,
+    transport: 'query-indexed-shards',
+    queryScoped: true,
+    queryScopeComplete: true,
+    queryCandidateShardCount: 0,
+    queryCandidatePages: 0,
+    queryTokenCount: terms.length,
+    queryIndexPrefixCount: prefixCount
+  };
+}
+
+async function loadQueryScopedCatalogFromManifest(
+  manifest,
+  commitSha,
+  manifestRaw,
+  query,
+  fetchBuffer = getBuffer
+) {
+  validateManifestEnvelope(manifest);
+  const checked = validateShardManifest(manifest);
+  const queryIndex = validateQueryIndexManifest(manifest);
+  if (!queryIndex) return null;
+  if (typeof commitSha !== 'string' || !/^[a-f0-9]{40}$/i.test(commitSha)) {
+    throw new Error('catalog_git_ref_invalid');
+  }
+
+  const queryText = String(query || '');
+  // The current page-search tokenizer is intentionally ASCII-compatible with
+  // the search index. Preserve the full-scan path for non-ASCII queries.
+  if (/[^\x00-\x7F]/.test(queryText)) return null;
+  const terms = Array.from(new Set(tokenize(queryText)));
+  const rawManifest = Buffer.isBuffer(manifestRaw) ? manifestRaw : Buffer.from(manifestRaw || '');
+  const manifestSha256 = crypto.createHash('sha256').update(rawManifest).digest('hex');
+  if (!terms.length) return emptyQueryScopedResult(manifest, manifestSha256, checked, terms);
+
+  const prefixes = new Set(terms.map(token =>
+    crypto.createHash('sha256').update(token).digest('hex').slice(0, 2)
+  ));
+  const indexEntries = queryIndex.shards.filter(entry => prefixes.has(entry.prefix));
+  if (!indexEntries.length) return emptyQueryScopedResult(manifest, manifestSha256, checked, terms);
+
+  const baseUrl = CATALOG_BASE_URL + commitSha + '/public-search/';
+  const loadedIndexes = await mapLimit(
+    indexEntries,
+    Math.min(MAX_QUERY_INDEX_CONCURRENCY, indexEntries.length),
+    async entry => {
+      const filePath = entry.file.split('/').map(encodeURIComponent).join('/');
+      const buffer = await fetchBuffer(
+        baseUrl + filePath,
+        entry.bytes,
+        SHARD_FETCH_TIMEOUT_MS
+      );
+      return validateQueryIndexPayload(entry, entry.prefix, buffer, checked.shards.length);
+    }
+  );
+
+  const candidateIndices = new Set();
+  for (const index of loadedIndexes) {
+    for (const term of terms) {
+      const postings = index.tokens[term] || [];
+      for (const posting of postings) candidateIndices.add(posting[0]);
+    }
+  }
+  const candidates = Array.from(candidateIndices).sort((a, b) => a - b);
+  if (!candidates.length) {
+    return emptyQueryScopedResult(manifest, manifestSha256, checked, terms, indexEntries.length);
+  }
+
+  const candidateMetas = candidates.map(index => checked.shards[index]);
+  const loadedPages = await mapLimit(
+    candidateMetas,
+    MAX_SHARD_CONCURRENCY,
+    async meta => {
+      const buffer = await fetchBuffer(
+        baseUrl + encodeURIComponent(meta.file),
+        meta.bytes,
+        SHARD_FETCH_TIMEOUT_MS
+      );
+      return validateShardPayload(meta, buffer);
+    }
+  );
+  const pages = [];
+  for (const shardPages of loadedPages) pages.push(...shardPages);
+  const candidatePages = candidateMetas.reduce((sum, meta) => sum + meta.pages, 0);
+  if (pages.length !== candidatePages) throw new Error('query_scoped_page_total_mismatch');
+  const seenUrls = new Set();
+  for (const page of pages) {
+    if (seenUrls.has(page.url)) throw new Error('query_scoped_duplicate_url');
+    seenUrls.add(page.url);
+  }
+  return {
+    pages,
+    updatedAt: manifest.updated_at,
+    sha256: manifestSha256,
+    indexedPages: manifest.total_pages,
+    source: 'git-commit-pinned-query-scoped-public-search-shards',
+    integrity: 'sha256',
+    shardCount: checked.shards.length,
+    shardBytes: checked.totalBytes,
+    transport: 'query-indexed-shards',
+    queryScoped: true,
+    queryScopeComplete: true,
+    queryCandidateShardCount: candidateMetas.length,
+    queryCandidatePages: candidatePages,
+    queryTokenCount: terms.length,
+    queryIndexPrefixCount: indexEntries.length
+  };
 }
 
 async function mapLimit(items, limit, mapper) {
