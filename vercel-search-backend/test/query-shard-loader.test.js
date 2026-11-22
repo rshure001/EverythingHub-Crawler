@@ -4,6 +4,10 @@ const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const zlib = require('node:zlib');
 const {
+  MAX_SHARD_COUNT,
+  MAX_PAGES_PER_SHARD,
+  MAX_TOTAL_COMPRESSED_SHARD_BYTES,
+  MAX_TOTAL_SHARD_UNCOMPRESSED_BYTES,
   MAX_QUERY_SCOPED_SHARD_COUNT,
   normalizeQueryIndexTokens,
   queryTokensForPage,
@@ -229,4 +233,21 @@ test('query-index-free manifests retain the verified full-index fallback contrac
     await loadQueryScopedCatalogFromManifest(fixture.manifest, COMMIT, fixture.manifestRaw, 'NASA', fixture.fetchBuffer),
     null
   );
+});
+
+test('public search shard envelope accepts the observed 1008-page shard within bounded totals', async () => {
+  assert.equal(MAX_SHARD_COUNT, 768);
+  assert.equal(MAX_PAGES_PER_SHARD, 2000);
+  assert.equal(MAX_TOTAL_COMPRESSED_SHARD_BYTES, 150000000);
+  assert.equal(MAX_TOTAL_SHARD_UNCOMPRESSED_BYTES, 600000000);
+  const pages = Array.from({ length: 1008 }, (_, index) =>
+    makePage('https://nasa.gov/page/' + index, 'NASA page ' + index, 'NASA public information', 'NASA public information')
+  );
+  const fixture = makeFixture([pages]);
+  const loaded = await loadQueryScopedCatalogFromManifest(
+    fixture.manifest, COMMIT, fixture.manifestRaw, 'NASA', fixture.fetchBuffer
+  );
+  assert.equal(loaded.pages.length, 1008);
+  assert.equal(loaded.candidatePageCount, 1008);
+  assert.equal(loaded.candidateShardCount, 1);
 });
