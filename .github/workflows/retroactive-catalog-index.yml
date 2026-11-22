@@ -69,6 +69,7 @@ jobs:
           key: ${{ runner.os }}-catalog-cache-${{ github.ref_name }}-${{ github.run_id }}
           restore-keys: |
             ${{ runner.os }}-catalog-cache-${{ github.ref_name }}-
+            ${{ runner.os }}-catalog-cache-main-
       - name: Test retroactive discovery
         working-directory: crawler
         run: python -m unittest test_catalog_retro_discovery.py -v
