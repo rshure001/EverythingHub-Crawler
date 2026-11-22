@@ -134,7 +134,7 @@ jobs:
             .sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at));
           const latest = successes[0] || null;
           const ageSeconds = latest ? Math.floor(Date.now() / 1000 - Date.parse(latest.updated_at) / 1000) : null;
-          if (!active.length && (ageSeconds === null || ageSeconds < -300 || ageSeconds > 900)) {
+          if (!active.length && (ageSeconds === null || !Number.isFinite(ageSeconds) || ageSeconds < -300 || ageSeconds > 900)) {
             throw new Error('No successful main-branch crawler run within 15 minutes and no active refresh: ' + JSON.stringify({latest, ageSeconds, activeRuns: active.length}));
           }
           const report = {
