@@ -581,23 +581,45 @@ async function loadCatalogFromManifest(manifest, commitSha, manifestRaw, fetchBu
   }
 }
 
+async function loadSnapshot() {
+  if (snapshotCache && Date.now() - snapshotCache.loadedAt < CACHE_TTL_MS) {
+    return snapshotCache;
+  }
+  const gitRef = JSON.parse((await getBuffer(GIT_REF_URL + '?v=' + Date.now(), 4096)).toString('utf8'));
+  const sha = gitRef && gitRef.object && gitRef.object.sha;
+  if (typeof sha !== 'string' || !/^[a-f0-9]{40}$/i.test(sha)) {
+    throw new Error('catalog_git_ref_invalid');
+  }
+  const manifestRaw = await getBuffer(
+    CATALOG_BASE_URL + sha + '/public-search/manifest.json',
+    MAX_MANIFEST_BYTES
+  );
+  let manifest;
+  try { manifest = JSON.parse(manifestRaw.toString('utf8')); } catch {
+    throw new Error('manifest_json_invalid');
+  }
+  validateManifestEnvelope(manifest);
+  const manifestSha256 = crypto.createHash('sha256').update(manifestRaw).digest('hex');
+  snapshotCache = {
+    sha,
+    manifest,
+    manifestRaw,
+    manifestSha256,
+    loadedAt: Date.now()
+  };
+  return snapshotCache;
+}
+
 async function loadCatalog() {
   if (cache && Date.now() - cache.loadedAt < CACHE_TTL_MS) return { ...cache, stale: false };
   try {
-    const gitRef = JSON.parse((await getBuffer(GIT_REF_URL + '?v=' + Date.now(), 4096)).toString('utf8'));
-    const sha = gitRef && gitRef.object && gitRef.object.sha;
-    if (typeof sha !== 'string' || !/^[a-f0-9]{40}$/i.test(sha)) {
-      throw new Error('catalog_git_ref_invalid');
-    }
-    const manifestRaw = await getBuffer(
-      CATALOG_BASE_URL + sha + '/public-search/manifest.json',
-      MAX_MANIFEST_BYTES
+    const snapshot = await loadSnapshot();
+    const validated = await loadCatalogFromManifest(
+      snapshot.manifest,
+      snapshot.sha,
+      snapshot.manifestRaw,
+      getBuffer
     );
-    let manifest;
-    try { manifest = JSON.parse(manifestRaw.toString('utf8')); } catch {
-      throw new Error('manifest_json_invalid');
-    }
-    const validated = await loadCatalogFromManifest(manifest, sha, manifestRaw, getBuffer);
     cache = { ...validated, loadedAt: Date.now(), stale: false };
     return { ...cache };
   } catch (error) {
@@ -608,7 +630,97 @@ async function loadCatalog() {
   }
 }
 
-function clearCatalogCache() { cache = null; }
+async function loadCatalogForQuery(query) {
+  const now = Date.now();
+  const queryKey = String(query || '').normalize('NFKC').trim().toLowerCase().slice(0, 256);
+  const existing = queryCache.get(queryKey);
+  if (existing && now - existing.loadedAt < CACHE_TTL_MS) {
+    return { ...existing, stale: false };
+  }
+  if (cache && now - cache.loadedAt < CACHE_TTL_MS) {
+    return {
+      ...cache,
+      stale: false,
+      queryScoped: false,
+      queryScopeComplete: true,
+      queryCandidateShardCount: cache.shardCount,
+      queryCandidatePages: cache.indexedPages,
+      queryTokenCount: 0,
+      queryIndexPrefixCount: 0
+    };
+  }
+
+  try {
+    const snapshot = await loadSnapshot();
+    let scoped = null;
+    let fallbackReason = null;
+    try {
+      scoped = await loadQueryScopedCatalogFromManifest(
+        snapshot.manifest,
+        snapshot.sha,
+        snapshot.manifestRaw,
+        query,
+        getBuffer
+      );
+    } catch (error) {
+      fallbackReason = String(error.message || error).slice(0, 180);
+    }
+
+    if (!scoped) {
+      if (!fallbackReason) fallbackReason = snapshot.manifest.query_index
+        ? 'query_requires_full_scan_or_index_unavailable'
+        : 'manifest_query_index_missing';
+      const validated = await loadCatalogFromManifest(
+        snapshot.manifest,
+        snapshot.sha,
+        snapshot.manifestRaw,
+        getBuffer
+      );
+      cache = { ...validated, loadedAt: Date.now(), stale: false };
+      return {
+        ...cache,
+        queryScoped: false,
+        queryScopeComplete: true,
+        queryCandidateShardCount: cache.shardCount,
+        queryCandidatePages: cache.indexedPages,
+        queryTokenCount: 0,
+        queryIndexPrefixCount: 0,
+        queryIndexFallbackReason: fallbackReason
+      };
+    }
+
+    const entry = { ...scoped, loadedAt: Date.now(), stale: false };
+    if (entry.queryCandidatePages <= 50000) {
+      queryCache.set(queryKey, entry);
+      if (queryCache.size > MAX_QUERY_CACHE_ENTRIES) {
+        const oldest = Array.from(queryCache.entries())
+          .sort((a, b) => a[1].loadedAt - b[1].loadedAt)[0];
+        if (oldest) queryCache.delete(oldest[0]);
+      }
+    }
+    return { ...entry };
+  } catch (error) {
+    const message = String(error.message || error).slice(0, 180);
+    const queryStale = queryCache.get(queryKey);
+    if (queryStale && Date.now() - queryStale.loadedAt < STALE_TTL_MS) {
+      return { ...queryStale, stale: true, refreshError: message };
+    }
+    if (cache && Date.now() - cache.loadedAt < STALE_TTL_MS) {
+      return {
+        ...cache,
+        stale: true,
+        refreshError: message,
+        queryScoped: false,
+        queryScopeComplete: true,
+        queryCandidateShardCount: cache.shardCount,
+        queryCandidatePages: cache.indexedPages
+      };
+    }
+    throw error;
+  }
+}
+
+function clearCatalogCache() { cache = null; snapshotCache = null; queryCache.clear(); }
 
 module.exports = {
   MAX_MANIFEST_BYTES,
@@ -622,6 +734,14 @@ module.exports = {
   MAX_TOTAL_COMPRESSED_SHARD_BYTES,
   MAX_TOTAL_SHARD_UNCOMPRESSED_BYTES,
   MAX_SHARD_CONCURRENCY,
+  MAX_QUERY_INDEX_SHARDS,
+  MAX_QUERY_INDEX_SHARD_BYTES,
+  MAX_QUERY_INDEX_SHARD_UNCOMPRESSED_BYTES,
+  MAX_QUERY_INDEX_TOTAL_COMPRESSED_BYTES,
+  MAX_QUERY_INDEX_TOTAL_UNCOMPRESSED_BYTES,
+  validateQueryIndexManifest,
+  validateQueryIndexPayload,
+  loadQueryScopedCatalogFromManifest,
   validateManifestAndCatalog,
   validateShardManifest,
   validateShardPayload,
@@ -629,5 +749,6 @@ module.exports = {
   loadCatalogFromManifest,
   mapLimit,
   loadCatalog,
+  loadCatalogForQuery,
   clearCatalogCache
 };
