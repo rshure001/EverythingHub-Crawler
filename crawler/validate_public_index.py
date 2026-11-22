@@ -122,6 +122,11 @@ def validate_query_index(
         for token in query_tokens(page):
             token_files = expected_postings.setdefault(token, {})
             token_files[filename] = token_files.get(filename, 0) + 1
+    expected_page_files = {
+        filename for filenames in expected_postings.values() for filename in filenames
+    }
+    if not expected_page_files.issubset(declared_page_files):
+        errors.append("query-index source references a page shard outside the verified manifest")
     expected_prefixes = {
         hashlib.sha256(token.encode("utf-8")).hexdigest()[:2]
         for token in expected_postings
@@ -403,11 +408,11 @@ def validate(root: Path = ROOT) -> list[str]:
         total_shard_bytes += len(raw)
         total_uncompressed_bytes += len(decoded)
         if compressed and total_shard_bytes > MAX_TOTAL_COMPRESSED_SHARD_BYTES:
-            errors.append("compressed public shards exceed the 80 MB aggregate safety limit")
+            errors.append("compressed public shards exceed the 100 MB aggregate safety limit")
         if not compressed and total_shard_bytes > MAX_TOTAL_LEGACY_SHARD_BYTES:
             errors.append("legacy raw public shards exceed the 100 MB aggregate safety limit")
         if total_uncompressed_bytes > MAX_TOTAL_SHARD_UNCOMPRESSED_BYTES:
-            errors.append("public shards exceed the 320 MB aggregate decompression safety limit")
+            errors.append("public shards exceed the 400 MB aggregate decompression safety limit")
 
 
         try:
