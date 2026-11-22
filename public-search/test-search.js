@@ -197,8 +197,8 @@ async function testCurrentPublishedManifestFitsClientLimits() {
   const totalUncompressedBytes = currentManifest.shards.reduce((sum, shard) => sum + (shard.uncompressed_bytes ?? shard.bytes), 0);
   
   assert.ok(
-    currentManifest.total_pages <= 180_000,
-    "current catalog must fit the 180,000-page browser limit; decoded shard data remains capped at 400 MB"
+    currentManifest.total_pages <= 250_000,
+    "current catalog must fit the 250,000-page browser limit; decoded shard data remains capped at 400 MB"
   );
   assert.ok(
     currentManifest.shard_count <= 768 &&
@@ -257,9 +257,9 @@ async function testRejectsClientLimitOverruns() {
   const previousFetch = globalThis.fetch;
   const overPageManifest = {
     ...manifest,
-    total_pages: 180_001,
+    total_pages: 250_001,
     shards: [
-      { ...manifest.shards[0], pages: 180_000 },
+      { ...manifest.shards[0], pages: 250_000 },
       { ...manifest.shards[1], pages: 1 }
     ]
   };

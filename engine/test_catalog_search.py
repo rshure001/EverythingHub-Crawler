@@ -14,7 +14,7 @@ class CatalogLoaderTests(unittest.TestCase):
         search_dir = root / "public-search"
         manifest = json.loads((search_dir / "manifest.json").read_text(encoding="utf-8"))
         self.assertEqual(MAX_CATALOG_GZIP_BYTES, 16_000_000)
-        self.assertEqual(MAX_INDEXED_PAGES, 180_000)
+        self.assertEqual(MAX_INDEXED_PAGES, 250_000)
         self.assertEqual(MAX_SHARD_COUNT, 768)
         self.assertEqual(MAX_SHARD_BYTES, 350_000)
         self.assertEqual(MAX_SHARD_UNCOMPRESSED_BYTES, 500_000)
