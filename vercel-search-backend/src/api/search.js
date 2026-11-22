@@ -4,6 +4,7 @@ const { loadCatalog } = require('../lib/catalog');
 const { loadPageDerivedCatalogs, searchPageDerivedCatalogs, matchesPageIndexSnapshot } = require('../lib/page-derived-catalogs');
 const { searchExternalCatalogs, getExternalCatalogStats } = require('../lib/external-catalogs');
 const { searchCatalog, parseBingRss, buildResponse } = require('../lib/search-core');
+const { loadResearchMetadata } = require('../lib/research-metadata');
 const MAX_QUERY_LENGTH = 160;
 const MAX_LIMIT = 50;
 const MAX_OFFSET = 5000;
@@ -115,14 +116,17 @@ module.exports = async function handler(req, res) {
     return res.status(400).json({ error: 'pagination_out_of_range' });
   }
   const lane = String(params.get('tentacle') || params.get('lane') || '').trim().toLowerCase();
+  const researchSearch = lane === 'research';
   const externalCatalogResults = searchExternalCatalogs(query);
   const externalCatalogStats = getExternalCatalogStats();
-  const [catalogResult, bingResult, pageDerivedResult] = await Promise.allSettled([
+  const [catalogResult, bingResult, pageDerivedResult, researchResult] = await Promise.allSettled([
     withTimeout(loadCatalog(), CATALOG_LOAD_BUDGET_MS, 'catalog_load_budget_exceeded'),
     loadBing(query),
-    withTimeout(loadPageDerivedCatalogs(query), PAGE_DERIVED_LOAD_BUDGET_MS, 'page_catalog_load_budget_exceeded')
+    withTimeout(loadPageDerivedCatalogs(query), PAGE_DERIVED_LOAD_BUDGET_MS, 'page_catalog_load_budget_exceeded'),
+    researchSearch ? withTimeout(loadResearchMetadata(query), 7000, 'research_metadata_timeout') : Promise.resolve([])
   ]);
   const bingResults = bingResult.status === 'fulfilled' ? bingResult.value : [];
+  const researchResults = researchResult.status === 'fulfilled' ? researchResult.value : [];
   const pageDerivedNetwork = pageDerivedResult.status === 'fulfilled' ? pageDerivedResult.value : null;
   let pageDerivedCatalogResults = pageDerivedNetwork ? searchPageDerivedCatalogs(query, pageDerivedNetwork, 5) : [];
   let catalogResults = mergeCatalogResults(externalCatalogResults, pageDerivedCatalogResults);
@@ -160,9 +164,13 @@ module.exports = async function handler(req, res) {
     }
     const catalogError = safeCatalogError(catalogResult.reason);
     console.warn('[catalog-load-failed]', catalogError);
-    const results = offset === 0 ? bingResults.slice(0, Math.min(10, limit)) : [];
+    const results = offset === 0
+      ? (researchSearch ? researchResults.slice(0, limit) : bingResults.slice(0, Math.min(10, limit)))
+      : [];
+    if (researchSearch && results.length < limit) results.push(...bingResults.slice(0, limit - results.length));
     const providers = [];
     if (bingResults.length) providers.push('Bing Web Search');
+    for (const source of new Set(researchResults.map(item => item.source))) if (source) providers.push(source);
     if (catalogResults.length) providers.push('Everything Hub Catalog Preview');
     if (!results.length && !catalogResults.length) {
       return res.status(503).json({
@@ -172,16 +180,17 @@ module.exports = async function handler(req, res) {
         database_required: false,
         catalogResults,
         catalogPreview,
+        researchResults,
         providers
       });
     }
     return res.status(200).json({
-      query, count: 0, totalMatches: 0,
+      query, count: researchSearch ? researchResults.length : 0, totalMatches: researchSearch ? researchResults.length : 0,
       page: Math.floor(offset / limit) + 1,
       pageSize: limit, offset, hasMore: false,
       indexedPages: 0, indexStatus: 'catalog-unavailable',
       catalogError, database_required: false,
-      results, catalogResults, catalogPreview, providers, fallback: true
+      results, catalogResults, catalogPreview, researchResults, providers, fallback: true
     });
   }
 
@@ -213,6 +222,18 @@ module.exports = async function handler(req, res) {
     staleCatalog: catalog.stale
   });
   payload.catalogResults = catalogResults;
+  payload.researchResults = researchResults;
+  if (researchSearch) {
+    payload.results = offset === 0
+      ? [...researchResults.slice(0, limit), ...payload.results].slice(0, limit)
+      : [];
+    payload.count = researchResults.length;
+    payload.totalMatches = researchResults.length;
+    payload.hasMore = false;
+  }
+  for (const source of new Set(researchResults.map(item => item.source))) {
+    if (source && !payload.providers.includes(source)) payload.providers.push(source);
+  }
   payload.externalCatalogResults = externalCatalogResults;
   payload.catalogPreview = catalogPreview;
   if (catalogResults.length) payload.providers.push('Everything Hub Catalog Preview');
