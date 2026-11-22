@@ -107,7 +107,8 @@ class ProductMetadataTests(unittest.TestCase):
         }) + "</script>"
         result = extract_structured_catalog_metadata(html, "https://shop.example/")
         self.assertTrue(result["lists"])
-        self.assertLessEqual(len(json.dumps(result, separators=(",", ":")).encode("utf-8")), 1024)
+        self.assertEqual(len(result["lists"][0]["items"]), 29)
+        self.assertLessEqual(len(json.dumps(result, separators=(",", ":")).encode("utf-8")), 8192)
 
     def test_extracts_only_stable_same_as_identifiers(self):
         html = """<script type="application/ld+json">{

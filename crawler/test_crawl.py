@@ -1,4 +1,5 @@
 import importlib.util
+import json
 from contextlib import contextmanager
 import unittest
 import tempfile
@@ -343,6 +344,26 @@ class CrawlerTests(unittest.TestCase):
         )
         self.assertTrue(noindex["_eh_noindex"])
         self.assertNotIn("structured_catalog", noindex)
+
+    def test_build_page_record_preserves_larger_bounded_structured_catalog_lists(self):
+        items = [{
+            "record_type": "dataset",
+            "name": f"Dataset {index}",
+            "url": f"https://data.example/datasets/{index}",
+        } for index in range(1, 51)]
+        record = crawl.build_page_record(
+            "https://data.example/catalog", "Datasets", "", "Public datasets", 1, set(),
+            structured_catalog_metadata={
+                "version": 1,
+                "lists": [{"name": "Public Datasets", "record_type": "dataset", "items": items}],
+            },
+        )
+        stored = record["structured_catalog"]["lists"][0]["items"]
+        self.assertEqual(len(stored), 50)
+        self.assertLessEqual(
+            len(json.dumps(record["structured_catalog"], separators=(",", ":")).encode("utf-8")),
+            8192,
+        )
 
     def test_extract_page_structured_catalog_metadata_accepts_data_catalog(self):
         html = """<script type="application/ld+json">{

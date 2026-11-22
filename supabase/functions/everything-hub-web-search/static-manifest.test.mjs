@@ -18,13 +18,13 @@ function makeManifest(shardCount = 35, totalPages = 6350) {
   };
 }
 
-test("accepts the current 145,957-page, 565-shard public catalog", () => {
-  assert.equal(isValidStaticManifest(makeManifest(514, 133026)), true);
+test("accepts the current 191,031-page, 601-shard public catalog", () => {
+  assert.equal(isValidStaticManifest(makeManifest(601, 191031)), true);
 });
 
-test("uses the bounded 250,000-page and 768-shard capacity", () => {
+test("uses the bounded 250,000-page and 900-shard capacity", () => {
   assert.equal(MAX_STATIC_INDEX_PAGES, 250_000);
-  assert.equal(MAX_STATIC_INDEX_SHARDS, 768);
+  assert.equal(MAX_STATIC_INDEX_SHARDS, 900);
 });
 
 test("accepts the configured shard ceiling", () => {
