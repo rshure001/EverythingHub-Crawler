@@ -207,7 +207,7 @@ class StageSearchCatalogTests(unittest.TestCase):
         self.assertEqual(checked["total_bytes"], total_compressed)
         self.assertEqual(checked["total_uncompressed_bytes"], total_uncompressed)
 
-    def test_accepts_180k_pages_with_768_shards_and_aggregate_headroom(self):
+    def test_accepts_250k_pages_with_768_shards_and_aggregate_headroom(self):
         total_pages = MAX_INDEXED_PAGES
         shard_count = MAX_SHARD_COUNT
         page_counts = [
@@ -233,7 +233,7 @@ class StageSearchCatalogTests(unittest.TestCase):
             "shards": shards,
         }
         checked = validate_manifest(manifest)
-        self.assertEqual(checked["total_pages"], 180_000)
+        self.assertEqual(checked["total_pages"], 250_000)
         self.assertEqual(len(checked["shards"]), 768)
         self.assertLessEqual(checked["total_bytes"], MAX_TOTAL_COMPRESSED_SHARD_BYTES)
         self.assertLessEqual(checked["total_uncompressed_bytes"], MAX_TOTAL_SHARD_UNCOMPRESSED_BYTES)
@@ -285,7 +285,7 @@ class StageSearchCatalogTests(unittest.TestCase):
             "shard_count": len(shards),
             "shards": shards,
         }
-        with self.assertRaisesRegex(ValueError, "180,000-page safety limit"):
+        with self.assertRaisesRegex(ValueError, "250,000-page safety limit"):
             validate_manifest(manifest)
 
 if __name__ == "__main__":
