@@ -235,7 +235,7 @@ test('query-indexed loader caps candidate shards and marks the search scope part
     'NASA',
     async (url) => {
       if (url.endsWith('/query-index/' + tokenPrefix(token) + '.json.gz')) return queryShard.buffer;
-      const match = url.match(/shard-(\\d{4})\\.json\\.gz$/);
+      const match = url.match(/shard-(\d{4})\.json\.gz$/);
       if (!match) throw new Error('unexpected_fetch:' + url);
       const index = Number(match[1]) - 1;
       return shards[index].buffer;
