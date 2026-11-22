@@ -333,7 +333,9 @@ class PageDerivedCatalogAnalysisTests(unittest.TestCase):
             self.assertEqual(third["metrics"]["host_partitions_reused"], 1)
             self.assertEqual(third["metrics"]["host_partitions_rebuilt"], 1)
             self.assertEqual(third["metrics"]["pages_analyzed"], 4)
-            self.assertEqual(third["metrics"]["unique_catalogs_discovered"], 2)
+            self.assertEqual(third["metrics"]["unique_catalogs_discovered"], 3)
+            self.assertEqual(third["metrics"]["global_typed_catalogs"], 1)
+            self.assertEqual(third["metrics"]["catalogs_by_origin"]["derived_from_global_typed_records"], 1)
 
     def test_explicit_content_lists_expand_multiple_records_and_a_catalog(self):
         result = analyze_pages([{
