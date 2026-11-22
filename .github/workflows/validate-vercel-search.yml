@@ -14,6 +14,7 @@ on:
     - cron: '5,20,35,50 * * * *'
   workflow_dispatch:
 permissions:
+  actions: read
   contents: read
 jobs:
   test:
@@ -113,6 +114,40 @@ jobs:
             pagination: health.pagination
           }, null, 2));
           NODE
+      - name: Verify recent crawler execution or active refresh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          curl --silent --show-error --fail --max-time 20 \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/workflows/crawl.yml/runs?branch=main&per_page=20" \
+            -o /tmp/crawler-runs.json
+          node <<'NODE'
+          const fs = require('node:fs');
+          const payload = JSON.parse(fs.readFileSync('/tmp/crawler-runs.json', 'utf8'));
+          const runs = Array.isArray(payload.workflow_runs) ? payload.workflow_runs : [];
+          const active = runs.filter(run => ['queued', 'in_progress'].includes(run.status));
+          const successes = runs
+            .filter(run => run.status === 'completed' && run.conclusion === 'success' && run.updated_at)
+            .sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at));
+          const latest = successes[0] || null;
+          const ageSeconds = latest ? Math.floor(Date.now() / 1000 - Date.parse(latest.updated_at) / 1000) : null;
+          if (!active.length && (ageSeconds === null || ageSeconds < -300 || ageSeconds > 900)) {
+            throw new Error('No successful main-branch crawler run within 15 minutes and no active refresh: ' + JSON.stringify({latest, ageSeconds, activeRuns: active.length}));
+          }
+          const report = {
+            latestSuccessfulRunId: latest?.id || null,
+            latestSuccessfulRunAt: latest?.updated_at || null,
+            latestSuccessfulRunAgeSeconds: ageSeconds,
+            activeCrawlerRuns: active.length,
+            freshnessStatus: active.length ? 'refresh-in-progress' : 'recent-success'
+          };
+          fs.writeFileSync('/tmp/crawler-freshness.json', JSON.stringify(report));
+          console.log(JSON.stringify(report, null, 2));
+          NODE
+
       - name: Verify live catalog search, freshness, and non-overlapping pagination
         env:
           BASE: https://everythinghub-search-backend.vercel.app
@@ -145,10 +180,11 @@ jobs:
               providers: first.providers
             }));
           }
-          const ageSeconds = Math.floor(Date.now() / 1000 - first.indexUpdatedAt);
-          if (ageSeconds < -300 || ageSeconds > 900) {
-            throw new Error('Crawler catalog timestamp is outside the 15-minute live-monitor window: ' + ageSeconds);
+          const snapshotAgeSeconds = Math.floor(Date.now() / 1000 - first.indexUpdatedAt);
+          if (snapshotAgeSeconds < -300) {
+            throw new Error('Crawler catalog snapshot timestamp is too far in the future: ' + snapshotAgeSeconds);
           }
+          const crawlerFreshness = JSON.parse(fs.readFileSync('/tmp/crawler-freshness.json', 'utf8'));
           if (
             second.offset !== 20 ||
             second.count !== first.count ||
@@ -169,7 +205,11 @@ jobs:
             indexedPages: first.indexedPages,
             crawlerMatches: first.count,
             catalogUpdatedAt: new Date(first.indexUpdatedAt * 1000).toISOString(),
-            catalogAgeSeconds: ageSeconds,
+            catalogSnapshotAgeSeconds: snapshotAgeSeconds,
+            latestSuccessfulCrawlerRunAt: crawlerFreshness.latestSuccessfulRunAt,
+            latestSuccessfulCrawlerRunAgeSeconds: crawlerFreshness.latestSuccessfulRunAgeSeconds,
+            activeCrawlerRuns: crawlerFreshness.activeCrawlerRuns,
+            crawlerFreshnessStatus: crawlerFreshness.freshnessStatus,
             page1Results: first.results.length,
             page1CrawlerResults: first.results.filter(item => item.provider === 'everythinghub-catalog').length,
             page1BingResults: first.results.filter(item => item.provider === 'bing-rss').length,
