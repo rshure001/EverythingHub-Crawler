@@ -8,7 +8,8 @@ const {
   normalizeQueryIndexTokens,
   queryTokensForPage,
   validateQueryIndexMetadata,
-  loadQueryScopedCatalogFromManifest
+  loadQueryScopedCatalogFromManifest,
+  clearCatalogCache
 } = require('../src/lib/catalog');
 const { searchCatalog } = require('../src/lib/search-core');
 
