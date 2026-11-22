@@ -139,7 +139,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 12
     env:
-      TARGET_URL: https://everythinghub-homepage-fixed.vercel.app/
+      TARGET_URL: https://everythinghub-homepage-fixed-3r0z1aktf-rshure001-8053.vercel.app/
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
