@@ -82,6 +82,31 @@ jobs:
           if(query==='Rolex'&&relevant.length===0&&!externalTitles.some(t=>/Rolex/i.test(t))) throw new Error('Rolex returned neither a relevant typed catalog nor an official directory');
           NODE
           done
+      - name: Verify robots-compliant current news feeds
+        run: |
+          set -euo pipefail
+          for category in for-you world technology business science; do
+            curl --silent --show-error --fail --max-time 30 -G "$BASE/api/news" \
+              --data-urlencode "category=$category" -o "/tmp/news-$category.json"
+            node - "/tmp/news-$category.json" "$category" <<'NODE'
+          const fs = require("node:fs");
+          const body = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+          const category = process.argv[3];
+          if (
+            body.status !== "ok" ||
+            body.category !== category ||
+            !Array.isArray(body.items) ||
+            body.items.length < 1 ||
+            body.count !== body.items.length ||
+            body.items.some(item => !item.title || !/^https?:\/\//i.test(item.url) || !item.source)
+          ) {
+            throw new Error("Robots-compliant news feed failed for " + category + ": " + JSON.stringify(body));
+          }
+          console.log(JSON.stringify({ category, count: body.count, firstHeadline: body.items[0].title, firstSource: body.items[0].source }));
+          NODE
+            sleep 1
+          done
+
   live-smoke:
     # Production freshness is monitored on main and by the schedule; do not fail code PRs because the independent live catalog is stale.
     if: github.event_name != 'pull_request'
