@@ -1,5 +1,11 @@
 import gzip
+import json
+import tempfile
 import unittest
+from pathlib import Path
+
+import build_search_shards as builder_module
+import validate_public_index as validator_module
 
 from validate_public_index import (
     MAX_CATALOG_GZIP_BYTES as VALIDATOR_MAX_CATALOG_GZIP_BYTES,
@@ -23,6 +29,8 @@ from build_search_shards import (
     compact,
     encode_batch,
     encode_shard,
+    build_query_index,
+    query_tokens,
 )
 
 
@@ -177,6 +185,95 @@ class SearchShardBatchBoundaryTests(unittest.TestCase):
         })
         self.assertNotIn("fetched_at", page)
         self.assertNotIn("published_at", page)
+
+    def test_query_tokens_cover_page_and_product_fields_with_unicode_normalization(self):
+        page = compact({
+            "url": "https://example.com/las-vegas",
+            "title": "ＮＡＳＡ Las Vegas",
+            "description": "The Space Center",
+            "text": "Rolex model collection",
+            "product": {
+                "type": "product", "name": "Explorer Watch",
+                "brand": "Rolex", "sku": "RX-42",
+                "price": "1299.00", "availability": "InStock",
+            },
+        })
+        tokens = query_tokens(page)
+        self.assertTrue({"nasa", "las", "vegas", "space", "center", "rolex", "explorer", "rx", "42"}.issubset(tokens))
+        self.assertNotIn("the", tokens)
+
+    def test_query_index_is_deterministic_and_tracks_distinct_page_counts(self):
+        postings = {
+            "nasa": {"shard-0002.json.gz": 2, "shard-0001.json.gz": 3},
+            "rolex": {"shard-0002.json.gz": 1},
+        }
+        first = build_query_index(postings)
+        second = build_query_index(postings)
+        self.assertEqual(first, second)
+        prefix = __import__("hashlib").sha256(b"nasa").hexdigest()[:2]
+        self.assertEqual(
+            first[prefix]["tokens"]["nasa"],
+            [
+                {"file": "shard-0001.json.gz", "pages": 3},
+                {"file": "shard-0002.json.gz", "pages": 2},
+            ],
+        )
+
+    def test_builder_and_validator_round_trip_query_index(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            data_dir = root / "data"
+            data_dir.mkdir()
+            source = {
+                "updated_at": 1795347352,
+                "pages": [
+                    {
+                        "url": "https://www.nasa.gov/missions/mars",
+                        "title": "NASA Mars Missions",
+                        "description": "Space science exploration",
+                        "text": "Mars mission directory",
+                        "lane": "science",
+                        "robots_allowed": True,
+                    },
+                    {
+                        "url": "https://www.rolex.com/watches",
+                        "title": "Rolex Watches",
+                        "description": "Swiss watchmaking",
+                        "text": "Luxury timepieces",
+                        "lane": "business",
+                        "robots_allowed": True,
+                    },
+                    {
+                        "url": "https://www.lasvegasnevada.gov/places",
+                        "title": "Las Vegas Places",
+                        "description": "City places and destinations",
+                        "text": "Public places directory",
+                        "lane": "government",
+                        "robots_allowed": True,
+                    },
+                ],
+            }
+            source_path = data_dir / "index.json"
+            source_path.write_text(json.dumps(source), encoding="utf-8")
+            original_source = builder_module.SOURCE
+            original_out = builder_module.OUT
+            original_root = validator_module.ROOT
+            try:
+                builder_module.SOURCE = source_path
+                builder_module.OUT = root / "public-search"
+                validator_module.ROOT = root
+                builder_module.main()
+                errors = validator_module.validate(root)
+                self.assertEqual(errors, [])
+                manifest = json.loads((root / "public-search" / "manifest.json").read_text(encoding="utf-8"))
+                query_index = manifest["query_index"]
+                self.assertGreater(query_index["token_count"], 0)
+                self.assertGreater(query_index["posting_count"], 0)
+                self.assertEqual(query_index["shard_count"], len(query_index["shards"]))
+            finally:
+                builder_module.SOURCE = original_source
+                builder_module.OUT = original_out
+                validator_module.ROOT = original_root
 
     def test_builder_serialization_is_utf8_and_deterministic(self):
         page = compact({
