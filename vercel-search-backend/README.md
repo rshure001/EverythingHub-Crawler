@@ -23,8 +23,8 @@ kept here so production behavior is reviewable and testable in GitHub.
   the backend loads the bounded shard set and verifies each shard's byte count,
   SHA-256, page count, schema, URL safety, and robots-denied exclusions.
 - Bounds the optional gzip catalog to 16,000,000 bytes and decoded JSON to
-  64,000,000 bytes. The sharded path supports up to 180,000 pages, 640 shards, 350,000 compressed bytes and 500,000 decoded bytes per shard, 80,000,000 aggregate compressed bytes, and 320,000,000 aggregate decoded bytes. Shard
-  downloads use a 32-worker pool and per-request timeouts.
+  64,000,000 bytes. The public page-shard path supports up to 250,000 pages and 900 page shards, with 350,000 compressed / 600,000 decoded bytes per shard, 150,000,000 aggregate compressed bytes, and 540,000,000 aggregate decoded bytes. The separate query index is capped at 256 shards. Shard
+  downloads use a 48-worker pool and per-request timeouts.
 - Keeps a last-known-good in-memory catalog for up to one hour if GitHub has a
   transient outage; responses identify stale catalog use.
 - Does not fetch or download indexed source pages; it reads only the
@@ -40,11 +40,12 @@ duplicates. Regression tests cover pages one through three.
 
 ## Deployment packaging
 
-- The direct Vercel upload maps vercel-search-backend/src/api/ to src/api/,
-  vercel-search-backend/src/lib/ to src/lib/, and the package manifest to
-  src/package.json in the deployment payload.
-- That folder's package.json explicitly pins CommonJS and Node.js 26.x; the
-  backend uses built-in Node modules only.
+- The Vercel project's configured root directory is `src`. Direct upload
+  supplies `README.md`, `src/package.json`, `src/api/`, `src/lib/`, and
+  `src/data/` relative to that root; the deployment file listing therefore
+  shows `src/README.md` and `src/src/...`.
+- The source `src/package.json` pins CommonJS and Node.js 26.x; the backend
+  uses built-in Node modules only.
 - Keep the package manifest in Git so direct Vercel API deployments remain
   reproducible and reviewable.
 
@@ -96,17 +97,18 @@ Relevance ranking: commerce catalogs with matching product/brand/model records a
 
 ## Current public-index capacity envelope
 
-The independent search readers share these hard safety bounds:
+The public page-shard readers and publisher share these bounded limits:
 
 - 250,000 indexed pages
-- 768 shards
+- 900 page shards (plus metadata, below GitHub's 1,000-entry directory Contents API limit)
+- 2,000 pages per shard
 - 350,000 compressed bytes per shard
-- 500,000 uncompressed bytes per shard
-- 100,000,000 aggregate compressed bytes
-- 400,000,000 aggregate uncompressed bytes
-- 256,000 bytes for the manifest
+- 600,000 uncompressed bytes per shard
+- 150,000,000 aggregate compressed bytes
+- 540,000,000 aggregate uncompressed bytes
+- 256,000 bytes for the page manifest
 
-These limits were aligned across the browser client, independent Python loader, recovery search service, Vercel backend, and Supabase Edge Function. They are capacity ceilings, not targets. Do not raise them without a query-scoped shard index, cold-start measurements, and memory-bound regression tests.
+The builder, Python index loader, public-index validator, publisher staging validator, and Vercel backend enforce the same page-shard envelope. The query index is separate (256 shards); the backend ranks and selects at most 96 candidate page shards under 24 MB compressed, 96 MB uncompressed, and 30,000-page query budgets, and reports when selection is truncated. These are capacity ceilings, not targets. Any further increase requires fresh corpus measurements, cold-start tests, and memory-bound regression coverage.
 
 ## Production deployment verification
 
