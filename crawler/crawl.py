@@ -211,7 +211,7 @@ def safe_stable_entity_id(value):
     """Accept only canonical identifiers emitted by product_metadata._stable_same_as_ids."""
     identity = normalize_text(value, 128)
     return bool(re.fullmatch(
-        r"(?:wikidata:Q[1-9]\\d*|orcid:\\d{4}-\\d{4}-\\d{4}-\\d{3}[\\dX]|viaf:\\d+|isni:\\d{15}[\\dX]|geonames:\\d+|osm:(?:node|way|relation):\\d+)",
+        r"(?:wikidata:Q[1-9]\d*|orcid:\d{4}-\d{4}-\d{4}-\d{3}[\dX]|viaf:\d+|isni:\d{15}[\dX]|geonames:\d+|osm:(?:node|way|relation):\d+)",
         identity,
     ))
 
