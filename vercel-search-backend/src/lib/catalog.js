@@ -20,8 +20,26 @@ const MAX_TOTAL_COMPRESSED_SHARD_BYTES = 100000000;
 const MAX_TOTAL_SHARD_UNCOMPRESSED_BYTES = 400000000;
 const MAX_SHARD_CONCURRENCY = 48;
 const SHARD_FETCH_TIMEOUT_MS = 8500;
+const MAX_QUERY_INDEX_SHARDS = 256;
+const MAX_QUERY_INDEX_SHARD_BYTES = 2000000;
+const MAX_QUERY_INDEX_SHARD_UNCOMPRESSED_BYTES = 8000000;
+const MAX_QUERY_INDEX_TOTAL_BYTES = 32000000;
+const MAX_QUERY_INDEX_TOTAL_UNCOMPRESSED_BYTES = 64000000;
+const MAX_QUERY_INDEX_TOKENS = 2000000;
+const MAX_QUERY_INDEX_POSTINGS = 50000000;
+const MAX_QUERY_INDEX_SHARD_TOKENS = 100000;
+const MAX_QUERY_INDEX_FETCH_CONCURRENCY = 8;
+const QUERY_INDEX_FETCH_TIMEOUT_MS = 3500;
+const MAX_QUERY_TERMS = 12;
+const MAX_QUERY_SHARDS = 48;
+const MAX_QUERY_CACHE_ENTRIES = 2;
+const QUERY_STOP_TOKENS = new Set([
+  'a', 'an', 'and', 'are', 'as', 'at', 'be', 'by', 'for', 'from',
+  'in', 'into', 'is', 'it', 'of', 'on', 'or', 'our', 'the', 'to',
+  'with', 'your', 'you', 'we', 'this', 'that', 'these', 'those'
+]);
 const agent = new https.Agent({ keepAlive: true, maxSockets: MAX_SHARD_CONCURRENCY });
-let cache = null;
+const cache = new Map();
 
 function getBuffer(url, maxBytes, timeoutMs = 10000) {
   return new Promise((resolve, reject) => {
@@ -77,6 +95,121 @@ function getBuffer(url, maxBytes, timeoutMs = 10000) {
   });
 }
 
+
+function queryIndexPrefix(token) {
+  return crypto.createHash('sha256').update(token, 'utf8').digest('hex').slice(0, 2);
+}
+
+function tokenizeQueryIndex(query) {
+  const normalized = String(query || '').normalize('NFKC').toLowerCase();
+  const tokens = normalized.match(/[\\p{L}\\p{N}\\p{M}]+/gu) || [];
+  return Array.from(new Set(tokens.filter(token => token && !QUERY_STOP_TOKENS.has(token))))
+    .slice(0, MAX_QUERY_TERMS);
+}
+
+function validateQueryIndexMetadata(manifest) {
+  const meta = manifest && manifest.query_index;
+  if (meta == null) return null;
+  if (!meta || meta.version !== 1 ||
+      !Number.isSafeInteger(meta.shard_count) || meta.shard_count < 0 ||
+      meta.shard_count > MAX_QUERY_INDEX_SHARDS ||
+      !Number.isSafeInteger(meta.token_count) || meta.token_count < 0 ||
+      meta.token_count > MAX_QUERY_INDEX_TOKENS ||
+      !Number.isSafeInteger(meta.posting_count) || meta.posting_count < 0 ||
+      meta.posting_count > MAX_QUERY_INDEX_POSTINGS ||
+      !Number.isSafeInteger(meta.compressed_bytes) || meta.compressed_bytes < 0 ||
+      meta.compressed_bytes > MAX_QUERY_INDEX_TOTAL_BYTES ||
+      !Number.isSafeInteger(meta.uncompressed_bytes) || meta.uncompressed_bytes < 0 ||
+      meta.uncompressed_bytes > MAX_QUERY_INDEX_TOTAL_UNCOMPRESSED_BYTES ||
+      !Array.isArray(meta.shards) || meta.shards.length !== meta.shard_count) {
+    throw new Error('manifest_query_index_metadata_invalid');
+  }
+  const seen = new Set();
+  let totalBytes = 0;
+  let totalUncompressedBytes = 0;
+  let totalItems = 0;
+  for (const shard of meta.shards) {
+    if (!shard || typeof shard.file !== 'string' ||
+        !/^query-index\\/[0-9a-f]{2}\\.json\\.gz$/.test(shard.file) ||
+        !Number.isSafeInteger(shard.items) || shard.items < 1 ||
+        shard.items > MAX_QUERY_INDEX_SHARD_TOKENS ||
+        !Number.isSafeInteger(shard.bytes) || shard.bytes < 1 ||
+        shard.bytes > MAX_QUERY_INDEX_SHARD_BYTES ||
+        !Number.isSafeInteger(shard.uncompressed_bytes) || shard.uncompressed_bytes < 1 ||
+        shard.uncompressed_bytes > MAX_QUERY_INDEX_SHARD_UNCOMPRESSED_BYTES ||
+        typeof shard.sha256 !== 'string' || !/^[a-f0-9]{64}$/i.test(shard.sha256)) {
+      throw new Error('manifest_query_index_shard_metadata_invalid');
+    }
+    if (seen.has(shard.file)) throw new Error('manifest_query_index_duplicate_shard');
+    seen.add(shard.file);
+    totalBytes += shard.bytes;
+    totalUncompressedBytes += shard.uncompressed_bytes;
+    totalItems += shard.items;
+  }
+  if (totalBytes !== meta.compressed_bytes ||
+      totalUncompressedBytes !== meta.uncompressed_bytes ||
+      totalItems !== meta.token_count ||
+      (meta.token_count === 0) !== (meta.shard_count === 0) ||
+      (meta.token_count === 0) !== (meta.posting_count === 0)) {
+    throw new Error('manifest_query_index_totals_mismatch');
+  }
+  return meta;
+}
+
+function validateQueryIndexPayload(meta, buffer, expectedPrefix, pageShards) {
+  if (!meta || meta.file !== 'query-index/' + expectedPrefix + '.json.gz') {
+    throw new Error('query_index_file_invalid');
+  }
+  if (!Buffer.isBuffer(buffer) || buffer.length !== meta.bytes) {
+    throw new Error('query_index_size_mismatch');
+  }
+  const digest = crypto.createHash('sha256').update(buffer).digest('hex');
+  if (digest.toLowerCase() !== String(meta.sha256 || '').toLowerCase()) {
+    throw new Error('query_index_integrity_mismatch');
+  }
+  let decoded;
+  try {
+    decoded = zlib.gunzipSync(buffer, { maxOutputLength: MAX_QUERY_INDEX_SHARD_UNCOMPRESSED_BYTES });
+  } catch {
+    throw new Error('query_index_gzip_invalid');
+  }
+  if (decoded.length !== meta.uncompressed_bytes) {
+    throw new Error('query_index_uncompressed_size_mismatch');
+  }
+  let payload;
+  try { payload = JSON.parse(decoded.toString('utf8')); } catch {
+    throw new Error('query_index_json_invalid');
+  }
+  if (!payload || payload.version !== 1 || payload.prefix !== expectedPrefix ||
+      !payload.tokens || typeof payload.tokens !== 'object' || Array.isArray(payload.tokens)) {
+    throw new Error('query_index_payload_schema_invalid');
+  }
+  const entries = Object.entries(payload.tokens);
+  if (entries.length !== meta.items) throw new Error('query_index_token_count_mismatch');
+  for (const [token, postings] of entries) {
+    if (typeof token !== 'string' || !token || token.length > 256 ||
+        queryIndexPrefix(token) !== expectedPrefix || !Array.isArray(postings)) {
+      throw new Error('query_index_token_invalid');
+    }
+    let previousShard = -1;
+    for (const posting of postings) {
+      if (!Array.isArray(posting) || posting.length !== 2) {
+        throw new Error('query_index_posting_invalid');
+      }
+      const shardIndex = posting[0];
+      const count = posting[1];
+      if (!Number.isSafeInteger(shardIndex) || shardIndex < 0 ||
+          shardIndex >= pageShards.length || shardIndex <= previousShard ||
+          !Number.isSafeInteger(count) || count < 1 ||
+          count > pageShards[shardIndex].pages) {
+        throw new Error('query_index_posting_invalid');
+      }
+      previousShard = shardIndex;
+    }
+  }
+  return payload.tokens;
+}
+
 function validateManifestEnvelope(manifest) {
   if (!manifest || manifest.version !== 1 || manifest.integrity !== 'sha256') {
     throw new Error('manifest_schema_invalid');
@@ -95,6 +228,7 @@ function validateManifestEnvelope(manifest) {
       !Array.isArray(manifest.shards) || manifest.shards.length !== manifest.shard_count) {
     throw new Error('manifest_shard_count_invalid');
   }
+  validateQueryIndexMetadata(manifest);
 }
 
 function validateCatalogMetadata(manifest) {
@@ -310,7 +444,138 @@ async function loadShardedCatalog(manifest, commitSha, manifestSha256, fetchBuff
   };
 }
 
-async function loadCatalogFromManifest(manifest, commitSha, manifestRaw, fetchBuffer = getBuffer) {
+
+async function loadQueryIndexedCatalog(manifest, commitSha, manifestSha256, query, fetchBuffer = getBuffer) {
+  const checked = validateShardManifest(manifest);
+  const queryIndex = validateQueryIndexMetadata(manifest);
+  if (!queryIndex) throw new Error('query_index_missing');
+  if (typeof commitSha !== 'string' || !/^[a-f0-9]{40}$/i.test(commitSha)) {
+    throw new Error('catalog_git_ref_invalid');
+  }
+  if (typeof manifestSha256 !== 'string' || !/^[a-f0-9]{64}$/i.test(manifestSha256)) {
+    throw new Error('manifest_digest_invalid');
+  }
+  const terms = tokenizeQueryIndex(query);
+  const baseUrl = CATALOG_BASE_URL + commitSha + '/public-search/';
+  const common = {
+    updatedAt: manifest.updated_at,
+    sha256: manifestSha256,
+    indexedPages: manifest.total_pages,
+    source: 'git-commit-pinned-query-indexed-public-search-shards',
+    integrity: 'sha256',
+    shardCount: checked.shards.length,
+    shardBytes: checked.totalBytes,
+    queryIndexTokenCount: queryIndex.token_count,
+    queryIndexPostingCount: queryIndex.posting_count,
+    queryIndexTermsRequested: terms.length
+  };
+  const empty = (matchedTerms = 0, prefixCount = 0) => ({
+    ...common,
+    pages: [],
+    candidatePages: 0,
+    candidateShardCount: 0,
+    candidateShardTotal: 0,
+    candidateShardsTruncated: false,
+    queryIndexTermsMatched: matchedTerms,
+    queryIndexPrefixCount: prefixCount,
+    candidateSelection: 'none',
+    transport: 'query-index-no-postings'
+  });
+  if (!terms.length || !queryIndex.shard_count) return empty();
+
+  const shardByPrefix = new Map(queryIndex.shards.map(meta => [
+    meta.file.split('/')[1].slice(0, 2),
+    meta
+  ]));
+  const prefixes = Array.from(new Set(terms.map(queryIndexPrefix)));
+  const indexMetas = prefixes.map(prefix => shardByPrefix.get(prefix)).filter(Boolean);
+  if (!indexMetas.length) return empty(0, 0);
+  const indexPayloads = await mapLimit(
+    indexMetas,
+    MAX_QUERY_INDEX_FETCH_CONCURRENCY,
+    async (meta) => {
+      const prefix = meta.file.split('/')[1].slice(0, 2);
+      const filePath = meta.file.split('/').map(encodeURIComponent).join('/');
+      const buffer = await fetchBuffer(
+        baseUrl + filePath,
+        meta.bytes,
+        QUERY_INDEX_FETCH_TIMEOUT_MS
+      );
+      return { prefix, tokens: validateQueryIndexPayload(meta, buffer, prefix, manifest.shards) };
+    }
+  );
+  const payloadByPrefix = new Map(indexPayloads.map(item => [item.prefix, item.tokens]));
+  const postingsByToken = new Map();
+  for (const term of terms) {
+    const payload = payloadByPrefix.get(queryIndexPrefix(term));
+    const postings = payload && payload[term];
+    if (Array.isArray(postings) && postings.length) {
+      postingsByToken.set(term, new Map(postings.map(([index, count]) => [index, count])));
+    }
+  }
+  if (!postingsByToken.size) return empty(0, indexMetas.length);
+
+  const scores = new Map();
+  for (const postings of postingsByToken.values()) {
+    for (const [shardIndex, count] of postings.entries()) {
+      const score = scores.get(shardIndex) || { matchedTokens: 0, pageCount: 0 };
+      score.matchedTokens += 1;
+      score.pageCount += count;
+      scores.set(shardIndex, score);
+    }
+  }
+  let candidateSelection = 'union';
+  let candidates = Array.from(scores.entries());
+  if (postingsByToken.size > 1 && postingsByToken.size === terms.length) {
+    const intersection = candidates.filter(([, score]) => score.matchedTokens === postingsByToken.size);
+    if (intersection.length) {
+      candidates = intersection;
+      candidateSelection = 'intersection';
+    }
+  }
+  candidates.sort((left, right) =>
+    right[1].matchedTokens - left[1].matchedTokens ||
+    right[1].pageCount - left[1].pageCount ||
+    left[0] - right[0]
+  );
+  const candidateShardTotal = candidates.length;
+  if (!candidateShardTotal) return empty(postingsByToken.size, indexMetas.length);
+  const selected = candidates.slice(0, MAX_QUERY_SHARDS);
+  const candidateMetas = selected.map(([index]) => manifest.shards[index]);
+  const loaded = await mapLimit(candidateMetas, MAX_SHARD_CONCURRENCY, async (meta) => {
+    const buffer = await fetchBuffer(
+      baseUrl + encodeURIComponent(meta.file),
+      meta.bytes,
+      SHARD_FETCH_TIMEOUT_MS
+    );
+    return validateShardPayload(meta, buffer);
+  });
+  const pages = [];
+  const seenUrls = new Set();
+  for (const shardPages of loaded) {
+    for (const page of shardPages) {
+      if (seenUrls.has(page.url)) throw new Error('catalog_duplicate_url');
+      seenUrls.add(page.url);
+      pages.push(page);
+    }
+  }
+  const candidatePages = candidateMetas.reduce((sum, meta) => sum + meta.pages, 0);
+  if (pages.length !== candidatePages) throw new Error('catalog_query_shard_page_total_mismatch');
+  return {
+    ...common,
+    pages,
+    candidatePages,
+    candidateShardCount: candidateMetas.length,
+    candidateShardTotal,
+    candidateShardsTruncated: candidateShardTotal > MAX_QUERY_SHARDS,
+    queryIndexTermsMatched: postingsByToken.size,
+    queryIndexPrefixCount: indexMetas.length,
+    candidateSelection,
+    transport: 'query-indexed-shards'
+  };
+}
+
+async function loadCatalogFromManifest(manifest, commitSha, manifestRaw, fetchBuffer = getBuffer, query = '') {
   validateManifestEnvelope(manifest);
   if (typeof commitSha !== 'string' || !/^[a-f0-9]{40}$/i.test(commitSha)) {
     throw new Error('catalog_git_ref_invalid');
@@ -318,6 +583,9 @@ async function loadCatalogFromManifest(manifest, commitSha, manifestRaw, fetchBu
   if (!Buffer.isBuffer(manifestRaw)) manifestRaw = Buffer.from(manifestRaw || '');
   const manifestSha256 = crypto.createHash('sha256').update(manifestRaw).digest('hex');
   const baseUrl = CATALOG_BASE_URL + commitSha + '/public-search/';
+  if (manifest.query_index != null && String(query || '').trim()) {
+    return loadQueryIndexedCatalog(manifest, commitSha, manifestSha256, query, fetchBuffer);
+  }
   let gzipError = null;
 
   if (manifest.catalog_gzip != null) {
@@ -341,8 +609,32 @@ async function loadCatalogFromManifest(manifest, commitSha, manifestRaw, fetchBu
   }
 }
 
-async function loadCatalog() {
-  if (cache && Date.now() - cache.loadedAt < CACHE_TTL_MS) return { ...cache, stale: false };
+function queryCacheKey(query) {
+  return String(query || '').normalize('NFKC').trim().toLowerCase().slice(0, 160) || '__full__';
+}
+
+function readCachedCatalog(key) {
+  const cached = cache.get(key);
+  if (!cached) return null;
+  cache.delete(key);
+  cache.set(key, cached);
+  return cached;
+}
+
+function writeCachedCatalog(key, value) {
+  cache.delete(key);
+  cache.set(key, value);
+  while (cache.size > MAX_QUERY_CACHE_ENTRIES) {
+    cache.delete(cache.keys().next().value);
+  }
+}
+
+async function loadCatalog(query = '') {
+  const key = queryCacheKey(query);
+  const existing = readCachedCatalog(key);
+  if (existing && Date.now() - existing.loadedAt < CACHE_TTL_MS) {
+    return { ...existing, stale: false };
+  }
   try {
     const gitRef = JSON.parse((await getBuffer(GIT_REF_URL + '?v=' + Date.now(), 4096)).toString('utf8'));
     const sha = gitRef && gitRef.object && gitRef.object.sha;
@@ -357,18 +649,20 @@ async function loadCatalog() {
     try { manifest = JSON.parse(manifestRaw.toString('utf8')); } catch {
       throw new Error('manifest_json_invalid');
     }
-    const validated = await loadCatalogFromManifest(manifest, sha, manifestRaw, getBuffer);
-    cache = { ...validated, loadedAt: Date.now(), stale: false };
-    return { ...cache };
+    const validated = await loadCatalogFromManifest(manifest, sha, manifestRaw, getBuffer, query);
+    const value = { ...validated, loadedAt: Date.now(), stale: false };
+    writeCachedCatalog(key, value);
+    return { ...value };
   } catch (error) {
-    if (cache && Date.now() - cache.loadedAt < STALE_TTL_MS) {
-      return { ...cache, stale: true, refreshError: String(error.message || error).slice(0, 180) };
+    const cached = readCachedCatalog(key);
+    if (cached && Date.now() - cached.loadedAt < STALE_TTL_MS) {
+      return { ...cached, stale: true, refreshError: String(error.message || error).slice(0, 180) };
     }
     throw error;
   }
 }
 
-function clearCatalogCache() { cache = null; }
+function clearCatalogCache() { cache.clear(); }
 
 module.exports = {
   MAX_MANIFEST_BYTES,
@@ -383,6 +677,18 @@ module.exports = {
   MAX_TOTAL_COMPRESSED_SHARD_BYTES,
   MAX_TOTAL_SHARD_UNCOMPRESSED_BYTES,
   MAX_SHARD_CONCURRENCY,
+  MAX_QUERY_INDEX_SHARDS,
+  MAX_QUERY_INDEX_SHARD_BYTES,
+  MAX_QUERY_INDEX_SHARD_UNCOMPRESSED_BYTES,
+  MAX_QUERY_INDEX_TOTAL_BYTES,
+  MAX_QUERY_INDEX_TOTAL_UNCOMPRESSED_BYTES,
+  MAX_QUERY_INDEX_TOKENS,
+  MAX_QUERY_INDEX_POSTINGS,
+  MAX_QUERY_SHARDS,
+  tokenizeQueryIndex,
+  validateQueryIndexMetadata,
+  validateQueryIndexPayload,
+  loadQueryIndexedCatalog,
   validateManifestAndCatalog,
   validateShardManifest,
   validateShardPayload,
