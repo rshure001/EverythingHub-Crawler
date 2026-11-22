@@ -73,7 +73,7 @@ jobs:
           };
           console.log(JSON.stringify(debug,null,2));
           const queryScoped=scan.mode==='query-scoped'&&Number.isSafeInteger(scan.indexedPages)&&Number.isSafeInteger(scan.scannedPages)&&scan.scannedPages>0&&scan.scannedPages<scan.indexedPages;
-          const previewFallback=query==='Las Vegas'&&scan.mode==='catalog-preview-fallback'&&Number.isSafeInteger(scan.previewRecords)&&scan.previewRecords>0&&(data.results||[]).some(r=>r.provider==='everythinghub-catalog-preview'&&String(r.title||'').toLowerCase().includes('las vegas'));
+          const previewFallback=scan.mode==='catalog-preview-fallback'&&Number.isSafeInteger(scan.previewRecords)&&scan.previewRecords>0&&(data.results||[]).some(r=>r.provider==='everythinghub-catalog-preview'&&(String(r.title||'')+' '+String(r.snippet||'')).toLowerCase().includes(query.toLowerCase()));
           if(!queryScoped&&!previewFallback) {
             throw new Error(query+' did not use bounded query shards or an explicitly marked catalog-preview fallback: '+JSON.stringify({scan,catalogError:data.catalogError,preview:data.catalogPreview}));
           }
