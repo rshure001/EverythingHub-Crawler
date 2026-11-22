@@ -337,7 +337,7 @@ class ScheduleWatchdogTests(unittest.TestCase):
         self.assertIn("actions: write", workflow)
         self.assertIn("actions/workflows/crawl.yml/runs?branch=main", workflow)
         self.assertIn("actions/workflows/crawl-watchdog.yml/runs?branch=main", workflow)
-        self.assertIn("gh workflow run crawl-watchdog.yml --ref main", workflow)
+        self.assertIn('gh workflow run crawl-watchdog.yml --repo "$GITHUB_REPOSITORY" --ref main', workflow)
         self.assertIn("activeCrawlerRuns", workflow)
         self.assertIn("activeWatchdogRuns", workflow)
         self.assertIn("latestSuccessfulRunAgeSeconds", workflow)
