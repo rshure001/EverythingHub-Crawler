@@ -39,10 +39,29 @@ class RetroCatalogDiscoveryTests(unittest.TestCase):
         self.assertTrue(all(x["related_catalog_ids"] == [] for x in result["page_catalog_seeds"]))
         self.assertEqual(result["metrics"]["page_catalog_profiles_created"], 2)
         self.assertEqual(result["metrics"]["profiles_pending_catalog_classification"], 2)
-        self.assertTrue(all("catalog_candidate_id" not in x for x in result["page_catalog_seeds"]))
+        self.assertTrue(all(x["catalog_seed_id"].startswith("page-catalog:") for x in result["page_catalog_seeds"]))
+        self.assertTrue(all(x["catalog_type"] == "general" for x in result["page_catalog_seeds"]))
+        self.assertTrue(all(x["catalog_status"] == "pending_catalog_classification" for x in result["page_catalog_seeds"]))
+        self.assertTrue(all(x["expansion_status"] == "pending_child_record_discovery" for x in result["page_catalog_seeds"]))
+        self.assertTrue(all(x["verified"] is False for x in result["page_catalog_seeds"]))
+        self.assertTrue(all(x["initial_record_count"] == 0 for x in result["page_catalog_seeds"]))
+        self.assertEqual(result["metrics"]["page_backed_catalog_seed_candidates"], 2)
+        self.assertEqual(result["metrics"]["page_backed_catalogs_pending_classification"], 2)
+        self.assertEqual(result["metrics"]["page_backed_catalogs_verified"], 0)
         self.assertTrue(all(x["analysis_status"] == "pending_page_content_analysis" for x in result["page_catalog_seeds"]))
         self.assertEqual(result["metrics"]["pages_with_catalog_signals"], 1)
         self.assertGreaterEqual(result["metrics"]["page_catalog_signal_references"], 1)
+
+    def test_duplicate_source_urls_create_only_one_catalog_seed(self):
+        url = "https://example.com/products"
+        result = build_candidates({"total_pages": 2, "pages": [
+            {"url": url, "title": "Products"},
+            {"url": url, "title": "Products duplicate row"},
+        ]})
+        self.assertEqual(len(result["page_catalog_seeds"]), 1)
+        self.assertEqual(result["metrics"]["pages_as_discovery_seeds"], 1)
+        self.assertEqual(result["metrics"]["duplicate_source_page_rows_skipped"], 1)
+        self.assertEqual(len({x["catalog_seed_id"] for x in result["page_catalog_seeds"]}), 1)
 
     def test_rejects_credential_urls_and_normalizes_www(self):
         self.assertEqual(host_key("https://www.example.com/a"), "example.com")
