@@ -26,10 +26,11 @@ _PUBLIC_SHARD_RE = re.compile(r"^shard-[0-9]{4}\.json\.gz$")
 # Keep the Python catalog analyzer aligned with the 250k public-search publisher/API ceiling.
 MAX_PUBLIC_SEARCH_PAGES = 250_000
 MAX_PUBLIC_SEARCH_SHARDS = 768
+MAX_PUBLIC_SEARCH_SHARD_PAGES = 2_000
 MAX_PUBLIC_SEARCH_SHARD_BYTES = 350_000
 MAX_PUBLIC_SEARCH_SHARD_UNCOMPRESSED_BYTES = 500_000
-MAX_PUBLIC_SEARCH_TOTAL_COMPRESSED_BYTES = 100_000_000
-MAX_PUBLIC_SEARCH_TOTAL_UNCOMPRESSED_BYTES = 400_000_000
+MAX_PUBLIC_SEARCH_TOTAL_COMPRESSED_BYTES = 150_000_000
+MAX_PUBLIC_SEARCH_TOTAL_UNCOMPRESSED_BYTES = 600_000_000
 
 
 def bucket_for_url(url: str) -> str:
@@ -93,7 +94,7 @@ def _load_public_search_index(path: Path, manifest: dict[str, Any]) -> dict[str,
         if not isinstance(name, str) or not _PUBLIC_SHARD_RE.fullmatch(name) or name in seen_names:
             raise ValueError("public search shard filename is unsafe or duplicated")
         seen_names.add(name)
-        if not isinstance(page_count, int) or isinstance(page_count, bool) or not 1 <= page_count <= 1000:
+        if not isinstance(page_count, int) or isinstance(page_count, bool) or not 1 <= page_count <= MAX_PUBLIC_SEARCH_SHARD_PAGES:
             raise ValueError(f"{name}: page count is invalid")
         if not isinstance(compressed_bytes, int) or isinstance(compressed_bytes, bool) or not 1 <= compressed_bytes <= MAX_PUBLIC_SEARCH_SHARD_BYTES:
             raise ValueError(f"{name}: compressed byte count is invalid")
