@@ -250,8 +250,8 @@ function searchPageDerivedCatalogs(query,network,limit=5){
   const hasLocation=['address_locality','address_region','address_country','city','state','region','country','postal_code','location_name','area_served'].some(key=>typeof attrs[key]==='string'&&attrs[key].trim());
   return hasLocation&&queryMatchesRecord(r);
  });
- const productIntent=!contentIntent&&!businessIntent&&(productTermIntent||globalProductMatch);
  const geoIntent=terms.length>=2&&globalPlaceMatch&&!contentIntent&&!eventIntent&&!businessIntent;
+ const productIntent=!contentIntent&&!businessIntent&&(productTermIntent||(globalProductMatch&&!geoIntent));
  const locationBusinessIntent=businessIntent&&!contentIntent;
  const byId=new Map(network.catalogs.map(c=>[c.catalog_id,c])),groups=new Map();
  for(const record of network.records){
@@ -260,6 +260,11 @@ function searchPageDerivedCatalogs(query,network,limit=5){
   const {titleTokens,descTokens,attrTokens}=recordTokens(record);
   const titleMatch=terms.every(t=>titleTokens.has(t)),attrMatch=terms.every(t=>attrTokens.has(t));
   const contentRecord=['article','resource','media','subject'].includes(type);
+  // A local offer or brand name can mention a city without making the query a
+  // commerce search. In a location/business query, keep typed place and local
+  // business records; only retain commerce records when the user signals
+  // product intent explicitly (for example, "Las Vegas watches").
+  if((geoIntent||locationBusinessIntent)&&!productTermIntent&&['product','brand','model'].includes(type))continue;
   for(const id of record.catalog_ids){
    const c=byId.get(id);if(!c)continue;
    const catalogTokens=new Set(tokenize([c.title,c.subject].join(' ')));
