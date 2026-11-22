@@ -1785,6 +1785,7 @@ def analyze_pages_incremental(
     source_index_sha256: str | None = None,
     cache_dir: Path | None = None,
     progress: bool = False,
+    cache_only: bool = False,
 ) -> dict:
     """Reuse per-host analysis shards when that host's indexed pages are unchanged.
 
@@ -1882,7 +1883,16 @@ def analyze_pages_incremental(
         structured_catalog_items += shard["metrics"].get("structured_catalog_items", 0)
         eligible += shard["metrics"]["eligible_pages"]
         signals += shard["metrics"]["pages_with_catalog_signals"]
-    all_records, cross_host_record_merges = _merge_cross_host_records(all_records)
+    if cache_only:
+        return {
+            "cache_only": True,
+            "host_count": host_count,
+            "cache_reused_hosts": reused,
+            "cache_rebuilt_hosts": rebuilt,
+            "unique_pages": len(pages),
+            "cache_files": len(list(cache_dir.glob("*.json.gz"))),
+        }
+        all_records, cross_host_record_merges = _merge_cross_host_records(all_records)
     global_subject_catalogs = _add_global_subject_catalogs(pages, all_page_rows, all_records, all_catalogs)
     _reconcile_page_record_provenance(all_page_rows, all_records)
     global_typed_catalogs_by_type = _add_global_typed_entity_catalogs(all_page_rows, all_records, all_catalogs)
@@ -2968,6 +2978,7 @@ def main() -> None:
     parser.add_argument("--query", action="append", default=[])
     parser.add_argument("--validate-only", action="store_true")
     parser.add_argument("--no-incremental", action="store_true")
+    parser.add_argument("--cache-only", action="store_true", help="Build and persist per-host cache shards without catalog aggregation")
     parser.add_argument("--cache-dir", type=Path, default=ROOT / "data" / ".page-derived-catalog-cache")
     args = parser.parse_args()
     if args.validate_only:
@@ -2984,8 +2995,11 @@ def main() -> None:
         source_total=source_manifest.get("total_pages"),
         source_updated_at=datetime.fromtimestamp(source_manifest.get("updated_at", 0), timezone.utc).isoformat().replace("+00:00", "Z") if source_manifest.get("updated_at") else None,
         source_index_sha256=hashlib.sha256(args.index.read_bytes()).hexdigest(),
-        **({} if args.no_incremental else {"cache_dir": args.cache_dir, "progress": True}),
+        **({} if args.no_incremental else {"cache_dir": args.cache_dir, "progress": True, "cache_only": args.cache_only}),
     )
+    if args.cache_only:
+        print(json.dumps(analysis, indent=2))
+        return
     finished_at = datetime.now(timezone.utc)
     finished_iso = finished_at.replace(microsecond=0).isoformat().replace("+00:00", "Z")
     analysis["generated_at"] = finished_iso
