@@ -24,6 +24,7 @@ MAX_RESPONSE_BYTES = 8_000_000
 TIMEOUT_SECONDS = 25
 DEFAULT_MAX_PAGES = 40
 MAX_PAGES_PER_SOURCE = 80
+SORT_ORDER = "id asc"
 USER_AGENT = "EverythingHubCatalogDiscovery/1.0 (+https://github.com/rshure001/EverythingHub-Crawler)"
 
 # Explicit public CKAN API hosts with reviewed, per-dataset rights handling.
@@ -201,6 +202,7 @@ def discover_source(
             "pages_requested_total": previous_pages_requested_total + pages_requested,
             "next_start": next_start,
             "scan_generation": scan_generation,
+            "sort_order": SORT_ORDER,
             "scan_complete": scan_complete,
             "coverage_status": "complete" if scan_complete else "partial" if current else "unknown",
             "records_added_this_run": records_added,
@@ -240,7 +242,7 @@ def discover_source(
             "q": "*:*",
             "rows": rows,
             "start": page_start,
-            "sort": "metadata_modified desc",
+            "sort": SORT_ORDER,
         })
         url = source["base"].rstrip("/") + source["api_path"] + "?" + params
         try:
@@ -254,6 +256,22 @@ def discover_source(
                 raise ValueError("CKAN package_search results were missing")
             count = result.get("count")
             if isinstance(count, int) and not isinstance(count, bool) and count >= 0:
+                if start_offset > 0 and (
+                    count < start_offset
+                    or (
+                        previous_available_dataset_count is not None
+                        and count < previous_available_dataset_count
+                    )
+                ):
+                    available_dataset_count = count
+                    scan_generation += 1
+                    previous_pages_requested_total = 0
+                    errors.append("source result count changed below the saved cursor; restarting from offset zero")
+                    return finish(
+                        page_limit_applied=page_limit_applied,
+                        scan_complete=False,
+                        next_start=0,
+                    )
                 available_dataset_count = count
             source_meta = {
                 **source,
@@ -326,20 +344,26 @@ def build_catalog(
         source_id = source["id"]
         old = previous_catalogs.get(source_id, {})
         old_generation = old.get("scan_generation")
-        legacy_snapshot = not isinstance(old_generation, int) or isinstance(old_generation, bool)
-        generation = max(1, int(old_generation or 1))
-        if old.get("scan_complete") is True:
-            generation += 1
+        has_generation = isinstance(old_generation, int) and not isinstance(old_generation, bool)
+        sort_changed = old.get("sort_order") != SORT_ORDER
+        legacy_snapshot = not has_generation or sort_changed
+        if old.get("scan_complete") is True and has_generation and not sort_changed:
+            generation = int(old_generation) + 1
+            start_offset = 0
+            pages_requested_total = 0
+        elif sort_changed or not has_generation:
+            # The prior snapshot used metadata_modified ordering, or predates
+            # persisted cursors. Restart at zero so offsets never cross sort
+            # orders; old records remain until this new generation completes.
+            generation = max(1, int(old_generation or 0) + (1 if has_generation else 0))
             start_offset = 0
             pages_requested_total = 0
         else:
+            generation = max(1, int(old_generation))
             saved_start = old.get("next_start")
             if isinstance(saved_start, int) and not isinstance(saved_start, bool) and saved_start >= 0:
                 start_offset = saved_start
             else:
-                # Migrate the existing non-resumable manifest without repeating
-                # already successful pages. CKAN pages are sequential and each
-                # successful page advances by exactly rows.
                 start_offset = max(0, int(old.get("pages_requested") or 0) * rows)
             pages_requested_total = max(
                 0,
@@ -360,9 +384,9 @@ def build_catalog(
         prior_rows = [dict(item) for item in previous_datasets.get(source_id, [])]
         for item in prior_rows:
             if legacy_snapshot:
-                # Legacy snapshots contain one sequential partial scan. Treat
-                # their existing records as observed in its first generation.
-                item["last_seen_generation"] = 1
+                # Existing records belong to the previous sort/generation and
+                # are retained until the new full scan can safely replace them.
+                item["last_seen_generation"] = max(0, int(old_generation or 0))
             else:
                 item.setdefault("last_seen_generation", max(0, generation - 1))
 
