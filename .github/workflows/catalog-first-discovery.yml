@@ -28,11 +28,11 @@ on:
       rows:
         description: Records per catalog API page
         required: false
-        default: "250"
+        default: "500"
       max_pages:
         description: Maximum API pages per catalog
         required: false
-        default: "40"
+        default: "80"
   schedule:
     - cron: "17 */2 * * *"
 
@@ -84,8 +84,8 @@ jobs:
         run: python -m unittest discover -s learning -p 'test_*.py' -v
       - name: Discover whole catalogs and their bulk resources
         env:
-          ROWS: ${{ inputs.rows || '250' }}
-          MAX_PAGES: ${{ inputs.max_pages || '40' }}
+          ROWS: ${{ inputs.rows || '500' }}
+          MAX_PAGES: ${{ inputs.max_pages || '80' }}
         run: python crawler/catalog_discovery.py --rows "$ROWS" --max-pages "$MAX_PAGES"
       - name: Discover Open Library subject catalogs
         run: python crawler/catalog_openlibrary.py --pause 1
