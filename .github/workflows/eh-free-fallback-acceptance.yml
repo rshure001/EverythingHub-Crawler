@@ -26,6 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 12
     env:
+      # Always test the public production alias, never a deployment-specific preview URL.
       TARGET_URL: https://everythinghub-homepage-fixed.vercel.app/
     steps:
       - uses: actions/setup-node@v4
