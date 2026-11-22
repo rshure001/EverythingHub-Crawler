@@ -899,6 +899,8 @@ def analyze_pages(
     source_total: int | None = None,
     source_updated_at: str | None = None,
     source_index_sha256: str | None = None,
+    progress_callback=None,
+    progress_interval: int = 500,
 ) -> dict:
     source_page_rows = len(pages)
     pages, duplicate_source_page_rows = _dedupe_source_pages(pages)
@@ -922,7 +924,12 @@ def analyze_pages(
     structured_entity_pages = 0
     structured_entity_occurrences = 0
 
-    for page in pages:
+    progress_interval = max(1, int(progress_interval))
+    for page_index, page in enumerate(pages, start=1):
+        if callable(progress_callback) and (
+            page_index == 1 or page_index % progress_interval == 0 or page_index == len(pages)
+        ):
+            progress_callback(page_index, len(pages))
         if not isinstance(page, dict):
             page_rows.append({"page_id": None, "url": None, "eligible": False, "reason": "malformed_page"})
             continue
@@ -1777,6 +1784,7 @@ def analyze_pages_incremental(
     source_updated_at: str | None = None,
     source_index_sha256: str | None = None,
     cache_dir: Path | None = None,
+    progress: bool = False,
 ) -> dict:
     """Reuse per-host analysis shards when that host's indexed pages are unchanged.
 
@@ -1801,7 +1809,18 @@ def analyze_pages_incremental(
     structured_catalog_items = 0
     eligible = signals = 0
     reused = rebuilt = 0
-    for host, host_pages in sorted(grouped.items()):
+    host_count = len(grouped)
+    analysis_started = time.monotonic()
+    if progress:
+        print(json.dumps({
+            "stage": "catalog_analysis_start",
+            "unique_pages": len(pages),
+            "host_count": host_count,
+            "cache_dir": str(cache_dir),
+        }, sort_keys=True), flush=True)
+    for host_index, (host, host_pages) in enumerate(sorted(grouped.items()), start=1):
+        host_started = time.monotonic()
+        cache_status = "rebuilt"
         payload = json.dumps(host_pages, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
         digest = hashlib.sha256(payload).hexdigest()
         cache_path = cache_dir / (hashlib.sha256(host.encode("utf-8")).hexdigest()[:32] + ".json.gz")
@@ -1811,16 +1830,48 @@ def analyze_pages_incremental(
                 cached = json.loads(gzip.decompress(cache_path.read_bytes()).decode("utf-8"))
                 if cached.get("analyzer_version") == ANALYZER_VERSION and cached.get("input_sha256") == digest:
                     shard = cached.get("analysis")
+                    cache_status = "reused"
                     reused += 1
             except (OSError, ValueError, json.JSONDecodeError):
                 shard = None
         if shard is None:
-            shard = analyze_pages(host_pages, source_total=len(host_pages))
+            def report_host_progress(page_index: int, page_count: int) -> None:
+                if progress:
+                    print(json.dumps({
+                        "stage": "catalog_host_analysis_progress",
+                        "host": host,
+                        "host_index": host_index,
+                        "host_count": host_count,
+                        "pages_started": page_index,
+                        "host_page_count": page_count,
+                    }, sort_keys=True), flush=True)
+            shard = analyze_pages(
+                host_pages,
+                source_total=len(host_pages),
+                progress_callback=report_host_progress if progress else None,
+            )
             raw = json.dumps({"analyzer_version": ANALYZER_VERSION, "input_sha256": digest, "analysis": shard}, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
             temp = cache_path.with_suffix(".tmp")
             temp.write_bytes(gzip.compress(raw, compresslevel=6, mtime=0))
             temp.replace(cache_path)
             rebuilt += 1
+        if progress:
+            print(json.dumps({
+                "stage": "catalog_host_analysis_complete",
+                "host": host,
+                "host_index": host_index,
+                "host_count": host_count,
+                "host_page_count": len(host_pages),
+                "cache_status": cache_status,
+                "catalogs": len(shard["catalogs"]),
+                "records": len(shard["records"]),
+                "eligible_pages": shard["metrics"]["eligible_pages"],
+                "pages_with_catalog_signals": shard["metrics"]["pages_with_catalog_signals"],
+                "elapsed_seconds": round(time.monotonic() - host_started, 3),
+                "analysis_elapsed_seconds": round(time.monotonic() - analysis_started, 3),
+                "cache_reused_hosts": reused,
+                "cache_rebuilt_hosts": rebuilt,
+            }, sort_keys=True), flush=True)
         all_catalogs.extend(shard["catalogs"])
         all_records.extend(shard["records"])
         all_page_rows.extend(shard["pages"])
@@ -2933,7 +2984,7 @@ def main() -> None:
         source_total=source_manifest.get("total_pages"),
         source_updated_at=datetime.fromtimestamp(source_manifest.get("updated_at", 0), timezone.utc).isoformat().replace("+00:00", "Z") if source_manifest.get("updated_at") else None,
         source_index_sha256=hashlib.sha256(args.index.read_bytes()).hexdigest(),
-        **({} if args.no_incremental else {"cache_dir": args.cache_dir}),
+        **({} if args.no_incremental else {"cache_dir": args.cache_dir, "progress": True}),
     )
     finished_at = datetime.now(timezone.utc)
     finished_iso = finished_at.replace(microsecond=0).isoformat().replace("+00:00", "Z")
