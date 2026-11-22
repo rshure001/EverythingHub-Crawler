@@ -189,6 +189,13 @@ function buildResponse(options) {
     indexIntegrity: options.indexIntegrity || null,
     indexShardCount: Number.isInteger(options.indexShardCount) ? options.indexShardCount : null,
     indexTransport: options.indexTransport || null,
+    queryScoped: Boolean(options.queryScoped),
+    queryScopeComplete: Boolean(options.queryScopeComplete),
+    queryCandidatePages: Number.isSafeInteger(options.queryCandidatePages) ? options.queryCandidatePages : null,
+    queryCandidateShardCount: Number.isSafeInteger(options.queryCandidateShardCount) ? options.queryCandidateShardCount : null,
+    queryTokenCount: Number.isSafeInteger(options.queryTokenCount) ? options.queryTokenCount : null,
+    queryIndexPrefixCount: Number.isSafeInteger(options.queryIndexPrefixCount) ? options.queryIndexPrefixCount : null,
+    queryIndexFallbackReason: options.queryIndexFallbackReason || null,
     staleCatalog: Boolean(options.staleCatalog),
     results,
     providers
