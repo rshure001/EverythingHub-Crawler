@@ -257,9 +257,9 @@ async function testRejectsClientLimitOverruns() {
   const previousFetch = globalThis.fetch;
   const overPageManifest = {
     ...manifest,
-    total_pages: 180_001,
+    total_pages: 250_001,
     shards: [
-      { ...manifest.shards[0], pages: 180_000 },
+      { ...manifest.shards[0], pages: 250_000 },
       { ...manifest.shards[1], pages: 1 }
     ]
   };
