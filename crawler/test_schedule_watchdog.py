@@ -128,13 +128,13 @@ class ScheduleWatchdogTests(unittest.TestCase):
         self.assertIsNone(result["schedule_age_seconds"])
         self.assertEqual(result["manifest_age_seconds"], 3600)
 
-    def test_unobserved_schedule_with_manifest_stale_under_10_minutes_waits(self):
+    def test_unobserved_schedule_with_fresh_manifest_is_healthy(self):
         result = evaluate(
             [{"status": "completed", "conclusion": "success", "event": "workflow_dispatch", "created_at": "2026-11-16T15:59:00Z"}],
             now=NOW,
             manifest_updated_at=manifest_minutes_ago(5),
         )
-        self.assertEqual(result["action"], "wait")
+        self.assertEqual(result["action"], "healthy")
         self.assertEqual(result["schedule_status"], "unobserved")
         self.assertEqual(result["manifest_age_seconds"], 300)
 
