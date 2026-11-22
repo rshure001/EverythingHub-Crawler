@@ -40,7 +40,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: catalog-data-publish-${{ github.ref }}
+  group: catalog-first-discovery-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
