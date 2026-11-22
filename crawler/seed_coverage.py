@@ -2,26 +2,27 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Callable, Iterable, MutableMapping
+from collections.abc import Iterable, MutableMapping
 
 DEFAULT_SEED_RETRY_SECONDS = 10 * 60
 
 
 def schedule_missing_seed_urls(
     seeds: Iterable[str],
-    indexed_hosts: Iterable[str],
+    indexed_urls: Iterable[str],
     queued_urls: Iterable[str],
     retry_after: MutableMapping[str, int | float],
     *,
     now: float,
     cooldown_seconds: int = DEFAULT_SEED_RETRY_SECONDS,
     queue_limit: int = 50_000,
-    host_key: Callable[[str], str],
 ) -> list[tuple[str, int]]:
-    # Return missing seed URLs without bypassing queue or retry bounds.
-    # The caller still applies robots.txt and per-host rate limits before fetching.
-    if not callable(host_key):
-        raise TypeError("host_key must be callable")
+    """Return exact seed URLs not yet indexed without skipping sibling paths.
+
+    Host-level politeness is enforced by the crawler's shared host scheduler.
+    Seed coverage itself must be URL-scoped: an indexed homepage does not prove
+    that a separately configured visitor, directory, or catalog path was read.
+    """
     if not isinstance(now, (int, float)) or not math.isfinite(float(now)):
         raise ValueError("now must be a finite timestamp")
     if not isinstance(cooldown_seconds, int) or cooldown_seconds < 0:
@@ -29,7 +30,7 @@ def schedule_missing_seed_urls(
     if not isinstance(queue_limit, int) or queue_limit < 0:
         raise ValueError("queue_limit must be a non-negative integer")
 
-    represented = set(indexed_hosts or ())
+    represented = {str(url) for url in (indexed_urls or ())}
     queued = {str(url) for url in (queued_urls or ())}
     scheduled: list[tuple[str, int]] = []
     retry_at = float(now) + cooldown_seconds
@@ -38,8 +39,7 @@ def schedule_missing_seed_urls(
         seed = str(raw_seed).strip()
         if not seed:
             continue
-        host = host_key(seed)
-        if host in represented:
+        if seed in represented:
             retry_after.pop(seed, None)
             continue
 
@@ -57,9 +57,8 @@ def schedule_missing_seed_urls(
         except (TypeError, ValueError, OverflowError):
             next_retry = 0
         if next_retry > now:
-            # Old 24-hour cooldowns must not strand missing seed hosts after
-            # the retry policy is shortened; clamp them to the new bounded window.
-            retry_after[seed] = int(min(next_retry, now + cooldown_seconds))
+            # Clamp old long cooldowns to the current bounded retry window.
+            retry_after[seed] = int(min(next_retry, retry_at))
             continue
         if len(queued) + len(scheduled) >= queue_limit:
             break
