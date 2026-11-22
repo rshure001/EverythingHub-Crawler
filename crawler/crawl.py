@@ -49,7 +49,7 @@ SEED_RETRY_SECONDS = DEFAULT_SEED_RETRY_SECONDS
 DEFAULT_429_BACKOFF_SECONDS = 3600
 DEFAULT_5XX_BACKOFF_SECONDS = 600
 DEFAULT_NETWORK_BACKOFF_SECONDS = 60
-# Keep index rebuild, validation, and commit inside the 10-minute Actions job timeout.
+# Keep network crawling bounded; the workflow checkpoints raw state before public-index validation.
 MAX_RUN_SECONDS = 420
 HOST_MIN_INTERVAL = 1.0
 ROBOTS_MAX_BYTES = 512_000
