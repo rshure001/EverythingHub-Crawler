@@ -995,9 +995,9 @@ def main():
     def host_delay(site):
         return effective_host_delay(policy(site))
 
-    # Resume the durable frontier and retry missing configured seed hosts on a
-    # long cooldown. A seed that was seen but blocked, noindexed, or permanently
-    # failed must not disappear from coverage forever.
+    # Resume the durable frontier and retry exact configured seed URLs on a
+    # bounded cooldown. A seed that was seen but blocked, noindexed, or
+    # permanently failed must not disappear from coverage forever.
     old_index = load_index(OUTPUT, {"version": 1, "pages": []})
     old_pages = old_index.get("pages", []) if isinstance(old_index, dict) else []
     indexed_urls = {
@@ -1005,8 +1005,6 @@ def main():
         for page in old_pages
         if isinstance(page, dict) and isinstance(page.get("url"), str)
     }
-    indexed_hosts = {host_key(url) for url in indexed_urls}
-
     frontier = load_json(FRONTIER, {"queue": [], "seen": []})
     # "seen" is a deduplication history, not the pending-queue budget.
     # Drop already-indexed and now-invalid entries so the history does not
@@ -1074,25 +1072,19 @@ def main():
         if seed not in seen and seed not in indexed_urls and len(queue) < QUEUE_LIMIT:
             seen.add(seed)
 
-    # Do not spend requests on a seed URL when that host already has indexed
-    # coverage. Missing hosts are re-queued at most once per 24 hours; normal
-    # robots checks and per-host rate limits still run in select_batch().
-    seed_set = set(seeds)
-    queue = deque(
-        (url, depth) for url, depth in queue
-        if not (url in seed_set and host_key(url) in indexed_hosts)
-    )
+    # Seed coverage is URL-scoped, not host-scoped: an indexed homepage does
+    # not prove that a separately configured visitor, directory, or catalog
+    # path was read. Exact indexed URLs were removed above; robots checks and
+    # per-host pacing remain enforced by select_batch().
     queued_urls = {url for url, _depth in queue}
-    eligible_seeds = [seed for seed in seeds if seed in seen]
     for seed_url, depth in schedule_missing_seed_urls(
-        eligible_seeds,
-        indexed_hosts,
+        seeds,
+        indexed_urls,
         queued_urls,
         seed_retry_after,
         now=time.time(),
         cooldown_seconds=SEED_RETRY_SECONDS,
         queue_limit=QUEUE_LIMIT,
-        host_key=host_key,
     ):
         queue.append((seed_url, depth))
         seen.add(seed_url)
