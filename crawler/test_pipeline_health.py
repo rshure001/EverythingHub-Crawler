@@ -80,14 +80,22 @@ class PipelineHealthTests(unittest.TestCase):
         self.assertEqual(result["search_smoke"]["status"], "healthy")
         self.assertEqual(result["overall_status"], "healthy")
 
-    def test_downstream_health_is_checked_on_schedule_not_every_workflow_completion(self):
+    def test_downstream_health_is_checked_on_schedule_and_catalog_completion(self):
         workflow = (
             Path(__file__).resolve().parents[1]
             / ".github" / "workflows" / "crawl-watchdog.yml"
         ).read_text(encoding="utf-8")
         workflow_run = workflow.split("  workflow_run:" + chr(10), 1)[1].split("  workflow_dispatch:", 1)[0]
-        self.assertEqual(workflow_run.count('- "'), 1)
-        self.assertIn('- "Everything Hub crawler"', workflow_run)
+        workflow_names = [
+            line.strip()[3:-1]
+            for line in workflow_run.splitlines()
+            if line.strip().startswith("- " + chr(34)) and line.strip().endswith(chr(34))
+        ]
+        self.assertEqual(workflow_names, [
+            "Everything Hub crawler",
+            "Retroactive catalog inventory",
+            "Catalog-first discovery",
+        ])
         self.assertNotIn("EverythingHub Publisher", workflow_run)
         self.assertNotIn("EverythingHub search API smoke test", workflow_run)
         self.assertNotIn("github.event.workflow_run.name", workflow)
