@@ -180,7 +180,7 @@ def query_tokens(page):
         normalized = unicodedata.normalize("NFKC", str(value)).casefold()
         tokens.update(
             token for token in re.findall(r"[^\W_]+", normalized, flags=re.UNICODE)
-            if len(token) >= 2 and token not in QUERY_STOP_TOKENS
+            if token and token not in QUERY_STOP_TOKENS
         )
     return tokens
 
