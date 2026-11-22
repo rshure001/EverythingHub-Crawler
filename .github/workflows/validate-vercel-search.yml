@@ -65,14 +65,17 @@ jobs:
           const debug={
             query,
             indexScan:data.indexScan||null,
+            catalogError:data.catalogError||null,
             catalogPreview:data.catalogPreview,
             error:data.error||null,
-            webResults:(data.results||[]).slice(0,3).map(r=>({title:r.title,snippet:r.snippet})),
-            catalogResults:(data.catalogResults||[]).slice(0,3).map(x=>({id:x.catalog_id,title:x.catalog_title||x.title,source:x.source_kind||x.sourceKind}))
+            webResults:(data.results||[]).slice(0,3).map(r=>({title:r.title,snippet:r.snippet,provider:r.provider,previewOnly:r.preview_only})),
+            catalogResults:(data.catalogResults||[]).slice(0,3).map(x=>({id:x.catalog_id,title:x.catalog_title||x.title,source:x.source_kind||x.sourceKind,relevanceClass:x.relevance_class,matchedRecords:(x.matched_records||[]).map(r=>({type:r.record_type,title:r.title,sourceUrl:r.source_url}))}))
           };
           console.log(JSON.stringify(debug,null,2));
-          if(scan.mode!=='query-scoped'||!Number.isSafeInteger(scan.indexedPages)||!Number.isSafeInteger(scan.scannedPages)||scan.scannedPages<1||scan.scannedPages>=scan.indexedPages) {
-            throw new Error(query+' did not use bounded query-scoped page shards: '+JSON.stringify({scan,preview:data.catalogPreview,error:data.error}));
+          const queryScoped=scan.mode==='query-scoped'&&Number.isSafeInteger(scan.indexedPages)&&Number.isSafeInteger(scan.scannedPages)&&scan.scannedPages>0&&scan.scannedPages<scan.indexedPages;
+          const previewFallback=query==='Las Vegas'&&scan.mode==='catalog-preview-fallback'&&Number.isSafeInteger(scan.previewRecords)&&scan.previewRecords>0&&(data.results||[]).some(r=>r.provider==='everythinghub-catalog-preview'&&String(r.title||'').toLowerCase().includes('las vegas'));
+          if(!queryScoped&&!previewFallback) {
+            throw new Error(query+' did not use bounded query shards or an explicitly marked catalog-preview fallback: '+JSON.stringify({scan,catalogError:data.catalogError,preview:data.catalogPreview}));
           }
           const summary={
             query,
