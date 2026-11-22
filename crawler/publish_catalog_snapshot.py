@@ -23,15 +23,23 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def _run(command, cwd: Path, env=None, check=True):
-    result = subprocess.run(
-        command,
-        cwd=cwd,
-        env=env,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
+def _run(command, cwd: Path, env=None, check=True, timeout: float = 600):
+    """Run a publication command with a finite timeout and actionable failure."""
+    try:
+        result = subprocess.run(
+            command,
+            cwd=cwd,
+            env=env,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired as exc:
+        rendered = " ".join(map(str, command))
+        raise RuntimeError(
+            f"command timed out after {timeout:g}s: {rendered}"
+        ) from exc
     if check and result.returncode:
         detail = (result.stderr or result.stdout or "").strip()
         raise RuntimeError(
