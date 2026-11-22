@@ -1,10 +1,7 @@
 {
   "version": 1,
-  "updated_at": "2026-11-22T02:00:44.205Z",
-  "reason": "Request one bounded recovery crawl because the public-search manifest remains stale (167,979 indexed pages; updated 2026-11-22T00:49:07Z), the last successful main crawler run was 44967830728 at 2026-11-22T00:41:14Z, and no newer crawler run is active. Preserve robots.txt, source terms, per-host pacing, provider rate limits, and GitHub API/file limits.",
-  "manifest_before_pages": 167979,
-  "manifest_before_updated_at": "2026-11-22T00:49:07Z",
-  "requested_at": "2026-11-22T02:00:44.205Z",
-  "requested_by": "Everything Hub Build automation",
-  "previous_run_id": "44967830728"
+  "updated_at": "2026-11-22T02:38:36.787Z",
+  "reason": "Explicit workflow_dispatch fallback after scheduled crawl delivery was 7042s old (>25 minutes); no queued or running crawler; public manifest was 1781s old (>10 minutes). One bounded recovery crawl; normal schedule unchanged.",
+  "manifest_before_pages": 169357,
+  "manifest_before_updated_at": "2026-11-22T02:08:55Z"
 }
