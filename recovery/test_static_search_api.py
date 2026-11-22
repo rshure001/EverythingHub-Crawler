@@ -88,17 +88,18 @@ class StaticSearchTests(unittest.TestCase):
             manifest_bytes,
         )
         self.assertEqual(api.MAX_PAGES, 250_000)
-        self.assertEqual(api.MAX_SHARDS, 768)
+        self.assertEqual(api.MAX_SHARDS, 900)
+        self.assertEqual(api.MAX_SHARD_UNCOMPRESSED_BYTES, 600_000)
         self.assertEqual(api.MAX_MANIFEST_BYTES, 256_000)
-        self.assertEqual(api.MAX_TOTAL_COMPRESSED_BYTES, 100_000_000)
-        self.assertEqual(api.MAX_TOTAL_UNCOMPRESSED_BYTES, 400_000_000)
+        self.assertEqual(api.MAX_TOTAL_COMPRESSED_BYTES, 150_000_000)
+        self.assertEqual(api.MAX_TOTAL_UNCOMPRESSED_BYTES, 540_000_000)
 
     def test_capacity_rejects_values_above_publisher_envelope(self):
         limits = [
             (250_001, "total_pages", api.MAX_PAGES),
-            (769, "shard_count", api.MAX_SHARDS),
-            (100_000_001, "total compressed bytes", api.MAX_TOTAL_COMPRESSED_BYTES),
-            (400_000_001, "total uncompressed bytes", api.MAX_TOTAL_UNCOMPRESSED_BYTES),
+            (901, "shard_count", api.MAX_SHARDS),
+            (150_000_001, "total compressed bytes", api.MAX_TOTAL_COMPRESSED_BYTES),
+            (540_000_001, "total uncompressed bytes", api.MAX_TOTAL_UNCOMPRESSED_BYTES),
             (256_001, "manifest bytes", api.MAX_MANIFEST_BYTES),
         ]
         for value, name, maximum in limits:
