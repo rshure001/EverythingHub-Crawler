@@ -326,7 +326,7 @@ class ProductMetadataTests(unittest.TestCase):
         self.assertEqual(by_type["place"]["name"], "Rainbow Family Park")
         self.assertEqual(by_type["place"]["attributes"]["address_locality"], "Las Vegas")
         self.assertEqual(by_type["place"]["attributes"]["address_region"], "NV")
-        self.assertIn("https://www.wikidata.org/entity/Q12345", by_type["place"]["attributes"]["same_as_ids"])
+        self.assertIn("wikidata:Q12345", by_type["place"]["attributes"]["same_as_ids"])
         self.assertNotIn("street_address", by_type["place"]["attributes"])
         self.assertNotIn("telephone", by_type["business"]["attributes"])
         self.assertNotIn("email", by_type["business"]["attributes"])
