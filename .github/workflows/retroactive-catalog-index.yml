@@ -10,7 +10,6 @@ on:
       - "crawler/catalog-source-terms.json"
       - "crawler/product_metadata.py"
       - "data/source-policy-reviews.json"
-      - "public-search/manifest.json"
   workflow_dispatch:
   schedule:
     - cron: "23 * * * *"
