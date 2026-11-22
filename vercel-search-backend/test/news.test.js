@@ -30,6 +30,22 @@ function feedXml(host) {
   return "<rss><channel><item><title>Update from " + host + "</title><link>https://" + host + "/news/latest</link><pubDate>Sun, 22 Nov 2026 12:00:00 GMT</pubDate><description><![CDATA[<p>Current public update from " + host + ".</p>]]></description></item></channel></rss>";
 }
 
+test("NASA news releases provide a current headline-only feed in the public science lanes", () => {
+  const nasa = { source: "NASA News Releases", url: "https://www.nasa.gov/news-release/feed/", headlinesOnly: true };
+  for (const category of ["for-you", "technology", "science"]) {
+    assert.ok(NEWS_FEEDS[category].some(feed => feed.url === nasa.url && feed.headlinesOnly === true));
+  }
+  const items = parseFeed(
+    "<rss><channel><item><title>NASA current update</title><link>https://www.nasa.gov/news/example</link>" +
+    "<pubDate>Sun, 22 Nov 2026 12:00:00 GMT</pubDate><description>Do not republish this summary.</description></item></channel></rss>",
+    nasa
+  );
+  assert.equal(items.length, 1);
+  assert.equal(items[0].source, "NASA News Releases");
+  assert.equal(items[0].publishedAt, "2026-11-22T12:00:00.000Z");
+  assert.equal(items[0].summary, "");
+});
+
 test.beforeEach(() => resetRobotsForTests());
 test.afterEach(() => {
   resetRobotsForTests();

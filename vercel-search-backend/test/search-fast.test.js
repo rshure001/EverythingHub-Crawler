@@ -28,8 +28,8 @@ function mockResponseObject() {
 }
 
 function feedXml(host) {
-  const title = host.includes("jpl.nasa.gov") ? "NASA Artemis mission update" : "Latest public update from " + host;
-  const summary = host.includes("jpl.nasa.gov") ? "NASA space science and exploration news." : "Verified public information from " + host;
+  const title = host.endsWith("nasa.gov") ? "NASA Artemis mission update" : "Latest public update from " + host;
+  const summary = host.endsWith("nasa.gov") ? "NASA space science and exploration news." : "Verified public information from " + host;
   return "<rss><channel><item><title>" + title + "</title><link>https://" + host + "/news/latest</link><pubDate>Sun, 22 Nov 2026 12:00:00 GMT</pubDate><description><![CDATA[" + summary + "]]></description></item></channel></rss>";
 }
 
@@ -67,9 +67,9 @@ test("news search uses permitted official RSS feeds and returns query-matched st
     assert.equal(res.body.status, "ok");
     assert.equal(res.body.query, "NASA");
     assert.ok(res.body.results.some(item => /NASA Artemis/.test(item.title)));
-    assert.ok(res.body.providers.includes("NASA Jet Propulsion Laboratory"));
+    assert.ok(res.body.providers.includes("NASA News Releases"));
     assert.equal(calls.some(url => url.startsWith("https://news.google.com/")), false);
-    assert.ok(calls.some(url => url.includes("jpl.nasa.gov/feeds/news/")));
+    assert.ok(calls.some(url => url.includes("nasa.gov/news-release/feed/")));
   } finally {
     global.fetch = originalFetch;
   }
@@ -140,7 +140,7 @@ test("news query normalization and feed selection remain bounded", () => {
   const selected = selectFeeds("NASA Artemis");
   assert.ok(selected.length > 0 && selected.length <= 5);
   assert.equal(new Set(selected.map(feed => feed.url)).size, selected.length);
-  assert.ok(selected.some(feed => feed.source === "NASA Jet Propulsion Laboratory"));
+  assert.ok(selected.some(feed => feed.source === "NASA News Releases"));
   const matched = searchNewsItems([{ title: "NASA Artemis", summary: "Space flight", source: "NASA", url: "https://nasa.gov/story" }], "NASA");
   assert.equal(matched.results.length, 1);
   assert.equal(NEWS_FEEDS.science.length, 3);
