@@ -155,7 +155,7 @@ def main() -> None:
         "schema_version": 1,
         "strategy": "one-persistent-page-catalog-profile-per-indexed-page",
         "source_index_pages": result["source_index_pages"],
-        "metrics": {key: value for key, value in result["metrics"].items() if key.startswith("pages_") or key in ("page_catalog_signal_references", "unique_catalog_candidates", "verified_page_catalogs")},
+        "metrics": {key: value for key, value in result["metrics"].items() if key.startswith("pages_") or key.startswith("page_backed_catalogs_") or key == "page_backed_catalog_seed_candidates" or key in ("page_catalog_signal_references", "unique_catalog_candidates", "verified_page_catalogs")},
         "pages": result["page_catalog_seeds"],
     }
     args.page_output.parent.mkdir(parents=True, exist_ok=True)
