@@ -12,6 +12,7 @@ const MAX_CATALOG_GZIP_BYTES = 16000000;
 const MAX_CATALOG_JSON_BYTES = 64000000;
 const MAX_INDEXED_PAGES = 250000;
 const MAX_SHARD_COUNT = 768;
+const MAX_PAGES_PER_SHARD = 2000;
 const MAX_SHARD_BYTES = 350000;
 const MAX_SHARD_UNCOMPRESSED_BYTES = 500000;
 const MAX_TOTAL_SHARD_BYTES = 100000000;
@@ -175,7 +176,7 @@ function validateShardManifest(manifest) {
     shardFormat = format;
     if (seen.has(shard.file)) throw new Error('manifest_duplicate_shard_file');
     seen.add(shard.file);
-    if (!Number.isSafeInteger(shard.pages) || shard.pages < 1 || shard.pages > 1000) {
+    if (!Number.isSafeInteger(shard.pages) || shard.pages < 1 || shard.pages > MAX_PAGES_PER_SHARD) {
       throw new Error('manifest_shard_page_count_invalid');
     }
     if (!Number.isSafeInteger(shard.bytes) || shard.bytes < 1 || shard.bytes > MAX_SHARD_BYTES) {
@@ -375,6 +376,7 @@ module.exports = {
   MAX_CATALOG_JSON_BYTES,
   MAX_INDEXED_PAGES,
   MAX_SHARD_COUNT,
+  MAX_PAGES_PER_SHARD,
   MAX_SHARD_BYTES,
   MAX_SHARD_UNCOMPRESSED_BYTES,
   MAX_TOTAL_SHARD_BYTES,
