@@ -88,9 +88,8 @@ def canonical_index_size_warning(root: Path = ROOT) -> str | None:
 def validate_query_index(
     manifest: dict,
     search_dir: Path,
-    declared_page_files: set[str],
     shard_records: list[dict],
-    page_shard_by_url: dict[str, str],
+    page_shard_by_url: dict[str, int],
 ) -> list[str]:
     """Validate every query posting against the exact verified page-shard contents."""
     errors: list[str] = []
@@ -123,11 +122,16 @@ def validate_query_index(
         for token in query_tokens(page):
             token_files = expected_postings.setdefault(token, {})
             token_files[filename] = token_files.get(filename, 0) + 1
-    expected_page_files = {
-        filename for filenames in expected_postings.values() for filename in filenames
+    declared_shard_count = len(manifest.get("shards", []))
+    expected_shard_indexes = {
+        shard_index for postings in expected_postings.values() for shard_index in postings
     }
-    if not expected_page_files.issubset(declared_page_files):
-        errors.append("query-index source references a page shard outside the verified manifest")
+    if any(
+        not isinstance(shard_index, int) or isinstance(shard_index, bool)
+        or shard_index < 0 or shard_index >= declared_shard_count
+        for shard_index in expected_shard_indexes
+    ):
+        errors.append("query-index source references a page-shard ordinal outside the verified manifest")
     expected_prefixes = {
         hashlib.sha256(token.encode("utf-8")).hexdigest()[:2]
         for token in expected_postings
@@ -206,8 +210,8 @@ def validate_query_index(
 
         expected_for_prefix = {
             token: [
-                {"file": filename, "pages": page_hits}
-                for filename, page_hits in sorted(expected_postings[token].items())
+                [shard_index, page_hits]
+                for shard_index, page_hits in sorted(expected_postings[token].items())
             ]
             for token in sorted(expected_postings)
             if hashlib.sha256(token.encode("utf-8")).hexdigest()[:2] == prefix
@@ -328,7 +332,7 @@ def validate(root: Path = ROOT) -> list[str]:
     total_uncompressed_bytes = 0
     shard_format = None
 
-    for entry in shards:
+    for shard_index, entry in enumerate(shards):
         if not isinstance(entry, dict):
             errors.append("manifest contains a non-object shard entry")
             continue
@@ -451,7 +455,7 @@ def validate(root: Path = ROOT) -> list[str]:
                 errors.append(f"duplicate URL across public shards: {url[:160]}")
             else:
                 seen_urls.add(url)
-                page_shard_by_url[url] = name
+                page_shard_by_url[url] = shard_index
 
     if manifest.get("total_pages") != total_pages:
         errors.append("manifest total_pages does not match actual shard records")
@@ -471,7 +475,7 @@ def validate(root: Path = ROOT) -> list[str]:
         )
 
     errors.extend(validate_query_index(
-        manifest, search_dir, declared_files, shard_records, page_shard_by_url
+        manifest, search_dir, shard_records, page_shard_by_url
     ))
 
     catalog = manifest.get("catalog_gzip")
