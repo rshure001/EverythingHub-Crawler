@@ -55,6 +55,22 @@ class PageDerivedCatalogAnalysisTests(unittest.TestCase):
         self.assertEqual(result["metrics"]["unique_records"], 0)
         self.assertEqual(result["metrics"]["records_published"], 0)
 
+    def test_analyze_pages_emits_bounded_progress_callbacks(self):
+        pages = [{
+            "url": "https://example.org/about/" + str(index),
+            "title": "About us",
+            "description": "Information about this organization.",
+            "text": "Contact and background information.",
+            "lane": "general",
+            "robots_allowed": True,
+        } for index in range(501)]
+        events = []
+        analyze_pages(
+            pages,
+            progress_callback=lambda current, total: events.append((current, total)),
+        )
+        self.assertEqual(events, [(1, 501), (500, 501), (501, 501)])
+
     def test_rolex_model_pages_form_one_deduplicated_catalog(self):
         pages = [
             {
