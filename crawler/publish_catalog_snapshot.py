@@ -9,6 +9,7 @@ publish is attempted, only the small publish/ledger step is repeated.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import shutil
@@ -143,16 +144,19 @@ def _is_superseded(current, snapshot) -> bool:
     return False
 
 
-def _current_index_pages(root: Path):
+def _current_index_snapshot(root: Path):
     path = root / "public-search" / "manifest.json"
     if not path.is_file():
         return None
     try:
-        manifest = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+        raw = path.read_bytes()
+        manifest = json.loads(raw.decode("utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
         return None
     value = manifest.get("total_pages")
-    return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else None
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        return None
+    return {"pages": value, "sha256": hashlib.sha256(raw).hexdigest()}
 
 
 def publish_snapshot(
@@ -216,15 +220,16 @@ def publish_snapshot(
             _git(root, "add", "-f", "data/page-derived-catalogs", "data/project-ledger.json", env=child_env)
             staged = _git(root, "diff", "--cached", "--quiet", env=child_env, check=False)
             if staged.returncode == 0:
-                current_pages = _current_index_pages(root)
+                current_index = _current_index_snapshot(root)
                 return {
                     **{key: value for key, value in snapshot.items() if key != "report" and key != "generated_time"},
                     "published": False,
                     "already_current": True,
                     "attempts_used": attempt,
-                    "current_index_pages": current_pages,
+                    "current_index_pages": current_index["pages"] if current_index else None,
+                    "current_index_sha256": current_index["sha256"] if current_index else None,
                     "stale_against_current_index": (
-                        current_pages is not None and current_pages != snapshot["analyzed_unique_pages"]
+                        current_index is not None and current_index["sha256"] != snapshot["source_index_sha256"]
                     ),
                 }
             if staged.returncode != 1:
@@ -240,9 +245,10 @@ def publish_snapshot(
                     "published": True,
                     "attempts_used": attempt,
                     "commit": local_head,
-                    "current_index_pages": current_pages,
+                    "current_index_pages": current_index["pages"] if current_index else None,
+                    "current_index_sha256": current_index["sha256"] if current_index else None,
                     "stale_against_current_index": (
-                        current_pages is not None and current_pages != snapshot["analyzed_unique_pages"]
+                        current_index is not None and current_index["sha256"] != snapshot["source_index_sha256"]
                     ),
                 }
 
