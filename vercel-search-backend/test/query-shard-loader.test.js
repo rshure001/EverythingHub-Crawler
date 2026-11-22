@@ -236,7 +236,7 @@ test('query-index-free manifests retain the verified full-index fallback contrac
 });
 
 test('public search shard envelope accepts the observed 1008-page shard within bounded totals', async () => {
-  assert.equal(MAX_SHARD_COUNT, 768);
+  assert.equal(MAX_SHARD_COUNT, 900);
   assert.equal(MAX_PAGES_PER_SHARD, 2000);
   assert.equal(MAX_TOTAL_COMPRESSED_SHARD_BYTES, 150000000);
   assert.equal(MAX_TOTAL_SHARD_UNCOMPRESSED_BYTES, 600000000);
