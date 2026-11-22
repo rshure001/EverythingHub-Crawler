@@ -73,9 +73,9 @@ function parseFeed(xml, feed) {
     .filter(item => item.title && item.url);
 }
 
-async function fetchFeed(feed) {
+async function fetchFeed(feed, timeoutMs = 12000) {
   const response = await robotsFetch(feed.url, {
-    signal: AbortSignal.timeout(12000),
+    signal: AbortSignal.timeout(timeoutMs),
     headers: { Accept: "application/rss+xml, application/xml, text/xml" }
   }, { userAgent: "EverythingHubNews/1.0" });
   if (!response.ok) throw new Error("Feed HTTP " + response.status);
