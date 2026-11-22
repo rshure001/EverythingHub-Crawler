@@ -20,8 +20,27 @@ const MAX_TOTAL_COMPRESSED_SHARD_BYTES = 100000000;
 const MAX_TOTAL_SHARD_UNCOMPRESSED_BYTES = 400000000;
 const MAX_SHARD_CONCURRENCY = 48;
 const SHARD_FETCH_TIMEOUT_MS = 8500;
+const MAX_QUERY_INDEX_SHARDS = 256;
+const MAX_QUERY_INDEX_SHARD_COMPRESSED_BYTES = 2000000;
+const MAX_QUERY_INDEX_SHARD_UNCOMPRESSED_BYTES = 8000000;
+const MAX_QUERY_INDEX_TOTAL_COMPRESSED_BYTES = 32000000;
+const MAX_QUERY_INDEX_TOTAL_UNCOMPRESSED_BYTES = 64000000;
+const MAX_QUERY_INDEX_TOKENS = 4000000;
+const MAX_QUERY_INDEX_POSTINGS = 100000000;
+const MAX_QUERY_SCOPED_SHARD_COUNT = 128;
+const MAX_QUERY_SCOPED_SHARD_BYTES = 32000000;
+const MAX_QUERY_SCOPED_SHARD_UNCOMPRESSED_BYTES = 128000000;
+const MAX_QUERY_CACHE_ENTRIES = 8;
+const QUERY_INDEX_STOP_TOKENS = new Set([
+  'a', 'an', 'and', 'are', 'as', 'at', 'be', 'by', 'for', 'from',
+  'in', 'into', 'is', 'it', 'of', 'on', 'or', 'our', 'the', 'to',
+  'with', 'your', 'you', 'we', 'this', 'that', 'these', 'those'
+]);
 const agent = new https.Agent({ keepAlive: true, maxSockets: MAX_SHARD_CONCURRENCY });
 let cache = null;
+let manifestCache = null;
+const queryCache = new Map();
+const queryIndexShardCache = new Map();
 
 function getBuffer(url, maxBytes, timeoutMs = 10000) {
   return new Promise((resolve, reject) => {
@@ -341,7 +360,263 @@ async function loadCatalogFromManifest(manifest, commitSha, manifestRaw, fetchBu
   }
 }
 
-async function loadCatalog() {
+function normalizeQueryIndexTokens(value) {
+  const normalized = String(value || '').normalize('NFKC').toLowerCase();
+  const raw = normalized.match(/[\p{L}\p{N}]+/gu) || [];
+  const seen = new Set();
+  const tokens = [];
+  for (const token of raw) {
+    if (!token || QUERY_INDEX_STOP_TOKENS.has(token) || seen.has(token)) continue;
+    seen.add(token);
+    tokens.push(token);
+  }
+  return tokens;
+}
+
+function queryTokensForPage(page) {
+  const values = [page && page.title, page && page.url, page && page.description, page && page.text];
+  const product = page && page.product;
+  if (product && typeof product === 'object' && !Array.isArray(product)) {
+    for (const key of ['name', 'brand', 'sku', 'price', 'availability']) values.push(product[key]);
+  }
+  const tokens = new Set();
+  for (const value of values) {
+    if (typeof value !== 'string' && typeof value !== 'number') continue;
+    for (const token of normalizeQueryIndexTokens(value)) tokens.add(token);
+  }
+  return tokens;
+}
+
+function validateQueryIndexMetadata(manifest) {
+  const index = manifest && manifest.query_index;
+  if (index == null) return null;
+  if (!index || index.version !== 1 || !Array.isArray(index.shards) ||
+      !Number.isSafeInteger(index.shard_count) || index.shard_count < 0 ||
+      index.shard_count > MAX_QUERY_INDEX_SHARDS || index.shards.length !== index.shard_count ||
+      !Number.isSafeInteger(index.token_count) || index.token_count < 0 ||
+      index.token_count > MAX_QUERY_INDEX_TOKENS ||
+      !Number.isSafeInteger(index.posting_count) || index.posting_count < 0 ||
+      index.posting_count > MAX_QUERY_INDEX_POSTINGS ||
+      !Number.isSafeInteger(index.compressed_bytes) || index.compressed_bytes < 0 ||
+      index.compressed_bytes > MAX_QUERY_INDEX_TOTAL_COMPRESSED_BYTES ||
+      !Number.isSafeInteger(index.uncompressed_bytes) || index.uncompressed_bytes < 0 ||
+      index.uncompressed_bytes > MAX_QUERY_INDEX_TOTAL_UNCOMPRESSED_BYTES) {
+    throw new Error('query_index_manifest_invalid');
+  }
+  const entries = new Map();
+  let compressedBytes = 0;
+  let uncompressedBytes = 0;
+  let tokenCount = 0;
+  for (const entry of index.shards) {
+    const match = entry && typeof entry.file === 'string'
+      ? /^query-index\/([a-f0-9]{2})\.json\.gz$/i.exec(entry.file)
+      : null;
+    if (!match || entries.has(match[1].toLowerCase()) ||
+        !Number.isSafeInteger(entry.bytes) || entry.bytes < 1 ||
+        entry.bytes > MAX_QUERY_INDEX_SHARD_COMPRESSED_BYTES ||
+        !Number.isSafeInteger(entry.uncompressed_bytes) || entry.uncompressed_bytes < 1 ||
+        entry.uncompressed_bytes > MAX_QUERY_INDEX_SHARD_UNCOMPRESSED_BYTES ||
+        !Number.isSafeInteger(entry.items) || entry.items < 1 ||
+        entry.items > MAX_QUERY_INDEX_TOKENS ||
+        typeof entry.sha256 !== 'string' || !/^[a-f0-9]{64}$/i.test(entry.sha256)) {
+      throw new Error('query_index_file_entry_invalid');
+    }
+    compressedBytes += entry.bytes;
+    uncompressedBytes += entry.uncompressed_bytes;
+    tokenCount += entry.items;
+    entries.set(match[1].toLowerCase(), entry);
+  }
+  if (compressedBytes !== index.compressed_bytes ||
+      uncompressedBytes !== index.uncompressed_bytes ||
+      tokenCount !== index.token_count ||
+      (index.token_count === 0 ? index.posting_count !== 0 : index.posting_count < index.token_count)) {
+    throw new Error('query_index_manifest_totals_invalid');
+  }
+  return entries;
+}
+
+function decodeQueryIndexShard(entry, buffer, prefix, manifest) {
+  if (!Buffer.isBuffer(buffer) || buffer.length !== entry.bytes ||
+      buffer.length > MAX_QUERY_INDEX_SHARD_COMPRESSED_BYTES) {
+    throw new Error('query_index_size_mismatch');
+  }
+  const digest = crypto.createHash('sha256').update(buffer).digest('hex');
+  if (digest.toLowerCase() !== entry.sha256.toLowerCase()) {
+    throw new Error('query_index_sha256_mismatch');
+  }
+  let decoded;
+  try {
+    decoded = zlib.gunzipSync(buffer, { maxOutputLength: MAX_QUERY_INDEX_SHARD_UNCOMPRESSED_BYTES });
+  } catch {
+    throw new Error('query_index_gzip_invalid');
+  }
+  if (decoded.length !== entry.uncompressed_bytes) throw new Error('query_index_uncompressed_size_mismatch');
+  let payload;
+  try { payload = JSON.parse(decoded.toString('utf8')); } catch {
+    throw new Error('query_index_json_invalid');
+  }
+  if (!payload || payload.version !== 1 || payload.prefix !== prefix ||
+      !payload.tokens || typeof payload.tokens !== 'object' || Array.isArray(payload.tokens) ||
+      Object.keys(payload.tokens).length !== entry.items) {
+    throw new Error('query_index_schema_invalid');
+  }
+  for (const [token, postings] of Object.entries(payload.tokens)) {
+    const normalized = normalizeQueryIndexTokens(token);
+    const tokenPrefix = crypto.createHash('sha256').update(token).digest('hex').slice(0, 2);
+    if (normalized.length !== 1 || normalized[0] !== token || tokenPrefix !== prefix ||
+        !Array.isArray(postings) || postings.length > manifest.shard_count) {
+      throw new Error('query_index_token_invalid');
+    }
+    let priorIndex = -1;
+    for (const pair of postings) {
+      if (!Array.isArray(pair) || pair.length !== 2 ||
+          !Number.isSafeInteger(pair[0]) || pair[0] < 0 || pair[0] >= manifest.shard_count ||
+          pair[0] <= priorIndex || !Number.isSafeInteger(pair[1]) || pair[1] < 1 ||
+          pair[1] > manifest.shards[pair[0]].pages) {
+        throw new Error('query_index_posting_invalid');
+      }
+      priorIndex = pair[0];
+    }
+  }
+  return payload.tokens;
+}
+
+function emptyQueryScopedCatalog(manifest, manifestSha256, tokenCount) {
+  return {
+    pages: [],
+    updatedAt: manifest.updated_at,
+    sha256: manifestSha256,
+    indexedPages: manifest.total_pages,
+    source: 'git-commit-pinned-query-indexed-public-search-shards',
+    integrity: 'sha256',
+    shardCount: manifest.shard_count,
+    transport: 'query-indexed-shards',
+    queryScoped: true,
+    scannedPages: 0,
+    candidatePageCount: 0,
+    candidateShardCount: 0,
+    queryIndexTokensUsed: tokenCount,
+    queryIndexPostingCount: 0
+  };
+}
+
+async function loadQueryScopedCatalogFromManifest(manifest, commitSha, manifestRaw, query, fetchBuffer = getBuffer) {
+  validateManifestEnvelope(manifest);
+  const checked = validateShardManifest(manifest);
+  if (typeof commitSha !== 'string' || !/^[a-f0-9]{40}$/i.test(commitSha)) {
+    throw new Error('catalog_git_ref_invalid');
+  }
+  if (!Buffer.isBuffer(manifestRaw)) manifestRaw = Buffer.from(manifestRaw || '');
+  if (!manifestRaw.length || manifestRaw.length > MAX_MANIFEST_BYTES) {
+    throw new Error('manifest_raw_size_invalid');
+  }
+  const manifestSha256 = crypto.createHash('sha256').update(manifestRaw).digest('hex');
+  const entries = validateQueryIndexMetadata(manifest);
+  if (!entries) return null;
+  const allTerms = normalizeQueryIndexTokens(query);
+  const terms = allTerms.slice(0, 12);
+  if (!terms.length) return null;
+
+  const baseUrl = CATALOG_BASE_URL + commitSha + '/public-search/';
+  const prefixes = Array.from(new Set(terms.map(term =>
+    crypto.createHash('sha256').update(term).digest('hex').slice(0, 2)
+  )));
+  const indexEntries = [];
+  for (const prefix of prefixes) {
+    const entry = entries.get(prefix);
+    if (!entry) return emptyQueryScopedCatalog(manifest, manifestSha256, terms.length);
+    indexEntries.push({ prefix, entry });
+  }
+
+  const loadedIndexShards = await mapLimit(indexEntries, 8, async ({ prefix, entry }) => {
+    const cacheKey = commitSha + ':' + prefix;
+    const cached = queryIndexShardCache.get(cacheKey);
+    if (cached && Date.now() - cached.loadedAt < CACHE_TTL_MS) return { prefix, tokens: cached.tokens };
+    const path = entry.file.split('/').map(encodeURIComponent).join('/');
+    const raw = await fetchBuffer(baseUrl + path, entry.bytes, 7000);
+    const tokens = decodeQueryIndexShard(entry, raw, prefix, manifest);
+    queryIndexShardCache.set(cacheKey, { tokens, loadedAt: Date.now() });
+    if (queryIndexShardCache.size > MAX_QUERY_INDEX_SHARDS) {
+      queryIndexShardCache.delete(queryIndexShardCache.keys().next().value);
+    }
+    return { prefix, tokens };
+  });
+  const tokensByPrefix = new Map(loadedIndexShards.map(item => [item.prefix, item.tokens]));
+
+  let candidateShardIds = null;
+  const postingsByTerm = new Map();
+  for (const term of terms) {
+    const prefix = crypto.createHash('sha256').update(term).digest('hex').slice(0, 2);
+    const postings = tokensByPrefix.get(prefix) && tokensByPrefix.get(prefix)[term];
+    if (!Array.isArray(postings)) {
+      return emptyQueryScopedCatalog(manifest, manifestSha256, terms.length);
+    }
+    const counts = new Map(postings.map(pair => [pair[0], pair[1]]));
+    postingsByTerm.set(term, counts);
+    const ids = new Set(counts.keys());
+    candidateShardIds = candidateShardIds === null
+      ? ids
+      : new Set(Array.from(candidateShardIds).filter(id => ids.has(id)));
+    if (!candidateShardIds.size) {
+      return emptyQueryScopedCatalog(manifest, manifestSha256, terms.length);
+    }
+  }
+
+  const shardIds = Array.from(candidateShardIds).sort((a, b) => a - b);
+  if (shardIds.length > MAX_QUERY_SCOPED_SHARD_COUNT) throw new Error('query_index_too_broad');
+  const candidateShards = shardIds.map(index => ({ index, meta: manifest.shards[index] }));
+  const candidateCompressedBytes = candidateShards.reduce((sum, item) => sum + item.meta.bytes, 0);
+  const candidateUncompressedBytes = candidateShards.reduce((sum, item) => sum + (item.meta.uncompressed_bytes || item.meta.bytes), 0);
+  if (candidateCompressedBytes > MAX_QUERY_SCOPED_SHARD_BYTES ||
+      candidateUncompressedBytes > MAX_QUERY_SCOPED_SHARD_UNCOMPRESSED_BYTES) {
+    throw new Error('query_index_candidate_budget_exceeded');
+  }
+  const candidatePageCount = candidateShards.reduce((sum, item) => sum + item.meta.pages, 0);
+  const loadedShards = await mapLimit(candidateShards, MAX_SHARD_CONCURRENCY, async ({ index, meta }) => {
+    const raw = await fetchBuffer(baseUrl + encodeURIComponent(meta.file), meta.bytes, SHARD_FETCH_TIMEOUT_MS);
+    return { index, pages: validateShardPayload(meta, raw) };
+  });
+
+  const pages = [];
+  const seenUrls = new Set();
+  let queryIndexPostingCount = 0;
+  for (const { index, pages: shardPages } of loadedShards) {
+    const actualCounts = new Map(terms.map(term => [term, 0]));
+    for (const page of shardPages) {
+      if (seenUrls.has(page.url)) throw new Error('catalog_duplicate_url');
+      seenUrls.add(page.url);
+      const pageTokens = queryTokensForPage(page);
+      for (const term of terms) if (pageTokens.has(term)) actualCounts.set(term, actualCounts.get(term) + 1);
+      pages.push(page);
+    }
+    for (const term of terms) {
+      const expected = postingsByTerm.get(term).get(index);
+      const actual = actualCounts.get(term);
+      if (expected !== actual) throw new Error('query_index_posting_mismatch');
+      queryIndexPostingCount += expected;
+    }
+  }
+  if (pages.length !== candidatePageCount) throw new Error('query_index_candidate_page_count_mismatch');
+  return {
+    pages,
+    updatedAt: manifest.updated_at,
+    sha256: manifestSha256,
+    indexedPages: manifest.total_pages,
+    source: 'git-commit-pinned-query-indexed-public-search-shards',
+    integrity: 'sha256',
+    shardCount: manifest.shard_count,
+    transport: 'query-indexed-shards',
+    queryScoped: true,
+    scannedPages: pages.length,
+    candidatePageCount,
+    candidateShardCount: shardIds.length,
+    queryIndexTokensUsed: terms.length,
+    queryIndexTotalQueryTokens: allTerms.length,
+    queryIndexPostingCount
+  };
+}
+
+async function loadFullCatalog() {
   if (cache && Date.now() - cache.loadedAt < CACHE_TTL_MS) return { ...cache, stale: false };
   try {
     const gitRef = JSON.parse((await getBuffer(GIT_REF_URL + '?v=' + Date.now(), 4096)).toString('utf8'));
@@ -368,7 +643,65 @@ async function loadCatalog() {
   }
 }
 
-function clearCatalogCache() { cache = null; }
+async function loadQueryScopedCatalog(query) {
+  const text = String(query || '').trim();
+  if (!text || text.length > 160) throw new Error('catalog_query_invalid');
+  const cacheKey = text.toLowerCase();
+  const prior = queryCache.get(cacheKey);
+  if (prior && Date.now() - prior.loadedAt < CACHE_TTL_MS) return { ...prior, stale: false };
+  if (cache && Date.now() - cache.loadedAt < CACHE_TTL_MS) return { ...cache, stale: false };
+  try {
+    let snapshot = manifestCache;
+    if (!snapshot || Date.now() - snapshot.loadedAt >= CACHE_TTL_MS) {
+      const gitRef = JSON.parse((await getBuffer(GIT_REF_URL + '?v=' + Date.now(), 4096)).toString('utf8'));
+      const sha = gitRef && gitRef.object && gitRef.object.sha;
+      if (typeof sha !== 'string' || !/^[a-f0-9]{40}$/i.test(sha)) throw new Error('catalog_git_ref_invalid');
+      const manifestRaw = await getBuffer(
+        CATALOG_BASE_URL + sha + '/public-search/manifest.json',
+        MAX_MANIFEST_BYTES
+      );
+      let manifest;
+      try { manifest = JSON.parse(manifestRaw.toString('utf8')); } catch {
+        throw new Error('manifest_json_invalid');
+      }
+      validateManifestEnvelope(manifest);
+      snapshot = { sha, manifest, manifestRaw, loadedAt: Date.now() };
+      manifestCache = snapshot;
+    }
+    const scoped = await loadQueryScopedCatalogFromManifest(
+      snapshot.manifest, snapshot.sha, snapshot.manifestRaw, text, getBuffer
+    );
+    if (scoped) {
+      const result = { ...scoped, loadedAt: Date.now(), stale: false };
+      queryCache.set(cacheKey, result);
+      if (queryCache.size > MAX_QUERY_CACHE_ENTRIES) queryCache.delete(queryCache.keys().next().value);
+      return { ...result };
+    }
+    const full = await loadCatalogFromManifest(snapshot.manifest, snapshot.sha, snapshot.manifestRaw, getBuffer);
+    cache = { ...full, loadedAt: Date.now(), stale: false };
+    return { ...cache };
+  } catch (error) {
+    if (prior && Date.now() - prior.loadedAt < STALE_TTL_MS) {
+      return { ...prior, stale: true, refreshError: String(error.message || error).slice(0, 180) };
+    }
+    if (cache && Date.now() - cache.loadedAt < STALE_TTL_MS) {
+      return { ...cache, stale: true, refreshError: String(error.message || error).slice(0, 180) };
+    }
+    throw error;
+  }
+}
+
+async function loadCatalog(query) {
+  if (String(query || '').trim()) return loadQueryScopedCatalog(query);
+  return loadFullCatalog();
+}
+
+function clearCatalogCache() {
+  cache = null;
+  manifestCache = null;
+  queryCache.clear();
+  queryIndexShardCache.clear();
+}
 
 module.exports = {
   MAX_MANIFEST_BYTES,
@@ -383,6 +716,16 @@ module.exports = {
   MAX_TOTAL_COMPRESSED_SHARD_BYTES,
   MAX_TOTAL_SHARD_UNCOMPRESSED_BYTES,
   MAX_SHARD_CONCURRENCY,
+  MAX_QUERY_INDEX_SHARDS,
+  MAX_QUERY_SCOPED_SHARD_COUNT,
+  MAX_QUERY_SCOPED_SHARD_BYTES,
+  MAX_QUERY_SCOPED_SHARD_UNCOMPRESSED_BYTES,
+  MAX_QUERY_CACHE_ENTRIES,
+  validateQueryIndexMetadata,
+  decodeQueryIndexShard,
+  normalizeQueryIndexTokens,
+  queryTokensForPage,
+  loadQueryScopedCatalogFromManifest,
   validateManifestAndCatalog,
   validateShardManifest,
   validateShardPayload,
