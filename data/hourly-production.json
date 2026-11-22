@@ -1,55 +1,7 @@
 {
-  "updated_at": "2026-11-22T07:37:12.515281+00:00",
+  "updated_at": "2026-11-22T08:20:07.964144+00:00",
   "target_new_records_per_hour": 60000,
   "runs": [
-    {
-      "run_id": "44882477617",
-      "run_number": "321",
-      "timestamp": "2026-11-21T08:03:36Z",
-      "indexed_records_processed": 766,
-      "fetch_attempts": 1005,
-      "duration_seconds": 421.05,
-      "commit_sha": "6af0e1b09959",
-      "manifest_interval": {
-        "valid": true,
-        "reason": null,
-        "before_pages": 145957,
-        "after_pages": 146710,
-        "before_updated_at": "2026-11-21T06:35:35Z",
-        "after_updated_at": "2026-11-21T08:03:36Z",
-        "elapsed_seconds": 5281.0,
-        "run_duration_seconds": 421.05,
-        "new_unique_records": 753,
-        "records_per_minute": 107.3,
-        "records_per_hour": 6438.2,
-        "wall_clock_records_per_minute": 8.56,
-        "wall_clock_records_per_hour": 513.3
-      }
-    },
-    {
-      "run_id": "44883672185",
-      "run_number": "322",
-      "timestamp": "2026-11-21T08:19:04Z",
-      "indexed_records_processed": 827,
-      "fetch_attempts": 1085,
-      "duration_seconds": 420.46,
-      "commit_sha": "a2bbdeb40597",
-      "manifest_interval": {
-        "valid": true,
-        "reason": null,
-        "before_pages": 146710,
-        "after_pages": 147526,
-        "before_updated_at": "2026-11-21T08:03:36Z",
-        "after_updated_at": "2026-11-21T08:19:04Z",
-        "elapsed_seconds": 928.0,
-        "run_duration_seconds": 420.46,
-        "new_unique_records": 816,
-        "records_per_minute": 116.44,
-        "records_per_hour": 6986.6,
-        "wall_clock_records_per_minute": 52.76,
-        "wall_clock_records_per_hour": 3165.5
-      }
-    },
     {
       "run_id": "44887952951",
       "run_number": "323",
@@ -913,26 +865,50 @@
         "wall_clock_records_per_minute": 31.54,
         "wall_clock_records_per_hour": 1892.5
       }
+    },
+    {
+      "run_id": "45001575194",
+      "run_number": "369",
+      "timestamp": "2026-11-22T08:18:43Z",
+      "indexed_records_processed": 1856,
+      "fetch_attempts": 2396,
+      "duration_seconds": 420.52,
+      "commit_sha": "572170539376",
+      "manifest_interval": {
+        "valid": true,
+        "reason": null,
+        "before_pages": 176642,
+        "after_pages": 178456,
+        "before_updated_at": "2026-11-22T07:35:33Z",
+        "after_updated_at": "2026-11-22T08:18:43Z",
+        "elapsed_seconds": 2590.0,
+        "run_duration_seconds": 420.52,
+        "new_unique_records": 1814,
+        "records_per_minute": 258.82,
+        "records_per_hour": 15529.3,
+        "wall_clock_records_per_minute": 42.02,
+        "wall_clock_records_per_hour": 2521.4
+      }
     }
   ],
   "latest_manifest_interval": {
     "valid": true,
     "reason": null,
-    "before_pages": 175844,
-    "after_pages": 176642,
-    "before_updated_at": "2026-11-22T07:10:15Z",
-    "after_updated_at": "2026-11-22T07:35:33Z",
-    "elapsed_seconds": 1518.0,
-    "run_duration_seconds": 421.0,
-    "new_unique_records": 798,
-    "records_per_minute": 113.73,
-    "records_per_hour": 6823.8,
-    "wall_clock_records_per_minute": 31.54,
-    "wall_clock_records_per_hour": 1892.5
+    "before_pages": 176642,
+    "after_pages": 178456,
+    "before_updated_at": "2026-11-22T07:35:33Z",
+    "after_updated_at": "2026-11-22T08:18:43Z",
+    "elapsed_seconds": 2590.0,
+    "run_duration_seconds": 420.52,
+    "new_unique_records": 1814,
+    "records_per_minute": 258.82,
+    "records_per_hour": 15529.3,
+    "wall_clock_records_per_minute": 42.02,
+    "wall_clock_records_per_hour": 2521.4
   },
   "recent_run_activity": {
-    "records_processed": 1682,
-    "fetch_attempts": 2478,
+    "records_processed": 2693,
+    "fetch_attempts": 3654,
     "run_count": 2
   }
 }
