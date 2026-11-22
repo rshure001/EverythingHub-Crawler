@@ -62,8 +62,17 @@ jobs:
           const externalTitles=data.catalogResults.filter(x=>String(x.catalog_id||'').startsWith('external:')).map(x=>String(x.catalog_title||x.title||x.name||''));
           const webRelevant=data.results.some(r=>(String(r.title||'')+' '+String(r.snippet||'')).toLowerCase().includes(query.toLowerCase()));
           const scan=data.indexScan||{};
+          const debug={
+            query,
+            indexScan:data.indexScan||null,
+            catalogPreview:data.catalogPreview,
+            error:data.error||null,
+            webResults:(data.results||[]).slice(0,3).map(r=>({title:r.title,snippet:r.snippet})),
+            catalogResults:(data.catalogResults||[]).slice(0,3).map(x=>({id:x.catalog_id,title:x.catalog_title||x.title,source:x.source_kind||x.sourceKind}))
+          };
+          console.log(JSON.stringify(debug,null,2));
           if(scan.mode!=='query-scoped'||!Number.isSafeInteger(scan.indexedPages)||!Number.isSafeInteger(scan.scannedPages)||scan.scannedPages<1||scan.scannedPages>=scan.indexedPages) {
-            throw new Error(query+' did not use bounded query-scoped page shards: '+JSON.stringify(scan));
+            throw new Error(query+' did not use bounded query-scoped page shards: '+JSON.stringify({scan,preview:data.catalogPreview,error:data.error}));
           }
           const summary={
             query,
