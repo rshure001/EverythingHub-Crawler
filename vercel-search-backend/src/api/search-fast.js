@@ -1,3 +1,4 @@
+const { robotsFetch } = require("../lib/robots");
 function decodeXml(value) {
   return String(value || "")
     .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
@@ -39,12 +40,14 @@ function parseRss(xml, sourceFallback) {
   }).slice(0, 12);
 }
 async function getFeed(url, source) {
-  const response = await fetch(url, {
-    headers: { "User-Agent": "Mozilla/5.0 (compatible; EverythingHubSearch/1.0)", "Accept": "application/rss+xml, application/xml, text/xml" },
+  const response = await robotsFetch(url, {
+    headers: { "Accept": "application/rss+xml, application/xml, text/xml" },
     signal: AbortSignal.timeout(8000)
-  });
+  }, { userAgent: "EverythingHubSearch/1.0" });
   if (!response.ok) throw new Error(source + " returned HTTP " + response.status);
-  return parseRss(await response.text(), source);
+  const xml = await response.text();
+  if (Buffer.byteLength(xml, "utf8") > 2_000_000) throw new Error(source + " response too large");
+  return parseRss(xml, source);
 }
 module.exports = async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -56,11 +59,17 @@ module.exports = async function handler(req, res) {
   const query = String(req.query.q || "").trim().slice(0, 160);
   const lane = String(req.query.lane || "web").toLowerCase();
   if (!query) return res.status(400).json({ error: "A search query is required" });
+  if (lane !== "news") return res.status(503).json({
+    status: "unavailable",
+    query,
+    lane,
+    count: 0,
+    results: [],
+    providers: [],
+    message: "External web fallback is disabled unless a source explicitly permits the requested path. Use the independent Everything Hub index."
+  });
   const googleNewsUrl = "https://news.google.com/rss/search?q=" + encodeURIComponent(query) + "&hl=en-US&gl=US&ceid=US:en";
-  const bingUrl = "https://www.bing.com/search?format=rss&q=" + encodeURIComponent(query);
-  const providers = lane === "news"
-    ? [{ url: googleNewsUrl, name: "Google News" }, { url: bingUrl, name: "Bing Web Search" }]
-    : [{ url: bingUrl, name: "Bing Web Search" }, { url: googleNewsUrl, name: "Google News" }];
+  const providers = [{ url: googleNewsUrl, name: "Google News" }];
   for (const provider of providers) {
     try {
       const results = await getFeed(provider.url, provider.name);
@@ -85,6 +94,7 @@ module.exports = async function handler(req, res) {
     count: 0,
     results: [],
     providers: [],
-    message: "Public web search sources are temporarily unavailable."
+    message: "No robots-verified public news source is currently available."
   });
 };
+module.exports._test = { parseRss, getFeed };

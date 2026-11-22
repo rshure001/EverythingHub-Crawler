@@ -1,6 +1,6 @@
 'use strict';
-const https = require('node:https');
 const { loadCatalog } = require('../lib/catalog');
+const { robotsFetch } = require('../lib/robots');
 const { loadPageDerivedCatalogs, searchPageDerivedCatalogs, matchesPageIndexSnapshot } = require('../lib/page-derived-catalogs');
 const { searchExternalCatalogs, getExternalCatalogStats } = require('../lib/external-catalogs');
 const { searchCatalog, parseBingRss, buildResponse } = require('../lib/search-core');
@@ -21,49 +21,19 @@ function withTimeout(promise, milliseconds, code) {
   return Promise.race([Promise.resolve(promise), timeout]).finally(() => clearTimeout(timer));
 }
 
-function fetchText(url) {
-  return new Promise((resolve, reject) => {
-    let request;
-    const chunks = [];
-    let total = 0;
-    request = https.get(url, {
-      headers: {
-        'user-agent': 'EverythingHub-IndependentSearch/2.0',
-        accept: 'application/rss+xml, application/xml, text/xml'
-      }
-    }, (response) => {
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        response.resume();
-        reject(new Error('bing_http_' + response.statusCode));
-        return;
-      }
-      const declared = Number(response.headers['content-length'] || 0);
-      if (declared > MAX_BING_BYTES) {
-        response.resume();
-        reject(new Error('bing_response_too_large'));
-        return;
-      }
-      response.on('data', (chunk) => {
-        total += chunk.length;
-        if (total > MAX_BING_BYTES) {
-          request.destroy(new Error('bing_response_too_large'));
-          return;
-        }
-        chunks.push(chunk);
-      });
-      response.on('end', () => resolve(Buffer.concat(chunks, total).toString('utf8')));
-      response.on('error', reject);
-    });
-    request.setTimeout(7000, () => request.destroy(new Error('bing_timeout')));
-    request.on('error', reject);
-  });
-}
 async function loadBing(query) {
   const key = query.toLowerCase();
   const existing = bingCache.get(key);
   if (existing && Date.now() - existing.loadedAt < BING_CACHE_TTL_MS) return existing.results;
   const url = 'https://www.bing.com/search?format=rss&q=' + encodeURIComponent(query);
-  const results = parseBingRss(await fetchText(url));
+  const response = await robotsFetch(url, {
+    headers: { accept: 'application/rss+xml, application/xml, text/xml' },
+    signal: AbortSignal.timeout(7000)
+  }, { userAgent: 'EverythingHub-IndependentSearch/2.0' });
+  if (!response.ok) throw new Error('bing_http_' + response.status);
+  const xml = await response.text();
+  if (Buffer.byteLength(xml, 'utf8') > MAX_BING_BYTES) throw new Error('bing_response_too_large');
+  const results = parseBingRss(xml);
   bingCache.set(key, { loadedAt: Date.now(), results });
   if (bingCache.size > 100) {
     const oldest = Array.from(bingCache.entries()).sort((a, b) => a[1].loadedAt - b[1].loadedAt)[0];
@@ -235,5 +205,5 @@ module.exports = async function handler(req, res) {
   return res.status(200).json(payload);
 };
 
-module.exports._test = { mergeCatalogResults, markCatalogPreviewStale, applyCatalogPreviewFreshness };
+module.exports._test = { mergeCatalogResults, markCatalogPreviewStale, applyCatalogPreviewFreshness, loadBing };
 

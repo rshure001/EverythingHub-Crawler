@@ -1,3 +1,4 @@
+const { robotsFetch } = require("../lib/robots");
 function decodeXml(value) {
   return String(value || "")
     .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
@@ -44,12 +45,12 @@ module.exports = async function handler(req, res) {
     url.searchParams.set("hl", "en-US");
     url.searchParams.set("gl", "US");
     url.searchParams.set("ceid", "US:en");
-    const response = await fetch(url, {
-      headers: { "User-Agent": "Mozilla/5.0 (compatible; EverythingHubNews/1.0)" },
+    const response = await robotsFetch(url, {
       signal: AbortSignal.timeout(12000)
-    });
+    }, { userAgent: "EverythingHubNews/1.0" });
     if (!response.ok) throw new Error("News provider HTTP " + response.status);
     const xml = await response.text();
+    if (Buffer.byteLength(xml, "utf8") > 2_000_000) throw new Error("News provider response too large");
     const rawItems = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/gi)]
       .map(match => {
         const item = match[1];
@@ -92,3 +93,5 @@ module.exports = async function handler(req, res) {
     });
   }
 };
+
+module.exports._test = { categories, decodeXml, readTag };
