@@ -2,7 +2,7 @@ import unittest
 
 from product_metadata import (
     extract_product_metadata, extract_structured_catalog_metadata,
-    has_structured_catalog_markup,
+    extract_structured_entity_metadata, has_structured_catalog_markup,
 )
 
 
@@ -297,6 +297,58 @@ class ProductMetadataTests(unittest.TestCase):
         }
         html = '<script type="application/ld+json">' + json.dumps(payload) + "</script>"
         self.assertEqual(extract_structured_catalog_metadata(html, "https://shop.example/watches"), {})
+
+
+    def test_extracts_typed_place_and_business_entities_from_json_ld_graph(self):
+        import json
+        payload = {
+            "@context": "https://schema.org",
+            "@graph": [
+                {"@type": "WebPage", "@id": "https://city.example/parks#page",
+                 "mainEntity": [{"@id": "#park"}, {"@id": "#hotel"}]},
+                {"@id": "#park", "@type": "Park", "name": "Rainbow Family Park",
+                 "url": "/parks/rainbow-family-park", "description": "Family recreation park.",
+                 "address": {"@type": "PostalAddress", "addressLocality": "Las Vegas",
+                             "addressRegion": "NV", "addressCountry": "US",
+                             "streetAddress": "100 Private Street"},
+                 "sameAs": "https://www.wikidata.org/entity/Q12345"},
+                {"@id": "#hotel", "@type": "Hotel", "name": "Golden Nugget",
+                 "url": "/listing/golden-nugget",
+                 "address": {"@type": "PostalAddress", "addressLocality": "Las Vegas",
+                             "addressRegion": "NV", "addressCountry": "US"},
+                 "telephone": "+1-555-0100", "email": "private@example.com"},
+            ],
+        }
+        html = '<script type="application/ld+json">' + json.dumps(payload) + "</script>"
+        entities = extract_structured_entity_metadata(html, "https://city.example/parks")
+        by_type = {item["record_type"]: item for item in entities}
+        self.assertEqual(set(by_type), {"place", "business"})
+        self.assertEqual(by_type["place"]["name"], "Rainbow Family Park")
+        self.assertEqual(by_type["place"]["attributes"]["address_locality"], "Las Vegas")
+        self.assertEqual(by_type["place"]["attributes"]["address_region"], "NV")
+        self.assertIn("https://www.wikidata.org/entity/Q12345", by_type["place"]["attributes"]["same_as_ids"])
+        self.assertNotIn("street_address", by_type["place"]["attributes"])
+        self.assertNotIn("telephone", by_type["business"]["attributes"])
+        self.assertNotIn("email", by_type["business"]["attributes"])
+        self.assertEqual(by_type["business"]["entity_url"], "https://city.example/listing/golden-nugget")
+
+    def test_structured_entity_extraction_is_bounded_and_ignores_untyped_pages(self):
+        import json
+        payload = {"@context": "https://schema.org", "@graph": [
+            {"@type": "Person", "name": f"Person {index}", "url": f"https://example.org/people/{index}"}
+            for index in range(12)
+        ]}
+        html = '<script type="application/ld+json">' + json.dumps(payload) + "</script>"
+        entities = extract_structured_entity_metadata(html, "https://example.org/people")
+        self.assertEqual(len(entities), 8)
+        self.assertEqual(extract_structured_entity_metadata("<p>ordinary page</p>", "https://example.org/"), [])
+        self.assertEqual(
+            extract_structured_entity_metadata(
+                '<script type="application/ld+json">{"@type":"WebPage","name":"Home"}</script>',
+                "https://example.org/",
+            ),
+            [],
+        )
 
 if __name__ == "__main__":
     unittest.main()
