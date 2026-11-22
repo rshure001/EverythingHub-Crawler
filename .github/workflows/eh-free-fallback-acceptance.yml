@@ -244,6 +244,25 @@ jobs:
                 await page.locator("#news-items .news-item").first().waitFor({ state: "visible", timeout: 30000 });
                 report.checks.news.refresh = "passed";
               }
+
+              const newsApi = await page.request.get("https://everythinghub-search-backend.vercel.app/api/news?category=for-you");
+              const newsPayload = await newsApi.json().catch(() => ({}));
+              const publishedTimes = (Array.isArray(newsPayload.items) ? newsPayload.items : [])
+                .map(item => Date.parse(item.publishedAt))
+                .filter(Number.isFinite);
+              const latestPublishedAt = publishedTimes.length ? Math.max(...publishedTimes) : 0;
+              const latestPublishedAgeHours = latestPublishedAt ? (Date.now() - latestPublishedAt) / 3600000 : null;
+              report.checks.newsFreshness = {
+                http: newsApi.status(),
+                latestPublishedAt: latestPublishedAt ? new Date(latestPublishedAt).toISOString() : null,
+                latestPublishedAgeHours,
+                sources: newsPayload.sources || [],
+                unavailable: newsPayload.sourcesUnavailable || []
+              };
+              if (newsApi.status() !== 200 || newsPayload.status !== "ok" ||
+                  latestPublishedAgeHours === null || latestPublishedAgeHours > 24) {
+                throw new Error("Top Stories latest published headline is missing or older than 24 hours: " + JSON.stringify(report.checks.newsFreshness));
+              }
               await shot("everythinghub-news.png");
               await goHome();
               await search("images", "NASA", "#results .media-card", 8);
