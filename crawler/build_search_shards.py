@@ -3,6 +3,9 @@
 import gzip
 import hashlib
 import json
+import re
+import unicodedata
+from collections import defaultdict
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -22,6 +25,17 @@ SHARD_GZIP_LEVEL = 6
 MAX_CATALOG_GZIP_BYTES = 16_000_000
 MAX_CATALOG_UNCOMPRESSED_BYTES = 64_000_000
 CATALOG_NAME = "catalog-v1.json.gz"
+QUERY_INDEX_DIR_NAME = "query-index"
+MAX_QUERY_INDEX_SHARDS = 256
+MAX_QUERY_INDEX_SHARD_COMPRESSED_BYTES = 2_000_000
+MAX_QUERY_INDEX_SHARD_UNCOMPRESSED_BYTES = 8_000_000
+MAX_QUERY_INDEX_TOTAL_COMPRESSED_BYTES = 32_000_000
+MAX_QUERY_INDEX_TOTAL_UNCOMPRESSED_BYTES = 64_000_000
+QUERY_STOP_TOKENS = {
+    "a", "an", "and", "are", "as", "at", "be", "by", "for", "from",
+    "in", "into", "is", "it", "of", "on", "or", "our", "the", "to",
+    "with", "your", "you", "we", "this", "that", "these", "those",
+}
 
 
 def is_publishable(doc):
@@ -153,6 +167,111 @@ def catalog_metadata(raw, page_count, uncompressed_bytes=None):
     }
 
 
+def query_tokens(page):
+    """Return conservative searchable tokens used to route queries to page shards."""
+    values = [page.get("title"), page.get("url"), page.get("description"), page.get("text")]
+    product = page.get("product")
+    if isinstance(product, dict):
+        values.extend(product.get(key) for key in ("name", "brand", "sku", "price", "availability"))
+    tokens = set()
+    for value in values:
+        if not isinstance(value, (str, int, float)):
+            continue
+        normalized = unicodedata.normalize("NFKC", str(value)).casefold()
+        tokens.update(
+            token for token in re.findall(r"[^\\W_]+", normalized, flags=re.UNICODE)
+            if len(token) >= 2 and token not in QUERY_STOP_TOKENS
+        )
+    return tokens
+
+
+def build_query_index(token_shards):
+    """Build deterministic token-to-page-shard postings with per-shard page counts."""
+    shards = {}
+    for token, shard_counts in sorted(token_shards.items()):
+        prefix = hashlib.sha256(token.encode("utf-8")).hexdigest()[:2]
+        shard = shards.setdefault(prefix, {"version": 1, "prefix": prefix, "tokens": {}})
+        shard["tokens"][token] = [
+            {"file": filename, "pages": int(count)}
+            for filename, count in sorted(shard_counts.items())
+            if isinstance(count, int) and not isinstance(count, bool) and count > 0
+        ]
+    return shards
+
+
+def write_query_index(output_dir, token_shards):
+    """Write bounded, deterministic query-index shards or omit the optional index safely."""
+    query_dir = output_dir / QUERY_INDEX_DIR_NAME
+    query_dir.mkdir(parents=True, exist_ok=True)
+    payloads = build_query_index(token_shards)
+    encoded = []
+    total_compressed = 0
+    total_uncompressed = 0
+    posting_count = 0
+
+    for prefix, payload in sorted(payloads.items()):
+        raw_json = json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\\n"
+        raw = raw_json.encode("utf-8")
+        compressed = gzip.compress(raw, compresslevel=9, mtime=0)
+        if len(raw) > MAX_QUERY_INDEX_SHARD_UNCOMPRESSED_BYTES:
+            reason = f"query-index shard {prefix} exceeds the {MAX_QUERY_INDEX_SHARD_UNCOMPRESSED_BYTES:,}-byte decoded limit"
+            for stale in query_dir.glob("*.json.gz"):
+                stale.unlink()
+            return None, reason
+        if len(compressed) > MAX_QUERY_INDEX_SHARD_COMPRESSED_BYTES:
+            reason = f"query-index shard {prefix} exceeds the {MAX_QUERY_INDEX_SHARD_COMPRESSED_BYTES:,}-byte compressed limit"
+            for stale in query_dir.glob("*.json.gz"):
+                stale.unlink()
+            return None, reason
+        total_compressed += len(compressed)
+        total_uncompressed += len(raw)
+        posting_count += sum(len(postings) for postings in payload["tokens"].values())
+        encoded.append((prefix, payload, raw, compressed))
+
+    if len(encoded) > MAX_QUERY_INDEX_SHARDS:
+        reason = f"query index requires {len(encoded)} shards; limit is {MAX_QUERY_INDEX_SHARDS}"
+        for stale in query_dir.glob("*.json.gz"):
+            stale.unlink()
+        return None, reason
+    if total_compressed > MAX_QUERY_INDEX_TOTAL_COMPRESSED_BYTES:
+        reason = f"query index exceeds the {MAX_QUERY_INDEX_TOTAL_COMPRESSED_BYTES:,}-byte aggregate compressed limit"
+        for stale in query_dir.glob("*.json.gz"):
+            stale.unlink()
+        return None, reason
+    if total_uncompressed > MAX_QUERY_INDEX_TOTAL_UNCOMPRESSED_BYTES:
+        reason = f"query index exceeds the {MAX_QUERY_INDEX_TOTAL_UNCOMPRESSED_BYTES:,}-byte aggregate decoded limit"
+        for stale in query_dir.glob("*.json.gz"):
+            stale.unlink()
+        return None, reason
+
+    expected_files = set()
+    files = []
+    for prefix, payload, raw, compressed in encoded:
+        relative = f"{QUERY_INDEX_DIR_NAME}/{prefix}.json.gz"
+        expected_files.add(f"{prefix}.json.gz")
+        (output_dir / relative).write_bytes(compressed)
+        files.append({
+            "file": relative,
+            "bytes": len(compressed),
+            "uncompressed_bytes": len(raw),
+            "sha256": hashlib.sha256(compressed).hexdigest(),
+            "items": len(payload["tokens"]),
+        })
+    for stale in query_dir.glob("*.json.gz"):
+        if stale.name not in expected_files:
+            stale.unlink()
+
+    return {
+        "version": 1,
+        "shard_count": len(files),
+        "token_count": sum(len(payload["tokens"]) for _prefix, payload, _raw, _compressed in encoded),
+        "posting_count": posting_count,
+        "compressed_bytes": total_compressed,
+        "uncompressed_bytes": total_uncompressed,
+        "shards": files,
+    }, None
+
+
 def main():
     source = load_index(SOURCE)
     pages = [compact(p) for p in source.get("pages", []) if is_publishable(p)]
@@ -162,6 +281,7 @@ def main():
         old.unlink()
 
     shards = []
+    query_postings = defaultdict(lambda: defaultdict(int))
     batch = []
     batch_payload_size = 0
     number = 0
@@ -183,6 +303,9 @@ def main():
             "uncompressed_bytes": uncompressed_bytes,
             "sha256": hashlib.sha256(raw).hexdigest(),
         })
+        for page in items:
+            for token in query_tokens(page):
+                query_postings[token][name] += 1
 
     prefix_bytes = len(b'{"version":1,"pages":[')
     suffix_bytes = len(b']}\n')
@@ -202,6 +325,7 @@ def main():
         batch.append(page)
         batch_payload_size += page_size + (1 if len(batch) > 1 else 0)
     write_batch(batch)
+    query_index, query_index_omission_reason = write_query_index(OUT, query_postings)
 
     catalog_payload = json.dumps(
         {"version": 1, "pages": pages},
@@ -246,6 +370,10 @@ def main():
     }
     if catalog_gzip is not None:
         manifest["catalog_gzip"] = catalog_gzip
+    if query_index is not None:
+        manifest["query_index"] = query_index
+    elif query_index_omission_reason:
+        manifest["query_index_omission_reason"] = query_index_omission_reason
     (OUT / "manifest.json").write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
@@ -267,6 +395,15 @@ def main():
             f"Compressed catalog omitted: {catalog_omission_reason}; "
             "verified shard fallback remains available."
         )
+    if query_index is not None:
+        print(
+            f"Built query index: {query_index['token_count']:,} tokens, "
+            f"{query_index['posting_count']:,} token-to-shard postings, "
+            f"{query_index['shard_count']:,} shards, "
+            f"{query_index['compressed_bytes']:,} compressed bytes."
+        )
+    else:
+        print(f"Query index omitted: {query_index_omission_reason}")
 
 
 if __name__ == "__main__":
