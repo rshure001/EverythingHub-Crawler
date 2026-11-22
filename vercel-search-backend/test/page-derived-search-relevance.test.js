@@ -112,3 +112,30 @@ test("a business description mentioning Las Vegas is not treated as a typed loca
   };
   assert.deepEqual(searchPageDerivedCatalogs("Las Vegas", network, 5), []);
 });
+
+
+test("Las Vegas location intent suppresses incidental commerce matches from local offer titles", () => {
+  const network = {
+    catalogs: [
+      catalog("catalog:global-products", "Global Product Directory", "commerce", "product", "products"),
+      catalog("catalog:global-places", "Global Place Directory", "geographic", "place", "places")
+    ],
+    records: [
+      record("r-vegas-offer", "Flamingo Las Vegas Daily Dining Credit", "product", ["catalog:global-products"]),
+      record("r-vegas-strip", "Las Vegas Strip", "place", ["catalog:global-places"])
+    ]
+  };
+  const results = searchPageDerivedCatalogs("Las Vegas", network, 5);
+  assert.deepEqual(results.map(item => item.catalog_id), ["catalog:global-places"]);
+  assert.equal(results[0].relevance_class, "typed_location_match");
+});
+
+test("explicit product intent still permits a product catalog for a place-qualified query", () => {
+  const network = {
+    catalogs: [catalog("catalog:vegas-watches", "Las Vegas Watch Catalog", "commerce", "product", "watches")],
+    records: [record("r-vegas-watch", "Las Vegas watches", "product", ["catalog:vegas-watches"])]
+  };
+  const results = searchPageDerivedCatalogs("Las Vegas watches", network, 5);
+  assert.deepEqual(results.map(item => item.catalog_id), ["catalog:vegas-watches"]);
+  assert.equal(results[0].relevance_class, "typed_product_match");
+});
