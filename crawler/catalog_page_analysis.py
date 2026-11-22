@@ -994,7 +994,7 @@ def analyze_pages(
                     continue
                 structured_items = []
                 seen_structured_items = set()
-                for raw_item in (raw_list.get("items") or [])[:8]:
+                for raw_item in (raw_list.get("items") or [])[:50]:
                     if not isinstance(raw_item, dict):
                         continue
                     item_kind = str(raw_item.get("record_type") or list_kind).casefold()
