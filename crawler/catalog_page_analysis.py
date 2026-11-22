@@ -2982,3 +2982,5 @@ if __name__ == "__main__":
     main()
 
 # Incremental catalog analysis trigger checkpoint 2026-11-21 16:31Z.
+
+# Inventory recovery checkpoint: reanalyze the refreshed 185,860-page public manifest.
