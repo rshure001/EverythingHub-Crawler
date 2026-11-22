@@ -968,11 +968,6 @@ async function searchPublicSources(query){
    return (d.docs||[]).map(p=>({title:p.title||'Book',url:'https://openlibrary.org'+p.key,snippet:[(p.author_name||[]).slice(0,3).join(', '),p.first_publish_year].filter(Boolean).join(' · '),image:p.cover_i?'https://covers.openlibrary.org/b/id/'+p.cover_i+'-M.jpg':'',source:'Open Library',score:0}));
   })(),
   (async()=>{
-   const u=new URL('https://api.crossref.org/works');u.searchParams.set('query',query);u.searchParams.set('rows','40');u.searchParams.set('select','DOI,title,author,published,container-title,URL');
-   const r=await fetch(u);if(!r.ok)throw Error('Crossref');const d=await r.json();
-   return (d.message?.items||[]).map(p=>({title:Array.isArray(p.title)?p.title[0]:'Research publication',url:p.URL||('https://doi.org/'+p.DOI),snippet:[(p.author||[]).slice(0,3).map(a=>[a.given,a.family].filter(Boolean).join(' ')).join(', '),(p['container-title']||[])[0],p.published?.['date-parts']?.[0]?.[0]].filter(Boolean).join(' · '),image:'',source:'Crossref research',score:0}));
-  })(),
-  (async()=>{
    const u=new URL('https://www.googleapis.com/books/v1/volumes');u.searchParams.set('q',query);u.searchParams.set('maxResults','40');
    const r=await fetch(u);if(!r.ok)throw Error('Google Books');const d=await r.json();
    return (d.items||[]).map(p=>{const v=p.volumeInfo||{};return {title:v.title||'Book',url:v.infoLink||('https://books.google.com/books?id='+p.id),snippet:[(v.authors||[]).slice(0,3).join(', '),v.publishedDate,v.description].filter(Boolean).join(' · ').slice(0,360),image:(v.imageLinks&&(v.imageLinks.thumbnail||v.imageLinks.smallThumbnail)||'').replace('http://','https://'),source:'Google Books',score:0};});
@@ -987,7 +982,7 @@ async function searchPublicSources(query){
  const settled=await Promise.allSettled(jobs);
  if(selectedMode==='images'||selectedMode==='videos')return settled[0].status==='fulfilled'?settled[0].value:[];
  if(selectedMode==='news')return [];
- if(selectedMode==='research')return settled.slice(2,5).flatMap(x=>x.status==='fulfilled'?x.value:[]);
+ if(selectedMode==='research')return settled.slice(2,4).flatMap(x=>x.status==='fulfilled'?x.value:[]);
  return settled.flatMap(x=>x.status==='fulfilled'?x.value:[]);
 }
 form.addEventListener('submit',async e=>{
@@ -1032,6 +1027,7 @@ form.addEventListener('submit',async e=>{
   u.searchParams.set('q',q);
   u.searchParams.set('limit','50');
   u.searchParams.set('offset',String((page-1)*50));
+  if(mode==='research')u.searchParams.set('lane','research');
   if(lane==='research')u.searchParams.set('lane','research');
   const r=await fetch(u,{headers:{accept:'application/json'}});
   if(!r.ok)throw Error('Independent Everything Hub search '+r.status);
@@ -1081,7 +1077,7 @@ form.addEventListener('submit',async e=>{
   // It is the primary index, not a last-resort fallback when outside sources fail.
   const [catalogResult,apiResult,publicResult]=await Promise.allSettled([
    searchCrawlerIndex(q),
-   loadApiPage(1),
+   loadApiPage(1,activeType),
    searchPublicSources(q)
   ]);
   // Independent live web search is the primary provider; the published static crawler catalog adds supplemental coverage.
