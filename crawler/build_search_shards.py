@@ -292,7 +292,7 @@ def main():
             return
         number += 1
         if number > MAX_SHARD_COUNT:
-            raise ValueError("public search catalog exceeds the fixed 640-shard limit")
+            raise ValueError(f"public search catalog exceeds the fixed {MAX_SHARD_COUNT}-shard limit")
         name = f"shard-{number:04d}.json.gz"
         raw, uncompressed_bytes = encode_shard(items)
         (OUT / name).write_bytes(raw)
