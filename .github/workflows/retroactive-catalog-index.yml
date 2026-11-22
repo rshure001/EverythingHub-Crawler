@@ -85,6 +85,16 @@ jobs:
         run: python -m unittest test_stage_search_catalog.py -v
       - name: Inventory every existing indexed host
         run: python crawler/catalog_retro_discovery.py
+      - name: Prepare per-host catalog cache before aggregation
+        timeout-minutes: 110
+        env:
+          PYTHONUNBUFFERED: "1"
+        run: python crawler/catalog_page_analysis.py --index public-search/manifest.json --query Rolex --query "Las Vegas" --query NASA --cache-dir data/.page-derived-catalog-cache --cache-only
+      - name: Persist host cache before catalog aggregation
+        uses: actions/cache/save@v4
+        with:
+          path: data/.page-derived-catalog-cache
+          key: ${{ runner.os }}-catalog-cache-${{ github.ref_name }}-hosts-${{ github.run_id }}
       - name: Analyze every eligible existing indexed page
         timeout-minutes: 110
         env:
