@@ -22,8 +22,8 @@ test("accepts the current 145,957-page, 565-shard public catalog", () => {
   assert.equal(isValidStaticManifest(makeManifest(514, 133026)), true);
 });
 
-test("uses the bounded 180,000-page and 768-shard capacity", () => {
-  assert.equal(MAX_STATIC_INDEX_PAGES, 180_000);
+test("uses the bounded 250,000-page and 768-shard capacity", () => {
+  assert.equal(MAX_STATIC_INDEX_PAGES, 250_000);
   assert.equal(MAX_STATIC_INDEX_SHARDS, 768);
 });
 
