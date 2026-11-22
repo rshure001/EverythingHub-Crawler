@@ -183,21 +183,22 @@ jobs:
 
           scheduled_payload = json.loads(Path("/tmp/crawl-scheduled-final.json").read_text(encoding="utf-8"))
           scheduled = scheduled_payload.get("workflow_runs")
-          if not isinstance(scheduled, list) or not scheduled:
-              print("No scheduled crawl event is observable; no recovery marker will be written.")
-              raise SystemExit(0)
-          latest = max(scheduled, key=lambda row: row.get("created_at") or "")
-          created_at = latest.get("created_at")
-          if not isinstance(created_at, str):
-              raise SystemExit("Latest scheduled crawl event has no valid created_at timestamp")
-          schedule_time = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
-          if schedule_time.tzinfo is None:
-              schedule_time = schedule_time.replace(tzinfo=timezone.utc)
+          schedule_age = None
           now = datetime.now(timezone.utc)
-          schedule_age = max(0, int((now - schedule_time.astimezone(timezone.utc)).total_seconds()))
-          if schedule_age <= 25 * 60:
-              print(f"Scheduled delivery is only {schedule_age}s old; no recovery marker will be written.")
-              raise SystemExit(0)
+          if isinstance(scheduled, list) and scheduled:
+              latest = max(scheduled, key=lambda row: row.get("created_at") or "")
+              created_at = latest.get("created_at")
+              if not isinstance(created_at, str):
+                  raise SystemExit("Latest scheduled crawl event has no valid created_at timestamp")
+              schedule_time = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+              if schedule_time.tzinfo is None:
+                  schedule_time = schedule_time.replace(tzinfo=timezone.utc)
+              schedule_age = max(0, int((now - schedule_time.astimezone(timezone.utc)).total_seconds()))
+              if schedule_age <= 25 * 60:
+                  print(f"Scheduled delivery is only {schedule_age}s old; no recovery marker will be written.")
+                  raise SystemExit(0)
+          else:
+              print("No scheduled crawl event is observable; using manifest age as a conservative fallback.")
 
           envelope = json.loads(Path("/tmp/public-manifest-final-envelope.json").read_text(encoding="utf-8"))
           encoded = envelope.get("content")
@@ -216,14 +217,21 @@ jobs:
           if manifest_age <= 10 * 60:
               print(f"Public manifest is only {manifest_age}s old; no recovery marker will be written.")
               raise SystemExit(0)
+          if schedule_age is None and manifest_age <= 25 * 60:
+              print(f"No scheduled crawl is observable, but manifest age is only {manifest_age}s; no recovery marker will be written.")
+              raise SystemExit(0)
 
+          schedule_reason = (
+              f"scheduled crawl delivery was {schedule_age}s old (>25 minutes)"
+              if schedule_age is not None
+              else f"no scheduled crawl event was observable and the manifest was {manifest_age}s old (>25 minutes)"
+          )
           marker = {
               "version": 1,
               "updated_at": now.isoformat(timespec="milliseconds").replace("+00:00", "Z"),
               "reason": (
-                  f"Explicit workflow_dispatch fallback after scheduled crawl delivery was {schedule_age}s old "
-                  f"(>25 minutes); no queued or running crawler; public manifest was {manifest_age}s old "
-                  f"(>10 minutes). One bounded recovery crawl; normal schedule unchanged."
+                  f"Explicit workflow_dispatch fallback after {schedule_reason}; no queued or running crawler; "
+                  f"public manifest was {manifest_age}s old (>10 minutes). One bounded recovery crawl; normal schedule unchanged."
               ),
               "manifest_before_pages": total_pages,
               "manifest_before_updated_at": manifest_time.isoformat(timespec="seconds").replace("+00:00", "Z"),
@@ -267,21 +275,22 @@ jobs:
               raise SystemExit(0)
           scheduled_payload = json.loads(Path("/tmp/crawl-scheduled-prepush.json").read_text(encoding="utf-8"))
           scheduled = scheduled_payload.get("workflow_runs", [])
-          if not scheduled:
-              print("Scheduled crawl history is unavailable at final push check; aborting marker commit.")
-              raise SystemExit(0)
-          latest = max(scheduled, key=lambda row: row.get("created_at") or "")
-          created_at = latest.get("created_at")
-          if not isinstance(created_at, str):
-              raise SystemExit("Latest scheduled crawl event has no created_at timestamp")
-          scheduled_at = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
-          if scheduled_at.tzinfo is None:
-              scheduled_at = scheduled_at.replace(tzinfo=timezone.utc)
+          schedule_age = None
           now = datetime.now(timezone.utc)
-          schedule_age = max(0, int((now - scheduled_at.astimezone(timezone.utc)).total_seconds()))
-          if schedule_age <= 25 * 60:
-              print("Scheduled crawl delivery is no longer more than 25 minutes stale; aborting marker commit.")
-              raise SystemExit(0)
+          if scheduled:
+              latest = max(scheduled, key=lambda row: row.get("created_at") or "")
+              created_at = latest.get("created_at")
+              if not isinstance(created_at, str):
+                  raise SystemExit("Latest scheduled crawl event has no created_at timestamp")
+              scheduled_at = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+              if scheduled_at.tzinfo is None:
+                  scheduled_at = scheduled_at.replace(tzinfo=timezone.utc)
+              schedule_age = max(0, int((now - scheduled_at.astimezone(timezone.utc)).total_seconds()))
+              if schedule_age <= 25 * 60:
+                  print("Scheduled crawl delivery is no longer more than 25 minutes stale; aborting marker commit.")
+                  raise SystemExit(0)
+          else:
+              print("No scheduled crawl event is observable at final push check; using manifest age as a conservative fallback.")
           envelope = json.loads(Path("/tmp/public-manifest-prepush-envelope.json").read_text(encoding="utf-8"))
           encoded = envelope.get("content")
           if not isinstance(encoded, str):
@@ -295,6 +304,9 @@ jobs:
               raise SystemExit("Latest public manifest timestamp is too far in the future")
           if manifest_age <= 10 * 60:
               print("Public manifest became fresh before push; aborting marker commit.")
+              raise SystemExit(0)
+          if schedule_age is None and manifest_age <= 25 * 60:
+              print("No scheduled crawl is observable, but the manifest is not beyond the 25-minute recovery window; aborting marker commit.")
               raise SystemExit(0)
           Path("/tmp/prepush-eligible").write_text("yes", encoding="utf-8")
           print("Final no-overlap and freshness recheck passed.")
