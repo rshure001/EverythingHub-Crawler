@@ -22,7 +22,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "data" / "catalogs.json.gz"
 MAX_RESPONSE_BYTES = 8_000_000
 TIMEOUT_SECONDS = 25
-DEFAULT_MAX_PAGES = 40
+DEFAULT_MAX_PAGES = 80
 MAX_PAGES_PER_SOURCE = 80
 USER_AGENT = "EverythingHubCatalogDiscovery/1.0 (+https://github.com/rshure001/EverythingHub-Crawler)"
 
@@ -222,7 +222,7 @@ def discover_source(source: dict[str, Any], rows: int, max_pages: int, pause: fl
         "errors": errors, "datasets": datasets,
     }
 
-def build_catalog(rows: int = 250, max_pages: int = DEFAULT_MAX_PAGES) -> dict[str, Any]:
+def build_catalog(rows: int = 500, max_pages: int = DEFAULT_MAX_PAGES) -> dict[str, Any]:
     if not 1 <= rows <= 1000:
         raise ValueError("rows must be between 1 and 1000")
     if not 1 <= max_pages <= MAX_PAGES_PER_SOURCE:
@@ -243,7 +243,7 @@ def build_catalog(rows: int = 250, max_pages: int = DEFAULT_MAX_PAGES) -> dict[s
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--rows", type=int, default=250)
+    parser.add_argument("--rows", type=int, default=500)
     parser.add_argument("--max-pages", type=int, default=DEFAULT_MAX_PAGES)
     parser.add_argument("--output", type=pathlib.Path, default=OUTPUT)
     args = parser.parse_args()

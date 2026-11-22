@@ -4,7 +4,7 @@ from unittest.mock import patch
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from catalog_discovery import build_catalog, normalize_dataset, SOURCES, EXCLUDED_SOURCES
+from catalog_discovery import build_catalog, normalize_dataset, SOURCES, EXCLUDED_SOURCES, DEFAULT_MAX_PAGES
 from catalog_source_policy import policy_for_host
 
 class CatalogDiscoveryTests(unittest.TestCase):
@@ -50,20 +50,38 @@ class CatalogDiscoveryTests(unittest.TestCase):
 
     def test_default_discovery_batch_is_bounded_by_each_reviewed_host_budget(self):
         max_pages = inspect.signature(build_catalog).parameters["max_pages"].default
-        self.assertEqual(max_pages, 40)
+        self.assertEqual(max_pages, 80)
+        self.assertEqual(inspect.signature(build_catalog).parameters["rows"].default, 500)
         for source in SOURCES:
             host = urlsplit(source["base"]).hostname
             policy = policy_for_host(host)
             self.assertTrue(policy["discovery_allowed"], source["id"])
-            self.assertGreaterEqual(policy["max_requests_per_run"], max_pages, source["id"])
+            self.assertEqual(min(max_pages, policy["max_requests_per_run"]), min(80, policy["max_requests_per_run"]), source["id"])
             self.assertGreaterEqual(policy["min_interval_seconds"], 1.0, source["id"])
 
         workflow = (
             Path(__file__).resolve().parents[1]
             / ".github" / "workflows" / "catalog-first-discovery.yml"
         ).read_text(encoding="utf-8")
-        self.assertIn('default: "40"', workflow)
-        self.assertEqual(workflow.count("inputs.max_pages || '40'"), 2)
+        self.assertIn('default: "80"', workflow)
+        self.assertEqual(workflow.count("inputs.max_pages || '80'"), 2)
+        self.assertIn('default: "500"', workflow)
+        self.assertEqual(workflow.count("inputs.rows || '500'"), 2)
+
+    def test_each_source_batch_ceiling_is_clamped_to_its_own_reviewed_budget(self):
+        payload = {"success": True, "result": {"count": 0, "results": []}}
+        with patch("catalog_discovery._request_json", return_value=payload):
+            for source in SOURCES:
+                policy = policy_for_host(urlsplit(source["base"]).hostname)
+                with patch("catalog_discovery.policy_for_host", return_value=policy):
+                    result = __import__("catalog_discovery").discover_source(
+                        source, rows=500, max_pages=DEFAULT_MAX_PAGES
+                    )
+                self.assertEqual(
+                    result["page_limit_applied"],
+                    min(DEFAULT_MAX_PAGES, policy["max_requests_per_run"]),
+                    source["id"],
+                )
 
     def test_discovery_reports_total_available_and_respects_source_request_budget(self):
         policy = {
