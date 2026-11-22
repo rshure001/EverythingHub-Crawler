@@ -15,9 +15,9 @@ from index_store import load_index
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "data" / "index.json"
 OUT = ROOT / "public-search"
-MAX_BYTES = 500_000  # Decoded shard target; gzip transport remains below 350 KB.
+MAX_BYTES = 600_000  # Decoded shard target; gzip transport must remain below 350 KB.
 MAX_COMPRESSED_BYTES = 350_000
-MAX_SHARD_COUNT = 768
+MAX_SHARD_COUNT = 900  # Keeps page shards plus metadata below GitHub's 1,000-entry directory API cap.
 MAX_PAGES_PER_SHARD = 2_000
 SHARD_GZIP_LEVEL = 6
 # The independent Vercel backend safely decompresses up to 64 MB. The

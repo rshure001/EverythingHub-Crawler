@@ -165,12 +165,12 @@ class StageSearchCatalogTests(unittest.TestCase):
                 stage_search_catalog(source, target)
 
 
-    def test_accepts_current_125643_page_sharded_catalog_with_headroom(self):
-        total_pages = 125_643
-        shard_count = 482
-        total_compressed = 60_689_761
-        total_uncompressed = 240_013_197
-        compressed_sizes = [176_884]
+    def test_accepts_current_189518_page_sharded_catalog_with_headroom(self):
+        total_pages = 189_518
+        shard_count = 716
+        total_compressed = 86_499_793
+        total_uncompressed = 357_021_990
+        compressed_sizes = [178_040]
         uncompressed_sizes = [499_996]
         remaining_compressed = total_compressed - compressed_sizes[0]
         remaining_uncompressed = total_uncompressed - uncompressed_sizes[0]
@@ -182,14 +182,12 @@ class StageSearchCatalogTests(unittest.TestCase):
             remaining_uncompressed // (shard_count - 1) + (1 if i < remaining_uncompressed % (shard_count - 1) else 0)
             for i in range(shard_count - 1)
         )
+        page_counts = [265 if index < 494 else 264 for index in range(shard_count)]
         shards = []
-        remaining_pages = total_pages
         for index in range(shard_count):
-            pages = min(261 if index < 323 else 260, remaining_pages)
-            remaining_pages -= pages
             shards.append({
                 "file": f"shard-{index + 1:04d}.json.gz",
-                "pages": pages,
+                "pages": page_counts[index],
                 "bytes": compressed_sizes[index],
                 "uncompressed_bytes": uncompressed_sizes[index],
                 "sha256": "a" * 64,
@@ -197,18 +195,18 @@ class StageSearchCatalogTests(unittest.TestCase):
         manifest = {
             "version": 1,
             "integrity": "sha256",
-            "updated_at": 1795140000,
+            "updated_at": 1795371182,
             "total_pages": total_pages,
             "shard_count": len(shards),
             "shards": shards,
         }
         checked = validate_manifest(manifest)
-        self.assertEqual(checked["total_pages"], 125_643)
-        self.assertEqual(len(checked["shards"]), 482)
+        self.assertEqual(checked["total_pages"], 189_518)
+        self.assertEqual(len(checked["shards"]), 716)
         self.assertEqual(checked["total_bytes"], total_compressed)
         self.assertEqual(checked["total_uncompressed_bytes"], total_uncompressed)
 
-    def test_accepts_250k_pages_with_768_shards_and_aggregate_headroom(self):
+    def test_accepts_250k_pages_with_900_shards_and_aggregate_headroom(self):
         total_pages = MAX_INDEXED_PAGES
         shard_count = MAX_SHARD_COUNT
         page_counts = [
@@ -219,8 +217,8 @@ class StageSearchCatalogTests(unittest.TestCase):
             {
                 "file": f"shard-{index + 1:04d}.json.gz",
                 "pages": page_count,
-                "bytes": 100_000,
-                "uncompressed_bytes": 400_000,
+                "bytes": 166_666,
+                "uncompressed_bytes": 600_000,
                 "sha256": "a" * 64,
             }
             for index, page_count in enumerate(page_counts)
@@ -235,8 +233,10 @@ class StageSearchCatalogTests(unittest.TestCase):
         }
         checked = validate_manifest(manifest)
         self.assertEqual(checked["total_pages"], 250_000)
-        self.assertEqual(len(checked["shards"]), 768)
+        self.assertEqual(len(checked["shards"]), 900)
+        self.assertEqual(checked["total_bytes"], 149_999_400)
         self.assertLessEqual(checked["total_bytes"], MAX_TOTAL_COMPRESSED_SHARD_BYTES)
+        self.assertEqual(checked["total_uncompressed_bytes"], 540_000_000)
         self.assertLessEqual(checked["total_uncompressed_bytes"], MAX_TOTAL_SHARD_UNCOMPRESSED_BYTES)
 
     def test_rejects_shard_count_above_configured_safety_limit(self):
@@ -259,7 +259,7 @@ class StageSearchCatalogTests(unittest.TestCase):
             "shard_count": shard_count,
             "shards": shards,
         }
-        with self.assertRaisesRegex(ValueError, "768-shard safety limit"):
+        with self.assertRaisesRegex(ValueError, "900-shard safety limit"):
             validate_manifest(manifest)
 
     def test_rejects_page_count_above_configured_safety_limit(self):
