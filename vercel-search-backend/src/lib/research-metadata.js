@@ -7,6 +7,7 @@ const MAX_RESULTS_PER_SOURCE = 10;
 const MAX_RESPONSE_BYTES = 1500000;
 const REQUEST_TIMEOUT_MS = 6500;
 const CACHE_TTL_MS = 5 * 60 * 1000;
+const PARTIAL_CACHE_TTL_MS = 30 * 1000;
 const MAX_CACHE_ENTRIES = 200;
 const USER_AGENT = 'EverythingHub-ResearchSearch/1.0 (https://everythinghub.org)';
 const cache = new Map();
@@ -185,7 +186,7 @@ function requestCrossref(url) {
 }
 
 function remember(key, results) {
-  cache.set(key, { loadedAt: Date.now(), results });
+  cache.set(key, { loadedAt: Date.now(), results, ttl: CACHE_TTL_MS });
   while (cache.size > MAX_CACHE_ENTRIES) cache.delete(cache.keys().next().value);
   return results;
 }
@@ -195,7 +196,7 @@ async function loadResearchMetadata(query) {
   if (!value) return [];
   const key = value.toLowerCase();
   const cached = cache.get(key);
-  if (cached && Date.now() - cached.loadedAt < CACHE_TTL_MS) return cached.results;
+  if (cached && Date.now() - cached.loadedAt < (cached.ttl || CACHE_TTL_MS)) return cached.results;
   if (inFlight.has(key)) return inFlight.get(key);
   const urls = providerUrls(value);
   const task = Promise.allSettled([
@@ -209,9 +210,12 @@ async function loadResearchMetadata(query) {
       ? (Array.isArray(dataCiteResult.value.data) ? dataCiteResult.value.data : []).map(mapDataCiteItem).filter(Boolean)
       : [];
     const merged = mergeResearchResults(crossrefItems, dataCiteItems);
-    return crossrefResult.status === 'fulfilled' && dataCiteResult.status === 'fulfilled'
-      ? remember(key, merged)
-      : merged;
+    if (crossrefResult.status === 'fulfilled' && dataCiteResult.status === 'fulfilled') return remember(key, merged);
+    if (crossrefResult.status === 'fulfilled' || dataCiteResult.status === 'fulfilled') {
+      cache.set(key, { loadedAt: Date.now(), results: merged, ttl: PARTIAL_CACHE_TTL_MS });
+      while (cache.size > MAX_CACHE_ENTRIES) cache.delete(cache.keys().next().value);
+    }
+    return merged;
   }).finally(() => inFlight.delete(key));
   inFlight.set(key, task);
   return task;
