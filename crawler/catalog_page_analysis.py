@@ -1088,7 +1088,7 @@ def analyze_pages(
             ):
                 continue
             entity_description = re.sub(
-                r"\\s+", " ", str(raw_entity.get("description") or description or text[:500])
+                r"\s+", " ", str(raw_entity.get("description") or description or text[:500])
             ).strip()[:500]
             location_parts = [
                 entity_attributes.get("address_locality"),
