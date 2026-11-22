@@ -2,11 +2,35 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
+  mapOpenAlexItem,
   mapCrossrefItem,
   mapDataCiteItem,
   mergeResearchResults,
   providerUrls
 } = require('../src/lib/research-metadata');
+
+test('OpenAlex mapping preserves CC0 metadata and linked-resource license separately', () => {
+  const item = mapOpenAlexItem({
+    id: 'https://openalex.org/W123456789',
+    doi: 'https://doi.org/10.5555/OCEAN.1',
+    display_name: 'Ocean temperature observations',
+    publication_year: 2026,
+    type: 'dataset',
+    authorships: [{ author: { display_name: 'Research Team' } }],
+    primary_location: {
+      source: { display_name: 'Ocean Data Journal' },
+      license: 'cc-by'
+    },
+    abstract_inverted_index: { copyrighted: [0] }
+  });
+  assert.equal(item.doi, '10.5555/ocean.1');
+  assert.equal(item.title, 'Ocean temperature observations');
+  assert.equal(item.url, 'https://doi.org/10.5555/ocean.1');
+  assert.equal(item.metadataLicense, 'CC0 1.0 OpenAlex metadata; linked works retain their own resource rights');
+  assert.equal(item.resourceRights[0].label, 'cc-by');
+  assert.equal(item.abstractIncluded, false);
+  assert.equal('abstract' in item, false);
+});
 
 test('Crossref mapping returns bibliographic facts and deliberately excludes abstracts', () => {
   const item = mapCrossrefItem({
@@ -54,14 +78,16 @@ test('DataCite mapping preserves per-resource rights without copying description
 test('federated results deduplicate by DOI across providers', () => {
   const crossref = [{ doi: '10.1234/ABC', source: 'Crossref' }, { doi: '10.1234/DEF', source: 'Crossref' }];
   const dataCite = [{ doi: '10.1234/abc', source: 'DataCite' }, { doi: '10.1234/XYZ', source: 'DataCite' }];
-  assert.deepEqual(
-    mergeResearchResults(crossref, dataCite, 10).map(item => item.doi),
-    ['10.1234/abc', '10.1234/def', '10.1234/xyz']
-  );
+  const openAlex = [{ id: 'openalex:W1', doi: '10.1234/abc', source: 'OpenAlex' }, { id: 'openalex:W2', doi: null, source: 'OpenAlex' }];
+  const merged = mergeResearchResults(openAlex, crossref, dataCite, 10);
+  assert.deepEqual(merged.map(item => item.doi), ['10.1234/abc', null, '10.1234/def', '10.1234/xyz']);
+  assert.equal(merged.length, 4);
 });
 
 test('provider URLs use bounded query lengths and omit abstract fields', () => {
   const urls = providerUrls('ocean temperature');
+  assert.match(urls.openAlex, /api\.openalex\.org\/works/);
+  assert.match(urls.openAlex, /per-page=10/);
   assert.match(urls.crossref, /api\.crossref\.org\/works/);
   assert.match(urls.crossref, /query\.bibliographic=ocean\+temperature/);
   assert.match(urls.crossref, /rows=10/);
