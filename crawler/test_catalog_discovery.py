@@ -68,6 +68,21 @@ class CatalogDiscoveryTests(unittest.TestCase):
         self.assertIn('default: "500"', workflow)
         self.assertEqual(workflow.count("inputs.rows || '500'"), 2)
 
+    def test_each_source_batch_ceiling_is_clamped_to_its_own_reviewed_budget(self):
+        payload = {"success": True, "result": {"count": 0, "results": []}}
+        with patch("catalog_discovery._request_json", return_value=payload):
+            for source in SOURCES:
+                policy = policy_for_host(urlsplit(source["base"]).hostname)
+                with patch("catalog_discovery.policy_for_host", return_value=policy):
+                    result = __import__("catalog_discovery").discover_source(
+                        source, rows=500, max_pages=DEFAULT_MAX_PAGES
+                    )
+                self.assertEqual(
+                    result["page_limit_applied"],
+                    min(DEFAULT_MAX_PAGES, policy["max_requests_per_run"]),
+                    source["id"],
+                )
+
     def test_discovery_reports_total_available_and_respects_source_request_budget(self):
         policy = {
             "discovery_allowed": True,
