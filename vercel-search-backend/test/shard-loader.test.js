@@ -9,6 +9,10 @@ const {
   MAX_INDEXED_PAGES,
   MAX_SHARD_COUNT,
   MAX_PAGES_PER_SHARD,
+  MAX_QUERY_SHARDS,
+  validateQueryIndexMetadata,
+  validateQueryIndexPayload,
+  loadQueryIndexedCatalog,
   MAX_TOTAL_SHARD_BYTES,
   MAX_TOTAL_COMPRESSED_SHARD_BYTES,
   validateShardManifest,
@@ -55,6 +59,38 @@ function page(url) {
   };
 }
 
+function makeQueryIndexShard(prefix, tokens) {
+  const uncompressed = Buffer.from(JSON.stringify({ version: 1, prefix, tokens }));
+  const buffer = gzipSync(uncompressed, { level: 9, mtime: 0 });
+  return {
+    meta: {
+      file: 'query-index/' + prefix + '.json.gz',
+      items: Object.keys(tokens).length,
+      bytes: buffer.length,
+      uncompressed_bytes: uncompressed.length,
+      sha256: crypto.createHash('sha256').update(buffer).digest('hex')
+    },
+    tokens,
+    buffer
+  };
+}
+
+function makeQueryIndexMetadata(shards) {
+  return {
+    version: 1,
+    shard_count: shards.length,
+    token_count: shards.reduce((sum, shard) => sum + shard.meta.items, 0),
+    posting_count: shards.reduce((sum, shard) => sum + Object.values(shard.tokens).reduce((count, postings) => count + postings.length, 0), 0),
+    compressed_bytes: shards.reduce((sum, shard) => sum + shard.meta.bytes, 0),
+    uncompressed_bytes: shards.reduce((sum, shard) => sum + shard.meta.uncompressed_bytes, 0),
+    shards: shards.map(shard => shard.meta)
+  };
+}
+
+function tokenPrefix(token) {
+  return crypto.createHash('sha256').update(token, 'utf8').digest('hex').slice(0, 2);
+}
+
 test('current repository manifest fits the bounded shard reader without gzip metadata', () => {
   const manifestPath = path.resolve(__dirname, '../../public-search/manifest.json');
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
@@ -88,6 +124,146 @@ test('rejects shard page counts above the 2,000-page bounded limit', () => {
   assert.throws(() => validateShardManifest(manifest), /manifest_shard_page_count_invalid/);
 });
 
+
+
+test('query-index metadata validates bounded prefix files and exact aggregate sizes', () => {
+  const pageShard = makeShard('shard-0001.json', [page('https://example.com/nasa')]);
+  const token = 'nasa';
+  const queryShard = makeQueryIndexShard(tokenPrefix(token), { nasa: [[0, 1]] });
+  const manifest = makeManifest([pageShard.meta]);
+  manifest.query_index = makeQueryIndexMetadata([queryShard]);
+  assert.equal(validateQueryIndexMetadata(manifest).token_count, 1);
+  assert.deepEqual(validateQueryIndexPayload(queryShard.meta, queryShard.buffer, tokenPrefix(token), manifest.shards), { nasa: [[0, 1]] });
+  const unsafe = { ...manifest, query_index: { ...manifest.query_index, shards: [{ ...queryShard.meta, file: '../query-index.json.gz' }] } };
+  assert.throws(() => validateQueryIndexMetadata(unsafe), /manifest_query_index_shard_metadata_invalid/);
+});
+
+test('query-indexed loader fetches only candidate page shards and preserves full-corpus counts', async () => {
+  const first = makeShard('shard-0001.json', [page('https://example.com/nasa')]);
+  const second = makeShard('shard-0002.json', [page('https://example.com/other')]);
+  const queryShard = makeQueryIndexShard(tokenPrefix('nasa'), { nasa: [[0, 1]] });
+  const manifest = makeManifest([first.meta, second.meta]);
+  manifest.query_index = makeQueryIndexMetadata([queryShard]);
+  const commitSha = 'c'.repeat(40);
+  const manifestRaw = Buffer.from(JSON.stringify(manifest));
+  const calls = [];
+  const loaded = await loadCatalogFromManifest(
+    manifest,
+    commitSha,
+    manifestRaw,
+    async (url) => {
+      calls.push(url);
+      if (url.endsWith('/query-index/' + tokenPrefix('nasa') + '.json.gz')) return queryShard.buffer;
+      if (url.endsWith('/shard-0001.json.gz')) return first.buffer;
+      throw new Error('unexpected_fetch:' + url);
+    },
+    'NASA'
+  );
+  assert.equal(loaded.transport, 'query-indexed-shards');
+  assert.equal(loaded.indexedPages, 2);
+  assert.equal(loaded.candidatePages, 1);
+  assert.equal(loaded.candidateShardCount, 1);
+  assert.equal(loaded.candidateShardTotal, 1);
+  assert.equal(loaded.candidateShardsTruncated, false);
+  assert.deepEqual(loaded.pages.map(item => item.url), ['https://example.com/nasa']);
+  assert.equal(calls.length, 2, 'one query-index file and one candidate page shard are fetched');
+});
+
+test('multi-term query uses shard intersection when every term has postings', async () => {
+  const first = makeShard('shard-0001.json', [page('https://example.com/las-only')]);
+  const second = makeShard('shard-0002.json', [page('https://example.com/las-vegas')]);
+  const third = makeShard('shard-0003.json', [page('https://example.com/vegas-only')]);
+  const las = makeQueryIndexShard(tokenPrefix('las'), { las: [[0, 1], [1, 1]] });
+  const vegas = makeQueryIndexShard(tokenPrefix('vegas'), { vegas: [[1, 1], [2, 1]] });
+  const manifest = makeManifest([first.meta, second.meta, third.meta]);
+  manifest.query_index = makeQueryIndexMetadata([las, vegas]);
+  const loaded = await loadQueryIndexedCatalog(
+    manifest,
+    'd'.repeat(40),
+    'e'.repeat(64),
+    'Las Vegas',
+    async (url) => {
+      if (url.endsWith('/query-index/' + tokenPrefix('las') + '.json.gz')) return las.buffer;
+      if (url.endsWith('/query-index/' + tokenPrefix('vegas') + '.json.gz')) return vegas.buffer;
+      if (url.endsWith('/shard-0002.json.gz')) return second.buffer;
+      throw new Error('unexpected_fetch:' + url);
+    }
+  );
+  assert.equal(loaded.candidateSelection, 'intersection');
+  assert.equal(loaded.candidateShardTotal, 1);
+  assert.deepEqual(loaded.pages.map(item => item.url), ['https://example.com/las-vegas']);
+});
+
+test('query-indexed loader falls back to a bounded union when terms have no shared shard', async () => {
+  const first = makeShard('shard-0001.json', [page('https://example.com/new')]);
+  const second = makeShard('shard-0002.json', [page('https://example.com/york')]);
+  const newer = makeQueryIndexShard(tokenPrefix('new'), { new: [[0, 1]] });
+  const york = makeQueryIndexShard(tokenPrefix('york'), { york: [[1, 1]] });
+  const manifest = makeManifest([first.meta, second.meta]);
+  manifest.query_index = makeQueryIndexMetadata([newer, york]);
+  const loaded = await loadQueryIndexedCatalog(
+    manifest,
+    'f'.repeat(40),
+    'a'.repeat(64),
+    'New York',
+    async (url) => {
+      if (url.endsWith('/query-index/' + tokenPrefix('new') + '.json.gz')) return newer.buffer;
+      if (url.endsWith('/query-index/' + tokenPrefix('york') + '.json.gz')) return york.buffer;
+      if (url.endsWith('/shard-0001.json.gz')) return first.buffer;
+      if (url.endsWith('/shard-0002.json.gz')) return second.buffer;
+      throw new Error('unexpected_fetch:' + url);
+    }
+  );
+  assert.equal(loaded.candidateSelection, 'union');
+  assert.equal(loaded.candidateShardTotal, 2);
+  assert.equal(loaded.pages.length, 2);
+});
+
+test('query-indexed loader caps candidate shards and marks the search scope partial', async () => {
+  const shards = Array.from({ length: MAX_QUERY_SHARDS + 1 }, (_, index) =>
+    makeShard('shard-' + String(index + 1).padStart(4, '0') + '.json', [page('https://example.com/page-' + index)])
+  );
+  const token = 'nasa';
+  const postings = shards.map((_shard, index) => [index, 1]);
+  const queryShard = makeQueryIndexShard(tokenPrefix(token), { nasa: postings });
+  const manifest = makeManifest(shards.map(shard => shard.meta));
+  manifest.query_index = makeQueryIndexMetadata([queryShard]);
+  const loaded = await loadQueryIndexedCatalog(
+    manifest,
+    '1'.repeat(40),
+    '2'.repeat(64),
+    'NASA',
+    async (url) => {
+      if (url.endsWith('/query-index/' + tokenPrefix(token) + '.json.gz')) return queryShard.buffer;
+      const match = url.match(/shard-(\\d{4})\\.json\\.gz$/);
+      if (!match) throw new Error('unexpected_fetch:' + url);
+      const index = Number(match[1]) - 1;
+      return shards[index].buffer;
+    }
+  );
+  assert.equal(loaded.candidateShardTotal, MAX_QUERY_SHARDS + 1);
+  assert.equal(loaded.candidateShardCount, MAX_QUERY_SHARDS);
+  assert.equal(loaded.candidateShardsTruncated, true);
+  assert.equal(loaded.candidatePages, MAX_QUERY_SHARDS);
+  assert.equal(loaded.pages.length, MAX_QUERY_SHARDS);
+});
+
+test('query-index postings cannot reference nonexistent page shards', async () => {
+  const shard = makeShard('shard-0001.json', [page('https://example.com/nasa')]);
+  const queryShard = makeQueryIndexShard(tokenPrefix('nasa'), { nasa: [[1, 1]] });
+  const manifest = makeManifest([shard.meta]);
+  manifest.query_index = makeQueryIndexMetadata([queryShard]);
+  await assert.rejects(
+    loadQueryIndexedCatalog(
+      manifest,
+      '3'.repeat(40),
+      '4'.repeat(64),
+      'NASA',
+      async () => queryShard.buffer
+    ),
+    /query_index_posting_invalid/
+  );
+});
 
 test('legacy raw shards remain readable during rollout', () => {
   const shard = makeShard('shard-0001.json', [page('https://example.com/legacy')], false);
