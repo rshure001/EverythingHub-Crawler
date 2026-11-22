@@ -9,7 +9,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from publish_catalog_snapshot import publish_snapshot
+from publish_catalog_snapshot import _run, publish_snapshot
 
 
 def run(command, cwd=None, env=None):
@@ -112,6 +112,14 @@ class CatalogSnapshotPublicationTests(unittest.TestCase):
 
     def tearDown(self):
         self.temporary.cleanup()
+
+    def test_publication_commands_fail_with_a_bounded_timeout(self):
+        with self.assertRaisesRegex(RuntimeError, "command timed out after 0.05s"):
+            _run(
+                [sys.executable, "-c", "import time; time.sleep(1)"],
+                cwd=self.root,
+                timeout=0.05,
+            )
 
     def test_retries_only_publication_after_concurrent_crawler_commit(self):
         hook = self.first / ".git" / "hooks" / "pre-push"
