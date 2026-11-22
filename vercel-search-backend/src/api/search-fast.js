@@ -45,7 +45,9 @@ async function getFeed(url, source) {
     signal: AbortSignal.timeout(8000)
   }, { userAgent: "EverythingHubSearch/1.0" });
   if (!response.ok) throw new Error(source + " returned HTTP " + response.status);
-  return parseRss(await response.text(), source);
+  const xml = await response.text();
+  if (Buffer.byteLength(xml, "utf8") > 2_000_000) throw new Error(source + " response too large");
+  return parseRss(xml, source);
 }
 module.exports = async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
