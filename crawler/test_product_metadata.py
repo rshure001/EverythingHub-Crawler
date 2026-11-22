@@ -238,5 +238,65 @@ class ProductMetadataTests(unittest.TestCase):
             ["orcid:0000-0002-1825-0097", "isni:000000012281955X"],
         )
 
+
+    def test_resolves_json_ld_item_references_across_graph_nodes(self):
+        import json
+        payload = {
+            "@context": "https://schema.org",
+            "@graph": [
+                {
+                    "@type": "ItemList",
+                    "name": "Rolex Watches",
+                    "itemListElement": [
+                        {"@type": "ListItem", "position": 1, "item": {"@id": "#submariner"}},
+                        {"@type": "ListItem", "position": 2, "item": "https://shop.example/#datejust"},
+                    ],
+                },
+                {
+                    "@id": "#submariner",
+                    "@type": "Product",
+                    "name": "Submariner",
+                    "url": "/watches/submariner",
+                    "sku": "124060",
+                },
+                {
+                    "@id": "https://shop.example/#datejust",
+                    "@type": "Product",
+                    "name": "Datejust",
+                    "url": "/watches/datejust",
+                    "sku": "126200",
+                },
+            ],
+        }
+        html = '<script type="application/ld+json">' + json.dumps(payload) + "</script>"
+        result = extract_structured_catalog_metadata(html, "https://shop.example/watches")
+        self.assertEqual(len(result["lists"]), 1)
+        self.assertEqual(result["lists"][0]["record_type"], "product")
+        self.assertEqual(
+            [item["name"] for item in result["lists"][0]["items"]],
+            ["Submariner", "Datejust"],
+        )
+        self.assertEqual(
+            [item["url"] for item in result["lists"][0]["items"]],
+            [
+                "https://shop.example/watches/submariner",
+                "https://shop.example/watches/datejust",
+            ],
+        )
+
+    def test_rejects_unsafe_json_ld_item_reference(self):
+        import json
+        payload = {
+            "@context": "https://schema.org",
+            "@type": "ItemList",
+            "name": "Unsafe items",
+            "itemListElement": [
+                {"@type": "ListItem", "item": {"@id": "javascript:alert(1)"}},
+                {"@type": "ListItem", "item": {"@id": "https://user:pass@example.com/p"}},
+            ],
+        }
+        html = '<script type="application/ld+json">' + json.dumps(payload) + "</script>"
+        self.assertEqual(extract_structured_catalog_metadata(html, "https://shop.example/watches"), {})
+
 if __name__ == "__main__":
     unittest.main()
