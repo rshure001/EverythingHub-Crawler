@@ -144,4 +144,4 @@ module.exports = async function handler(req, res) {
   });
 };
 
-module.exports._test = { NEWS_FEEDS, decodeXml, readTag, parseFeed, mergeFeeds };
+module.exports._test = { NEWS_FEEDS, decodeXml, readTag, parseFeed, fetchFeed, mergeFeeds };
