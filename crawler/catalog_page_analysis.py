@@ -2221,13 +2221,32 @@ def _search_tokens(value: object) -> set[str]:
     return tokens
 
 
+def _search_catalog_priority(catalog: dict) -> tuple[int, str]:
+    """Keep typed global directories inside the bounded query-candidate window."""
+    catalog_id = str(catalog.get("catalog_id") or "")
+    if catalog.get("catalog_origin") == "derived_from_global_typed_records":
+        rank = 0
+    elif catalog.get("is_source_declared_catalog") is True:
+        rank = 1
+    elif catalog.get("catalog_type") in {
+        "commerce", "geographic", "business_directory", "service_directory",
+        "organization_directory", "people_directory", "events", "open_data",
+        "media", "resource_library", "software",
+    }:
+        rank = 2
+    else:
+        rank = 3
+    return rank, catalog_id
+
+
 def build_search_index(analysis: dict) -> dict[str, dict]:
-    """Build deterministic token-to-catalog postings for bounded Edge search."""
-    catalog_ids = {
-        item.get("catalog_id")
+    """Build deterministic, relevance-prioritized token-to-catalog postings."""
+    catalog_by_id = {
+        item.get("catalog_id"): item
         for item in analysis.get("catalogs", [])
         if isinstance(item, dict) and isinstance(item.get("catalog_id"), str)
     }
+    catalog_ids = set(catalog_by_id)
     token_catalogs: dict[str, set[str]] = defaultdict(set)
 
     for catalog in analysis.get("catalogs", []):
@@ -2265,11 +2284,17 @@ def build_search_index(analysis: dict) -> dict[str, dict]:
     for token, related_catalogs in sorted(token_catalogs.items()):
         prefix = hashlib.sha256(token.encode("utf-8")).hexdigest()[:2]
         shard = shards.setdefault(prefix, {"version": 1, "prefix": prefix, "tokens": {}})
-        shard["tokens"][token] = sorted(related_catalogs)
+        shard["tokens"][token] = list(related_catalogs)
     return {
         prefix: {
             **payload,
-            "tokens": dict(sorted(payload["tokens"].items())),
+            "tokens": {
+                token: sorted(
+                    related_catalog_ids,
+                    key=lambda catalog_id: _search_catalog_priority(catalog_by_id[catalog_id]),
+                )
+                for token, related_catalog_ids in sorted(payload["tokens"].items())
+            },
         }
         for prefix, payload in sorted(shards.items())
     }
@@ -2592,8 +2617,11 @@ def validate_outputs(output_dir: Path) -> dict:
                     or not isinstance(related_catalog_ids, list)
                     or not related_catalog_ids
                     or len(related_catalog_ids) != len(set(related_catalog_ids))
-                    or related_catalog_ids != sorted(related_catalog_ids)
                     or any(catalog_id not in catalogs_by_id for catalog_id in related_catalog_ids)
+                    or related_catalog_ids != sorted(
+                        related_catalog_ids,
+                        key=lambda catalog_id: _search_catalog_priority(catalogs_by_id[catalog_id]),
+                    )
                 ):
                     raise ValueError("search index token postings are invalid")
                 search_index_tokens.add(token)
