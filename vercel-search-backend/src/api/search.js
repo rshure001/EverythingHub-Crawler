@@ -1,5 +1,5 @@
 'use strict';
-const { loadCatalog } = require('../lib/catalog');
+const { loadCatalogForQuery } = require('../lib/catalog');
 const { robotsFetch } = require('../lib/robots');
 const { loadPageDerivedCatalogs, searchPageDerivedCatalogs, matchesPageIndexSnapshot } = require('../lib/page-derived-catalogs');
 const { searchExternalCatalogs, getExternalCatalogStats } = require('../lib/external-catalogs');
@@ -107,7 +107,7 @@ module.exports = async function handler(req, res) {
   const externalCatalogResults = searchExternalCatalogs(query);
   const externalCatalogStats = getExternalCatalogStats();
   const [catalogResult, bingResult, pageDerivedResult] = await Promise.allSettled([
-    withTimeout(loadCatalog(), CATALOG_LOAD_BUDGET_MS, 'catalog_load_budget_exceeded'),
+    withTimeout(loadCatalogForQuery(query), CATALOG_LOAD_BUDGET_MS, 'catalog_load_budget_exceeded'),
     loadBing(query),
     withTimeout(loadPageDerivedCatalogs(query), PAGE_DERIVED_LOAD_BUDGET_MS, 'page_catalog_load_budget_exceeded')
   ]);
@@ -193,6 +193,13 @@ module.exports = async function handler(req, res) {
     indexIntegrity: catalog.integrity,
     indexShardCount: catalog.shardCount,
     indexTransport: catalog.transport,
+    queryScoped: catalog.queryScoped,
+    queryScopeComplete: catalog.queryScopeComplete,
+    queryCandidatePages: catalog.queryCandidatePages,
+    queryCandidateShardCount: catalog.queryCandidateShardCount,
+    queryTokenCount: catalog.queryTokenCount,
+    queryIndexPrefixCount: catalog.queryIndexPrefixCount,
+    queryIndexFallbackReason: catalog.queryIndexFallbackReason,
     staleCatalog: catalog.stale
   });
   payload.catalogResults = catalogResults;
