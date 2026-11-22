@@ -53,7 +53,7 @@ class RetroCatalogDiscoveryTests(unittest.TestCase):
             Path(__file__).resolve().parents[1]
             / ".github" / "workflows" / "retroactive-catalog-index.yml"
         ).read_text(encoding="utf-8")
-        self.assertIn('schedule:\\n    - cron: "23 * * * *"', workflow)
+        self.assertIn('schedule:\n    - cron: "23 * * * *"', workflow)
         self.assertNotIn("workflow_run:", workflow)
         self.assertNotIn("Everything Hub crawler", workflow)
 
