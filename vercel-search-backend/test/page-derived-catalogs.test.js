@@ -28,10 +28,10 @@ test('validates the compressed registry and global records against the manifest'
  const f=fixture(),network=validatePageDerivedCatalogs(f.manifest,f.registry,f.recordsFile);
  assert.equal(network.catalogCount,3);assert.equal(network.recordCount,3);assert.equal(network.sourceIndexPages,131899);assert.equal(network.metrics.records_published,0);
 });
-test('accepts the live search index after it grows beyond 150,000 pages',()=>{
- const f=fixture();f.manifest.source_index_pages=152631;
+test('accepts the current 181,887-page search index snapshot',()=>{
+ const f=fixture();f.manifest.source_index_pages=181887;
  const network=validatePageDerivedCatalogs(f.manifest,f.registry,f.recordsFile);
- assert.equal(network.sourceIndexPages,152631);
+ assert.equal(network.sourceIndexPages,181887);
 });
 test('loads both artifacts from one commit-pinned GitHub snapshot',async()=>{
  const f=fixture(),sha='b'.repeat(40),base='https://raw.githubusercontent.com/rshure001/EverythingHub-Crawler/'+sha+'/data/page-derived-catalogs/';
