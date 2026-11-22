@@ -1603,6 +1603,7 @@ def analyze_pages_incremental(
 
     Catalog IDs remain host-scoped; records with vetted external identifiers can
     merge across host partitions without merging generic same-title entities.
+    Global typed directories are built only after all host partitions are merged.
     """
     source_page_rows = len(pages)
     pages, duplicate_source_page_rows = _dedupe_source_pages(pages)
@@ -1654,6 +1655,7 @@ def analyze_pages_incremental(
     all_records, cross_host_record_merges = _merge_cross_host_records(all_records)
     global_subject_catalogs = _add_global_subject_catalogs(pages, all_page_rows, all_records, all_catalogs)
     _reconcile_page_record_provenance(all_page_rows, all_records)
+    global_typed_catalogs_by_type = _add_global_typed_entity_catalogs(all_page_rows, all_records, all_catalogs)
     all_catalogs.sort(key=lambda x: (x["catalog_type"], x["title"].casefold(), x["catalog_id"]))
     all_records.sort(key=lambda x: (x["record_type"], x["title"].casefold(), x["record_id"]))
     all_page_rows.sort(key=lambda x: (x.get("url") or "", x.get("page_id") or ""))
@@ -1683,10 +1685,15 @@ def analyze_pages_incremental(
         "source_row_deduplication_percentage": round(source_row_deduplication, 4),
         "eligible_page_coverage_status": "complete" if source_set_complete else "unknown_incomplete_source_set",
         "global_subject_catalogs": global_subject_catalogs,
+        "global_typed_catalogs": sum(global_typed_catalogs_by_type.values()),
+        "global_typed_catalogs_by_type": global_typed_catalogs_by_type,
+        "global_typed_catalog_page_associations": sum(len(x.get("source_page_ids", [])) for x in all_catalogs if x.get("catalog_origin") == "derived_from_global_typed_records"),
+        "global_typed_catalog_record_associations": sum(len(x.get("record_ids", [])) for x in all_catalogs if x.get("catalog_origin") == "derived_from_global_typed_records"),
+        "catalogs_by_origin": dict(sorted(Counter(x.get("catalog_origin") or "unknown" for x in all_catalogs).items())),
         "unique_catalogs_discovered": len(all_catalogs),
         "unique_catalogs_by_type": dict(sorted(Counter(x["catalog_type"] for x in all_catalogs).items())),
         "source_declared_catalogs": sum(bool(x.get("is_source_declared_catalog")) for x in all_catalogs),
-        "derived_catalogs": sum(x.get("catalog_origin") == "derived_from_repeated_records" for x in all_catalogs),
+        "derived_catalogs": sum(x.get("catalog_origin") in {"derived_from_repeated_records", "derived_from_global_typed_records"} for x in all_catalogs),
         "content_list_catalogs": sum(x.get("catalog_origin") == "content_list_declared_collection" for x in all_catalogs),
         "structured_schema_catalogs": sum(x.get("catalog_origin") == "structured_schema_collection" for x in all_catalogs),
         "catalogs_with_records": sum(bool(x.get("record_ids")) for x in all_catalogs),
@@ -2222,20 +2229,33 @@ def _search_tokens(value: object) -> set[str]:
 
 
 def _search_catalog_priority(catalog: dict) -> tuple[int, str]:
-    """Keep typed global directories inside the bounded query-candidate window."""
+    """Keep query-relevant typed global directories inside the bounded candidate window."""
     catalog_id = str(catalog.get("catalog_id") or "")
     if catalog.get("catalog_origin") == "derived_from_global_typed_records":
-        rank = 0
+        typed_rank = {
+            "geographic": 0,
+            "commerce": 1,
+            "organization_directory": 2,
+            "business_directory": 3,
+            "service_directory": 4,
+            "people_directory": 5,
+            "events": 6,
+            "open_data": 7,
+            "media": 8,
+            "resource_library": 9,
+            "software": 10,
+        }
+        rank = typed_rank.get(str(catalog.get("catalog_type") or ""), 11)
     elif catalog.get("is_source_declared_catalog") is True:
-        rank = 1
+        rank = 20
     elif catalog.get("catalog_type") in {
         "commerce", "geographic", "business_directory", "service_directory",
         "organization_directory", "people_directory", "events", "open_data",
         "media", "resource_library", "software",
     }:
-        rank = 2
+        rank = 30
     else:
-        rank = 3
+        rank = 40
     return rank, catalog_id
 
 
@@ -2520,8 +2540,8 @@ def validate_outputs(output_dir: Path) -> dict:
     for catalog in catalogs:
         if stable_id("catalog", catalog.get("source_key", "")) != catalog.get("catalog_id"):
             raise ValueError("catalog ID does not match its canonical source key")
-        if catalog.get("catalog_origin") not in ("source_declared_collection", "content_list_declared_collection", "structured_schema_collection", "derived_from_repeated_records"):
-            raise ValueError("catalog origin is missing or invalid")
+        if catalog.get("catalog_origin") not in ("source_declared_collection", "content_list_declared_collection", "structured_schema_collection", "derived_from_repeated_records", "derived_from_global_typed_records"):
+            raise ValueError(f"catalog origin is missing or invalid: id={catalog.get('catalog_id')} origin={catalog.get('catalog_origin')!r} source_key={catalog.get('source_key')!r}")
         if catalog.get("commercial_eligible") is not False or catalog.get("source_terms_status") != "not_reviewed":
             raise ValueError("candidate catalogs cannot be marked commercially eligible or source-cleared")
         if (

@@ -20,12 +20,6 @@ on:
       - "public-search/manifest.json"
       - ".github/workflows/retroactive-catalog-index.yml"
   workflow_dispatch:
-  workflow_run:
-    workflows:
-      - "Everything Hub crawler"
-    types:
-      - completed
-    branches: [main]
   schedule:
     - cron: "23 * * * *"
 
@@ -35,11 +29,10 @@ permissions:
 
 concurrency:
   group: catalog-data-publish-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   inventory:
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
@@ -76,6 +69,7 @@ jobs:
           key: ${{ runner.os }}-catalog-cache-${{ github.ref_name }}-${{ github.run_id }}
           restore-keys: |
             ${{ runner.os }}-catalog-cache-${{ github.ref_name }}-
+            ${{ runner.os }}-catalog-cache-main-
       - name: Test retroactive discovery
         working-directory: crawler
         run: python -m unittest test_catalog_retro_discovery.py -v

@@ -48,19 +48,15 @@ class RetroCatalogDiscoveryTests(unittest.TestCase):
         self.assertEqual(host_key("https://www.example.com/a"), "example.com")
         self.assertIsNone(host_key("https://user:pass@example.com/"))
 
-    def test_inventory_runs_after_successful_main_crawler_completion(self):
+    def test_full_catalog_inventory_runs_hourly_not_after_every_crawler_cycle(self):
         workflow = (
             Path(__file__).resolve().parents[1]
             / ".github" / "workflows" / "retroactive-catalog-index.yml"
         ).read_text(encoding="utf-8")
-        self.assertIn(
-            'workflows:\n      - "Everything Hub crawler"\n    types:\n      - completed\n    branches: [main]',
-            workflow,
-        )
-        self.assertIn(
-            "if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'",
-            workflow,
-        )
+        self.assertIn('schedule:\n    - cron: "23 * * * *"', workflow)
+        self.assertNotIn("workflow_run:", workflow)
+        self.assertNotIn("Everything Hub crawler", workflow)
+        self.assertIn("cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}", workflow)
 
 if __name__ == "__main__":
     unittest.main()

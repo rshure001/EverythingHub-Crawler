@@ -333,7 +333,9 @@ class PageDerivedCatalogAnalysisTests(unittest.TestCase):
             self.assertEqual(third["metrics"]["host_partitions_reused"], 1)
             self.assertEqual(third["metrics"]["host_partitions_rebuilt"], 1)
             self.assertEqual(third["metrics"]["pages_analyzed"], 4)
-            self.assertEqual(third["metrics"]["unique_catalogs_discovered"], 2)
+            self.assertEqual(third["metrics"]["unique_catalogs_discovered"], 3)
+            self.assertEqual(third["metrics"]["global_typed_catalogs"], 1)
+            self.assertEqual(third["metrics"]["catalogs_by_origin"]["derived_from_global_typed_records"], 1)
 
     def test_explicit_content_lists_expand_multiple_records_and_a_catalog(self):
         result = analyze_pages([{
@@ -1839,6 +1841,75 @@ class CatalogInventoryTriggerTests(unittest.TestCase):
         }
         self.assertEqual(reversed_ids, expected_ids)
 
+
+    def test_incremental_analysis_builds_global_typed_directories_after_host_merge(self):
+        pages = []
+        for host, title, sku in (
+            ("alpha-store.example", "Alpha Widget", "AW-100"),
+            ("bravo-store.example", "Bravo Widget", "BW-200"),
+            ("charlie-store.example", "Charlie Widget", "CW-300"),
+        ):
+            url = f"https://{host}/products/{sku.lower()}"
+            pages.append({
+                "url": url,
+                "title": title,
+                "description": f"{title} product listing",
+                "text": f"Product details for {title}",
+                "lane": "shopping",
+                "robots_allowed": True,
+                "fetched_at": 100,
+                "product": {
+                    "type": "product",
+                    "name": title,
+                    "brand": "Example Works",
+                    "sku": sku,
+                    "url": url,
+                },
+            })
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            result = analyze_pages_incremental(
+                pages,
+                source_total=len(pages),
+                cache_dir=root / "cache",
+            )
+            global_products = [
+                item for item in result["catalogs"]
+                if item.get("catalog_origin") == "derived_from_global_typed_records"
+                and item.get("record_type") == "product"
+            ]
+            self.assertEqual(len(global_products), 1)
+            directory = global_products[0]
+            self.assertEqual(directory["record_count"], 3)
+            self.assertEqual(directory["source_page_count"], 3)
+            self.assertGreaterEqual(result["metrics"]["global_typed_catalogs"], 1)
+            self.assertEqual(result["metrics"]["global_typed_catalogs_by_type"].get("product"), 1)
+            self.assertGreaterEqual(result["metrics"]["global_typed_catalog_page_associations"], 3)
+            self.assertGreaterEqual(result["metrics"]["global_typed_catalog_record_associations"], 3)
+            self.assertEqual(result["metrics"]["catalogs_by_origin"]["derived_from_global_typed_records"], 1)
+            self.assertEqual(
+                result["metrics"]["derived_catalogs"],
+                sum(item.get("catalog_origin") in {"derived_from_repeated_records", "derived_from_global_typed_records"} for item in result["catalogs"]),
+            )
+            hits = search_catalog_network("Alpha Widget", result)
+            self.assertTrue(any(item.get("catalog_id") == directory["catalog_id"] for item in hits))
+
+            invalid_origins = [
+                (item.get("catalog_id"), item.get("catalog_origin"), item.get("source_key"))
+                for item in result["catalogs"]
+                if item.get("catalog_origin") not in {
+                    "source_declared_collection", "content_list_declared_collection",
+                    "structured_schema_collection", "derived_from_repeated_records",
+                    "derived_from_global_typed_records",
+                }
+            ]
+            self.assertEqual(invalid_origins, [])
+            output = root / "output"
+            write_outputs(result, output)
+            validated = validate_outputs(output)
+            self.assertEqual(validated["catalogs"], result["metrics"]["unique_catalogs_discovered"])
+            self.assertEqual(validated["records_validated"], result["metrics"]["unique_records"])
 
 if __name__ == "__main__":
     unittest.main()
