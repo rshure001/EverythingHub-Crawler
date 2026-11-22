@@ -2541,7 +2541,7 @@ def validate_outputs(output_dir: Path) -> dict:
         if stable_id("catalog", catalog.get("source_key", "")) != catalog.get("catalog_id"):
             raise ValueError("catalog ID does not match its canonical source key")
         if catalog.get("catalog_origin") not in ("source_declared_collection", "content_list_declared_collection", "structured_schema_collection", "derived_from_repeated_records", "derived_from_global_typed_records"):
-            raise ValueError("catalog origin is missing or invalid")
+            raise ValueError(f"catalog origin is missing or invalid: id={catalog.get('catalog_id')} origin={catalog.get('catalog_origin')!r} source_key={catalog.get('source_key')!r}")
         if catalog.get("commercial_eligible") is not False or catalog.get("source_terms_status") != "not_reviewed":
             raise ValueError("candidate catalogs cannot be marked commercially eligible or source-cleared")
         if (
