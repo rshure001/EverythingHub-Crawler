@@ -9,8 +9,8 @@ on:
       - "crawler/pipeline_health.py"
       - "crawler/test_pipeline_health.py"
   schedule:
-    # Run lightweight five-minute checks away from Actions peaks. The watchdog rechecks active runs immediately before committing a marker; crawl.yml retains its own single-run concurrency guard.
-    - cron: "*/5 * * * *"
+    # Run lightweight checks every five minutes, two minutes after each staggered crawl slot, away from the top-of-hour Actions load peak.
+    - cron: "4-59/5 * * * *"
   workflow_run:
     # Recheck freshness after catalog publishers too. Scheduled crawl events can
     # be delayed; a completed inventory/discovery run is another safe recovery
