@@ -12,6 +12,7 @@ on:
       - "vercel-homepage/**"
       - "project/**"
       - ".github/workflows/retroactive-catalog-index.yml"
+      - ".github/workflows/catalog-first-discovery.yml"
       - "README.md"
       - "SCALABLE-ARCHITECTURE.md"
       - ".github/workflows/crawl.yml"
@@ -64,7 +65,7 @@ jobs:
           python-version: "3.12"
       - name: Validate crawler, watchdog, and publisher workflow YAML
         run: |
-          ruby -e 'require "yaml"; ARGV.each { |path| YAML.load_file(path, aliases: true); puts "YAML-valid #{path}" }' .github/workflows/crawl.yml .github/workflows/crawl-watchdog.yml .github/workflows/publish-site.yml .github/workflows/search-api-smoke.yml .github/workflows/everything-hub-live-diagnostics.yml .github/workflows/recovery-search-check.yml .github/workflows/validate-vercel-search.yml .github/workflows/everything-hub-production-browser-check.yml .github/workflows/retroactive-catalog-index.yml \
+          ruby -e 'require "yaml"; ARGV.each { |path| YAML.load_file(path, aliases: true); puts "YAML-valid #{path}" }' .github/workflows/crawl.yml .github/workflows/crawl-watchdog.yml .github/workflows/publish-site.yml .github/workflows/search-api-smoke.yml .github/workflows/everything-hub-live-diagnostics.yml .github/workflows/recovery-search-check.yml .github/workflows/validate-vercel-search.yml .github/workflows/everything-hub-production-browser-check.yml .github/workflows/retroactive-catalog-index.yml .github/workflows/catalog-first-discovery.yml \
             .github/workflows/eh-free-fallback-acceptance.yml
       - name: Compile crawler and database tools
         run: |
