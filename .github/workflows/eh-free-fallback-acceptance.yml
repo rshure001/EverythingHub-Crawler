@@ -1,5 +1,13 @@
 name: Everything Hub free fallback acceptance
 on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/eh-free-fallback-acceptance.yml"
+      - ".github/workflows/validate-vercel-search.yml"
+      - "vercel-search-backend/**"
+      - "vercel-homepage/**"
   push:
     branches:
       - main
@@ -328,11 +336,15 @@ jobs:
                 failed: cards.filter(card => !!card.querySelector(".video-placeholder")).length,
                 thumbnailUrls: cards.slice(0, 4).map(card => card.querySelector("img")?.currentSrc || card.querySelector("img")?.src || ""),
                 providers: cards.map(card => card.querySelector("small")?.textContent || ""),
-                links: cards.map(card => card.querySelector("a")?.href || "")
+                links: cards.map(card => card.querySelector("a")?.href || ""),
+                titles: cards.map(card => (card.querySelector("h3, h4, strong")?.textContent || card.textContent || "").replace(/\s+/g, " ").trim())
               }));
               videoStats.thumbnailResponses = mediaResponses.slice();
               videoStats.thumbnailFailures = mediaFailures.slice();
               report.checks.videos = videoStats;
+              const unrelatedVideoTitles = videoStats.titles.filter(title => /\b(?:now voyager|curiosity company|two sides same coin)\b/i.test(title));
+              const hasNASAContext = videoStats.titles.some(title => /\b(?:nasa|apollo|artemis|hubble|space shuttle|international space station|mars rover|perseverance|voyager|james webb)\b/i.test(title));
+              if (unrelatedVideoTitles.length || !hasNASAContext) throw new Error("NASA video relevance checks failed: " + JSON.stringify({ titles: videoStats.titles, unrelated: unrelatedVideoTitles }));
               const videoHrefs = await videoCards.evaluateAll(cards => cards.map(card => card.tagName.toLowerCase() === "a" ? card.href : card.querySelector("a")?.href || "").filter(Boolean));
               await openCoreLink("videoSource", videoHrefs.find(href => { try { return new URL(href).hostname.toLowerCase() === "archive.org"; } catch { return false; } }));
               report.checks.coreLinks = coreLinks;
