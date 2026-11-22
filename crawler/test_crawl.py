@@ -1,4 +1,5 @@
 import importlib.util
+import json
 from contextlib import contextmanager
 import unittest
 import tempfile
