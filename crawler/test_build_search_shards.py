@@ -204,8 +204,8 @@ class SearchShardBatchBoundaryTests(unittest.TestCase):
 
     def test_query_index_is_deterministic_and_tracks_distinct_page_counts(self):
         postings = {
-            "nasa": {"shard-0002.json.gz": 2, "shard-0001.json.gz": 3},
-            "rolex": {"shard-0002.json.gz": 1},
+            "nasa": {1: 2, 0: 3},
+            "rolex": {1: 1},
         }
         first = build_query_index(postings)
         second = build_query_index(postings)
