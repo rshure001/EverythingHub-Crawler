@@ -8,6 +8,17 @@ test("uses robots-checked Internet Archive image API and attribution fields",()=
 test("keeps live public news tabs and Refresh",()=>{for(const category of ["for-you","world","technology","business","science"])assert.ok(html.includes('data-news="'+category+'"'));assert.match(html,/id="news-refresh"/);assert.match(html,/everythinghub-search-backend\.vercel\.app\/api\/news/);});
 test("uses metadata-only Internet Archive videos with item-level license attribution",()=>{assert.match(html,/everythinghub-search-backend\.vercel\.app\/api\/videos/);assert.match(html,/Internet Archive/);assert.match(html,/item\.license/);assert.match(html,/item\.creator/);assert.match(html,/license and reuse terms/);assert.doesNotMatch(html,/youtube\.com|ytimg\.com|api\.openverse\.org|commons\.wikimedia\.org\/w\/api\.php|video-thumbnail/);});
 test("renders candidate catalog previews separately and keeps rights restrictions visible",()=>{assert.match(html,/function renderCatalogResults\(items,q\)/);assert.match(html,/data\.catalogResults/);assert.match(html,/item\.preview_only===true/);assert.match(html,/item\.commercial_eligible===false/);assert.match(html,/className='eh-catalog-result'/);assert.match(html,/Candidate preview only/);assert.match(html,/Source terms not reviewed/);assert.match(html,/Record rights not cleared/);assert.match(html,/Commercial use not cleared/);assert.match(html,/Matched records:/);assert.match(html,/External directory · links only/);assert.match(html,/External links only · excluded from page-derived record counts/);assert.match(html,/Catalog preview is based on an older source-index snapshot/);});
+test("retries empty category searches against the full owned index before any news-only fast fallback",()=>{
+  const start=html.indexOf("async function requestIndexedSearch"),end=html.indexOf("const newsItems=",start);
+  assert.ok(start>=0&&end>start);
+  const search=html.slice(start,end);
+  assert.match(search,/if\(!data&&mode!=='news'\)/);
+  assert.match(search,/requestIndexedSearch\(q,''\)/);
+  assert.match(search,/if\(!data&&mode==='news'\)/);
+  assert.match(search,/if\(data&&\(!Array\.isArray\(data\.results\)\|\|!data\.results\.length\).*mode==='news'\)/);
+  assert.equal((search.match(/api\/search-fast/g)||[]).length,2);
+  assert.match(search,/External fallback is disabled for this category under the current robots policy/);
+});
 test("keeps standalone script identical to embedded deployment script",()=>{const standalone=fs.readFileSync(path.join(__dirname,"fallback","inline-script.js"),"utf8").trim(),embedded=html.match(/<script>([\s\S]*?)<\/script>/);assert.ok(embedded);assert.equal(standalone,embedded[1].trim());});
 test("normalizes curated external directories without mislabeling them as page-derived",()=>{assert.match(html,/curated_external_link_directory/);assert.match(html,/card\.dataset\.sourceKind=external\?'external_link_only'/);assert.match(html,/card\.dataset\.sourceOrigin=rawSourceKind/);assert.match(html,/External directory · links only/);});
 test("allows the catalog-aware primary search request to complete before fast fallback",()=>{assert.match(html,/signal:AbortSignal\.timeout\(30000\)/);});
