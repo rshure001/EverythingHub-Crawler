@@ -154,16 +154,20 @@ test('loads only matching sharded catalog indexes for Rolex and Las Vegas querie
 });
 
 test('bounds query-scoped catalog index fan-out while keeping the first priority candidates',async()=>{
+ const modulePath=require.resolve('../src/lib/page-derived-catalogs');
+ delete require.cache[modulePath];
+ const freshModule=require(modulePath);
+ const loadFresh=freshModule.loadQueryScopedPageDerivedCatalogs;
  const f=fixture(),sha='d'.repeat(40),artifacts=new Map(),indexFetches=[];
  const candidates=Array.from({length:20},(_,index)=>index===0?'global-place':`distractor-${String(index).padStart(2,'0')}`);
  const add=(file,buffer,items)=>{f.manifest.files.push({file,bytes:buffer.length,sha256:hash(buffer),items});artifacts.set('https://raw.githubusercontent.com/rshure001/EverythingHub-Crawler/'+sha+'/data/page-derived-catalogs/'+file.split('/').map(encodeURIComponent).join('/'),buffer);};
  for(let index=0;index<candidates.length;index++){
   const id=candidates[index],digest=crypto.createHash('sha256').update(id).digest('hex');
-  const record={record_id:'record-'+id,record_type:index===0?'place':'subject',title:'Las Vegas '+id,description:'Las Vegas candidate',source_urls:['https://example.test/'+id],source_page_ids:['page-'+id],catalog_ids:[id],commercial_eligible:false,source_terms_status:'not_reviewed',rights_status:'publicly_accessible_not_cleared_for_redistribution',attributes:{}};
+  const record={record_id:'record-'+id,record_type:index===0?'place':'subject',title:'Las Vegas fanout probe '+id,description:'Las Vegas fanout probe candidate',source_urls:['https://example.test/'+id],source_page_ids:['page-'+id],catalog_ids:[id],commercial_eligible:false,source_terms_status:'not_reviewed',rights_status:'publicly_accessible_not_cleared_for_redistribution',attributes:{}};
   add('indexes/'+digest.slice(0,2)+'/'+digest.slice(0,24)+'.json.gz',gzip({version:1,catalog_id:id,title:index===0?'Global place directory':'Unrelated Las Vegas collection',status:'candidate_needs_source_validation',records:[record]}),1);
  }
  const byPrefix=new Map();
- for(const term of ['las','vegas']){
+ for(const term of ['las','vegas','fanout','probe']){
   const prefix=crypto.createHash('sha256').update(term).digest('hex').slice(0,2);
   if(!byPrefix.has(prefix))byPrefix.set(prefix,{});
   byPrefix.get(prefix)[term]=candidates;
@@ -179,7 +183,7 @@ test('bounds query-scoped catalog index fan-out while keeping the first priority
   if(artifacts.has(url))return artifacts.get(url);
   throw new Error('unexpected_test_url '+url);
  };
- const loaded=await loadQueryScopedPageDerivedCatalogs('Las Vegas',fetcher);
+ const loaded=await loadFresh('Las Vegas fanout probe',fetcher);
  assert.equal(loaded.queryCandidateCount,12);
  assert.equal(loaded.queryCatalogsLoaded,12);
  assert.equal(loaded.catalogs.length,12);
