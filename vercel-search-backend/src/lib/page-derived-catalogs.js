@@ -7,7 +7,7 @@ const {tokenize}=require('./search-core');
 const RAW='https://raw.githubusercontent.com/rshure001/EverythingHub-Crawler/';
 const REF='https://api.github.com/repos/rshure001/EverythingHub-Crawler/git/ref/heads/main';
 const CACHE_MS=300000, STALE_MS=3600000;
-const MAX_QUERY_CANDIDATES=40, MAX_CATALOG_INDEX_GZIP=8000000, MAX_CATALOG_INDEX_JSON=40000000;
+const MAX_QUERY_CANDIDATES=12, MAX_CATALOG_INDEX_GZIP=8000000, MAX_CATALOG_INDEX_JSON=40000000;
 let manifestCache=null; const queryCache=new Map();
 const MAX_MANIFEST=4000000, MAX_REGISTRY_GZIP=5000000, MAX_RECORDS_GZIP=16000000;
 const MAX_REGISTRY_JSON=32000000, MAX_RECORDS_JSON=96000000;
