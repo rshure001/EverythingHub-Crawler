@@ -5,8 +5,6 @@ on:
     paths:
       - "crawler/catalog_retro_discovery.py"
       - "crawler/catalog_page_analysis.py"
-      - "crawler/publish_catalog_snapshot.py"
-      - "crawler/test_publish_catalog_snapshot.py"
       - "crawler/test_catalog_page_analysis.py"
       - "crawler/catalog_host_review_queue.py"
       - "crawler/test_catalog_host_review_queue.py"
@@ -20,7 +18,6 @@ on:
       - "project/test_ledger.py"
       - "data/source-policy-reviews.json"
       - "public-search/manifest.json"
-      - ".github/workflows/retroactive-catalog-index.yml"
   workflow_dispatch:
   schedule:
     - cron: "23 * * * *"
