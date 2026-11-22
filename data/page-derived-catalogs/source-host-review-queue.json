@@ -1,20 +1,20 @@
 {
   "schema_version": 1,
   "status": "source_review_backlog_not_a_fetch_queue",
-  "generated_at": "2026-11-22T03:43:43Z",
+  "generated_at": "2026-11-22T05:08:14Z",
   "analysis_version": 15,
-  "source_index_pages": 171753,
-  "source_index_updated_at": "2026-11-22T03:24:49Z",
-  "source_index_sha256": "79d9683e2a90074fdfb3b9bc86ab4fce50bc7af1e6067647da4e36a482944753",
+  "source_index_pages": 172928,
+  "source_index_updated_at": "2026-11-22T04:14:19Z",
+  "source_index_sha256": "2d818deacdc9e5d0ea01ebd6755b014e8d56d042d34138f1acde8938c09aa4f7",
   "metrics": {
-    "catalog_definition_candidates": 2217,
+    "catalog_definition_candidates": 2233,
     "unique_source_hosts": 114,
-    "unique_source_urls": 2216,
-    "policy_preapproved_urls_needing_runtime_robots_check": 551,
+    "unique_source_urls": 2232,
+    "policy_preapproved_urls_needing_runtime_robots_check": 556,
     "policy_preapproved_api_urls_needing_runtime_robots_check": 0,
-    "policy_preapproved_catalog_page_urls_needing_runtime_robots_check": 551,
-    "policy_review_required_urls": 1570,
-    "path_not_allowlisted_urls": 95,
+    "policy_preapproved_catalog_page_urls_needing_runtime_robots_check": 556,
+    "policy_review_required_urls": 1579,
+    "path_not_allowlisted_urls": 97,
     "mixed_policy_status_urls": 0,
     "invalid_catalog_candidates": 0,
     "robots_checks_performed": 0,
@@ -5426,7 +5426,7 @@
       "evidence_strength": "high",
       "catalog_status": "candidate_needs_source_validation",
       "record_count": 1,
-      "source_page_count": 1579,
+      "source_page_count": 1598,
       "source_host": "clevelandart.org",
       "source_url": "https://clevelandart.org/art/collection/contact?artwork=1915.618&reason=artwork_information",
       "review_status": "policy_review_required",
@@ -8153,8 +8153,8 @@
       "catalog_origin": "source_declared_collection",
       "evidence_strength": "high",
       "catalog_status": "candidate_needs_source_validation",
-      "record_count": 46,
-      "source_page_count": 47,
+      "record_count": 50,
+      "source_page_count": 51,
       "source_host": "data.europa.eu",
       "source_url": "https://data.europa.eu/en/news-events/news/advancing-global-digital-future-new-eus-international-digital-strategy",
       "review_status": "policy_review_required",
@@ -8281,6 +8281,37 @@
       "source_page_count": 1,
       "source_host": "data.gouv.fr",
       "source_url": "https://data.gouv.fr/organizations/institut-national-de-la-statistique-et-des-etudes-economiques-insee/datasets",
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "reviewed_at": null,
+      "metadata_only": false,
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null,
+      "robots_recheck_required": true,
+      "fetch_authorized": false
+    },
+    {
+      "catalog_id": "catalog:24044913952984182cdf5ec9",
+      "title": "Data Datasets",
+      "catalog_type": "open_data",
+      "record_type": "dataset",
+      "catalog_origin": "source_declared_collection",
+      "evidence_strength": "medium",
+      "catalog_status": "definition_only",
+      "record_count": 0,
+      "source_page_count": 1,
+      "source_host": "data.gouv.fr",
+      "source_url": "https://data.gouv.fr/organizations/tuveuxvivreou/datasets",
       "review_status": "policy_review_required",
       "source_access_mode": null,
       "terms_url": null,
@@ -8456,6 +8487,37 @@
       "fetch_authorized": false
     },
     {
+      "catalog_id": "catalog:5949c312e64f757dbce40138",
+      "title": "Data Datasets",
+      "catalog_type": "open_data",
+      "record_type": "dataset",
+      "catalog_origin": "source_declared_collection",
+      "evidence_strength": "medium",
+      "catalog_status": "definition_only",
+      "record_count": 0,
+      "source_page_count": 2,
+      "source_host": "data.gouv.fr",
+      "source_url": "https://data.gouv.fr/organizations/sante-publique-france/datasets",
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "reviewed_at": null,
+      "metadata_only": false,
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null,
+      "robots_recheck_required": true,
+      "fetch_authorized": false
+    },
+    {
       "catalog_id": "catalog:62f1ad0d124a07d41d78898e",
       "title": "Data Datasets",
       "catalog_type": "open_data",
@@ -8467,6 +8529,68 @@
       "source_page_count": 1,
       "source_host": "data.gouv.fr",
       "source_url": "https://data.gouv.fr/organizations/office-national-d-information-sur-les-enseignements-et-les-professions/datasets",
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "reviewed_at": null,
+      "metadata_only": false,
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null,
+      "robots_recheck_required": true,
+      "fetch_authorized": false
+    },
+    {
+      "catalog_id": "catalog:70cf4e0f3de0551ea3bb2ed5",
+      "title": "Data Datasets",
+      "catalog_type": "open_data",
+      "record_type": "dataset",
+      "catalog_origin": "source_declared_collection",
+      "evidence_strength": "medium",
+      "catalog_status": "definition_only",
+      "record_count": 0,
+      "source_page_count": 1,
+      "source_host": "data.gouv.fr",
+      "source_url": "https://data.gouv.fr/organizations/premier-ministre/datasets",
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "reviewed_at": null,
+      "metadata_only": false,
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null,
+      "robots_recheck_required": true,
+      "fetch_authorized": false
+    },
+    {
+      "catalog_id": "catalog:7374e67df3a3d1e0eb6d1070",
+      "title": "Data Datasets",
+      "catalog_type": "open_data",
+      "record_type": "dataset",
+      "catalog_origin": "source_declared_collection",
+      "evidence_strength": "medium",
+      "catalog_status": "definition_only",
+      "record_count": 0,
+      "source_page_count": 1,
+      "source_host": "data.gouv.fr",
+      "source_url": "https://data.gouv.fr/organizations/sirelium/datasets",
       "review_status": "policy_review_required",
       "source_access_mode": null,
       "terms_url": null,
@@ -8649,8 +8773,8 @@
       "catalog_origin": "source_declared_collection",
       "evidence_strength": "medium",
       "catalog_status": "candidate_needs_source_validation",
-      "record_count": 207,
-      "source_page_count": 220,
+      "record_count": 236,
+      "source_page_count": 249,
       "source_host": "data.gouv.fr",
       "source_url": "https://data.gouv.fr/datasets",
       "review_status": "policy_review_required",
@@ -8983,6 +9107,37 @@
       "fetch_authorized": false
     },
     {
+      "catalog_id": "catalog:f154ef0e43ca899983993883",
+      "title": "Data Datasets",
+      "catalog_type": "open_data",
+      "record_type": "dataset",
+      "catalog_origin": "source_declared_collection",
+      "evidence_strength": "medium",
+      "catalog_status": "definition_only",
+      "record_count": 0,
+      "source_page_count": 1,
+      "source_host": "data.gouv.fr",
+      "source_url": "https://data.gouv.fr/organizations/riann-sas/datasets",
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "reviewed_at": null,
+      "metadata_only": false,
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null,
+      "robots_recheck_required": true,
+      "fetch_authorized": false
+    },
+    {
       "catalog_id": "catalog:f4415532f5cc11e16c30f65f",
       "title": "Data Datasets",
       "catalog_type": "open_data",
@@ -9025,6 +9180,37 @@
       "source_page_count": 1,
       "source_host": "data.gouv.fr",
       "source_url": "https://data.gouv.fr/organizations/ministeres-de-leducation-nationale/datasets",
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "reviewed_at": null,
+      "metadata_only": false,
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null,
+      "robots_recheck_required": true,
+      "fetch_authorized": false
+    },
+    {
+      "catalog_id": "catalog:6331547066d46c808ca530eb",
+      "title": "Data Organizations",
+      "catalog_type": "organization_directory",
+      "record_type": "organization",
+      "catalog_origin": "source_declared_collection",
+      "evidence_strength": "medium",
+      "catalog_status": "candidate_needs_source_validation",
+      "record_count": 4,
+      "source_page_count": 7,
+      "source_host": "data.gouv.fr",
+      "source_url": "https://data.gouv.fr/organizations",
       "review_status": "policy_review_required",
       "source_access_mode": null,
       "terms_url": null,
@@ -13633,6 +13819,37 @@
       "fetch_authorized": false
     },
     {
+      "catalog_id": "catalog:37b67cd21fd8829e7c067eb3",
+      "title": "FEC Datasets",
+      "catalog_type": "open_data",
+      "record_type": "dataset",
+      "catalog_origin": "source_declared_collection",
+      "evidence_strength": "high",
+      "catalog_status": "candidate_needs_source_validation",
+      "record_count": 8,
+      "source_page_count": 13,
+      "source_host": "fec.gov",
+      "source_url": "https://fec.gov/data/browse-data",
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "reviewed_at": null,
+      "metadata_only": false,
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null,
+      "robots_recheck_required": true,
+      "fetch_authorized": false
+    },
+    {
       "catalog_id": "catalog:f92337599e77ebdd9bfb0b9d",
       "title": "Fec Events",
       "catalog_type": "events",
@@ -14023,6 +14240,56 @@
       "source_page_count": 15,
       "source_host": "frontiersin.org",
       "source_url": "https://frontiersin.org/journals/genetics/articles",
+      "review_status": "policy_preapproved_robots_recheck_required",
+      "source_access_mode": "catalog_landing_page",
+      "terms_url": "https://www.frontiersin.org/legal/terms-and-conditions",
+      "terms_status": "reviewed_per_dataset",
+      "reviewed_at": "2026-11-21",
+      "metadata_only": true,
+      "per_dataset_rights_required": true,
+      "attribution_required": "per_article",
+      "rights_scope": "per_article_license",
+      "allowed_metadata_fields": [
+        "title",
+        "authors",
+        "doi",
+        "journal",
+        "publication_date",
+        "article_url",
+        "license",
+        "publisher"
+      ],
+      "allowed_catalog_path_patterns": [
+        "/articles",
+        "/journals/*/articles",
+        "/journals/*/sections/*",
+        "/journals/*/sections/*/articles"
+      ],
+      "prohibited_content": [
+        "full_text",
+        "images",
+        "supplementary_files",
+        "bulk_assets"
+      ],
+      "max_response_bytes": 1500000,
+      "min_interval_seconds": 3.0,
+      "max_requests_per_run": 40,
+      "policy_note": "Frontiers Terms and Conditions section 14 permits text and data mining of public content for the legitimate purpose of enriching external collections of scientific literature. Content remains subject to each article's applicable CC-BY, CC0, or other license and applicable data-protection laws. This policy is limited to bounded landing-page discovery of bibliographic metadata; do not retrieve full text, images, supplementary files, or bulk assets. Exact path shapes only: /articles; /journals/{journal}/articles; /journals/{journal}/sections/{section}; /journals/{journal}/sections/{section}/articles. Individual article paths and deeper descendants are not allowlisted. Runtime robots.txt verification on the exact host is mandatory; honor disallowed paths and any performance restrictions.",
+      "robots_recheck_required": true,
+      "fetch_authorized": false
+    },
+    {
+      "catalog_id": "catalog:079941a5799fa457e560b857",
+      "title": "Frontiers Articles",
+      "catalog_type": "knowledge_base",
+      "record_type": "article",
+      "catalog_origin": "source_declared_collection",
+      "evidence_strength": "medium",
+      "catalog_status": "candidate_needs_source_validation",
+      "record_count": 31,
+      "source_page_count": 32,
+      "source_host": "frontiersin.org",
+      "source_url": "https://frontiersin.org/journals/organizational-psychology/articles",
       "review_status": "policy_preapproved_robots_recheck_required",
       "source_access_mode": "catalog_landing_page",
       "terms_url": "https://www.frontiersin.org/legal/terms-and-conditions",
@@ -16119,8 +16386,8 @@
       "catalog_origin": "source_declared_collection",
       "evidence_strength": "medium",
       "catalog_status": "candidate_needs_source_validation",
-      "record_count": 10,
-      "source_page_count": 11,
+      "record_count": 11,
+      "source_page_count": 12,
       "source_host": "frontiersin.org",
       "source_url": "https://frontiersin.org/journals/sociology/articles",
       "review_status": "policy_preapproved_robots_recheck_required",
@@ -16369,8 +16636,8 @@
       "catalog_origin": "source_declared_collection",
       "evidence_strength": "medium",
       "catalog_status": "candidate_needs_source_validation",
-      "record_count": 79,
-      "source_page_count": 80,
+      "record_count": 80,
+      "source_page_count": 81,
       "source_host": "frontiersin.org",
       "source_url": "https://frontiersin.org/journals/public-health/articles",
       "review_status": "policy_preapproved_robots_recheck_required",
@@ -18962,6 +19229,56 @@
       "fetch_authorized": false
     },
     {
+      "catalog_id": "catalog:13e2b124edd1c9bc4fcdf885",
+      "title": "Frontiersin Articles",
+      "catalog_type": "knowledge_base",
+      "record_type": "article",
+      "catalog_origin": "source_declared_collection",
+      "evidence_strength": "medium",
+      "catalog_status": "definition_only",
+      "record_count": 0,
+      "source_page_count": 1,
+      "source_host": "frontiersin.org",
+      "source_url": "https://frontiersin.org/journals/organizational-psychology/sections/organizational-justice-diversity-equity-inclusion-and-belonging/articles",
+      "review_status": "policy_preapproved_robots_recheck_required",
+      "source_access_mode": "catalog_landing_page",
+      "terms_url": "https://www.frontiersin.org/legal/terms-and-conditions",
+      "terms_status": "reviewed_per_dataset",
+      "reviewed_at": "2026-11-21",
+      "metadata_only": true,
+      "per_dataset_rights_required": true,
+      "attribution_required": "per_article",
+      "rights_scope": "per_article_license",
+      "allowed_metadata_fields": [
+        "title",
+        "authors",
+        "doi",
+        "journal",
+        "publication_date",
+        "article_url",
+        "license",
+        "publisher"
+      ],
+      "allowed_catalog_path_patterns": [
+        "/articles",
+        "/journals/*/articles",
+        "/journals/*/sections/*",
+        "/journals/*/sections/*/articles"
+      ],
+      "prohibited_content": [
+        "full_text",
+        "images",
+        "supplementary_files",
+        "bulk_assets"
+      ],
+      "max_response_bytes": 1500000,
+      "min_interval_seconds": 3.0,
+      "max_requests_per_run": 40,
+      "policy_note": "Frontiers Terms and Conditions section 14 permits text and data mining of public content for the legitimate purpose of enriching external collections of scientific literature. Content remains subject to each article's applicable CC-BY, CC0, or other license and applicable data-protection laws. This policy is limited to bounded landing-page discovery of bibliographic metadata; do not retrieve full text, images, supplementary files, or bulk assets. Exact path shapes only: /articles; /journals/{journal}/articles; /journals/{journal}/sections/{section}; /journals/{journal}/sections/{section}/articles. Individual article paths and deeper descendants are not allowlisted. Runtime robots.txt verification on the exact host is mandatory; honor disallowed paths and any performance restrictions.",
+      "robots_recheck_required": true,
+      "fetch_authorized": false
+    },
+    {
       "catalog_id": "catalog:14475d9dbcf86ae1d6b2fb26",
       "title": "Frontiersin Articles",
       "catalog_type": "knowledge_base",
@@ -19625,6 +19942,56 @@
       "source_url": "https://frontiersin.org/journals/sports-and-active-living/sections/elite-sports-and-performance-enhancement/articles",
       "review_status": "policy_preapproved_robots_recheck_required",
       "source_access_mode": "catalog_landing_page",
+      "terms_url": "https://www.frontiersin.org/legal/terms-and-conditions",
+      "terms_status": "reviewed_per_dataset",
+      "reviewed_at": "2026-11-21",
+      "metadata_only": true,
+      "per_dataset_rights_required": true,
+      "attribution_required": "per_article",
+      "rights_scope": "per_article_license",
+      "allowed_metadata_fields": [
+        "title",
+        "authors",
+        "doi",
+        "journal",
+        "publication_date",
+        "article_url",
+        "license",
+        "publisher"
+      ],
+      "allowed_catalog_path_patterns": [
+        "/articles",
+        "/journals/*/articles",
+        "/journals/*/sections/*",
+        "/journals/*/sections/*/articles"
+      ],
+      "prohibited_content": [
+        "full_text",
+        "images",
+        "supplementary_files",
+        "bulk_assets"
+      ],
+      "max_response_bytes": 1500000,
+      "min_interval_seconds": 3.0,
+      "max_requests_per_run": 40,
+      "policy_note": "Frontiers Terms and Conditions section 14 permits text and data mining of public content for the legitimate purpose of enriching external collections of scientific literature. Content remains subject to each article's applicable CC-BY, CC0, or other license and applicable data-protection laws. This policy is limited to bounded landing-page discovery of bibliographic metadata; do not retrieve full text, images, supplementary files, or bulk assets. Exact path shapes only: /articles; /journals/{journal}/articles; /journals/{journal}/sections/{section}; /journals/{journal}/sections/{section}/articles. Individual article paths and deeper descendants are not allowlisted. Runtime robots.txt verification on the exact host is mandatory; honor disallowed paths and any performance restrictions.",
+      "robots_recheck_required": true,
+      "fetch_authorized": false
+    },
+    {
+      "catalog_id": "catalog:1b7a7fc97e61f47baeec9f80",
+      "title": "Frontiersin Articles",
+      "catalog_type": "knowledge_base",
+      "record_type": "article",
+      "catalog_origin": "source_declared_collection",
+      "evidence_strength": "medium",
+      "catalog_status": "definition_only",
+      "record_count": 0,
+      "source_page_count": 1,
+      "source_host": "frontiersin.org",
+      "source_url": "https://frontiersin.org/research-topics/60136/impact-of-remote-work-on-individual-and-organizational-performance-constructs/articles",
+      "review_status": "path_not_allowlisted",
+      "source_access_mode": null,
       "terms_url": "https://www.frontiersin.org/legal/terms-and-conditions",
       "terms_status": "reviewed_per_dataset",
       "reviewed_at": "2026-11-21",
@@ -28062,6 +28429,56 @@
       "fetch_authorized": false
     },
     {
+      "catalog_id": "catalog:64c6c02d95e6ffeddea18bfe",
+      "title": "Frontiersin Articles",
+      "catalog_type": "knowledge_base",
+      "record_type": "article",
+      "catalog_origin": "source_declared_collection",
+      "evidence_strength": "medium",
+      "catalog_status": "definition_only",
+      "record_count": 0,
+      "source_page_count": 1,
+      "source_host": "frontiersin.org",
+      "source_url": "https://frontiersin.org/journals/organizational-psychology/sections/performance-and-development/articles",
+      "review_status": "policy_preapproved_robots_recheck_required",
+      "source_access_mode": "catalog_landing_page",
+      "terms_url": "https://www.frontiersin.org/legal/terms-and-conditions",
+      "terms_status": "reviewed_per_dataset",
+      "reviewed_at": "2026-11-21",
+      "metadata_only": true,
+      "per_dataset_rights_required": true,
+      "attribution_required": "per_article",
+      "rights_scope": "per_article_license",
+      "allowed_metadata_fields": [
+        "title",
+        "authors",
+        "doi",
+        "journal",
+        "publication_date",
+        "article_url",
+        "license",
+        "publisher"
+      ],
+      "allowed_catalog_path_patterns": [
+        "/articles",
+        "/journals/*/articles",
+        "/journals/*/sections/*",
+        "/journals/*/sections/*/articles"
+      ],
+      "prohibited_content": [
+        "full_text",
+        "images",
+        "supplementary_files",
+        "bulk_assets"
+      ],
+      "max_response_bytes": 1500000,
+      "min_interval_seconds": 3.0,
+      "max_requests_per_run": 40,
+      "policy_note": "Frontiers Terms and Conditions section 14 permits text and data mining of public content for the legitimate purpose of enriching external collections of scientific literature. Content remains subject to each article's applicable CC-BY, CC0, or other license and applicable data-protection laws. This policy is limited to bounded landing-page discovery of bibliographic metadata; do not retrieve full text, images, supplementary files, or bulk assets. Exact path shapes only: /articles; /journals/{journal}/articles; /journals/{journal}/sections/{section}; /journals/{journal}/sections/{section}/articles. Individual article paths and deeper descendants are not allowlisted. Runtime robots.txt verification on the exact host is mandatory; honor disallowed paths and any performance restrictions.",
+      "robots_recheck_required": true,
+      "fetch_authorized": false
+    },
+    {
       "catalog_id": "catalog:667ed7a59d78c31f626e954f",
       "title": "Frontiersin Articles",
       "catalog_type": "knowledge_base",
@@ -33823,6 +34240,56 @@
       "source_page_count": 1,
       "source_host": "frontiersin.org",
       "source_url": "https://frontiersin.org/journals/chemistry/sections/astrochemistry/articles",
+      "review_status": "policy_preapproved_robots_recheck_required",
+      "source_access_mode": "catalog_landing_page",
+      "terms_url": "https://www.frontiersin.org/legal/terms-and-conditions",
+      "terms_status": "reviewed_per_dataset",
+      "reviewed_at": "2026-11-21",
+      "metadata_only": true,
+      "per_dataset_rights_required": true,
+      "attribution_required": "per_article",
+      "rights_scope": "per_article_license",
+      "allowed_metadata_fields": [
+        "title",
+        "authors",
+        "doi",
+        "journal",
+        "publication_date",
+        "article_url",
+        "license",
+        "publisher"
+      ],
+      "allowed_catalog_path_patterns": [
+        "/articles",
+        "/journals/*/articles",
+        "/journals/*/sections/*",
+        "/journals/*/sections/*/articles"
+      ],
+      "prohibited_content": [
+        "full_text",
+        "images",
+        "supplementary_files",
+        "bulk_assets"
+      ],
+      "max_response_bytes": 1500000,
+      "min_interval_seconds": 3.0,
+      "max_requests_per_run": 40,
+      "policy_note": "Frontiers Terms and Conditions section 14 permits text and data mining of public content for the legitimate purpose of enriching external collections of scientific literature. Content remains subject to each article's applicable CC-BY, CC0, or other license and applicable data-protection laws. This policy is limited to bounded landing-page discovery of bibliographic metadata; do not retrieve full text, images, supplementary files, or bulk assets. Exact path shapes only: /articles; /journals/{journal}/articles; /journals/{journal}/sections/{section}; /journals/{journal}/sections/{section}/articles. Individual article paths and deeper descendants are not allowlisted. Runtime robots.txt verification on the exact host is mandatory; honor disallowed paths and any performance restrictions.",
+      "robots_recheck_required": true,
+      "fetch_authorized": false
+    },
+    {
+      "catalog_id": "catalog:a052e6cfa7667b657f29fb17",
+      "title": "Frontiersin Articles",
+      "catalog_type": "knowledge_base",
+      "record_type": "article",
+      "catalog_origin": "source_declared_collection",
+      "evidence_strength": "medium",
+      "catalog_status": "definition_only",
+      "record_count": 0,
+      "source_page_count": 1,
+      "source_host": "frontiersin.org",
+      "source_url": "https://frontiersin.org/journals/organizational-psychology/sections/work-motivation-and-participation/articles",
       "review_status": "policy_preapproved_robots_recheck_required",
       "source_access_mode": "catalog_landing_page",
       "terms_url": "https://www.frontiersin.org/legal/terms-and-conditions",
@@ -41162,6 +41629,56 @@
       "fetch_authorized": false
     },
     {
+      "catalog_id": "catalog:e5a9ac2b59298976006936be",
+      "title": "Frontiersin Articles",
+      "catalog_type": "knowledge_base",
+      "record_type": "article",
+      "catalog_origin": "source_declared_collection",
+      "evidence_strength": "medium",
+      "catalog_status": "definition_only",
+      "record_count": 0,
+      "source_page_count": 1,
+      "source_host": "frontiersin.org",
+      "source_url": "https://frontiersin.org/journals/organizational-psychology/sections/employee-well-being-and-health/articles",
+      "review_status": "policy_preapproved_robots_recheck_required",
+      "source_access_mode": "catalog_landing_page",
+      "terms_url": "https://www.frontiersin.org/legal/terms-and-conditions",
+      "terms_status": "reviewed_per_dataset",
+      "reviewed_at": "2026-11-21",
+      "metadata_only": true,
+      "per_dataset_rights_required": true,
+      "attribution_required": "per_article",
+      "rights_scope": "per_article_license",
+      "allowed_metadata_fields": [
+        "title",
+        "authors",
+        "doi",
+        "journal",
+        "publication_date",
+        "article_url",
+        "license",
+        "publisher"
+      ],
+      "allowed_catalog_path_patterns": [
+        "/articles",
+        "/journals/*/articles",
+        "/journals/*/sections/*",
+        "/journals/*/sections/*/articles"
+      ],
+      "prohibited_content": [
+        "full_text",
+        "images",
+        "supplementary_files",
+        "bulk_assets"
+      ],
+      "max_response_bytes": 1500000,
+      "min_interval_seconds": 3.0,
+      "max_requests_per_run": 40,
+      "policy_note": "Frontiers Terms and Conditions section 14 permits text and data mining of public content for the legitimate purpose of enriching external collections of scientific literature. Content remains subject to each article's applicable CC-BY, CC0, or other license and applicable data-protection laws. This policy is limited to bounded landing-page discovery of bibliographic metadata; do not retrieve full text, images, supplementary files, or bulk assets. Exact path shapes only: /articles; /journals/{journal}/articles; /journals/{journal}/sections/{section}; /journals/{journal}/sections/{section}/articles. Individual article paths and deeper descendants are not allowlisted. Runtime robots.txt verification on the exact host is mandatory; honor disallowed paths and any performance restrictions.",
+      "robots_recheck_required": true,
+      "fetch_authorized": false
+    },
+    {
       "catalog_id": "catalog:e60dfcda6cc8140f7cb4575a",
       "title": "Frontiersin Articles",
       "catalog_type": "knowledge_base",
@@ -44262,6 +44779,56 @@
       "fetch_authorized": false
     },
     {
+      "catalog_id": "catalog:1e2202b3bc6c407cb30bd551",
+      "title": "Frontiersin People",
+      "catalog_type": "people_directory",
+      "record_type": "person",
+      "catalog_origin": "source_declared_collection",
+      "evidence_strength": "medium",
+      "catalog_status": "definition_only",
+      "record_count": 0,
+      "source_page_count": 1,
+      "source_host": "frontiersin.org",
+      "source_url": "https://frontiersin.org/research-topics/60136/impact-of-remote-work-on-individual-and-organizational-performance-constructs/authors",
+      "review_status": "path_not_allowlisted",
+      "source_access_mode": null,
+      "terms_url": "https://www.frontiersin.org/legal/terms-and-conditions",
+      "terms_status": "reviewed_per_dataset",
+      "reviewed_at": "2026-11-21",
+      "metadata_only": true,
+      "per_dataset_rights_required": true,
+      "attribution_required": "per_article",
+      "rights_scope": "per_article_license",
+      "allowed_metadata_fields": [
+        "title",
+        "authors",
+        "doi",
+        "journal",
+        "publication_date",
+        "article_url",
+        "license",
+        "publisher"
+      ],
+      "allowed_catalog_path_patterns": [
+        "/articles",
+        "/journals/*/articles",
+        "/journals/*/sections/*",
+        "/journals/*/sections/*/articles"
+      ],
+      "prohibited_content": [
+        "full_text",
+        "images",
+        "supplementary_files",
+        "bulk_assets"
+      ],
+      "max_response_bytes": 1500000,
+      "min_interval_seconds": 3.0,
+      "max_requests_per_run": 40,
+      "policy_note": "Frontiers Terms and Conditions section 14 permits text and data mining of public content for the legitimate purpose of enriching external collections of scientific literature. Content remains subject to each article's applicable CC-BY, CC0, or other license and applicable data-protection laws. This policy is limited to bounded landing-page discovery of bibliographic metadata; do not retrieve full text, images, supplementary files, or bulk assets. Exact path shapes only: /articles; /journals/{journal}/articles; /journals/{journal}/sections/{section}; /journals/{journal}/sections/{section}/articles. Individual article paths and deeper descendants are not allowlisted. Runtime robots.txt verification on the exact host is mandatory; honor disallowed paths and any performance restrictions.",
+      "robots_recheck_required": true,
+      "fetch_authorized": false
+    },
+    {
       "catalog_id": "catalog:1f30c646ebc050a546ebd1b8",
       "title": "Frontiersin People",
       "catalog_type": "people_directory",
@@ -46344,7 +46911,7 @@
       "evidence_strength": "medium",
       "catalog_status": "candidate_needs_source_validation",
       "record_count": 9,
-      "source_page_count": 7,
+      "source_page_count": 8,
       "source_host": "fws.gov",
       "source_url": "https://fws.gov/events",
       "review_status": "policy_review_required",
@@ -46374,8 +46941,8 @@
       "catalog_origin": "source_declared_collection",
       "evidence_strength": "high",
       "catalog_status": "candidate_needs_source_validation",
-      "record_count": 788,
-      "source_page_count": 1338,
+      "record_count": 867,
+      "source_page_count": 1474,
       "source_host": "fws.gov",
       "source_url": "https://fws.gov/locations",
       "review_status": "policy_review_required",
@@ -55771,6 +56338,37 @@
       "source_page_count": 1,
       "source_host": "fws.gov",
       "source_url": "https://fws.gov/locations/rose-atoll-national-wildlife-refuge/services",
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "reviewed_at": null,
+      "metadata_only": false,
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null,
+      "robots_recheck_required": true,
+      "fetch_authorized": false
+    },
+    {
+      "catalog_id": "catalog:70f30998473afdb29c3deed1",
+      "title": "Fws Services",
+      "catalog_type": "service_directory",
+      "record_type": "service",
+      "catalog_origin": "source_declared_collection",
+      "evidence_strength": "medium",
+      "catalog_status": "definition_only",
+      "record_count": 0,
+      "source_page_count": 1,
+      "source_host": "fws.gov",
+      "source_url": "https://fws.gov/locations/patoka-river-national-wildlife-refuge-and-management-area/services",
       "review_status": "policy_review_required",
       "source_access_mode": null,
       "terms_url": null,
@@ -76437,6 +77035,37 @@
       "fetch_authorized": false
     },
     {
+      "catalog_id": "catalog:cd6d8cbe0b61e7d7bb17cc9f",
+      "title": "Hotels Las Vegas Businesses",
+      "catalog_type": "business_directory",
+      "record_type": "business",
+      "catalog_origin": "source_declared_collection",
+      "evidence_strength": "medium",
+      "catalog_status": "candidate_needs_source_validation",
+      "record_count": 4,
+      "source_page_count": 7,
+      "source_host": "visitlasvegas.com",
+      "source_url": "https://visitlasvegas.com/hotels-casinos/hotels",
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "reviewed_at": null,
+      "metadata_only": false,
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null,
+      "robots_recheck_required": true,
+      "fetch_authorized": false
+    },
+    {
       "catalog_id": "catalog:f905cbcc1007d9cabe9eae6a",
       "title": "Las Vegas Businesses",
       "catalog_type": "business_directory",
@@ -76444,8 +77073,8 @@
       "catalog_origin": "source_declared_collection",
       "evidence_strength": "medium",
       "catalog_status": "candidate_needs_source_validation",
-      "record_count": 3,
-      "source_page_count": 4,
+      "record_count": 6,
+      "source_page_count": 8,
       "source_host": "visitlasvegas.com",
       "source_url": "https://visitlasvegas.com/restaurants-and-nightlife/restaurants",
       "review_status": "policy_review_required",
@@ -76506,41 +77135,10 @@
       "catalog_origin": "content_list_declared_collection",
       "evidence_strength": "medium",
       "catalog_status": "candidate_needs_source_validation",
-      "record_count": 23,
-      "source_page_count": 12,
+      "record_count": 26,
+      "source_page_count": 13,
       "source_host": "visitlasvegas.com",
       "source_url": "https://visitlasvegas.com/direct-flights-canada-to-las-vegas",
-      "review_status": "policy_review_required",
-      "source_access_mode": null,
-      "terms_url": null,
-      "terms_status": "unreviewed",
-      "reviewed_at": null,
-      "metadata_only": false,
-      "per_dataset_rights_required": true,
-      "attribution_required": null,
-      "rights_scope": null,
-      "allowed_metadata_fields": [],
-      "allowed_catalog_path_patterns": [],
-      "prohibited_content": [],
-      "max_response_bytes": 0,
-      "min_interval_seconds": 1.0,
-      "max_requests_per_run": 1,
-      "policy_note": null,
-      "robots_recheck_required": true,
-      "fetch_authorized": false
-    },
-    {
-      "catalog_id": "catalog:cd6d8cbe0b61e7d7bb17cc9f",
-      "title": "Visitlasvegas Businesses",
-      "catalog_type": "business_directory",
-      "record_type": "business",
-      "catalog_origin": "source_declared_collection",
-      "evidence_strength": "medium",
-      "catalog_status": "definition_only",
-      "record_count": 0,
-      "source_page_count": 3,
-      "source_host": "visitlasvegas.com",
-      "source_url": "https://visitlasvegas.com/hotels-casinos/hotels",
       "review_status": "policy_review_required",
       "source_access_mode": null,
       "terms_url": null,
@@ -77967,6 +78565,37 @@
       "source_page_count": 3,
       "source_host": "wikidata.org",
       "source_url": "https://wikidata.org/wiki/Wikidata:Requests_for_new_items/Archive",
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "reviewed_at": null,
+      "metadata_only": false,
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null,
+      "robots_recheck_required": true,
+      "fetch_authorized": false
+    },
+    {
+      "catalog_id": "catalog:68d33001cc2ce349502ee673",
+      "title": "Wikidata Articles",
+      "catalog_type": "knowledge_base",
+      "record_type": "article",
+      "catalog_origin": "source_declared_collection",
+      "evidence_strength": "medium",
+      "catalog_status": "definition_only",
+      "record_count": 0,
+      "source_page_count": 1,
+      "source_host": "wikidata.org",
+      "source_url": "https://wikidata.org/wiki/Wikidata:De_kroeg/Archive",
       "review_status": "policy_review_required",
       "source_access_mode": null,
       "terms_url": null,
@@ -87891,6 +88520,32 @@
       "policy_note": null
     },
     {
+      "source_url": "https://data.gouv.fr/organizations",
+      "source_host": "data.gouv.fr",
+      "catalog_ids": [
+        "catalog:6331547066d46c808ca530eb"
+      ],
+      "catalog_count": 1,
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "policy_preapproved": false,
+      "metadata_only": false,
+      "robots_recheck_required": true,
+      "fetch_authorized": false,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null
+    },
+    {
       "source_url": "https://data.gouv.fr/organizations/ademe/datasets",
       "source_host": "data.gouv.fr",
       "catalog_ids": [
@@ -88515,6 +89170,32 @@
       "policy_note": null
     },
     {
+      "source_url": "https://data.gouv.fr/organizations/premier-ministre/datasets",
+      "source_host": "data.gouv.fr",
+      "catalog_ids": [
+        "catalog:70cf4e0f3de0551ea3bb2ed5"
+      ],
+      "catalog_count": 1,
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "policy_preapproved": false,
+      "metadata_only": false,
+      "robots_recheck_required": true,
+      "fetch_authorized": false,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null
+    },
+    {
       "source_url": "https://data.gouv.fr/organizations/radio-france/datasets",
       "source_host": "data.gouv.fr",
       "catalog_ids": [
@@ -88571,6 +89252,110 @@
       "source_host": "data.gouv.fr",
       "catalog_ids": [
         "catalog:cb34a411531201368e71b2b3"
+      ],
+      "catalog_count": 1,
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "policy_preapproved": false,
+      "metadata_only": false,
+      "robots_recheck_required": true,
+      "fetch_authorized": false,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null
+    },
+    {
+      "source_url": "https://data.gouv.fr/organizations/riann-sas/datasets",
+      "source_host": "data.gouv.fr",
+      "catalog_ids": [
+        "catalog:f154ef0e43ca899983993883"
+      ],
+      "catalog_count": 1,
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "policy_preapproved": false,
+      "metadata_only": false,
+      "robots_recheck_required": true,
+      "fetch_authorized": false,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null
+    },
+    {
+      "source_url": "https://data.gouv.fr/organizations/sante-publique-france/datasets",
+      "source_host": "data.gouv.fr",
+      "catalog_ids": [
+        "catalog:5949c312e64f757dbce40138"
+      ],
+      "catalog_count": 1,
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "policy_preapproved": false,
+      "metadata_only": false,
+      "robots_recheck_required": true,
+      "fetch_authorized": false,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null
+    },
+    {
+      "source_url": "https://data.gouv.fr/organizations/sirelium/datasets",
+      "source_host": "data.gouv.fr",
+      "catalog_ids": [
+        "catalog:7374e67df3a3d1e0eb6d1070"
+      ],
+      "catalog_count": 1,
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "policy_preapproved": false,
+      "metadata_only": false,
+      "robots_recheck_required": true,
+      "fetch_authorized": false,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null
+    },
+    {
+      "source_url": "https://data.gouv.fr/organizations/tuveuxvivreou/datasets",
+      "source_host": "data.gouv.fr",
+      "catalog_ids": [
+        "catalog:24044913952984182cdf5ec9"
       ],
       "catalog_count": 1,
       "review_status": "policy_review_required",
@@ -92445,6 +93230,32 @@
       "source_host": "fec.gov",
       "catalog_ids": [
         "catalog:f92337599e77ebdd9bfb0b9d"
+      ],
+      "catalog_count": 1,
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "policy_preapproved": false,
+      "metadata_only": false,
+      "robots_recheck_required": true,
+      "fetch_authorized": false,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null
+    },
+    {
+      "source_url": "https://fec.gov/data/browse-data",
+      "source_host": "fec.gov",
+      "catalog_ids": [
+        "catalog:37b67cd21fd8829e7c067eb3"
       ],
       "catalog_count": 1,
       "review_status": "policy_review_required",
@@ -107255,6 +108066,231 @@
       "policy_note": "Frontiers Terms and Conditions section 14 permits text and data mining of public content for the legitimate purpose of enriching external collections of scientific literature. Content remains subject to each article's applicable CC-BY, CC0, or other license and applicable data-protection laws. This policy is limited to bounded landing-page discovery of bibliographic metadata; do not retrieve full text, images, supplementary files, or bulk assets. Exact path shapes only: /articles; /journals/{journal}/articles; /journals/{journal}/sections/{section}; /journals/{journal}/sections/{section}/articles. Individual article paths and deeper descendants are not allowlisted. Runtime robots.txt verification on the exact host is mandatory; honor disallowed paths and any performance restrictions."
     },
     {
+      "source_url": "https://frontiersin.org/journals/organizational-psychology/articles",
+      "source_host": "frontiersin.org",
+      "catalog_ids": [
+        "catalog:079941a5799fa457e560b857"
+      ],
+      "catalog_count": 1,
+      "review_status": "policy_preapproved_robots_recheck_required",
+      "source_access_mode": "catalog_landing_page",
+      "policy_preapproved": true,
+      "metadata_only": true,
+      "robots_recheck_required": true,
+      "fetch_authorized": false,
+      "terms_url": "https://www.frontiersin.org/legal/terms-and-conditions",
+      "terms_status": "reviewed_per_dataset",
+      "per_dataset_rights_required": true,
+      "attribution_required": "per_article",
+      "rights_scope": "per_article_license",
+      "allowed_metadata_fields": [
+        "title",
+        "authors",
+        "doi",
+        "journal",
+        "publication_date",
+        "article_url",
+        "license",
+        "publisher"
+      ],
+      "allowed_catalog_path_patterns": [
+        "/articles",
+        "/journals/*/articles",
+        "/journals/*/sections/*",
+        "/journals/*/sections/*/articles"
+      ],
+      "prohibited_content": [
+        "full_text",
+        "images",
+        "supplementary_files",
+        "bulk_assets"
+      ],
+      "max_response_bytes": 1500000,
+      "min_interval_seconds": 3.0,
+      "max_requests_per_run": 40,
+      "policy_note": "Frontiers Terms and Conditions section 14 permits text and data mining of public content for the legitimate purpose of enriching external collections of scientific literature. Content remains subject to each article's applicable CC-BY, CC0, or other license and applicable data-protection laws. This policy is limited to bounded landing-page discovery of bibliographic metadata; do not retrieve full text, images, supplementary files, or bulk assets. Exact path shapes only: /articles; /journals/{journal}/articles; /journals/{journal}/sections/{section}; /journals/{journal}/sections/{section}/articles. Individual article paths and deeper descendants are not allowlisted. Runtime robots.txt verification on the exact host is mandatory; honor disallowed paths and any performance restrictions."
+    },
+    {
+      "source_url": "https://frontiersin.org/journals/organizational-psychology/sections/employee-well-being-and-health/articles",
+      "source_host": "frontiersin.org",
+      "catalog_ids": [
+        "catalog:e5a9ac2b59298976006936be"
+      ],
+      "catalog_count": 1,
+      "review_status": "policy_preapproved_robots_recheck_required",
+      "source_access_mode": "catalog_landing_page",
+      "policy_preapproved": true,
+      "metadata_only": true,
+      "robots_recheck_required": true,
+      "fetch_authorized": false,
+      "terms_url": "https://www.frontiersin.org/legal/terms-and-conditions",
+      "terms_status": "reviewed_per_dataset",
+      "per_dataset_rights_required": true,
+      "attribution_required": "per_article",
+      "rights_scope": "per_article_license",
+      "allowed_metadata_fields": [
+        "title",
+        "authors",
+        "doi",
+        "journal",
+        "publication_date",
+        "article_url",
+        "license",
+        "publisher"
+      ],
+      "allowed_catalog_path_patterns": [
+        "/articles",
+        "/journals/*/articles",
+        "/journals/*/sections/*",
+        "/journals/*/sections/*/articles"
+      ],
+      "prohibited_content": [
+        "full_text",
+        "images",
+        "supplementary_files",
+        "bulk_assets"
+      ],
+      "max_response_bytes": 1500000,
+      "min_interval_seconds": 3.0,
+      "max_requests_per_run": 40,
+      "policy_note": "Frontiers Terms and Conditions section 14 permits text and data mining of public content for the legitimate purpose of enriching external collections of scientific literature. Content remains subject to each article's applicable CC-BY, CC0, or other license and applicable data-protection laws. This policy is limited to bounded landing-page discovery of bibliographic metadata; do not retrieve full text, images, supplementary files, or bulk assets. Exact path shapes only: /articles; /journals/{journal}/articles; /journals/{journal}/sections/{section}; /journals/{journal}/sections/{section}/articles. Individual article paths and deeper descendants are not allowlisted. Runtime robots.txt verification on the exact host is mandatory; honor disallowed paths and any performance restrictions."
+    },
+    {
+      "source_url": "https://frontiersin.org/journals/organizational-psychology/sections/organizational-justice-diversity-equity-inclusion-and-belonging/articles",
+      "source_host": "frontiersin.org",
+      "catalog_ids": [
+        "catalog:13e2b124edd1c9bc4fcdf885"
+      ],
+      "catalog_count": 1,
+      "review_status": "policy_preapproved_robots_recheck_required",
+      "source_access_mode": "catalog_landing_page",
+      "policy_preapproved": true,
+      "metadata_only": true,
+      "robots_recheck_required": true,
+      "fetch_authorized": false,
+      "terms_url": "https://www.frontiersin.org/legal/terms-and-conditions",
+      "terms_status": "reviewed_per_dataset",
+      "per_dataset_rights_required": true,
+      "attribution_required": "per_article",
+      "rights_scope": "per_article_license",
+      "allowed_metadata_fields": [
+        "title",
+        "authors",
+        "doi",
+        "journal",
+        "publication_date",
+        "article_url",
+        "license",
+        "publisher"
+      ],
+      "allowed_catalog_path_patterns": [
+        "/articles",
+        "/journals/*/articles",
+        "/journals/*/sections/*",
+        "/journals/*/sections/*/articles"
+      ],
+      "prohibited_content": [
+        "full_text",
+        "images",
+        "supplementary_files",
+        "bulk_assets"
+      ],
+      "max_response_bytes": 1500000,
+      "min_interval_seconds": 3.0,
+      "max_requests_per_run": 40,
+      "policy_note": "Frontiers Terms and Conditions section 14 permits text and data mining of public content for the legitimate purpose of enriching external collections of scientific literature. Content remains subject to each article's applicable CC-BY, CC0, or other license and applicable data-protection laws. This policy is limited to bounded landing-page discovery of bibliographic metadata; do not retrieve full text, images, supplementary files, or bulk assets. Exact path shapes only: /articles; /journals/{journal}/articles; /journals/{journal}/sections/{section}; /journals/{journal}/sections/{section}/articles. Individual article paths and deeper descendants are not allowlisted. Runtime robots.txt verification on the exact host is mandatory; honor disallowed paths and any performance restrictions."
+    },
+    {
+      "source_url": "https://frontiersin.org/journals/organizational-psychology/sections/performance-and-development/articles",
+      "source_host": "frontiersin.org",
+      "catalog_ids": [
+        "catalog:64c6c02d95e6ffeddea18bfe"
+      ],
+      "catalog_count": 1,
+      "review_status": "policy_preapproved_robots_recheck_required",
+      "source_access_mode": "catalog_landing_page",
+      "policy_preapproved": true,
+      "metadata_only": true,
+      "robots_recheck_required": true,
+      "fetch_authorized": false,
+      "terms_url": "https://www.frontiersin.org/legal/terms-and-conditions",
+      "terms_status": "reviewed_per_dataset",
+      "per_dataset_rights_required": true,
+      "attribution_required": "per_article",
+      "rights_scope": "per_article_license",
+      "allowed_metadata_fields": [
+        "title",
+        "authors",
+        "doi",
+        "journal",
+        "publication_date",
+        "article_url",
+        "license",
+        "publisher"
+      ],
+      "allowed_catalog_path_patterns": [
+        "/articles",
+        "/journals/*/articles",
+        "/journals/*/sections/*",
+        "/journals/*/sections/*/articles"
+      ],
+      "prohibited_content": [
+        "full_text",
+        "images",
+        "supplementary_files",
+        "bulk_assets"
+      ],
+      "max_response_bytes": 1500000,
+      "min_interval_seconds": 3.0,
+      "max_requests_per_run": 40,
+      "policy_note": "Frontiers Terms and Conditions section 14 permits text and data mining of public content for the legitimate purpose of enriching external collections of scientific literature. Content remains subject to each article's applicable CC-BY, CC0, or other license and applicable data-protection laws. This policy is limited to bounded landing-page discovery of bibliographic metadata; do not retrieve full text, images, supplementary files, or bulk assets. Exact path shapes only: /articles; /journals/{journal}/articles; /journals/{journal}/sections/{section}; /journals/{journal}/sections/{section}/articles. Individual article paths and deeper descendants are not allowlisted. Runtime robots.txt verification on the exact host is mandatory; honor disallowed paths and any performance restrictions."
+    },
+    {
+      "source_url": "https://frontiersin.org/journals/organizational-psychology/sections/work-motivation-and-participation/articles",
+      "source_host": "frontiersin.org",
+      "catalog_ids": [
+        "catalog:a052e6cfa7667b657f29fb17"
+      ],
+      "catalog_count": 1,
+      "review_status": "policy_preapproved_robots_recheck_required",
+      "source_access_mode": "catalog_landing_page",
+      "policy_preapproved": true,
+      "metadata_only": true,
+      "robots_recheck_required": true,
+      "fetch_authorized": false,
+      "terms_url": "https://www.frontiersin.org/legal/terms-and-conditions",
+      "terms_status": "reviewed_per_dataset",
+      "per_dataset_rights_required": true,
+      "attribution_required": "per_article",
+      "rights_scope": "per_article_license",
+      "allowed_metadata_fields": [
+        "title",
+        "authors",
+        "doi",
+        "journal",
+        "publication_date",
+        "article_url",
+        "license",
+        "publisher"
+      ],
+      "allowed_catalog_path_patterns": [
+        "/articles",
+        "/journals/*/articles",
+        "/journals/*/sections/*",
+        "/journals/*/sections/*/articles"
+      ],
+      "prohibited_content": [
+        "full_text",
+        "images",
+        "supplementary_files",
+        "bulk_assets"
+      ],
+      "max_response_bytes": 1500000,
+      "min_interval_seconds": 3.0,
+      "max_requests_per_run": 40,
+      "policy_note": "Frontiers Terms and Conditions section 14 permits text and data mining of public content for the legitimate purpose of enriching external collections of scientific literature. Content remains subject to each article's applicable CC-BY, CC0, or other license and applicable data-protection laws. This policy is limited to bounded landing-page discovery of bibliographic metadata; do not retrieve full text, images, supplementary files, or bulk assets. Exact path shapes only: /articles; /journals/{journal}/articles; /journals/{journal}/sections/{section}; /journals/{journal}/sections/{section}/articles. Individual article paths and deeper descendants are not allowlisted. Runtime robots.txt verification on the exact host is mandatory; honor disallowed paths and any performance restrictions."
+    },
+    {
       "source_url": "https://frontiersin.org/journals/pediatrics/articles",
       "source_host": "frontiersin.org",
       "catalog_ids": [
@@ -119675,6 +120711,96 @@
       "policy_note": "Frontiers Terms and Conditions section 14 permits text and data mining of public content for the legitimate purpose of enriching external collections of scientific literature. Content remains subject to each article's applicable CC-BY, CC0, or other license and applicable data-protection laws. This policy is limited to bounded landing-page discovery of bibliographic metadata; do not retrieve full text, images, supplementary files, or bulk assets. Exact path shapes only: /articles; /journals/{journal}/articles; /journals/{journal}/sections/{section}; /journals/{journal}/sections/{section}/articles. Individual article paths and deeper descendants are not allowlisted. Runtime robots.txt verification on the exact host is mandatory; honor disallowed paths and any performance restrictions."
     },
     {
+      "source_url": "https://frontiersin.org/research-topics/60136/impact-of-remote-work-on-individual-and-organizational-performance-constructs/articles",
+      "source_host": "frontiersin.org",
+      "catalog_ids": [
+        "catalog:1b7a7fc97e61f47baeec9f80"
+      ],
+      "catalog_count": 1,
+      "review_status": "path_not_allowlisted",
+      "source_access_mode": null,
+      "policy_preapproved": false,
+      "metadata_only": true,
+      "robots_recheck_required": true,
+      "fetch_authorized": false,
+      "terms_url": "https://www.frontiersin.org/legal/terms-and-conditions",
+      "terms_status": "reviewed_per_dataset",
+      "per_dataset_rights_required": true,
+      "attribution_required": "per_article",
+      "rights_scope": "per_article_license",
+      "allowed_metadata_fields": [
+        "title",
+        "authors",
+        "doi",
+        "journal",
+        "publication_date",
+        "article_url",
+        "license",
+        "publisher"
+      ],
+      "allowed_catalog_path_patterns": [
+        "/articles",
+        "/journals/*/articles",
+        "/journals/*/sections/*",
+        "/journals/*/sections/*/articles"
+      ],
+      "prohibited_content": [
+        "full_text",
+        "images",
+        "supplementary_files",
+        "bulk_assets"
+      ],
+      "max_response_bytes": 1500000,
+      "min_interval_seconds": 3.0,
+      "max_requests_per_run": 40,
+      "policy_note": "Frontiers Terms and Conditions section 14 permits text and data mining of public content for the legitimate purpose of enriching external collections of scientific literature. Content remains subject to each article's applicable CC-BY, CC0, or other license and applicable data-protection laws. This policy is limited to bounded landing-page discovery of bibliographic metadata; do not retrieve full text, images, supplementary files, or bulk assets. Exact path shapes only: /articles; /journals/{journal}/articles; /journals/{journal}/sections/{section}; /journals/{journal}/sections/{section}/articles. Individual article paths and deeper descendants are not allowlisted. Runtime robots.txt verification on the exact host is mandatory; honor disallowed paths and any performance restrictions."
+    },
+    {
+      "source_url": "https://frontiersin.org/research-topics/60136/impact-of-remote-work-on-individual-and-organizational-performance-constructs/authors",
+      "source_host": "frontiersin.org",
+      "catalog_ids": [
+        "catalog:1e2202b3bc6c407cb30bd551"
+      ],
+      "catalog_count": 1,
+      "review_status": "path_not_allowlisted",
+      "source_access_mode": null,
+      "policy_preapproved": false,
+      "metadata_only": true,
+      "robots_recheck_required": true,
+      "fetch_authorized": false,
+      "terms_url": "https://www.frontiersin.org/legal/terms-and-conditions",
+      "terms_status": "reviewed_per_dataset",
+      "per_dataset_rights_required": true,
+      "attribution_required": "per_article",
+      "rights_scope": "per_article_license",
+      "allowed_metadata_fields": [
+        "title",
+        "authors",
+        "doi",
+        "journal",
+        "publication_date",
+        "article_url",
+        "license",
+        "publisher"
+      ],
+      "allowed_catalog_path_patterns": [
+        "/articles",
+        "/journals/*/articles",
+        "/journals/*/sections/*",
+        "/journals/*/sections/*/articles"
+      ],
+      "prohibited_content": [
+        "full_text",
+        "images",
+        "supplementary_files",
+        "bulk_assets"
+      ],
+      "max_response_bytes": 1500000,
+      "min_interval_seconds": 3.0,
+      "max_requests_per_run": 40,
+      "policy_note": "Frontiers Terms and Conditions section 14 permits text and data mining of public content for the legitimate purpose of enriching external collections of scientific literature. Content remains subject to each article's applicable CC-BY, CC0, or other license and applicable data-protection laws. This policy is limited to bounded landing-page discovery of bibliographic metadata; do not retrieve full text, images, supplementary files, or bulk assets. Exact path shapes only: /articles; /journals/{journal}/articles; /journals/{journal}/sections/{section}; /journals/{journal}/sections/{section}/articles. Individual article paths and deeper descendants are not allowlisted. Runtime robots.txt verification on the exact host is mandatory; honor disallowed paths and any performance restrictions."
+    },
+    {
       "source_url": "https://frontiersin.org/research-topics/60145/association-of-cardiovascular-diseases-with-neuropsychiatric-symptoms/articles",
       "source_host": "frontiersin.org",
       "catalog_ids": [
@@ -122477,6 +123603,32 @@
       "source_host": "fws.gov",
       "catalog_ids": [
         "catalog:7d18aba2badaf82e73991343"
+      ],
+      "catalog_count": 1,
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "policy_preapproved": false,
+      "metadata_only": false,
+      "robots_recheck_required": true,
+      "fetch_authorized": false,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null
+    },
+    {
+      "source_url": "https://fws.gov/locations/patoka-river-national-wildlife-refuge-and-management-area/services",
+      "source_host": "fws.gov",
+      "catalog_ids": [
+        "catalog:70f30998473afdb29c3deed1"
       ],
       "catalog_count": 1,
       "review_status": "policy_review_required",
@@ -148396,6 +149548,32 @@
       "policy_note": null
     },
     {
+      "source_url": "https://wikidata.org/wiki/Wikidata:De_kroeg/Archive",
+      "source_host": "wikidata.org",
+      "catalog_ids": [
+        "catalog:68d33001cc2ce349502ee673"
+      ],
+      "catalog_count": 1,
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "policy_preapproved": false,
+      "metadata_only": false,
+      "robots_recheck_required": true,
+      "fetch_authorized": false,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null
+    },
+    {
       "source_url": "https://wikidata.org/wiki/Wikidata:Forum/Archive",
       "source_host": "wikidata.org",
       "catalog_ids": [
@@ -150921,11 +152099,11 @@
   "hosts": [
     {
       "host": "frontiersin.org",
-      "catalog_definition_count": 646,
-      "unique_source_urls": 646,
+      "catalog_definition_count": 653,
+      "unique_source_urls": 653,
       "review_status_counts": {
-        "path_not_allowlisted": 95,
-        "policy_preapproved_robots_recheck_required": 551
+        "path_not_allowlisted": 97,
+        "policy_preapproved_robots_recheck_required": 556
       },
       "terms_url": "https://www.frontiersin.org/legal/terms-and-conditions",
       "terms_status": "reviewed_per_dataset",
@@ -150965,6 +152143,13 @@
           "title": "Frontiers Articles",
           "catalog_type": "knowledge_base",
           "source_url": "https://frontiersin.org/journals/genetics/articles",
+          "review_status": "policy_preapproved_robots_recheck_required"
+        },
+        {
+          "catalog_id": "catalog:079941a5799fa457e560b857",
+          "title": "Frontiers Articles",
+          "catalog_type": "knowledge_base",
+          "source_url": "https://frontiersin.org/journals/organizational-psychology/articles",
           "review_status": "policy_preapproved_robots_recheck_required"
         },
         {
@@ -151008,22 +152193,15 @@
           "catalog_type": "knowledge_base",
           "source_url": "https://frontiersin.org/journals/tuberculosis/articles",
           "review_status": "policy_preapproved_robots_recheck_required"
-        },
-        {
-          "catalog_id": "catalog:2eb4256180b42c42d874429e",
-          "title": "Frontiers Articles",
-          "catalog_type": "knowledge_base",
-          "source_url": "https://frontiersin.org/journals/oncology/articles",
-          "review_status": "policy_preapproved_robots_recheck_required"
         }
       ]
     },
     {
       "host": "fws.gov",
-      "catalog_definition_count": 340,
-      "unique_source_urls": 340,
+      "catalog_definition_count": 341,
+      "unique_source_urls": 341,
       "review_status_counts": {
-        "policy_review_required": 340
+        "policy_review_required": 341
       },
       "terms_url": null,
       "terms_status": "unreviewed",
@@ -151747,6 +152925,97 @@
       ]
     },
     {
+      "host": "data.gouv.fr",
+      "catalog_definition_count": 34,
+      "unique_source_urls": 34,
+      "review_status_counts": {
+        "policy_review_required": 34
+      },
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "reviewed_at": null,
+      "source_access_modes": [],
+      "metadata_only": false,
+      "allowed_catalog_path_patterns": [],
+      "max_response_bytes": 0,
+      "per_dataset_rights_required": true,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null,
+      "sample_catalogs": [
+        {
+          "catalog_id": "catalog:09cd6598d096523d13ee8d09",
+          "title": "Data Datasets",
+          "catalog_type": "open_data",
+          "source_url": "https://data.gouv.fr/organizations/referentiel-national-des-batiments/datasets",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:0f1ee5517d2bf4986eec5aef",
+          "title": "Data Datasets",
+          "catalog_type": "open_data",
+          "source_url": "https://data.gouv.fr/organizations/centre-scientifique-et-technique-du-batiment/datasets",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:13fe84d421838e3a4a4a6e97",
+          "title": "Data Datasets",
+          "catalog_type": "open_data",
+          "source_url": "https://data.gouv.fr/organizations/ademe/datasets",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:16b745953caa8a5db5262c24",
+          "title": "Data Datasets",
+          "catalog_type": "open_data",
+          "source_url": "https://data.gouv.fr/organizations/institut-national-de-la-statistique-et-des-etudes-economiques-insee/datasets",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:24044913952984182cdf5ec9",
+          "title": "Data Datasets",
+          "catalog_type": "open_data",
+          "source_url": "https://data.gouv.fr/organizations/tuveuxvivreou/datasets",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:244a5e5914644eb76997e3be",
+          "title": "Data Datasets",
+          "catalog_type": "open_data",
+          "source_url": "https://data.gouv.fr/organizations/nos-parlementaires/datasets",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:390b62482fa9ad1988489df0",
+          "title": "Data Datasets",
+          "catalog_type": "open_data",
+          "source_url": "https://data.gouv.fr/organizations/base-adresse-nationale/datasets",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:3c40111825ffc364cb294bf5",
+          "title": "Data Datasets",
+          "catalog_type": "open_data",
+          "source_url": "https://data.gouv.fr/organizations/democratiser-la-politique/datasets",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:3cca61bb4ab14f510a3c43a8",
+          "title": "Data Datasets",
+          "catalog_type": "open_data",
+          "source_url": "https://data.gouv.fr/organizations/radio-france/datasets",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:5655b7781f41ce6f848b3f3c",
+          "title": "Data Datasets",
+          "catalog_type": "open_data",
+          "source_url": "https://data.gouv.fr/organizations/electricite-reseau-distribution-france/datasets",
+          "review_status": "policy_review_required"
+        }
+      ]
+    },
+    {
       "host": "dol.gov",
       "catalog_definition_count": 33,
       "unique_source_urls": 33,
@@ -151924,97 +153193,6 @@
           "title": "W3 Datasets",
           "catalog_type": "open_data",
           "source_url": "https://w3.org/2013/data",
-          "review_status": "policy_review_required"
-        }
-      ]
-    },
-    {
-      "host": "data.gouv.fr",
-      "catalog_definition_count": 28,
-      "unique_source_urls": 28,
-      "review_status_counts": {
-        "policy_review_required": 28
-      },
-      "terms_url": null,
-      "terms_status": "unreviewed",
-      "reviewed_at": null,
-      "source_access_modes": [],
-      "metadata_only": false,
-      "allowed_catalog_path_patterns": [],
-      "max_response_bytes": 0,
-      "per_dataset_rights_required": true,
-      "min_interval_seconds": 1.0,
-      "max_requests_per_run": 1,
-      "policy_note": null,
-      "sample_catalogs": [
-        {
-          "catalog_id": "catalog:09cd6598d096523d13ee8d09",
-          "title": "Data Datasets",
-          "catalog_type": "open_data",
-          "source_url": "https://data.gouv.fr/organizations/referentiel-national-des-batiments/datasets",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:0f1ee5517d2bf4986eec5aef",
-          "title": "Data Datasets",
-          "catalog_type": "open_data",
-          "source_url": "https://data.gouv.fr/organizations/centre-scientifique-et-technique-du-batiment/datasets",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:13fe84d421838e3a4a4a6e97",
-          "title": "Data Datasets",
-          "catalog_type": "open_data",
-          "source_url": "https://data.gouv.fr/organizations/ademe/datasets",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:16b745953caa8a5db5262c24",
-          "title": "Data Datasets",
-          "catalog_type": "open_data",
-          "source_url": "https://data.gouv.fr/organizations/institut-national-de-la-statistique-et-des-etudes-economiques-insee/datasets",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:244a5e5914644eb76997e3be",
-          "title": "Data Datasets",
-          "catalog_type": "open_data",
-          "source_url": "https://data.gouv.fr/organizations/nos-parlementaires/datasets",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:390b62482fa9ad1988489df0",
-          "title": "Data Datasets",
-          "catalog_type": "open_data",
-          "source_url": "https://data.gouv.fr/organizations/base-adresse-nationale/datasets",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:3c40111825ffc364cb294bf5",
-          "title": "Data Datasets",
-          "catalog_type": "open_data",
-          "source_url": "https://data.gouv.fr/organizations/democratiser-la-politique/datasets",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:3cca61bb4ab14f510a3c43a8",
-          "title": "Data Datasets",
-          "catalog_type": "open_data",
-          "source_url": "https://data.gouv.fr/organizations/radio-france/datasets",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:5655b7781f41ce6f848b3f3c",
-          "title": "Data Datasets",
-          "catalog_type": "open_data",
-          "source_url": "https://data.gouv.fr/organizations/electricite-reseau-distribution-france/datasets",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:62f1ad0d124a07d41d78898e",
-          "title": "Data Datasets",
-          "catalog_type": "open_data",
-          "source_url": "https://data.gouv.fr/organizations/office-national-d-information-sur-les-enseignements-et-les-professions/datasets",
           "review_status": "policy_review_required"
         }
       ]
@@ -153203,6 +154381,97 @@
       ]
     },
     {
+      "host": "wikidata.org",
+      "catalog_definition_count": 14,
+      "unique_source_urls": 14,
+      "review_status_counts": {
+        "policy_review_required": 14
+      },
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "reviewed_at": null,
+      "source_access_modes": [],
+      "metadata_only": false,
+      "allowed_catalog_path_patterns": [],
+      "max_response_bytes": 0,
+      "per_dataset_rights_required": true,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null,
+      "sample_catalogs": [
+        {
+          "catalog_id": "catalog:6378437647410936b67b6ccc",
+          "title": "technical Wikidata Articles",
+          "catalog_type": "knowledge_base",
+          "source_url": "https://wikidata.org/wiki/Wikidata:Report_a_technical_problem/Archive",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:1bff801ca8846a0536203607",
+          "title": "Wikidata Articles",
+          "catalog_type": "knowledge_base",
+          "source_url": "https://wikidata.org/wiki/Wikidata:Bar/Archive",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:45a7581ba12f82a8aaf84302",
+          "title": "Wikidata Articles",
+          "catalog_type": "knowledge_base",
+          "source_url": "https://wikidata.org/wiki/Wikidata:Bistro/Archive",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:6043740d89a8f653c315fd9b",
+          "title": "Wikidata Articles",
+          "catalog_type": "knowledge_base",
+          "source_url": "https://wikidata.org/wiki/Wikidata:Requests_for_new_items/Archive",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:68d33001cc2ce349502ee673",
+          "title": "Wikidata Articles",
+          "catalog_type": "knowledge_base",
+          "source_url": "https://wikidata.org/wiki/Wikidata:De_kroeg/Archive",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:6b5055860b3dfaaee8daf229",
+          "title": "Wikidata Articles",
+          "catalog_type": "knowledge_base",
+          "source_url": "https://wikidata.org/wiki/Wikidata:Forum/Archive",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:97e7b959aa8a2ea36d5bb5d9",
+          "title": "Wikidata Articles",
+          "catalog_type": "knowledge_base",
+          "source_url": "https://wikidata.org/wiki/Wikidata:Warung_Kopi/Archive",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:b37e829ea85fe8aec79a77d2",
+          "title": "Wikidata Articles",
+          "catalog_type": "knowledge_base",
+          "source_url": "https://wikidata.org/wiki/Wikidata:Administrators%27_noticeboard/Archive",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:c4d759f96bc16f8ad7b87956",
+          "title": "Wikidata Articles",
+          "catalog_type": "knowledge_base",
+          "source_url": "https://wikidata.org/wiki/Wikidata:%EC%82%AC%EB%9E%91%EB%B0%A9/Archive",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:e95e3abb14b27fc752008389",
+          "title": "Wikidata Articles",
+          "catalog_type": "knowledge_base",
+          "source_url": "https://wikidata.org/wiki/Wikidata:Mezi_bajty/Archive",
+          "review_status": "policy_review_required"
+        }
+      ]
+    },
+    {
       "host": "blm.gov",
       "catalog_definition_count": 13,
       "unique_source_urls": 13,
@@ -153562,97 +154831,6 @@
           "title": "Nber Subjects",
           "catalog_type": "knowledge_base",
           "source_url": "https://nber.org/research/topics",
-          "review_status": "policy_review_required"
-        }
-      ]
-    },
-    {
-      "host": "wikidata.org",
-      "catalog_definition_count": 13,
-      "unique_source_urls": 13,
-      "review_status_counts": {
-        "policy_review_required": 13
-      },
-      "terms_url": null,
-      "terms_status": "unreviewed",
-      "reviewed_at": null,
-      "source_access_modes": [],
-      "metadata_only": false,
-      "allowed_catalog_path_patterns": [],
-      "max_response_bytes": 0,
-      "per_dataset_rights_required": true,
-      "min_interval_seconds": 1.0,
-      "max_requests_per_run": 1,
-      "policy_note": null,
-      "sample_catalogs": [
-        {
-          "catalog_id": "catalog:6378437647410936b67b6ccc",
-          "title": "technical Wikidata Articles",
-          "catalog_type": "knowledge_base",
-          "source_url": "https://wikidata.org/wiki/Wikidata:Report_a_technical_problem/Archive",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:1bff801ca8846a0536203607",
-          "title": "Wikidata Articles",
-          "catalog_type": "knowledge_base",
-          "source_url": "https://wikidata.org/wiki/Wikidata:Bar/Archive",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:45a7581ba12f82a8aaf84302",
-          "title": "Wikidata Articles",
-          "catalog_type": "knowledge_base",
-          "source_url": "https://wikidata.org/wiki/Wikidata:Bistro/Archive",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:6043740d89a8f653c315fd9b",
-          "title": "Wikidata Articles",
-          "catalog_type": "knowledge_base",
-          "source_url": "https://wikidata.org/wiki/Wikidata:Requests_for_new_items/Archive",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:6b5055860b3dfaaee8daf229",
-          "title": "Wikidata Articles",
-          "catalog_type": "knowledge_base",
-          "source_url": "https://wikidata.org/wiki/Wikidata:Forum/Archive",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:97e7b959aa8a2ea36d5bb5d9",
-          "title": "Wikidata Articles",
-          "catalog_type": "knowledge_base",
-          "source_url": "https://wikidata.org/wiki/Wikidata:Warung_Kopi/Archive",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:b37e829ea85fe8aec79a77d2",
-          "title": "Wikidata Articles",
-          "catalog_type": "knowledge_base",
-          "source_url": "https://wikidata.org/wiki/Wikidata:Administrators%27_noticeboard/Archive",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:c4d759f96bc16f8ad7b87956",
-          "title": "Wikidata Articles",
-          "catalog_type": "knowledge_base",
-          "source_url": "https://wikidata.org/wiki/Wikidata:%EC%82%AC%EB%9E%91%EB%B0%A9/Archive",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:e95e3abb14b27fc752008389",
-          "title": "Wikidata Articles",
-          "catalog_type": "knowledge_base",
-          "source_url": "https://wikidata.org/wiki/Wikidata:Mezi_bajty/Archive",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:f242bc91310fac865c83d39f",
-          "title": "Wikidata Articles",
-          "catalog_type": "knowledge_base",
-          "source_url": "https://wikidata.org/wiki/Wikidata:%E4%BA%95%E6%88%B8%E7%AB%AF/Archive",
           "review_status": "policy_review_required"
         }
       ]
@@ -156610,6 +157788,13 @@
       "policy_note": null,
       "sample_catalogs": [
         {
+          "catalog_id": "catalog:cd6d8cbe0b61e7d7bb17cc9f",
+          "title": "Hotels Las Vegas Businesses",
+          "catalog_type": "business_directory",
+          "source_url": "https://visitlasvegas.com/hotels-casinos/hotels",
+          "review_status": "policy_review_required"
+        },
+        {
           "catalog_id": "catalog:f905cbcc1007d9cabe9eae6a",
           "title": "Las Vegas Businesses",
           "catalog_type": "business_directory",
@@ -156628,13 +157813,6 @@
           "title": "Vegas Places",
           "catalog_type": "geographic",
           "source_url": "https://visitlasvegas.com/direct-flights-canada-to-las-vegas",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:cd6d8cbe0b61e7d7bb17cc9f",
-          "title": "Visitlasvegas Businesses",
-          "catalog_type": "business_directory",
-          "source_url": "https://visitlasvegas.com/hotels-casinos/hotels",
           "review_status": "policy_review_required"
         }
       ]
@@ -157263,6 +158441,41 @@
       ]
     },
     {
+      "host": "fec.gov",
+      "catalog_definition_count": 2,
+      "unique_source_urls": 2,
+      "review_status_counts": {
+        "policy_review_required": 2
+      },
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "reviewed_at": null,
+      "source_access_modes": [],
+      "metadata_only": false,
+      "allowed_catalog_path_patterns": [],
+      "max_response_bytes": 0,
+      "per_dataset_rights_required": true,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null,
+      "sample_catalogs": [
+        {
+          "catalog_id": "catalog:37b67cd21fd8829e7c067eb3",
+          "title": "FEC Datasets",
+          "catalog_type": "open_data",
+          "source_url": "https://fec.gov/data/browse-data",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:f92337599e77ebdd9bfb0b9d",
+          "title": "Fec Events",
+          "catalog_type": "events",
+          "source_url": "https://fec.gov/calendar",
+          "review_status": "policy_review_required"
+        }
+      ]
+    },
+    {
       "host": "gpo.gov",
       "catalog_definition_count": 2,
       "unique_source_urls": 2,
@@ -157797,34 +159010,6 @@
           "title": "Fda Products",
           "catalog_type": "commerce",
           "source_url": "https://fda.gov/tobacco-products",
-          "review_status": "policy_review_required"
-        }
-      ]
-    },
-    {
-      "host": "fec.gov",
-      "catalog_definition_count": 1,
-      "unique_source_urls": 1,
-      "review_status_counts": {
-        "policy_review_required": 1
-      },
-      "terms_url": null,
-      "terms_status": "unreviewed",
-      "reviewed_at": null,
-      "source_access_modes": [],
-      "metadata_only": false,
-      "allowed_catalog_path_patterns": [],
-      "max_response_bytes": 0,
-      "per_dataset_rights_required": true,
-      "min_interval_seconds": 1.0,
-      "max_requests_per_run": 1,
-      "policy_note": null,
-      "sample_catalogs": [
-        {
-          "catalog_id": "catalog:f92337599e77ebdd9bfb0b9d",
-          "title": "Fec Events",
-          "catalog_type": "events",
-          "source_url": "https://fec.gov/calendar",
           "review_status": "policy_review_required"
         }
       ]
