@@ -1049,7 +1049,7 @@ class CrawlerTests(unittest.TestCase):
                 "address_locality": "Las Vegas",
                 "address_region": "NV",
                 "address_country": "US",
-                "same_as_ids": ["https://www.wikidata.org/entity/Q12345"],
+                "same_as_ids": ["wikidata:Q12345"],
                 "street_address": "100 Private Street",
                 "telephone": "+1-555-0100",
                 "email": "private@example.com",
