@@ -26,8 +26,8 @@ def manifest_minutes_ago(minutes):
 class ScheduleWatchdogTests(unittest.TestCase):
     def test_watchdog_schedule_is_staggered_away_from_peak_minutes(self):
         workflow = (Path(__file__).resolve().parents[1] / ".github" / "workflows" / "crawl-watchdog.yml").read_text(encoding="utf-8")
-        self.assertIn('    - cron: "7,22,37,52 * * * *"', workflow)
-        self.assertNotIn('    - cron: "*/15 * * * *"', workflow)
+        self.assertIn('    - cron: "*/5 * * * *"', workflow)
+        self.assertNotIn('    - cron: "7,22,37,52 * * * *"', workflow)
 
     def test_crawler_push_watches_hourly_automation_fallback_marker(self):
         workflow = (Path(__file__).resolve().parents[1] / ".github" / "workflows" / "crawl.yml").read_text(encoding="utf-8")
@@ -117,7 +117,7 @@ class ScheduleWatchdogTests(unittest.TestCase):
         self.assertEqual(result["action"], "wait")
         self.assertEqual(result["schedule_status"], "recent")
 
-    def test_unobserved_schedule_with_manifest_stale_over_25_minutes_marks_recovery(self):
+    def test_unobserved_schedule_with_manifest_stale_over_10_minutes_marks_recovery(self):
         result = evaluate(
             [{"status": "completed", "conclusion": "success", "event": "workflow_dispatch", "created_at": "2026-11-16T15:59:00Z"}],
             now=NOW,
@@ -128,29 +128,29 @@ class ScheduleWatchdogTests(unittest.TestCase):
         self.assertIsNone(result["schedule_age_seconds"])
         self.assertEqual(result["manifest_age_seconds"], 3600)
 
-    def test_unobserved_schedule_with_manifest_stale_under_25_minutes_waits(self):
+    def test_unobserved_schedule_with_manifest_stale_under_10_minutes_waits(self):
         result = evaluate(
             [{"status": "completed", "conclusion": "success", "event": "workflow_dispatch", "created_at": "2026-11-16T15:59:00Z"}],
             now=NOW,
-            manifest_updated_at=manifest_minutes_ago(15),
+            manifest_updated_at=manifest_minutes_ago(5),
         )
         self.assertEqual(result["action"], "wait")
         self.assertEqual(result["schedule_status"], "unobserved")
-        self.assertEqual(result["manifest_age_seconds"], 900)
+        self.assertEqual(result["manifest_age_seconds"], 300)
 
     def test_missing_manifest_timestamp_does_not_write_marker(self):
         result = evaluate([scheduled("2026-11-16T14:00:00Z")], now=NOW)
         self.assertEqual(result["action"], "wait")
         self.assertIsNone(result["manifest_age_seconds"])
 
-    def test_exact_25_minute_schedule_boundary_is_not_stale(self):
+    def test_exact_10_minute_schedule_boundary_is_not_stale(self):
         result = evaluate(
-            [scheduled("2026-11-16T15:35:00Z")],
+            [scheduled("2026-11-16T15:50:00Z")],
             now=NOW,
             manifest_updated_at=manifest_minutes_ago(30),
         )
         self.assertEqual(result["action"], "wait")
-        self.assertEqual(result["schedule_age_seconds"], 1500)
+        self.assertEqual(result["schedule_age_seconds"], 600)
         self.assertEqual(result["schedule_status"], "recent")
 
     def test_exact_10_minute_manifest_boundary_is_not_stale(self):
@@ -317,8 +317,28 @@ class ScheduleWatchdogTests(unittest.TestCase):
         workflow = (Path(__file__).resolve().parents[1] / ".github" / "workflows" / "crawl-watchdog.yml").read_text(encoding="utf-8")
         self.assertIn("No scheduled crawl event is observable; using manifest age as a conservative fallback.", workflow)
         self.assertIn("created_at = None", workflow)
-        self.assertIn("schedule_age is None and manifest_age <= 25 * 60", workflow)
+        self.assertIn("schedule_age is None and manifest_age <= 10 * 60", workflow)
         self.assertNotIn("No scheduled crawl event is observable; no recovery marker will be written.", workflow)
+
+
+    def test_schedule_older_than_ten_minutes_marks_when_manifest_is_stale(self):
+        result = evaluate(
+            [scheduled("2026-11-16T15:49:00Z")],
+            now=NOW,
+            manifest_updated_at=manifest_minutes_ago(15),
+        )
+        self.assertEqual(result["action"], "mark")
+        self.assertEqual(result["schedule_status"], "stale")
+        self.assertEqual(result["schedule_age_seconds"], 660)
+
+
+    def test_live_search_freshness_uses_recent_crawler_run_or_active_refresh(self):
+        workflow = (Path(__file__).resolve().parents[1] / ".github" / "workflows" / "validate-vercel-search.yml").read_text(encoding="utf-8")
+        self.assertIn("actions: read", workflow)
+        self.assertIn("actions/workflows/crawl.yml/runs?branch=main", workflow)
+        self.assertIn("activeCrawlerRuns", workflow)
+        self.assertIn("latestSuccessfulRunAgeSeconds", workflow)
+        self.assertNotIn("Crawler catalog timestamp is outside the 15-minute live-monitor window", workflow)
 
 if __name__ == "__main__":
     unittest.main()
