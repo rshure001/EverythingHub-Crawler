@@ -270,6 +270,12 @@ jobs:
                     latestPublishedAgeHours > maxAgeHours) {
                   throw new Error("Top Stories category is empty or stale: " + category + " " + JSON.stringify(report.checks.newsFreshness[category]));
                 }
+                const nasaFeedRequired = ["for-you", "technology", "science"].includes(category);
+                const nasaFeedActive = Array.isArray(newsPayload.sources) && newsPayload.sources.includes("NASA News Releases");
+                report.checks.newsFreshness[category].nasaNewsReleasesActive = nasaFeedActive;
+                if (nasaFeedRequired && !nasaFeedActive) {
+                  throw new Error("NASA News Releases feed is not active in " + category + ": " + JSON.stringify(report.checks.newsFreshness[category]));
+                }
               }
               await shot("everythinghub-news.png");
               await goHome();
