@@ -1027,11 +1027,12 @@ form.addEventListener('submit',async e=>{
    items.push(item);itemByUrl.set(url,item);
   }
  };
- const loadApiPage=async(page)=>{
+ const loadApiPage=async(page, lane=activeType)=>{
   const u=new URL('https://everythinghub-search-backend.vercel.app/api/search');
   u.searchParams.set('q',q);
   u.searchParams.set('limit','50');
   u.searchParams.set('offset',String((page-1)*50));
+  if(lane==='research')u.searchParams.set('lane','research');
   const r=await fetch(u,{headers:{accept:'application/json'}});
   if(!r.ok)throw Error('Independent Everything Hub search '+r.status);
   const d=await r.json();
@@ -1041,12 +1042,12 @@ form.addEventListener('submit',async e=>{
    const snippet=x.snippet||x.description||'Candidate catalog preview; source terms and reuse rights have not been reviewed.';
    return {...x,title:x.title||x.catalog_title||x.catalog_id||'Catalog candidate',url:x.url||x.source_url||'',snippet,description:snippet,source:x.source||'Everything Hub Catalog Preview',origin:x.origin||'Everything Hub Catalog Preview',mediaType:'web',score:Number(x.score)||0};
   }).filter(x=>x.url);
-  const pageResults=(d.results||[]).map(x=>({...x,description:x.snippet||x.description||'',source:x.source||d.provider||'Web search',mediaType:'web'}));
+  const pageResults=(d.results||[]).map(x=>({...x,description:x.snippet||x.description||'',source:x.source||d.provider||'Web search',mediaType:x.mediaType||'web'}));
   return catalogResults.concat(pageResults);
  };
  const render=()=>{
   const isVideo=x=>x.mediaType==='video'||Boolean(x.video)||/youtube\.com|youtu\.be|vimeo\.com/i.test(String(x.url||''));
-  const matches=items.filter(x=>activeType==='images'?Boolean(safe(x.image)!=='#'):activeType==='videos'?isVideo(x):activeType==='news'?/news|reuters|apnews|bbc|cnn|nytimes|theguardian/i.test(String(x.url||'')+' '+String(x.source||'')):activeType==='shopping'?/shop|store|amazon|walmart|ebay|product/i.test(String(x.url||'')+' '+String(x.title||'')):activeType==='places'?/maps|place|travel|visit|location/i.test(String(x.url||'')+' '+String(x.title||'')):activeType==='business'?/company|business|corporate|linkedin|crunchbase/i.test(String(x.url||'')+' '+String(x.title||'')):activeType==='research'?/research|study|journal|paper|scholar|arxiv/i.test(String(x.url||'')+' '+String(x.title||'')):!isVideo(x));
+  const matches=items.filter(x=>activeType==='images'?Boolean(safe(x.image)!=='#'):activeType==='videos'?isVideo(x):activeType==='news'?/news|reuters|apnews|bbc|cnn|nytimes|theguardian/i.test(String(x.url||'')+' '+String(x.source||'')):activeType==='shopping'?/shop|store|amazon|walmart|ebay|product/i.test(String(x.url||'')+' '+String(x.title||'')):activeType==='places'?/maps|place|travel|visit|location/i.test(String(x.url||'')+' '+String(x.title||'')):activeType==='business'?/company|business|corporate|linkedin|crunchbase/i.test(String(x.url||'')+' '+String(x.title||'')):activeType==='research'?(x.mediaType==='research'||/research|study|journal|paper|scholar|arxiv/i.test(String(x.url||'')+' '+String(x.title||''))):!isVideo(x));
   const visible=matches.slice(0,shown);
   out.className=activeType==='images'?'image-mode':activeType==='videos'?'video-mode':'';
   const tabs='<nav class="search-tabs" aria-label="Search categories">'+[['web','All'],['news','News'],['images','Images'],['videos','Videos'],['shopping','Shopping'],['places','Maps'],['business','Business'],['research','Research']].map(([key,label])=>'<button type="button" class="search-tab" data-type="'+key+'" aria-pressed="'+(activeType===key)+'">'+label+'</button>').join('')+'</nav>';
@@ -1064,7 +1065,7 @@ form.addEventListener('submit',async e=>{
   const moreAvailable=shown<matches.length||(activeType==='web'&&apiHasMore);
   const resultLabel=activeType==='web'&&totalIndexed?'Showing '+matches.length.toLocaleString()+' results · '+totalIndexed.toLocaleString()+' pages indexed':matches.length.toLocaleString()+' '+activeType+' results';
   out.innerHTML=tabs+'<p class="source result-count">'+resultLabel+'</p>'+cards+(moreAvailable?'<button id="moreResults" type="button" style="display:block;margin:22px auto;padding:13px 25px;border:1px solid #39ff79;border-radius:999px;background:#063b2e;color:#fff;font-weight:800">'+(shown<matches.length?'Show 24 more results':'Load next 50 indexed results')+'</button>':'')+(matches.length?'':'<p>No '+activeType+' results found for this search. Try Web or a broader search.</p>');
-  out.querySelectorAll('.search-tab').forEach(tab=>tab.addEventListener('click',()=>{activeType=tab.dataset.type;shown=24;render()}));
+  out.querySelectorAll('.search-tab').forEach(tab=>tab.addEventListener('click',async()=>{activeType=tab.dataset.type;shown=24;if(activeType==='research'&&!items.some(x=>x.mediaType==='research')){try{addItems(await loadApiPage(1,'research'));}catch(error){}}render()}));
   const more=document.querySelector('#moreResults');
   if(more)more.addEventListener('click',async()=>{
    if(loadingMore)return;loadingMore=true;more.disabled=true;more.textContent='Loading more results…';
