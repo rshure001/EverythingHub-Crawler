@@ -192,9 +192,10 @@ def build_query_index(token_shards):
         prefix = hashlib.sha256(token.encode("utf-8")).hexdigest()[:2]
         shard = shards.setdefault(prefix, {"version": 1, "prefix": prefix, "tokens": {}})
         shard["tokens"][token] = [
-            {"file": filename, "pages": int(count)}
-            for filename, count in sorted(shard_counts.items())
-            if isinstance(count, int) and not isinstance(count, bool) and count > 0
+            [int(shard_index), int(count)]
+            for shard_index, count in sorted(shard_counts.items())
+            if isinstance(shard_index, int) and not isinstance(shard_index, bool)
+            and isinstance(count, int) and not isinstance(count, bool) and count > 0
         ]
     return shards
 
@@ -303,9 +304,10 @@ def main():
             "uncompressed_bytes": uncompressed_bytes,
             "sha256": hashlib.sha256(raw).hexdigest(),
         })
+        shard_index = len(shards) - 1
         for page in items:
             for token in query_tokens(page):
-                query_postings[token][name] += 1
+                query_postings[token][shard_index] += 1
 
     prefix_bytes = len(b'{"version":1,"pages":[')
     suffix_bytes = len(b']}\n')
