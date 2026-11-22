@@ -1038,5 +1038,45 @@ class CrawlerTests(unittest.TestCase):
             )
             pretty = crawl.json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
             self.assertLess(len(raw), len(pretty))
+
+    def test_build_page_record_preserves_safe_structured_entity_metadata(self):
+        metadata = [{
+            "record_type": "place",
+            "name": "Rainbow Family Park",
+            "description": "Public family park.",
+            "entity_url": "https://city.example/parks/rainbow-family-park",
+            "attributes": {
+                "address_locality": "Las Vegas",
+                "address_region": "NV",
+                "address_country": "US",
+                "same_as_ids": ["https://www.wikidata.org/entity/Q12345"],
+                "street_address": "100 Private Street",
+                "telephone": "+1-555-0100",
+                "email": "private@example.com",
+            },
+        }, {
+            "record_type": "business",
+            "name": "Unsafe URL",
+            "entity_url": "javascript:alert(1)",
+            "attributes": {},
+        }]
+        record = crawl.build_page_record(
+            "https://city.example/parks", "Parks", "", "Public parks", 1, set(),
+            structured_entity_metadata=metadata,
+        )
+        self.assertEqual(len(record["structured_entities"]), 1)
+        entity = record["structured_entities"][0]
+        self.assertEqual(entity["attributes"]["address_locality"], "Las Vegas")
+        self.assertIn("https://www.wikidata.org/entity/Q12345", entity["attributes"]["same_as_ids"])
+        self.assertNotIn("street_address", entity["attributes"])
+        self.assertNotIn("telephone", entity["attributes"])
+        self.assertNotIn("email", entity["attributes"])
+        noindex = crawl.build_page_record(
+            "https://city.example/private", "Private", "", "", 1, {"noindex"},
+            structured_entity_metadata=metadata,
+        )
+        self.assertTrue(noindex["_eh_noindex"])
+        self.assertNotIn("structured_entities", noindex)
+
 if __name__ == "__main__":
     unittest.main()
