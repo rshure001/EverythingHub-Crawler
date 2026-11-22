@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_INDEX = ROOT / "data" / "index.json"
 DEFAULT_OUTPUT = ROOT / "data" / "page-derived-catalogs"
 DEFAULT_SOURCE_POLICY_REVIEWS = ROOT / "data" / "source-policy-reviews.json"
-ANALYZER_VERSION = 14
+ANALYZER_VERSION = 15
 TRACKING_KEYS = {"fbclid", "gclid", "dclid", "mc_cid", "mc_eid", "ref", "source"}
 STOP_TOKENS = {
     "the", "and", "for", "with", "from", "our", "your", "all", "new", "home", "page",
@@ -662,6 +662,179 @@ def _add_global_subject_catalogs(pages: list[dict], page_rows: list[dict], recor
     return created
 
 
+
+def _add_global_typed_entity_catalogs(page_rows: list[dict], records, catalogs) -> dict[str, int]:
+    """Create cross-host typed directories from distinct, provenance-backed records.
+
+    These are aggregate directories, not one synthetic catalog per source page.
+    A directory is created only when at least three unique records from at least
+    three source pages and two independent hosts support that record type.
+    """
+    directory_types = {
+        "brand": ("Global Brand Directory", "commerce"),
+        "business": ("Global Business Directory", "business_directory"),
+        "dataset": ("Global Dataset Directory", "open_data"),
+        "event": ("Global Event Directory", "events"),
+        "media": ("Global Media Directory", "media"),
+        "model": ("Global Model Directory", "commerce"),
+        "organization": ("Global Organization Directory", "organization_directory"),
+        "person": ("Global People Directory", "people_directory"),
+        "place": ("Global Place Directory", "geographic"),
+        "product": ("Global Product Directory", "commerce"),
+        "service": ("Global Service Directory", "service_directory"),
+        "software": ("Global Software Directory", "software"),
+    }
+    page_rows_by_id = {
+        row.get("page_id"): row for row in page_rows
+        if isinstance(row, dict) and row.get("page_id")
+    }
+    records_are_list = isinstance(records, list)
+    record_map = (
+        {item["record_id"]: item for item in records if isinstance(item, dict) and item.get("record_id")}
+        if records_are_list else records
+    )
+    catalogs_are_list = isinstance(catalogs, list)
+    original_catalog_ids = {
+        item.get("catalog_id") for item in catalogs
+        if isinstance(item, dict) and item.get("catalog_id")
+    } if catalogs_are_list else set()
+    catalog_map = (
+        {item["catalog_id"]: item for item in catalogs if isinstance(item, dict) and item.get("catalog_id")}
+        if catalogs_are_list else catalogs
+    )
+    catalog_by_id = {
+        item.get("catalog_id"): item for item in catalog_map.values()
+        if isinstance(item, dict) and item.get("catalog_id")
+    }
+
+    created_by_type: dict[str, int] = {}
+    for record_type, (title, catalog_type) in sorted(directory_types.items()):
+        members = []
+        for item in record_map.values():
+            if not isinstance(item, dict) or item.get("record_type") != record_type:
+                continue
+            page_ids = sorted({
+                page_id for page_id in item.get("source_page_ids", [])
+                if page_id in page_rows_by_id
+            })
+            if page_ids:
+                members.append((item, page_ids))
+        record_ids = sorted({
+            item["record_id"] for item, _ in members
+            if isinstance(item.get("record_id"), str) and item.get("record_id")
+        })
+        source_page_ids = sorted({
+            page_id for _, page_ids in members for page_id in page_ids
+        })
+        source_hosts = set()
+        source_urls = set()
+        timestamps = []
+        page_record_ids: dict[str, set[str]] = defaultdict(set)
+        for item, page_ids in members:
+            for page_id in page_ids:
+                page_record_ids[page_id].add(item["record_id"])
+        for page_id in source_page_ids:
+            row = page_rows_by_id[page_id]
+            page_url = canonical_url(row.get("url"))
+            if page_url:
+                source_urls.add(page_url)
+                host = urlsplit(page_url).hostname or ""
+                if host:
+                    source_hosts.add(host)
+            stamp = _timestamp_iso(row.get("fetched_at"))
+            if stamp:
+                timestamps.append(stamp)
+        timestamps.extend(
+            stamp for item, _ in members
+            if (stamp := _timestamp_iso(item.get("last_seen_at")))
+        )
+        if len(record_ids) < 3 or len(source_page_ids) < 3 or len(source_hosts) < 2:
+            continue
+
+        source_key = f"__global__|{record_type}|/directory"
+        catalog_id = stable_id("catalog", source_key)
+        stamps = sorted(set(timestamps))
+        catalog = {
+            "catalog_id": catalog_id,
+            "source_key": source_key,
+            "title": title,
+            "catalog_type": catalog_type,
+            "record_type": record_type,
+            "subject": record_type,
+            "source_host": "__global__",
+            "source_url": min(source_urls) if source_urls else "",
+            "source_page_ids": source_page_ids,
+            "source_page_count": len(source_page_ids),
+            "first_seen_at": stamps[0] if stamps else None,
+            "last_seen_at": stamps[-1] if stamps else None,
+            "record_ids": record_ids,
+            "record_count": len(record_ids),
+            "parent_catalog_id": None,
+            "evidence": [
+                "multiple_distinct_typed_records",
+                "minimum_3_distinct_records",
+                "minimum_3_source_pages",
+                "minimum_2_source_hosts",
+                "source_page_provenance",
+            ],
+            "catalog_origin": "derived_from_global_typed_records",
+            "is_source_declared_catalog": False,
+            "catalog_definition": False,
+            "evidence_strength": "derived",
+            "catalog_status": "derived_candidate_needs_source_validation",
+            "source_terms_status": "not_reviewed",
+            "source_policy_review_status": "not_reviewed",
+            "rights_status": "publicly_accessible_not_cleared_for_redistribution",
+            "record_level_clearance": "not_reviewed",
+            "commercial_eligible": False,
+            "status": "derived_candidate_needs_source_validation",
+            "verified": False,
+        }
+        existing = catalog_by_id.get(catalog_id)
+        if existing is not None:
+            existing.update(catalog)
+            catalog = existing
+        else:
+            catalog_map[catalog_id] = catalog
+            catalog_by_id[catalog_id] = catalog
+
+        for record_id in record_ids:
+            item = record_map[record_id]
+            catalog_ids = item.get("catalog_ids")
+            if not isinstance(catalog_ids, list):
+                catalog_ids = []
+            if catalog_id not in catalog_ids:
+                catalog_ids.append(catalog_id)
+            item["catalog_ids"] = catalog_ids
+        for page_id in source_page_ids:
+            row = page_rows_by_id[page_id]
+            row["record_ids"] = sorted(set(row.get("record_ids", [])) | page_record_ids[page_id])
+            row["catalog_group_keys"] = sorted(set(row.get("catalog_group_keys", [])) | {source_key})
+        created_by_type[record_type] = 1
+
+    # Existing host-specific directories become children of the corresponding
+    # global typed directory, preserving any deeper path hierarchy already set.
+    for record_type in created_by_type:
+        global_catalog_id = stable_id("catalog", f"__global__|{record_type}|/directory")
+        catalog_type = directory_types[record_type][1]
+        for item in catalog_by_id.values():
+            if (
+                item.get("record_type") == record_type
+                and item.get("catalog_id") != global_catalog_id
+                and item.get("source_host") != "__global__"
+                and not item.get("parent_catalog_id")
+                and item.get("catalog_type") == catalog_type
+            ):
+                item["parent_catalog_id"] = global_catalog_id
+
+    if catalogs_are_list:
+        catalogs.extend(
+            item for catalog_id, item in catalog_map.items()
+            if catalog_id not in original_catalog_ids
+        )
+    return created_by_type
+
+
 def _reconcile_page_record_provenance(page_rows: list[dict], records) -> int:
     """Reconcile page-to-record edges with each record's reverse provenance index."""
     if isinstance(records, dict):
@@ -1246,6 +1419,7 @@ def analyze_pages(
                 records[record_id]["catalog_ids"].append(catalog_id)
 
     global_subject_catalogs = _add_global_subject_catalogs(pages, page_rows, records, catalogs)
+    global_typed_catalogs_by_type = _add_global_typed_entity_catalogs(page_rows, records, catalogs)
     _reconcile_page_record_provenance(page_rows, records)
 
     for item in records.values():
@@ -1286,10 +1460,15 @@ def analyze_pages(
         "source_row_deduplication_percentage": round(source_row_deduplication, 4),
         "eligible_page_coverage_status": "complete" if source_set_complete else "unknown_incomplete_source_set",
         "global_subject_catalogs": global_subject_catalogs,
+        "global_typed_catalogs": sum(global_typed_catalogs_by_type.values()),
+        "global_typed_catalogs_by_type": global_typed_catalogs_by_type,
+        "global_typed_catalog_page_associations": sum(len(x.get("source_page_ids", [])) for x in catalog_list if x.get("catalog_origin") == "derived_from_global_typed_records"),
+        "global_typed_catalog_record_associations": sum(len(x.get("record_ids", [])) for x in catalog_list if x.get("catalog_origin") == "derived_from_global_typed_records"),
+        "catalogs_by_origin": dict(sorted(Counter(x.get("catalog_origin") or "unknown" for x in catalog_list).items())),
         "unique_catalogs_discovered": len(catalog_list),
         "unique_catalogs_by_type": dict(sorted(Counter(x["catalog_type"] for x in catalog_list).items())),
         "source_declared_catalogs": sum(bool(x.get("is_source_declared_catalog")) for x in catalog_list),
-        "derived_catalogs": sum(x.get("catalog_origin") == "derived_from_repeated_records" for x in catalog_list),
+        "derived_catalogs": sum(x.get("catalog_origin") in {"derived_from_repeated_records", "derived_from_global_typed_records"} for x in catalog_list),
         "content_list_catalogs": sum(x.get("catalog_origin") == "content_list_declared_collection" for x in catalog_list),
         "structured_schema_catalogs": sum(x.get("catalog_origin") == "structured_schema_collection" for x in catalog_list),
         "catalogs_with_records": sum(bool(x.get("record_ids")) for x in catalog_list),
@@ -2061,7 +2240,7 @@ def build_search_index(analysis: dict) -> dict[str, dict]:
             for token in _search_tokens(value):
                 token_catalogs[token].add(catalog_id)
 
-    searchable_attributes = {"brand", "model", "sku", "mpn", "gtin", "manufacturer", "category"}
+    searchable_attributes = {"brand", "model", "sku", "mpn", "gtin", "manufacturer", "category", "address_locality", "address_region", "address_country", "city", "state", "region", "country", "postal_code", "location_name", "area_served", "service_type"}
     for record in analysis.get("records", []):
         if not isinstance(record, dict):
             continue
