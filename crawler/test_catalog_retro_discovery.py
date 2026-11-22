@@ -56,6 +56,7 @@ class RetroCatalogDiscoveryTests(unittest.TestCase):
         self.assertIn('schedule:\n    - cron: "23 * * * *"', workflow)
         self.assertNotIn("workflow_run:", workflow)
         self.assertNotIn("Everything Hub crawler", workflow)
+        self.assertIn("cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}", workflow)
 
 if __name__ == "__main__":
     unittest.main()
