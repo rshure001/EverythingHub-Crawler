@@ -1183,7 +1183,7 @@ class CatalogInventoryTriggerTests(unittest.TestCase):
         push_paths = workflow.split("  push:\n", 1)[1].split("  workflow_dispatch:", 1)[0]
         self.assertIn('"public-search/manifest.json"', push_paths)
 
-    def test_catalog_publish_rebuilds_from_latest_main_after_concurrent_updates(self):
+    def test_catalog_publish_reuses_validated_snapshot_after_concurrent_updates(self):
         repository_root = Path(__file__).resolve().parents[1]
         workflow = (repository_root / ".github" / "workflows" / "retroactive-catalog-index.yml").read_text(encoding="utf-8")
         publish = workflow.split("Publish validated catalog snapshot on latest main", 1)[1]
