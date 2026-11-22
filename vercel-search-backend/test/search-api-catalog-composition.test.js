@@ -59,3 +59,60 @@ test('curated external catalogs do not bypass the indexed catalog loader', async
     });
   }
 });
+
+
+test('fallback responses keep curated external catalogs visible when either index loader exceeds its budget', async () => {
+  const modulePaths = [
+    '../src/lib/catalog',
+    '../src/lib/page-derived-catalogs',
+    '../src/lib/external-catalogs',
+    '../src/lib/search-core'
+  ].map((path) => require.resolve(path));
+  const originals = modulePaths.map((path) => require.cache[path]);
+  const httpsGet = https.get;
+  const consoleWarn = console.warn;
+  const external = [{ catalog_id: 'external:rolex', catalog_title: 'Official Rolex links', source_kind: 'curated_external_link_directory', preview_only: true, commercial_eligible: false, url: 'https://www.rolex.com/' }];
+  require.cache[modulePaths[0]] = { id: modulePaths[0], filename: modulePaths[0], loaded: true, exports: {
+    loadCatalog: async () => { throw new Error('catalog_load_budget_exceeded'); }
+  }};
+  require.cache[modulePaths[1]] = { id: modulePaths[1], filename: modulePaths[1], loaded: true, exports: {
+    loadPageDerivedCatalogs: async () => { throw new Error('page_catalog_load_budget_exceeded'); },
+    searchPageDerivedCatalogs: () => [],
+    matchesPageIndexSnapshot: () => false
+  }};
+  require.cache[modulePaths[2]] = { id: modulePaths[2], filename: modulePaths[2], loaded: true, exports: {
+    searchExternalCatalogs: () => external,
+    getExternalCatalogStats: () => ({ catalogCount: 1, recordCount: 6 })
+  }};
+  require.cache[modulePaths[3]] = { id: modulePaths[3], filename: modulePaths[3], loaded: true, exports: {
+    searchCatalog: () => [],
+    parseBingRss: () => [],
+    buildResponse: () => ({ status: 'ok', providers: [], results: [], count: 0, totalMatches: 0 })
+  }};
+  https.get = () => { throw new Error('bing_disabled_for_test'); };
+  console.warn = () => {};
+  try {
+    const handlerPath = require.resolve('../src/api/search');
+    delete require.cache[handlerPath];
+    const handler = require(handlerPath);
+    const response = {
+      headers: {},
+      setHeader(key, value) { this.headers[key] = value; },
+      status(code) { this.statusCode = code; return this; },
+      json(value) { this.body = value; return this; }
+    };
+    await handler({ method: 'GET', url: '/api/search?q=Rolex&limit=10' }, response);
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.body.fallback, true);
+    assert.equal(response.body.catalogResults[0].catalog_id, 'external:rolex');
+    assert.equal(response.body.externalCatalogResults[0].catalog_id, 'external:rolex');
+  } finally {
+    https.get = httpsGet;
+    console.warn = consoleWarn;
+    delete require.cache[require.resolve('../src/api/search')];
+    modulePaths.forEach((path, index) => {
+      if (originals[index]) require.cache[path] = originals[index];
+      else delete require.cache[path];
+    });
+  }
+});
