@@ -248,6 +248,18 @@ async function runVideoSearch(q){
   if(!response.ok||data.status!=='ok')throw new Error(data.message||'Video search unavailable');
   renderVideos(data,q);status.textContent=data.count.toLocaleString()+' videos from '+data.provider+'.';
 }
+async function requestIndexedSearch(q,lane){
+  const u=new URL('https://everythinghub-search-backend.vercel.app/api/search');
+  u.searchParams.set('q',q);
+  u.searchParams.set('limit','20');
+  if(lane)u.searchParams.set('lane',lane);
+  const response=await fetch(u,{headers:{accept:'application/json'},signal:AbortSignal.timeout(30000)});
+  if(!response.ok)throw new Error('Independent Everything Hub search '+response.status);
+  return response.json();
+}
+function hasIndexedResults(data){
+  return Boolean(data&&((Array.isArray(data.results)&&data.results.length)||(Array.isArray(data.catalogResults)&&data.catalogResults.length)));
+}
 async function runSearch(){
   const q=input.value.trim();if(!q){input.focus();return;}
   status.textContent='Searching…';resultsRoot.replaceChildren();
@@ -255,13 +267,56 @@ async function runSearch(){
   try{
     if(mode==='images'){await runImageSearch(q);return;}
     if(mode==='videos'){await runVideoSearch(q);return;}
-    const u=new URL('https://everythinghub-search-backend.vercel.app/api/search');u.searchParams.set('q',q);u.searchParams.set('limit','20');u.searchParams.set('lane',mode);
-    let data=null;
-    try{const response=await fetch(u,{headers:{accept:'application/json'},signal:AbortSignal.timeout(30000)});if(response.ok){const candidate=await response.json();if((Array.isArray(candidate.results)&&candidate.results.length)||(Array.isArray(candidate.catalogResults)&&candidate.catalogResults.length))data=candidate;}}catch(error){}
-    if(!data){const fast=new URL('https://everythinghub-search-backend.vercel.app/api/search-fast');fast.searchParams.set('q',q);fast.searchParams.set('lane',mode);const response=await fetch(fast,{headers:{accept:'application/json'},signal:AbortSignal.timeout(12000)});if(!response.ok)throw new Error('Live web search returned HTTP '+response.status);data=await response.json();if(data.status!=='ok'||!Array.isArray(data.results)||!data.results.length)throw new Error(data.message||'No public results returned');}
-    if(data&&(!Array.isArray(data.results)||!data.results.length)&&Array.isArray(data.catalogResults)&&data.catalogResults.length){try{const fast=new URL('https://everythinghub-search-backend.vercel.app/api/search-fast');fast.searchParams.set('q',q);fast.searchParams.set('lane',mode);const response=await fetch(fast,{headers:{accept:'application/json'},signal:AbortSignal.timeout(12000)});if(response.ok){const fastData=await response.json();if(fastData.status==='ok'&&Array.isArray(fastData.results)&&fastData.results.length){data={...data,results:fastData.results,count:fastData.count||fastData.results.length,totalMatches:fastData.totalMatches||fastData.count||fastData.results.length,providers:Array.from(new Set([...(data.providers||[]),...(fastData.providers||[])])),fallback:fastData.fallback||data.fallback};}}}catch(error){}}
-    renderResults(data,q);const pageCount=Array.isArray(data.results)?data.results.length:(Number(data.count)||0);const catalogCount=Array.isArray(data.catalogResults)?data.catalogResults.length:0;status.textContent=pageCount.toLocaleString()+' web results and '+catalogCount.toLocaleString()+' catalog previews from '+(data.providers||[]).join(' and ')+'.';
-  }catch(error){status.textContent=mode==='images'?'Image search is temporarily unavailable.':mode==='videos'?'Video sources are temporarily unavailable.':'Search is temporarily unavailable. Please try again.';const message=document.createElement('div');message.className='results-empty';message.textContent=error.message||'The search service did not respond. Please try again.';resultsRoot.replaceChildren(message);}
+    let data=null,lastError=null;
+    try{
+      const candidate=await requestIndexedSearch(q,mode);
+      if(hasIndexedResults(candidate))data=candidate;
+    }catch(error){lastError=error;}
+    // A category-specific lane can be empty even when the independent crawler
+    // has relevant pages in another lane. Retry the same owned index without a
+    // lane filter before considering any outside provider.
+    if(!data&&mode!=='news'){
+      try{
+        const candidate=await requestIndexedSearch(q,'');
+        if(hasIndexedResults(candidate))data={...candidate,laneFallback:true,requestedLane:mode};
+      }catch(error){if(!lastError)lastError=error;}
+    }
+    // The fast endpoint is an RSS-only news fallback. Its other lanes are
+    // intentionally disabled by robots policy and must never be requested.
+    if(!data&&mode==='news'){
+      const fast=new URL('https://everythinghub-search-backend.vercel.app/api/search-fast');
+      fast.searchParams.set('q',q);fast.searchParams.set('lane','news');
+      const response=await fetch(fast,{headers:{accept:'application/json'},signal:AbortSignal.timeout(12000)});
+      if(!response.ok)throw new Error('News fallback returned HTTP '+response.status);
+      const fastData=await response.json();
+      if(fastData.status==='ok'&&Array.isArray(fastData.results)&&fastData.results.length)data=fastData;
+      else throw new Error(fastData.message||'No robots-verified public news results returned');
+    }
+    if(data&&(!Array.isArray(data.results)||!data.results.length)&&Array.isArray(data.catalogResults)&&data.catalogResults.length&&mode==='news'){
+      try{
+        const fast=new URL('https://everythinghub-search-backend.vercel.app/api/search-fast');
+        fast.searchParams.set('q',q);fast.searchParams.set('lane','news');
+        const response=await fetch(fast,{headers:{accept:'application/json'},signal:AbortSignal.timeout(12000)});
+        if(response.ok){
+          const fastData=await response.json();
+          if(fastData.status==='ok'&&Array.isArray(fastData.results)&&fastData.results.length){
+            data={...data,results:fastData.results,count:fastData.count||fastData.results.length,totalMatches:fastData.totalMatches||fastData.count||fastData.results.length,providers:Array.from(new Set([...(data.providers||[]),...(fastData.providers||[])])),fallback:fastData.fallback||data.fallback};
+          }
+        }
+      }catch(error){}
+    }
+    if(!data){
+      throw lastError||new Error('No matching indexed results were found. External fallback is disabled for this category under the current robots policy.');
+    }
+    renderResults(data,q);
+    const pageCount=Array.isArray(data.results)?data.results.length:(Number(data.count)||0);
+    const catalogCount=Array.isArray(data.catalogResults)?data.catalogResults.length:0;
+    const laneNote=data.laneFallback?' · related results from all indexed categories':'';
+    status.textContent=pageCount.toLocaleString()+' web results and '+catalogCount.toLocaleString()+' catalog previews from '+(data.providers||[]).join(' and ')+laneNote+'.';
+  }catch(error){
+    status.textContent=mode==='images'?'Image search is temporarily unavailable.':mode==='videos'?'Video sources are temporarily unavailable.':'Search is temporarily unavailable. Please try again.';
+    const message=document.createElement('div');message.className='results-empty';message.textContent=error.message||'The search service did not respond. Please try again.';resultsRoot.replaceChildren(message);
+  }
 }
 const newsItems=document.getElementById('news-items'),newsStatus=document.getElementById('news-status');
 let activeNewsCategory='for-you';
