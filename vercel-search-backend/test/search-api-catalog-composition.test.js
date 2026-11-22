@@ -31,7 +31,7 @@ test('curated external catalogs do not bypass the indexed catalog loader', async
   require.cache[modulePaths[3]] = { id: modulePaths[3], filename: modulePaths[3], loaded: true, exports: {
     searchCatalog: () => [],
     parseBingRss: () => [],
-    buildResponse: () => ({ status: 'ok', providers: [], results: [], count: 0, totalMatches: 0 })
+    buildResponse: ({ catalog }) => ({ status: 'ok', providers: [], results: [], count: 0, totalMatches: 0, indexedPages: catalog.indexedPages })
   }};
   https.get = () => { throw new Error('bing_disabled_for_test'); };
 
