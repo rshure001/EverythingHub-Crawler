@@ -273,6 +273,39 @@ class CanonicalIndexStoreTests(unittest.TestCase):
         self.assertEqual(loaded["updated_at"], 1700000000)
         self.assertEqual(loaded["pages"], pages)
 
+    def test_public_search_page_limit_matches_the_250k_publisher_ceiling(self):
+        self.assertEqual(index_store.MAX_PUBLIC_SEARCH_PAGES, 250_000)
+        public_dir = self.root / "public-search"
+        public_dir.mkdir()
+        manifest_path = public_dir / "manifest.json"
+        pages = self.pages(1)
+        decoded = (json.dumps({"version": 1, "pages": pages}, separators=(",", ":")) + "\n").encode("utf-8")
+        raw = gzip.compress(decoded, compresslevel=9, mtime=0)
+        shard_name = "shard-0001.json.gz"
+        (public_dir / shard_name).write_bytes(raw)
+        manifest = {
+            "version": 1, "integrity": "sha256", "updated_at": 1700000000,
+            "total_pages": 180_001, "shard_count": 1,
+            "shards": [{
+                "file": shard_name, "pages": 1, "bytes": len(raw),
+                "uncompressed_bytes": len(decoded), "sha256": hashlib.sha256(raw).hexdigest(),
+            }],
+        }
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+        # Counts above the old 180k ceiling must pass the bound check and reach
+        # the later manifest-vs-shard integrity check.
+        for total_pages in (180_001, 250_000):
+            manifest["total_pages"] = total_pages
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "shard totals do not match manifest total_pages"):
+                index_store.load_index(manifest_path)
+
+        manifest["total_pages"] = 250_001
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "public search manifest page count is invalid"):
+            index_store.load_index(manifest_path)
+
     def test_public_search_shard_digest_is_checked_before_json_use(self):
         public_dir = self.root / "public-search"
         public_dir.mkdir()
