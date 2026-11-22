@@ -36,6 +36,30 @@ jobs:
       - name: Validate ten-at-a-time expansion engine
         working-directory: crawler
         run: python -m unittest test_catalog_seed_expansion.py test_catalog_source_policy.py -v
+      - name: Measure real main-branch seed eligibility without fetching sources
+        if: github.ref != 'refs/heads/main'
+        run: |
+          set -euo pipefail
+          git fetch --depth=1 origin main
+          git checkout origin/main -- data/page-catalog-seeds.json.gz
+          PYTHONPATH=crawler python - <<'PY'
+          import gzip, json
+          from collections import Counter
+          from pathlib import Path
+          from catalog_seed_expansion import _eligible_seed
+          payload = json.loads(gzip.decompress(Path("data/page-catalog-seeds.json.gz").read_bytes()))
+          pages = payload.get("pages", [])
+          eligible = [row for row in pages if _eligible_seed(row)]
+          hosts = Counter((row.get("host") or row.get("source_url", "").split("/")[2]) for row in eligible)
+          print(json.dumps({
+              "source_index_pages": payload.get("source_index_pages"),
+              "page_backed_seed_rows": len(pages),
+              "eligible_metadata_listing_seeds": len(eligible),
+              "eligible_seed_hosts": dict(hosts),
+              "network_requests_made": 0,
+              "records_published": 0
+          }, indent=2))
+          PY
       - name: Expand one bounded batch of ten page-backed seeds
         if: github.ref == 'refs/heads/main'
         run: python crawler/catalog_seed_expansion.py --limit 10
