@@ -1,3 +1,4 @@
+import re
 import gzip
 import json
 import tempfile
@@ -1644,6 +1645,137 @@ class CatalogInventoryTriggerTests(unittest.TestCase):
         self.assertEqual(len({item["record_id"] for item in nasa_records}), 3)
         self.assertEqual(metrics["subject_page_records"], len(subject_records))
         self.assertEqual(metrics["unique_subject_entities"], len({item["entity_id"] for item in subject_records}))
+
+
+
+
+    def test_global_typed_directories_aggregate_cross_host_records_and_are_searchable(self):
+        pages = []
+        product_sources = [
+            ("rolex.com", "Rolex", [("Submariner", "124060"), ("Datejust", "126200")]),
+            ("omegawatches.com", "Omega", [("Speedmaster", "31030"), ("Seamaster", "21030")]),
+            ("tudorwatch.com", "Tudor", [("Black Bay", "7941"), ("Pelagos", "25600")]),
+        ]
+        fetched_at = 100
+        for host, brand, models in product_sources:
+            for model, sku in models:
+                slug = re.sub(r"[^a-z0-9]+", "-", model.lower()).strip("-")
+                url = f"https://{host}/watches/{slug}"
+                pages.append({
+                    "url": url,
+                    "title": model,
+                    "description": f"{brand} watch model",
+                    "text": f"{brand} {model} watch collection",
+                    "lane": "shopping",
+                    "robots_allowed": True,
+                    "fetched_at": fetched_at,
+                    "product": {
+                        "type": "product", "name": model, "brand": brand,
+                        "sku": sku, "url": url,
+                    },
+                })
+                fetched_at += 1
+
+            brand_slug = re.sub(r"[^a-z0-9]+", "-", brand.lower()).strip("-")
+            for record_type, url_path, title in (
+                ("brand", "brands", brand),
+                ("product", "products", f"{brand} Watch Collection"),
+            ):
+                pages.append({
+                    "url": f"https://{host}/{url_path}/{brand_slug}",
+                    "title": title,
+                    "description": f"{brand} watch brand and product collection",
+                    "text": f"Official {brand} watch brand and product information.",
+                    "lane": "general",
+                    "robots_allowed": True,
+                    "fetched_at": fetched_at,
+                })
+                fetched_at += 1
+
+        place_sources = [
+            ("visitlasvegas.com", ["Las Vegas Strip", "Fremont Street"]),
+            ("travel.example", ["Downtown Las Vegas", "Red Rock Canyon"]),
+            ("nps.gov", ["Neon Museum Las Vegas", "Springs Preserve"]),
+        ]
+        for host, places in place_sources:
+            for place in places:
+                slug = re.sub(r"[^a-z0-9]+", "-", place.lower()).strip("-")
+                pages.append({
+                    "url": f"https://{host}/places/{slug}",
+                    "title": place,
+                    "description": f"{place} in Las Vegas, Nevada",
+                    "text": f"Places and attractions around Las Vegas. {place}.",
+                    "lane": "places",
+                    "robots_allowed": True,
+                    "fetched_at": fetched_at,
+                })
+                fetched_at += 1
+
+        organization_sources = [
+            ("nasa.gov", ["NASA", "NASA Ames Research Center"]),
+            ("space.example", ["Jet Propulsion Laboratory", "NASA Johnson Space Center"]),
+        ]
+        for host, organizations in organization_sources:
+            for organization in organizations:
+                slug = re.sub(r"[^a-z0-9]+", "-", organization.lower()).strip("-")
+                pages.append({
+                    "url": f"https://{host}/organizations/{slug}",
+                    "title": organization,
+                    "description": f"{organization} aerospace organization",
+                    "text": f"Organization profile for {organization}.",
+                    "lane": "general",
+                    "robots_allowed": True,
+                    "fetched_at": fetched_at,
+                })
+                fetched_at += 1
+
+        result = analyze_pages(pages, source_total=len(pages))
+        metrics = result["metrics"]
+        expected_types = {"brand", "product", "model", "place", "organization"}
+        self.assertTrue(expected_types.issubset(metrics["global_typed_catalogs_by_type"]))
+        self.assertGreaterEqual(metrics["global_typed_catalogs"], len(expected_types))
+
+        global_catalogs = {
+            item["record_type"]: item
+            for item in result["catalogs"]
+            if item.get("catalog_origin") == "derived_from_global_typed_records"
+        }
+        for query, record_type, expected_title in [
+            ("Rolex", "brand", "Rolex"),
+            ("Las Vegas", "place", "Las Vegas"),
+            ("NASA", "organization", "NASA"),
+        ]:
+            self.assertIn(record_type, global_catalogs)
+            hits = search_catalog_network(query, result)
+            global_id = global_catalogs[record_type]["catalog_id"]
+            matching = [hit for hit in hits if hit.get("catalog_id") == global_id]
+            self.assertTrue(matching, f"{query} did not find its global typed directory")
+            self.assertTrue(any(
+                expected_title.casefold() in str(item.get("title", "")).casefold()
+                for item in matching[0].get("matched_records", [])
+            ))
+
+        place_global_id = global_catalogs["place"]["catalog_id"]
+        place_children = [
+            item for item in result["catalogs"]
+            if item.get("record_type") == "place"
+            and item.get("source_host") != "__global__"
+            and item.get("parent_catalog_id") == place_global_id
+        ]
+        self.assertTrue(place_children)
+        self.assertGreaterEqual(metrics["global_typed_catalog_page_associations"], 3)
+        self.assertGreaterEqual(metrics["global_typed_catalog_record_associations"], 3)
+
+        reversed_result = analyze_pages(list(reversed(pages)), source_total=len(pages))
+        reversed_ids = {
+            item["catalog_id"] for item in reversed_result["catalogs"]
+            if item.get("catalog_origin") == "derived_from_global_typed_records"
+        }
+        expected_ids = {
+            item["catalog_id"] for item in result["catalogs"]
+            if item.get("catalog_origin") == "derived_from_global_typed_records"
+        }
+        self.assertEqual(reversed_ids, expected_ids)
 
 
 if __name__ == "__main__":
