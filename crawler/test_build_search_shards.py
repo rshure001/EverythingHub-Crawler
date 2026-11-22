@@ -213,10 +213,7 @@ class SearchShardBatchBoundaryTests(unittest.TestCase):
         prefix = __import__("hashlib").sha256(b"nasa").hexdigest()[:2]
         self.assertEqual(
             first[prefix]["tokens"]["nasa"],
-            [
-                {"file": "shard-0001.json.gz", "pages": 3},
-                {"file": "shard-0002.json.gz", "pages": 2},
-            ],
+            [[0, 3], [1, 2]],
         )
 
     def test_builder_and_validator_round_trip_query_index(self):
