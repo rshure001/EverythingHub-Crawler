@@ -87,3 +87,28 @@ test("explicit content intent still permits relevant article catalogs", () => {
   const results = searchPageDerivedCatalogs("NASA news", fixture(), 8);
   assert.ok(results.some(x => x.matched_records.some(r => r.title === "NASA Announces New Mission")));
 });
+
+
+test("Las Vegas typed location search can match a business with explicit locality metadata", () => {
+  const business = record("r-vegas-business", "Example hotel", "business", ["catalog:global-businesses"], "Hotel information");
+  business.attributes = {
+    address_locality: "Las Vegas",
+    address_region: "Nevada",
+    address_country: "United States"
+  };
+  const network = {
+    catalogs: [catalog("catalog:global-businesses", "Global Business Directory", "business_directory", "business", "business")],
+    records: [business]
+  };
+  const results = searchPageDerivedCatalogs("Las Vegas", network, 5);
+  assert.deepEqual(results.map(item => item.catalog_id), ["catalog:global-businesses"]);
+  assert.equal(results[0].relevance_class, "typed_location_match");
+});
+
+test("a business description mentioning Las Vegas is not treated as a typed location without locality metadata", () => {
+  const network = {
+    catalogs: [catalog("catalog:global-businesses", "Global Business Directory", "business_directory", "business", "business")],
+    records: [record("r-vegas-business", "Example hotel", "business", ["catalog:global-businesses"], "A hotel that mentions Las Vegas in an article")]
+  };
+  assert.deepEqual(searchPageDerivedCatalogs("Las Vegas", network, 5), []);
+});
