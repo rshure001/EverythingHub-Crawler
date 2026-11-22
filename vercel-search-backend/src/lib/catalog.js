@@ -496,7 +496,6 @@ function emptyQueryScopedCatalog(manifest, manifestSha256, tokenCount) {
     scannedPages: 0,
     candidatePageCount: 0,
     candidateShardCount: 0,
-    candidatePageCount: 0,
     totalCandidateShardCount: 0,
     totalCandidatePageCount: 0,
     candidateTruncated: false,
@@ -568,15 +567,21 @@ async function loadQueryScopedCatalogFromManifest(manifest, commitSha, manifestR
     }
   }
 
+  const termWeights = new Map();
+  for (const term of terms) {
+    const counts = postingsByTerm.get(term);
+    let totalTermCount = 0;
+    for (const count of counts.values()) totalTermCount += count;
+    termWeights.set(term, {
+      counts,
+      inverseFrequency: Math.log1p(manifest.total_pages / Math.max(1, totalTermCount))
+    });
+  }
   const rankedCandidates = Array.from(candidateShardIds).map(index => {
     const meta = manifest.shards[index];
     let score = 0;
-    for (const term of terms) {
-      const counts = postingsByTerm.get(term);
-      const termCount = counts.get(index) || 0;
-      const totalTermCount = Array.from(counts.values()).reduce((sum, count) => sum + count, 0);
-      const inverseFrequency = Math.log1p(manifest.total_pages / Math.max(1, totalTermCount));
-      score += termCount * inverseFrequency;
+    for (const { counts, inverseFrequency } of termWeights.values()) {
+      score += (counts.get(index) || 0) * inverseFrequency;
     }
     return { index, meta, score };
   }).sort((a, b) => b.score - a.score || a.index - b.index);
