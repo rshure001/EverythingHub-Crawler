@@ -149,6 +149,19 @@ def evaluate(
             **common,
         }
 
+    if schedule["schedule_status"] == "unobserved":
+        if manifest_age <= max_schedule_age_seconds:
+            return {
+                "action": "wait",
+                "reason": "no scheduled crawl event is observable, but the public manifest is not older than the 25-minute recovery window",
+                **common,
+            }
+        return {
+            "action": "mark",
+            "reason": "no scheduled crawl event is observable, the public manifest is more than 25 minutes old, and no crawler is queued or running",
+            **common,
+        }
+
     if schedule["schedule_status"] != "stale":
         return {
             "action": "wait",
