@@ -38,16 +38,17 @@ from build_search_shards import (
 
 class SearchShardBatchBoundaryTests(unittest.TestCase):
     def test_builder_target_keeps_headroom_under_public_hard_cap(self):
-        self.assertEqual(MAX_BYTES, 500_000)
+        self.assertEqual(MAX_BYTES, 600_000)
         self.assertEqual(MAX_COMPRESSED_BYTES, 350_000)
         self.assertLess(MAX_COMPRESSED_BYTES, 1_000_000)
         self.assertEqual(SHARD_GZIP_LEVEL, 6)
 
     def test_shard_capacity_is_aligned_across_builder_and_validator(self):
-        self.assertEqual(MAX_SHARD_COUNT, 768)
+        self.assertEqual(MAX_SHARD_COUNT, 900)
         self.assertEqual(MAX_SHARD_COUNT, VALIDATOR_MAX_SHARD_COUNT)
-        self.assertEqual(MAX_TOTAL_COMPRESSED_SHARD_BYTES, 100_000_000)
-        self.assertEqual(MAX_TOTAL_SHARD_UNCOMPRESSED_BYTES, 400_000_000)
+        self.assertLess(MAX_SHARD_COUNT + 3, 1_000)
+        self.assertEqual(MAX_TOTAL_COMPRESSED_SHARD_BYTES, 150_000_000)
+        self.assertEqual(MAX_TOTAL_SHARD_UNCOMPRESSED_BYTES, 540_000_000)
 
     def test_incremental_size_accounting_matches_exact_utf8_batch_bytes(self):
         pages = [
