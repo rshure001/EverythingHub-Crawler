@@ -99,7 +99,7 @@ class PipelineHealthTests(unittest.TestCase):
         self.assertNotIn("EverythingHub Publisher", workflow_run)
         self.assertNotIn("EverythingHub search API smoke test", workflow_run)
         self.assertNotIn("github.event.workflow_run.name", workflow)
-        self.assertIn('    - cron: "7,22,37,52 * * * *"', workflow)
+        self.assertIn('    - cron: "*/5 * * * *"', workflow)
         self.assertIn("pipeline_health.py", workflow)
 
     def test_search_manifest_at_fifteen_minute_boundary_is_fresh(self):
