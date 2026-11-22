@@ -202,6 +202,12 @@ class SearchShardBatchBoundaryTests(unittest.TestCase):
         self.assertTrue({"nasa", "las", "vegas", "space", "center", "rolex", "explorer", "rx", "42", "5"}.issubset(tokens))
         self.assertNotIn("the", tokens)
 
+    def test_query_tokens_match_javascript_lowercase_for_sharp_s(self):
+        page = compact({"title": "Straße NASA"})
+        tokens = query_tokens(page)
+        self.assertIn("straße", tokens)
+        self.assertNotIn("strasse", tokens)
+
     def test_query_index_is_deterministic_and_tracks_distinct_page_counts(self):
         postings = {
             "nasa": {1: 2, 0: 3},

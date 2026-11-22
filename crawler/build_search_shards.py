@@ -177,7 +177,8 @@ def query_tokens(page):
     for value in values:
         if not isinstance(value, (str, int, float)):
             continue
-        normalized = unicodedata.normalize("NFKC", str(value)).casefold()
+        # Keep parity with the JavaScript consumer: String.normalize("NFKC").toLowerCase().
+        normalized = unicodedata.normalize("NFKC", str(value)).lower()
         tokens.update(
             token for token in re.findall(r"[^\W_]+", normalized, flags=re.UNICODE)
             if token and token not in QUERY_STOP_TOKENS
