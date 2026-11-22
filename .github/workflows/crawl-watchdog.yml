@@ -12,8 +12,13 @@ on:
     # Stagger lightweight 15-minute checks away from Actions peaks. The watchdog rechecks active runs immediately before committing a marker; crawl.yml retains its own single-run concurrency guard.
     - cron: "7,22,37,52 * * * *"
   workflow_run:
+    # Recheck freshness after catalog publishers too. Scheduled crawl events can
+    # be delayed; a completed inventory/discovery run is another safe recovery
+    # point, while the watchdog's no-overlap and manifest-age guards stay intact.
     workflows:
       - "Everything Hub crawler"
+      - "Retroactive catalog inventory"
+      - "Catalog-first discovery"
     types:
       - completed
     branches: [main]
