@@ -7,7 +7,7 @@
   "source_index_sha256": "c450b8434c31deea2d56790fb2cde80eec427023df95f96552d5950702798e20",
   "catalog_count": 19017,
   "record_count": 941094,
-  "generated_at": "2026-11-21T23:34:13Z",
+  "generated_at": "2026-11-21T23:55:38Z",
   "metrics": {
     "pages_analyzed": 164541,
     "source_page_rows": 165030,
@@ -129,34 +129,32 @@
     "commercial_eligibility": false,
     "republication": "not_cleared"
   },
-  "analysis_started_at": "2026-11-21T23:32:51Z",
-  "analysis_finished_at": "2026-11-21T23:34:13Z",
-  "persisted_snapshot_at": "2026-11-21T23:34:13Z",
-  "analysis_elapsed_seconds": 81.249,
-  "elapsed_wall_clock_seconds": 7933.119,
+  "analysis_started_at": "2026-11-21T23:54:16Z",
+  "analysis_finished_at": "2026-11-21T23:55:38Z",
+  "persisted_snapshot_at": "2026-11-21T23:55:38Z",
+  "analysis_elapsed_seconds": 81.854,
+  "elapsed_wall_clock_seconds": 1285.059,
   "previous_counts": {
-    "pages_analyzed": 157816,
-    "eligible_pages": 157305,
-    "unique_catalogs_discovered": 18587,
+    "pages_analyzed": 164541,
+    "eligible_pages": 163994,
+    "unique_catalogs_discovered": 19017,
     "subcatalogs_discovered": 75,
-    "unique_records": 905879,
-    "media_references": 8536
+    "unique_records": 941094,
+    "media_references": 7856
   },
   "count_deltas": {
-    "pages_analyzed": 6725,
-    "eligible_pages": 6689,
-    "unique_catalogs_discovered": 430,
+    "pages_analyzed": 0,
+    "eligible_pages": 0,
+    "unique_catalogs_discovered": 0,
     "subcatalogs_discovered": 0,
-    "unique_records": 35215,
-    "media_references": -680
+    "unique_records": 0,
+    "media_references": 0
   },
-  "negative_count_deltas": {
-    "media_references": -680
-  },
+  "negative_count_deltas": {},
   "throughput": {
-    "pages_per_minute": 50.8627,
-    "catalogs_per_minute": 3.2522,
-    "records_per_minute": 266.3391,
+    "pages_per_minute": 0.0,
+    "catalogs_per_minute": 0.0,
+    "records_per_minute": 0.0,
     "subcatalogs_per_minute": 0.0,
     "media_references_per_minute": 0.0,
     "measurement": "persisted_count_delta_over_wall_clock_interval",
