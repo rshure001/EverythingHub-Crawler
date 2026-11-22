@@ -27,11 +27,11 @@ jobs:
       - name: Run search integrity and pagination tests
         run: node --test vercel-search-backend/test/*.test.js
   staging-smoke:
-    if: (github.event_name == 'pull_request' && contains(fromJSON('["fix/bounded-catalog-search-20261121","eh/search-load-budget-20261121","eh/catalog-search-relevance-20261121"]'), github.head_ref)) || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    if: (github.event_name == 'pull_request' && contains(fromJSON('["fix/bounded-catalog-search-20261121","eh/search-load-budget-20261121","eh/catalog-search-relevance-20261121","fix/live-search-watchdog-recovery-20261122"]'), github.head_ref)) || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
-      BASE: https://everythinghub-search-backend-hhkr7e8r9-rshure001-8053.vercel.app
+      BASE: https://everythinghub-search-backend-49r46ai1s-rshure001-8053.vercel.app
     steps:
       - name: Verify staging backend health and representative catalog searches
         run: |
