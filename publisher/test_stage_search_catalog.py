@@ -8,6 +8,7 @@ from pathlib import Path
 from stage_search_catalog import (
     MAX_INDEXED_PAGES,
     MAX_SHARD_COUNT,
+    MAX_PAGES_PER_SHARD,
     MAX_TOTAL_COMPRESSED_SHARD_BYTES,
     MAX_TOTAL_SHARD_UNCOMPRESSED_BYTES,
     stage_search_catalog,
@@ -286,6 +287,41 @@ class StageSearchCatalogTests(unittest.TestCase):
             "shards": shards,
         }
         with self.assertRaisesRegex(ValueError, "250,000-page safety limit"):
+            validate_manifest(manifest)
+
+    def test_stages_shards_above_legacy_1000_page_limit(self):
+        pages = [
+            page(f"https://example.com/page-{index}", f"Page {index}")
+            for index in range(1_006)
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "public-search"
+            target = root / "site" / "search-index"
+            source.mkdir()
+            shard = write_shard(source, 1, pages, compressed=True)
+            manifest = write_manifest(source, [shard], pages)
+            self.assertEqual(validate_manifest(manifest)["total_pages"], 1_006)
+            result = stage_search_catalog(source, target)
+            self.assertEqual(result["pages"], 1_006)
+
+    def test_rejects_shard_page_count_above_bounded_limit(self):
+        shard = {
+            "file": "shard-0001.json.gz",
+            "pages": MAX_PAGES_PER_SHARD + 1,
+            "bytes": 1,
+            "uncompressed_bytes": 1,
+            "sha256": "a" * 64,
+        }
+        manifest = {
+            "version": 1,
+            "integrity": "sha256",
+            "updated_at": 1795140000,
+            "total_pages": MAX_PAGES_PER_SHARD + 1,
+            "shard_count": 1,
+            "shards": [shard],
+        }
+        with self.assertRaisesRegex(ValueError, "shard page count must be within"):
             validate_manifest(manifest)
 
 if __name__ == "__main__":

@@ -7,6 +7,7 @@ from pathlib import Path
 from build_search_shards import is_publishable
 from index_store import save_index
 from validate_public_index import (
+    MAX_PAGES_PER_SHARD,
     MAX_CANONICAL_INDEX_BYTES,
     RECOMMENDED_CANONICAL_INDEX_BYTES,
     bounded_gzip_decompress,
@@ -269,6 +270,25 @@ class PublicIndexValidationTests(unittest.TestCase):
         manifest["shards"][0].pop("sha256")
         manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
         self.assertEqual(validate(self.root), [])
+
+    def test_shard_with_more_than_legacy_1000_pages_is_valid(self):
+        pages = [
+            {"url": f"https://example.com/page-{index}", "title": f"Page {index}"}
+            for index in range(1_006)
+        ]
+        self.write_fixture(pages, pages)
+        self.assertEqual(validate(self.root), [])
+
+    def test_shard_page_count_above_bounded_limit_is_rejected(self):
+        pages = [
+            {"url": f"https://example.com/page-{index}", "title": f"Page {index}"}
+            for index in range(MAX_PAGES_PER_SHARD + 1)
+        ]
+        self.write_fixture(pages, pages)
+        self.assertTrue(any(
+            f"shard page count exceeds the {MAX_PAGES_PER_SHARD:,}-page safety limit" in error
+            for error in validate(self.root)
+        ))
 
 
 if __name__ == "__main__":

@@ -11,6 +11,7 @@ from validate_public_index import (
     MAX_CATALOG_GZIP_BYTES as VALIDATOR_MAX_CATALOG_GZIP_BYTES,
     MAX_CATALOG_UNCOMPRESSED_BYTES as VALIDATOR_MAX_CATALOG_UNCOMPRESSED_BYTES,
     MAX_SHARD_COUNT as VALIDATOR_MAX_SHARD_COUNT,
+    MAX_PAGES_PER_SHARD as VALIDATOR_MAX_PAGES_PER_SHARD,
     MAX_TOTAL_COMPRESSED_SHARD_BYTES,
     MAX_TOTAL_SHARD_UNCOMPRESSED_BYTES,
 )
@@ -19,6 +20,7 @@ from build_search_shards import (
     MAX_BYTES,
     MAX_COMPRESSED_BYTES,
     MAX_SHARD_COUNT,
+    MAX_PAGES_PER_SHARD,
     SHARD_GZIP_LEVEL,
     MAX_CATALOG_GZIP_BYTES,
     MAX_CATALOG_UNCOMPRESSED_BYTES,
@@ -289,6 +291,49 @@ class SearchShardBatchBoundaryTests(unittest.TestCase):
 
         self.assertEqual(first, second)
         self.assertIn("Café".encode("utf-8"), first)
+
+    def test_shard_page_count_limit_is_aligned_across_builder_and_validator(self):
+        self.assertEqual(MAX_PAGES_PER_SHARD, 2_000)
+        self.assertEqual(MAX_PAGES_PER_SHARD, VALIDATOR_MAX_PAGES_PER_SHARD)
+
+    def test_builder_splits_shards_when_page_count_limit_is_reached(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            data_dir = root / "data"
+            data_dir.mkdir()
+            pages = [
+                {
+                    "url": f"https://example.com/page-{index}",
+                    "title": f"Page {index}",
+                    "description": "Small public page",
+                    "text": "Bounded shard fixture",
+                    "lane": "general",
+                    "robots_allowed": True,
+                }
+                for index in range(5)
+            ]
+            source = {"version": 1, "updated_at": 1795347352, "pages": pages}
+            source_path = data_dir / "index.json"
+            source_path.write_text(json.dumps(source), encoding="utf-8")
+            original_source = builder_module.SOURCE
+            original_out = builder_module.OUT
+            original_load_index = builder_module.load_index
+            original_limit = builder_module.MAX_PAGES_PER_SHARD
+            try:
+                builder_module.SOURCE = source_path
+                builder_module.OUT = root / "public-search"
+                builder_module.load_index = lambda _path: source
+                builder_module.MAX_PAGES_PER_SHARD = 2
+                builder_module.main()
+                manifest = json.loads((root / "public-search" / "manifest.json").read_text(encoding="utf-8"))
+                self.assertEqual([item["pages"] for item in manifest["shards"]], [2, 2, 1])
+                self.assertEqual(manifest["total_pages"], 5)
+                self.assertEqual(validator_module.validate(root), [])
+            finally:
+                builder_module.SOURCE = original_source
+                builder_module.OUT = original_out
+                builder_module.load_index = original_load_index
+                builder_module.MAX_PAGES_PER_SHARD = original_limit
 
 
 if __name__ == "__main__":

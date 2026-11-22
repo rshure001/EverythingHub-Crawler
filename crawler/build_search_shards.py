@@ -18,6 +18,7 @@ OUT = ROOT / "public-search"
 MAX_BYTES = 500_000  # Decoded shard target; gzip transport remains below 350 KB.
 MAX_COMPRESSED_BYTES = 350_000
 MAX_SHARD_COUNT = 768
+MAX_PAGES_PER_SHARD = 2_000
 SHARD_GZIP_LEVEL = 6
 # The independent Vercel backend safely decompresses up to 64 MB. The
 # Supabase Edge Function has a smaller 30 MB/6 MB budget and delegates larger
@@ -292,6 +293,8 @@ def main():
         nonlocal number
         if not items:
             return
+        if len(items) > MAX_PAGES_PER_SHARD:
+            raise ValueError(f"public search shard exceeds the fixed {MAX_PAGES_PER_SHARD}-page limit")
         number += 1
         if number > MAX_SHARD_COUNT:
             raise ValueError(f"public search catalog exceeds the fixed {MAX_SHARD_COUNT}-shard limit")
@@ -318,7 +321,7 @@ def main():
             prefix_bytes + batch_payload_size
             + (1 if batch else 0) + page_size + suffix_bytes
         )
-        if batch and candidate_size > MAX_BYTES:
+        if batch and (candidate_size > MAX_BYTES or len(batch) >= MAX_PAGES_PER_SHARD):
             write_batch(batch)
             batch = []
             batch_payload_size = 0
