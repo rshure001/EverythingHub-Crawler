@@ -1193,10 +1193,6 @@ class CatalogInventoryTriggerTests(unittest.TestCase):
         self.assertNotIn("data/host-catalog-candidates.json", publish)
         self.assertNotIn("data/page-catalog-seeds.json.gz", publish)
         self.assertNotIn("git push --force", publish)
-        self.assertNotIn("git push --force", publish)
-
-
-
 
     def test_structured_item_list_creates_nested_catalog_and_direct_record_urls(self):
         result = analyze_pages([{
