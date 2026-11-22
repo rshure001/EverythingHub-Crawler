@@ -142,7 +142,7 @@ jobs:
           # data/index* and public-search files, which do not overlap these catalog
           # manifests. Git will reject a rebase if another catalog writer changed
           # the same binary snapshot or ledger; only then rebuild the bounded batch.
-          for attempt in 1 2 3; do
+          for attempt in 1 2 3 4; do
             base_commit="$(git rev-parse HEAD^)"
             if git push origin HEAD:main; then
               exit 0
@@ -154,7 +154,7 @@ jobs:
               exit 1
             fi
 
-            echo "Main advanced during catalog publication; trying a path-safe rebase (attempt $attempt/3)."
+            echo "Main advanced during catalog publication; trying a path-safe rebase (attempt $attempt/4)."
             if git rebase origin/main; then
               if git push origin HEAD:main; then
                 echo "Validated catalog snapshot safely rebased over non-overlapping main changes."
@@ -166,8 +166,8 @@ jobs:
                 echo "Push failed after rebase without another remote advance; check repository write permission."
                 exit 1
               fi
-              if [ "$attempt" -eq 3 ]; then
-                echo "main kept advancing during three safe rebase attempts; leaving the remote untouched."
+              if [ "$attempt" -eq 4 ]; then
+                echo "main kept advancing during four safe rebase attempts; leaving the remote untouched."
                 exit 1
               fi
               echo "main advanced again; retrying the same validated catalog snapshot."
@@ -175,6 +175,10 @@ jobs:
             fi
 
             git rebase --abort || true
+            if [ "$attempt" -eq 4 ]; then
+              echo "Overlapping catalog paths changed on the final bounded attempt; leaving the remote untouched."
+              exit 1
+            fi
             echo "Overlapping catalog paths changed; rebuilding the bounded discovery batch from $remote_head."
             git reset --hard origin/main
             python crawler/catalog_discovery.py --rows "${{ inputs.rows || '250' }}" --max-pages "${{ inputs.max_pages || '40' }}"
@@ -189,5 +193,5 @@ jobs:
             fi
             git commit -m "Record catalog discovery and project history"
           done
-          echo "Unable to publish a coherent catalog snapshot after three bounded attempts."
+          echo "Unable to publish a coherent catalog snapshot after four bounded push attempts."
           exit 1
