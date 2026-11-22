@@ -23,7 +23,8 @@ MAX_TOTAL_UNCOMPRESSED_BYTES = 768_000_000
 _BUCKET_RE = re.compile(r"^[0-9a-f]{2}$")
 _SHA_RE = re.compile(r"^[0-9a-f]{64}$")
 _PUBLIC_SHARD_RE = re.compile(r"^shard-[0-9]{4}\.json\.gz$")
-MAX_PUBLIC_SEARCH_PAGES = 180_000
+# Keep the Python catalog analyzer aligned with the 250k public-search publisher/API ceiling.
+MAX_PUBLIC_SEARCH_PAGES = 250_000
 MAX_PUBLIC_SEARCH_SHARDS = 768
 MAX_PUBLIC_SEARCH_SHARD_BYTES = 350_000
 MAX_PUBLIC_SEARCH_SHARD_UNCOMPRESSED_BYTES = 500_000
