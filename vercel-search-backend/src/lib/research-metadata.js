@@ -18,7 +18,7 @@ let openAlexQueue = Promise.resolve();
 let lastOpenAlexRequestAt = 0;
 
 function clean(value, limit = 320) {
-  return String(value || '').replace(/<[^>]*>/g, ' ').replace(/\\s+/g, ' ').trim().slice(0, limit);
+  return String(value || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, limit);
 }
 
 function firstTitle(value) {
@@ -34,7 +34,7 @@ function yearFromParts(value) {
 function mapOpenAlexItem(item) {
   if (!item || typeof item !== 'object') return null;
   const openAlexId = clean(item.id, 240);
-  const doi = clean(item.doi, 240).replace(/^https?:\\/\\/doi\\.org\\//i, '').toLowerCase();
+  const doi = clean(item.doi, 240).replace(/^https?:\/\/doi\.org\//i, '').toLowerCase();
   const title = clean(item.display_name || item.title);
   if (!title || (!doi && !openAlexId)) return null;
   const authors = (Array.isArray(item.authorships) ? item.authorships : [])
