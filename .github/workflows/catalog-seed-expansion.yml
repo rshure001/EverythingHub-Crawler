@@ -1,0 +1,92 @@
+name: Ten-at-a-time catalog seed expansion
+
+on:
+  push:
+    paths:
+      - "crawler/catalog_seed_expansion.py"
+      - "crawler/test_catalog_seed_expansion.py"
+      - ".github/workflows/catalog-seed-expansion.yml"
+  pull_request:
+    paths:
+      - "crawler/catalog_seed_expansion.py"
+      - "crawler/test_catalog_seed_expansion.py"
+      - ".github/workflows/catalog-seed-expansion.yml"
+  workflow_dispatch:
+  schedule:
+    - cron: "7,27,47 * * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: page-catalog-seed-expansion
+  cancel-in-progress: false
+
+jobs:
+  expand:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref == 'refs/heads/main' && 'main' || github.head_ref || github.ref }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate ten-at-a-time expansion engine
+        working-directory: crawler
+        run: python -m unittest test_catalog_seed_expansion.py test_catalog_source_policy.py -v
+      - name: Measure real main-branch seed eligibility without fetching sources
+        if: github.ref != 'refs/heads/main'
+        run: |
+          set -euo pipefail
+          git fetch --depth=1 origin main
+          git checkout origin/main -- data/page-catalog-seeds.json.gz
+          PYTHONPATH=crawler python - <<'PY'
+          import gzip, json
+          from collections import Counter
+          from pathlib import Path
+          from catalog_seed_expansion import _eligible_seed
+          payload = json.loads(gzip.decompress(Path("data/page-catalog-seeds.json.gz").read_bytes()))
+          pages = payload.get("pages", [])
+          eligible = [row for row in pages if _eligible_seed(row)]
+          hosts = Counter((row.get("host") or row.get("source_url", "").split("/")[2]) for row in eligible)
+          print(json.dumps({
+              "source_index_pages": payload.get("source_index_pages"),
+              "page_backed_seed_rows": len(pages),
+              "eligible_metadata_listing_seeds": len(eligible),
+              "eligible_seed_hosts": dict(hosts),
+              "network_requests_made": 0,
+              "records_published": 0
+          }, indent=2))
+          PY
+      - name: Expand one bounded batch of ten page-backed seeds
+        if: github.ref == 'refs/heads/main'
+        run: python crawler/catalog_seed_expansion.py --limit 10
+      - name: Publish metadata-only expansion ledger
+        if: github.ref == 'refs/heads/main'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f data/page-catalog-expansion.json.gz
+          if git diff --cached --quiet; then
+            echo "No expansion ledger changes."
+            exit 0
+          fi
+          git commit -m "Expand ten page-backed catalog seeds"
+          for attempt in 1 2 3; do
+            if git push origin HEAD:main; then
+              exit 0
+            fi
+            git fetch origin main
+            git reset --hard origin/main
+            python crawler/catalog_seed_expansion.py --limit 10
+            git add -f data/page-catalog-expansion.json.gz
+            if git diff --cached --quiet; then
+              echo "Latest main already contains this expansion batch."
+              exit 0
+            fi
+            git commit -m "Expand ten page-backed catalog seeds"
+          done
+          echo "Unable to publish expansion ledger after three bounded attempts."
+          exit 1
