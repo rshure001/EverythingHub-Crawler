@@ -30,6 +30,16 @@ class CatalogSeedExpansionTests(unittest.TestCase):
         self.assertFalse(rows[0]["verified"])
         self.assertFalse(rows[0]["content_fetched"])
 
+    def test_rejects_alternate_ports_and_credentials(self):
+        parent = "https://frontiersin.org/journals/demo/articles"
+        self.assertIsNone(expansion._canonical_child(parent, "https://frontiersin.org:8443/journals/demo/articles/one"))
+        self.assertIsNone(expansion._canonical_child(parent, "https://user@frontiersin.org/journals/demo/articles/one"))
+        self.assertIsNone(expansion._canonical_child("https://frontiersin.org:8443/journals/demo/articles", "/journals/demo/articles/one"))
+        self.assertEqual(
+            expansion._canonical_child(parent, "/journals/demo/articles/one"),
+            "https://frontiersin.org/journals/demo/articles/one",
+        )
+
     def test_policy_gate_rejects_unreviewed_or_unallowlisted_seed(self):
         with patch.object(expansion, "policy_for_host", return_value=None):
             self.assertFalse(expansion._eligible_seed({
