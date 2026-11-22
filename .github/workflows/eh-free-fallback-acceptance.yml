@@ -26,7 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 12
     env:
-      # Always test the public production alias, never a deployment-specific preview URL.
+      # Always test the stable public alias, never a deployment-specific deployment URL.
       TARGET_URL: https://everythinghub-homepage-fixed.vercel.app/
     steps:
       - uses: actions/setup-node@v4
@@ -65,6 +65,48 @@ jobs:
               }
             });
             const report = { url: process.env.TARGET_URL, checks: {}, pageErrors, consoleErrors, mediaNetwork: { responses: mediaResponses, failures: mediaFailures } };
+            const layoutSnapshot = async () => page.evaluate(() => {
+              const categories = [...document.querySelectorAll(".hotspots [data-mode]")];
+              const categoryRects = categories.map(node => {
+                const r = node.getBoundingClientRect();
+                return { mode: node.dataset.mode, left: r.left, right: r.right, top: r.top, bottom: r.bottom };
+              });
+              const overlappingCategories = [];
+              for (let i = 0; i < categoryRects.length; i++) {
+                for (let j = i + 1; j < categoryRects.length; j++) {
+                  const a = categoryRects[i], b = categoryRects[j];
+                  if (Math.min(a.right, b.right) - Math.max(a.left, b.left) > 1 &&
+                      Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 1) {
+                    overlappingCategories.push([a.mode, b.mode]);
+                  }
+                }
+              }
+              const controls = [...document.querySelectorAll("#query, #searchForm button[type=submit], .hotspots [data-mode]")];
+              const controlsWithinViewport = controls.every(node => {
+                const r = node.getBoundingClientRect();
+                return r.width > 0 && r.height > 0 && r.left >= -1 && r.right <= window.innerWidth + 1;
+              });
+              return {
+                viewport: document.documentElement.clientWidth,
+                document: document.documentElement.scrollWidth,
+                body: document.body.scrollWidth,
+                artwork: !!document.querySelector(".art img")?.getClientRects().length,
+                search: !!document.querySelector("#query")?.getClientRects().length,
+                categories: categories.length,
+                brokenImages: [...document.images].filter(img => img.complete && img.naturalWidth === 0).length,
+                controlsWithinViewport,
+                overlappingCategories
+              };
+            });
+            const assertLayout = (label, layout) => {
+              if (layout.document > layout.viewport + 2 ||
+                  layout.body > layout.viewport + 2 ||
+                  !layout.artwork || !layout.search || layout.categories !== 8 ||
+                  layout.brokenImages || !layout.controlsWithinViewport ||
+                  layout.overlappingCategories.length) {
+                throw new Error(label + " layout failed: " + JSON.stringify(layout));
+              }
+            };
             const shot = async name => page.screenshot({ path: name, fullPage: true });
             const goHome = async () => {
               await page.goto(process.env.TARGET_URL, { waitUntil: "domcontentloaded", timeout: 45000 });
@@ -103,6 +145,9 @@ jobs:
               const modes = await page.locator(".hotspots [data-mode]").evaluateAll(nodes => nodes.map(node => node.dataset.mode));
               if (modes.length !== 8) throw new Error("Expected eight search categories; got " + modes.length);
               report.checks.home = { http: response.status(), title: await page.title(), artwork: art, modes };
+              const desktop = await layoutSnapshot();
+              assertLayout("Desktop", desktop);
+              report.checks.desktop = desktop;
               await shot("everythinghub-home.png");
               const rolex = await search("web", "Rolex", "#results .eh-result", 1, true);
               const rolexPageDerived = rolex.catalogs.some(card => card.sourceKind !== "external_link_only" && card.relevanceClass === "typed_product_match" && /Rolex/i.test(card.title + " " + card.text));
@@ -237,15 +282,8 @@ jobs:
               await shot("everythinghub-videos.png");
               await page.setViewportSize({ width: 390, height: 844 });
               await goHome();
-              const mobile = await page.evaluate(() => ({
-                viewport: document.documentElement.clientWidth,
-                document: document.documentElement.scrollWidth,
-                artwork: !!document.querySelector(".art img")?.getClientRects().length,
-                search: !!document.querySelector("#query")?.getClientRects().length,
-                categories: document.querySelectorAll(".hotspots [data-mode]").length,
-                brokenImages: [...document.images].filter(img => img.complete && img.naturalWidth === 0).length
-              }));
-              if (mobile.document > mobile.viewport + 2 || !mobile.artwork || !mobile.search || mobile.categories !== 8 || mobile.brokenImages) throw new Error("Mobile layout failed: " + JSON.stringify(mobile));
+              const mobile = await layoutSnapshot();
+              assertLayout("Mobile", mobile);
               report.checks.mobile = mobile;
               await shot("everythinghub-mobile.png");
               if (pageErrors.length || consoleErrors.length) throw new Error("Browser errors: " + JSON.stringify({ pageErrors, consoleErrors }));
