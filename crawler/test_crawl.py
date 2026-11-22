@@ -1073,7 +1073,7 @@ class CrawlerTests(unittest.TestCase):
         self.assertEqual(len(record["structured_entities"]), 1)
         entity = record["structured_entities"][0]
         self.assertEqual(entity["attributes"]["address_locality"], "Las Vegas")
-        self.assertIn("https://www.wikidata.org/entity/Q12345", entity["attributes"]["same_as_ids"])
+        self.assertIn("wikidata:Q12345", entity["attributes"]["same_as_ids"])
         self.assertNotIn("street_address", entity["attributes"])
         self.assertNotIn("telephone", entity["attributes"])
         self.assertNotIn("email", entity["attributes"])
