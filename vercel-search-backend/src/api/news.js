@@ -25,7 +25,7 @@ function readTag(xml, name) {
 const NEWS_FEEDS = {
   "for-you": [
     { source: "The White House", url: "https://www.whitehouse.gov/releases/feed/" },
-    { source: "NASA Jet Propulsion Laboratory", url: "https://www.jpl.nasa.gov/feeds/news/" },
+    { source: "NASA News Releases", url: "https://www.nasa.gov/news-release/feed/", headlinesOnly: true },
     { source: "NOAA", url: "https://www.noaa.gov/rss.xml" },
     { source: "Federal Reserve", url: "https://www.federalreserve.gov/feeds/press_all.xml" }
   ],
@@ -36,14 +36,14 @@ const NEWS_FEEDS = {
   ],
   technology: [
     { source: "NIST", url: "https://www.nist.gov/news-events/news/rss.xml" },
-    { source: "NASA Jet Propulsion Laboratory", url: "https://www.jpl.nasa.gov/feeds/news/" }
+    { source: "NASA News Releases", url: "https://www.nasa.gov/news-release/feed/", headlinesOnly: true }
   ],
   business: [
     { source: "Federal Reserve", url: "https://www.federalreserve.gov/feeds/press_all.xml" },
     { source: "U.S. Department of Labor", url: "https://www.dol.gov/rss/releases.xml" }
   ],
   science: [
-    { source: "NASA Jet Propulsion Laboratory", url: "https://www.jpl.nasa.gov/feeds/news/" },
+    { source: "NASA News Releases", url: "https://www.nasa.gov/news-release/feed/", headlinesOnly: true },
     { source: "NOAA", url: "https://www.noaa.gov/rss.xml" },
     { source: "National Science Foundation", url: "https://www.nsf.gov/rss/rss_www_news.xml" }
   ]
@@ -61,7 +61,7 @@ function parseFeed(xml, feed) {
         if (parsed.protocol === "https:") url = parsed.toString();
       } catch {}
       const published = readTag(item, "pubDate") || readTag(item, "dc:date") || readTag(item, "date");
-      const summary = readTag(item, "description") || readTag(item, "summary") || readTag(item, "content:encoded");
+      const summary = feed.headlinesOnly ? "" : (readTag(item, "description") || readTag(item, "summary") || readTag(item, "content:encoded"));
       return {
         title,
         url,
