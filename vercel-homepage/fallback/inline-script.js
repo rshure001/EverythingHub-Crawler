@@ -17,12 +17,14 @@ function renderCatalogResults(items,q){
   makeHeading(q,'Catalog matches',safeItems.length.toLocaleString()+' candidate previews · preview only');
   const list=document.createElement('div');list.className='catalog-preview-list';
   for(const item of safeItems){
-    const external=String(item.source_kind||'')==='external_link_only';
+    const rawSourceKind=String(item.source_kind||'');
+    const external=rawSourceKind==='external_link_only'||rawSourceKind==='curated_external_link_directory';
     const card=document.createElement('article');card.className='eh-catalog-result';
     card.dataset.catalogId=String(item.catalog_id||'');
-    card.dataset.sourceKind=String(item.source_kind||'page-derived');
+    card.dataset.sourceKind=external?'external_link_only':(rawSourceKind||'page-derived');
+    card.dataset.sourceOrigin=rawSourceKind;
     card.dataset.rightsStatus=String(item.rights_status||'not_cleared');
-    card.dataset.relevanceClass=String(item.relevance_class||'');
+    card.dataset.relevanceClass=external?'external_link_only':String(item.relevance_class||'');
     card.dataset.previewOnly='true';
     card.dataset.commercialEligible='false';
     const meta=document.createElement('div');meta.className='catalog-meta';
@@ -165,7 +167,7 @@ async function runSearch(){
     if(mode==='videos'){await runVideoSearch(q);return;}
     const u=new URL('https://everythinghub-search-backend.vercel.app/api/search');u.searchParams.set('q',q);u.searchParams.set('limit','20');u.searchParams.set('lane',mode);
     let data=null;
-    try{const response=await fetch(u,{headers:{accept:'application/json'},signal:AbortSignal.timeout(15000)});if(response.ok){const candidate=await response.json();if((Array.isArray(candidate.results)&&candidate.results.length)||(Array.isArray(candidate.catalogResults)&&candidate.catalogResults.length))data=candidate;}}catch(error){}
+    try{const response=await fetch(u,{headers:{accept:'application/json'},signal:AbortSignal.timeout(30000)});if(response.ok){const candidate=await response.json();if((Array.isArray(candidate.results)&&candidate.results.length)||(Array.isArray(candidate.catalogResults)&&candidate.catalogResults.length))data=candidate;}}catch(error){}
     if(!data){const fast=new URL('https://everythinghub-search-backend.vercel.app/api/search-fast');fast.searchParams.set('q',q);fast.searchParams.set('lane',mode);const response=await fetch(fast,{headers:{accept:'application/json'},signal:AbortSignal.timeout(12000)});if(!response.ok)throw new Error('Live web search returned HTTP '+response.status);data=await response.json();if(data.status!=='ok'||!Array.isArray(data.results)||!data.results.length)throw new Error(data.message||'No public results returned');}
     if(data&&(!Array.isArray(data.results)||!data.results.length)&&Array.isArray(data.catalogResults)&&data.catalogResults.length){try{const fast=new URL('https://everythinghub-search-backend.vercel.app/api/search-fast');fast.searchParams.set('q',q);fast.searchParams.set('lane',mode);const response=await fetch(fast,{headers:{accept:'application/json'},signal:AbortSignal.timeout(12000)});if(response.ok){const fastData=await response.json();if(fastData.status==='ok'&&Array.isArray(fastData.results)&&fastData.results.length){data={...data,results:fastData.results,count:fastData.count||fastData.results.length,totalMatches:fastData.totalMatches||fastData.count||fastData.results.length,providers:Array.from(new Set([...(data.providers||[]),...(fastData.providers||[])])),fallback:fastData.fallback||data.fallback};}}}catch(error){}}
     renderResults(data,q);const pageCount=Array.isArray(data.results)?data.results.length:(Number(data.count)||0);const catalogCount=Array.isArray(data.catalogResults)?data.catalogResults.length:0;status.textContent=pageCount.toLocaleString()+' web results and '+catalogCount.toLocaleString()+' catalog previews from '+(data.providers||[]).join(' and ')+'.';

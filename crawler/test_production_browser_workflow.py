@@ -34,7 +34,10 @@ class ProductionBrowserWorkflowContractTests(unittest.TestCase):
         self.assertIn('catalogPreview:{count:catalogCount', workflow)
         self.assertIn('Record rights not cleared', workflow)
         self.assertIn('Commercial use not cleared', workflow)
-        self.assertIn('timeout: 25000', workflow)
+        self.assertIn('timeout: 30000', workflow)
+        self.assertIn('timeout: 35000', workflow)
+        self.assertIn('node.dataset.sourceOrigin || node.dataset.sourceKind', workflow)
+        self.assertIn('catalogDisplaySources.includes("external_link_only")', workflow)
 
 
 if __name__ == "__main__":

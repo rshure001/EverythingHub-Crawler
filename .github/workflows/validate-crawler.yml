@@ -20,6 +20,7 @@ on:
       - ".github/workflows/search-api-smoke.yml"
       - ".github/workflows/recovery-search-check.yml"
       - ".github/workflows/validate-vercel-search.yml"
+      - ".github/workflows/everything-hub-production-browser-check.yml"
   pull_request:
     paths:
       - "crawler/**"
@@ -61,7 +62,7 @@ jobs:
           python-version: "3.12"
       - name: Validate crawler, watchdog, and publisher workflow YAML
         run: |
-          ruby -e 'require "yaml"; ARGV.each { |path| YAML.load_file(path, aliases: true); puts "YAML-valid #{path}" }' .github/workflows/crawl.yml .github/workflows/crawl-watchdog.yml .github/workflows/publish-site.yml .github/workflows/search-api-smoke.yml .github/workflows/everything-hub-live-diagnostics.yml .github/workflows/recovery-search-check.yml .github/workflows/validate-vercel-search.yml .github/workflows/retroactive-catalog-index.yml
+          ruby -e 'require "yaml"; ARGV.each { |path| YAML.load_file(path, aliases: true); puts "YAML-valid #{path}" }' .github/workflows/crawl.yml .github/workflows/crawl-watchdog.yml .github/workflows/publish-site.yml .github/workflows/search-api-smoke.yml .github/workflows/everything-hub-live-diagnostics.yml .github/workflows/recovery-search-check.yml .github/workflows/validate-vercel-search.yml .github/workflows/everything-hub-production-browser-check.yml .github/workflows/retroactive-catalog-index.yml
       - name: Compile crawler and database tools
         run: |
           python -m py_compile crawler/index_store.py crawler/validate_index_migration.py crawler/crawl.py crawler/report.py crawler/build_search_shards.py crawler/validate_public_index.py crawler/validate_media_catalog.py crawler/schedule_watchdog.py crawler/pipeline_health.py database/import_repository_index.py database/crawl_worker.py database/crawl_worker_smoke.py publisher/release_health.py publisher/stage_search_catalog.py
@@ -74,7 +75,8 @@ jobs:
           node --check vercel-search-backend/src/api/search.js
           node --check vercel-search-backend/src/api/health.js
           node --test vercel-search-backend/test/*.test.js
-          node --test vercel-homepage/media-preview-policy.test.js vercel-homepage/homepage-contract.test.js
+          node --test vercel-homepage/media-preview-policy.test.js vercel-homepage/homepage-contract.test.js vercel-homepage/fallback-contract.test.js
+          node --check vercel-homepage/fallback/inline-script.js
           node --test supabase/functions/everything-hub-web-search/params.test.mjs supabase/functions/everything-hub-web-search/db-fetch.test.mjs supabase/functions/everything-hub-web-search/static-search.test.mjs supabase/functions/everything-hub-web-search/static-manifest.test.mjs supabase/functions/everything-hub-web-search/bounded-stream.test.mjs supabase/functions/everything-hub-web-search/manifest-time.test.mjs supabase/functions/everything-hub-web-search/vercel-fallback.test.mjs supabase/functions/everything-hub-media-search/merge-results.test.mjs
           python crawler/validate_index_migration.py
           python crawler/build_search_shards.py

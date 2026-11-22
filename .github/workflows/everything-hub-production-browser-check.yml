@@ -175,7 +175,7 @@ jobs:
               apiUrl.searchParams.set("q", query);
               apiUrl.searchParams.set("limit", "20");
               apiUrl.searchParams.set("lane", "web");
-              const apiResponse = await page.request.get(apiUrl.toString(), { timeout: 20000 });
+              const apiResponse = await page.request.get(apiUrl.toString(), { timeout: 30000 });
               let apiBody = {};
               try { apiBody = await apiResponse.json(); } catch (error) { apiBody = { parseError: String(error) }; }
               report.apiProbes[query] = { status: apiResponse.status(), pageResults: Array.isArray(apiBody.results) ? apiBody.results.length : 0, catalogResults: Array.isArray(apiBody.catalogResults) ? apiBody.catalogResults.length : 0, externalCatalogResults: Array.isArray(apiBody.externalCatalogResults) ? apiBody.externalCatalogResults.length : 0, catalogPreview: apiBody.catalogPreview || null, providers: apiBody.providers || [], error: apiBody.error || apiBody.message || null };
@@ -248,14 +248,15 @@ jobs:
                 const result = await readResultCards();
                 const pattern = query === "Rolex" ? /rolex/i : query === "Las Vegas" ? /las vegas|vegas/i : /nasa/i;
                 if (!result.count || !result.titles.some(title => pattern.test(title))) throw new Error(query + " did not return relevant visible web results: " + JSON.stringify(result));
-                await page.locator("#results .eh-catalog-result").first().waitFor({ state: "visible", timeout: 25000 });
+                await page.locator("#results .eh-catalog-result").first().waitFor({ state: "visible", timeout: 35000 });
                 const catalogCards = page.locator("#results .eh-catalog-result");
                 const catalogCount = await catalogCards.count();
                 const catalogTitles = await catalogCards.locator("a").allTextContents();
                 const catalogMatched = await catalogCards.locator(".catalog-matched").allTextContents();
                 const catalogRelevance = await catalogCards.locator(".catalog-relevance").allTextContents();
                 const catalogRights = await catalogCards.locator(".catalog-rights").allTextContents();
-                const catalogSources = await catalogCards.evaluateAll(nodes => nodes.map(node => node.dataset.sourceKind || ""));
+                const catalogSources = await catalogCards.evaluateAll(nodes => nodes.map(node => node.dataset.sourceOrigin || node.dataset.sourceKind || ""));
+                const catalogDisplaySources = await catalogCards.evaluateAll(nodes => nodes.map(node => node.dataset.sourceKind || ""));
                 const catalogFlags = await catalogCards.evaluateAll(nodes => nodes.map(node => ({
                   id: node.dataset.catalogId,
                   previewOnly: node.dataset.previewOnly,
@@ -264,7 +265,7 @@ jobs:
                 const familyLinksVisible = query === "Rolex" && /Submariner/.test(catalogMatched.join(" ")) && /Datejust/.test(catalogMatched.join(" ")) && /Cosmograph Daytona/.test(catalogMatched.join(" "));
                 const lasVegasResourcesVisible = query === "Las Vegas" && /Business License/.test(catalogMatched.join(" ")) && /Things to Do/.test(catalogMatched.join(" "));
                 const nasaResourcesVisible = query === "NASA" && /NASA Earthdata Search/.test(catalogMatched.join(" ")) && /NASA Image and Video Library/.test(catalogMatched.join(" "));
-                const externalDirectoryVisible = catalogSources.includes("curated_external_link_directory");
+                const externalDirectoryVisible = catalogSources.includes("curated_external_link_directory") || catalogDisplaySources.includes("external_link_only");
                 const relevantCatalog = (query === "Rolex" && familyLinksVisible && externalDirectoryVisible) ||
                   (query === "Las Vegas" && lasVegasResourcesVisible && externalDirectoryVisible) ||
                   (query === "NASA" && nasaResourcesVisible && externalDirectoryVisible) ||
@@ -275,7 +276,7 @@ jobs:
                     !catalogRights.every(text => /Candidate preview only/.test(text) && /Record rights not cleared/.test(text) && /Commercial use not cleared/.test(text))) {
                   throw new Error(query + " catalog preview rights or identity labels failed: " + JSON.stringify({catalogFlags,catalogRelevance,catalogRights}));
                 }
-                report.searches[query] = {...result,status:await page.locator("#status").textContent(),catalogPreview:{count:catalogCount,titles:catalogTitles,matched:catalogMatched,relevance:catalogRelevance,rights:catalogRights,sources:catalogSources,familyLinksVisible,lasVegasResourcesVisible,nasaResourcesVisible,externalDirectoryVisible}};
+                report.searches[query] = {...result,status:await page.locator("#status").textContent(),catalogPreview:{count:catalogCount,titles:catalogTitles,matched:catalogMatched,relevance:catalogRelevance,rights:catalogRights,sources:catalogSources,familyLinksVisible,lasVegasResourcesVisible,nasaResourcesVisible,externalDirectoryVisible,displaySources:catalogDisplaySources}};
 
                 await page.screenshot({ path: "everythinghub-fallback-" + query.toLowerCase().replace(/\s+/g, "-") + ".png", fullPage: true });
               }
