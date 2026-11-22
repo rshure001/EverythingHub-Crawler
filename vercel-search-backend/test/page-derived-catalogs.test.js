@@ -153,6 +153,40 @@ test('loads only matching sharded catalog indexes for Rolex and Las Vegas querie
  assert.equal(vegas.records[0].record_id,'record-vegas');
 });
 
+test('bounds query-scoped catalog index fan-out while keeping the first priority candidates',async()=>{
+ const f=fixture(),sha='d'.repeat(40),artifacts=new Map(),indexFetches=[];
+ const candidates=Array.from({length:20},(_,index)=>index===0?'global-place':`distractor-${String(index).padStart(2,'0')}`);
+ const add=(file,buffer,items)=>{f.manifest.files.push({file,bytes:buffer.length,sha256:hash(buffer),items});artifacts.set('https://raw.githubusercontent.com/rshure001/EverythingHub-Crawler/'+sha+'/data/page-derived-catalogs/'+file.split('/').map(encodeURIComponent).join('/'),buffer);};
+ for(let index=0;index<candidates.length;index++){
+  const id=candidates[index],digest=crypto.createHash('sha256').update(id).digest('hex');
+  const record={record_id:'record-'+id,record_type:index===0?'place':'subject',title:'Las Vegas '+id,description:'Las Vegas candidate',source_urls:['https://example.test/'+id],source_page_ids:['page-'+id],catalog_ids:[id],commercial_eligible:false,source_terms_status:'not_reviewed',rights_status:'publicly_accessible_not_cleared_for_redistribution',attributes:{}};
+  add('indexes/'+digest.slice(0,2)+'/'+digest.slice(0,24)+'.json.gz',gzip({version:1,catalog_id:id,title:index===0?'Global place directory':'Unrelated Las Vegas collection',status:'candidate_needs_source_validation',records:[record]}),1);
+ }
+ const byPrefix=new Map();
+ for(const term of ['las','vegas']){
+  const prefix=crypto.createHash('sha256').update(term).digest('hex').slice(0,2);
+  if(!byPrefix.has(prefix))byPrefix.set(prefix,{});
+  byPrefix.get(prefix)[term]=candidates;
+ }
+ for(const [prefix,tokens] of byPrefix)add('search-index/'+prefix+'.json.gz',gzip({version:1,prefix,tokens}),Object.keys(tokens).length);
+ const manifestRaw=Buffer.from(JSON.stringify(f.manifest));
+ const refUrl='https://api.github.com/repos/rshure001/EverythingHub-Crawler/git/ref/heads/main';
+ const manifestUrl='https://raw.githubusercontent.com/rshure001/EverythingHub-Crawler/'+sha+'/data/page-derived-catalogs/manifest.json';
+ const fetcher=async url=>{
+  if(url.startsWith(refUrl))return Buffer.from(JSON.stringify({object:{sha}}));
+  if(url===manifestUrl)return manifestRaw;
+  if(url.includes('/indexes/'))indexFetches.push(url);
+  if(artifacts.has(url))return artifacts.get(url);
+  throw new Error('unexpected_test_url '+url);
+ };
+ const loaded=await loadQueryScopedPageDerivedCatalogs('Las Vegas',fetcher);
+ assert.equal(loaded.queryCandidateCount,12);
+ assert.equal(loaded.queryCatalogsLoaded,12);
+ assert.equal(loaded.catalogs.length,12);
+ assert.equal(indexFetches.length,12);
+ assert.equal(loaded.catalogs[0].catalog_id,'global-place');
+});
+
 test('freshness requires matching source-page count and update timestamp',()=>{
  const {matchesPageIndexSnapshot}=require('../src/lib/page-derived-catalogs');
  const updatedAt=Date.parse('2026-11-20T22:00:00Z')/1000;
