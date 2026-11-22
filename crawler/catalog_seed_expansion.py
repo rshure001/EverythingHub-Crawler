@@ -119,8 +119,15 @@ def _canonical_child(parent_url: str, href: str) -> str | None:
         _ = parsed.port
     except ValueError:
         return None
+    # Require the exact HTTPS origin, not merely the same hostname.
+    # Non-default ports are intentionally excluded from metadata discovery.
+    parsed_port = parsed.port or 443
+    parent_port = parent.port or 443
     if (
         parsed.scheme != "https"
+        or parent.scheme != "https"
+        or parsed_port != 443
+        or parent_port != 443
         or not parsed.hostname
         or parsed.username is not None
         or parsed.password is not None
