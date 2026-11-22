@@ -4,22 +4,21 @@ const { robotsFetch } = require("../lib/robots");
 
 function decodeXml(value) {
   return String(value || "")
-    .replace(/<!\\[CDATA\\[([\\s\\S]*?)\\]\\]>/g, "$1")
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
     .replace(/<[^>]+>/g, " ")
     .replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
     .replace(/&apos;/g, "'")
-    .replace(/&#(\\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
+    .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
     .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCodePoint(parseInt(n, 16)))
-    .replace(/\\s+/g, " ")
+    .replace(/\s+/g, " ")
     .trim();
 }
 
 function readTag(xml, name) {
-  const escaped = name.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&");
-  const match = xml.match(new RegExp("<" + escaped + "(?:\\\\s[^>]*)?>([\\\\s\\\\S]*?)</" + escaped + ">", "i"));
+  const match = String(xml || "").match(new RegExp("<" + name + "(?:\\s[^>]*)?>([\\s\\S]*?)</" + name + ">", "i"));
   return match ? decodeXml(match[1]) : "";
 }
 
@@ -51,7 +50,7 @@ const NEWS_FEEDS = {
 };
 
 function parseFeed(xml, feed) {
-  return [...String(xml || "").matchAll(/<item(?:\\s[^>]*)?>([\\s\\S]*?)<\\/item>/gi)]
+  return [...String(xml || "").matchAll(/<item(?:\s[^>]*)?>([\s\S]*?)<\/item>/gi)]
     .map(match => {
       const item = match[1];
       const title = readTag(item, "title");
