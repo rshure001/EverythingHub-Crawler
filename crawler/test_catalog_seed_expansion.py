@@ -89,10 +89,14 @@ class CatalogSeedExpansionTests(unittest.TestCase):
                 self.assertEqual(first["last_batch_size"], 10)
                 self.assertEqual(request.call_count, 10)
                 second = expansion.run_batch(seeds_path, state_path, 10)
-            self.assertEqual(second["last_batch_size"], 10)
+            self.assertEqual(second["last_batch_size"], 3)
             self.assertEqual(second["eligible_page_seeds"], 13)
             self.assertEqual(second["metrics"]["records_published"], 0)
             self.assertEqual(second["metrics"]["child_pages_fetched"], 0)
+            self.assertEqual(request.call_count, 13)
+            third = expansion.run_batch(seeds_path, state_path, 10)
+            self.assertEqual(third["last_batch_size"], 0)
+            self.assertEqual(request.call_count, 13)
 
     def test_batch_limit_cannot_exceed_ten(self):
         with self.assertRaisesRegex(ValueError, "between 1 and 10"):
