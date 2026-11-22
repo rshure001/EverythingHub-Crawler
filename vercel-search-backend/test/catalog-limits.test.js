@@ -6,6 +6,7 @@ const {
   MAX_CATALOG_GZIP_BYTES,
   MAX_INDEXED_PAGES,
   MAX_SHARD_COUNT,
+  MAX_PAGES_PER_SHARD,
   MAX_SHARD_BYTES,
   MAX_SHARD_UNCOMPRESSED_BYTES,
   MAX_TOTAL_SHARD_BYTES,
@@ -28,6 +29,7 @@ test("Vercel catalog loader retains a bounded optional gzip envelope", () => {
 test("Vercel catalog loader exposes the 250,000-page bounded shard envelope", () => {
   assert.equal(MAX_INDEXED_PAGES, 250_000);
   assert.equal(MAX_SHARD_COUNT, 768);
+  assert.equal(MAX_PAGES_PER_SHARD, 2000);
   assert.equal(MAX_SHARD_BYTES, 350_000);
   assert.equal(MAX_SHARD_UNCOMPRESSED_BYTES, 500_000);
   assert.equal(MAX_TOTAL_SHARD_BYTES, 100_000_000);
