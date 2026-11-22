@@ -137,8 +137,12 @@ function requestJson(url, provider) {
       }
     }, response => {
       if (response.statusCode < 200 || response.statusCode >= 300) {
-        response.resume();
-        reject(new Error(provider + '_http_' + response.statusCode));
+        let errorBody = '';
+        response.on('data', chunk => {
+          if (errorBody.length < 4000) errorBody += chunk.toString('utf8').slice(0, 4000 - errorBody.length);
+        });
+        response.on('end', () => reject(new Error(provider + '_http_' + response.statusCode + ':' + errorBody)));
+        response.on('error', reject);
         return;
       }
       const declared = Number(response.headers['content-length'] || 0);
