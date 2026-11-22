@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_INDEX = ROOT / "data" / "index.json"
 DEFAULT_OUTPUT = ROOT / "data" / "page-derived-catalogs"
 DEFAULT_SOURCE_POLICY_REVIEWS = ROOT / "data" / "source-policy-reviews.json"
-ANALYZER_VERSION = 15
+ANALYZER_VERSION = 16
 TRACKING_KEYS = {"fbclid", "gclid", "dclid", "mc_cid", "mc_eid", "ref", "source"}
 STOP_TOKENS = {
     "the", "and", "for", "with", "from", "our", "your", "all", "new", "home", "page",
@@ -919,6 +919,8 @@ def analyze_pages(
     structured_catalog_pages = 0
     structured_catalog_list_count = 0
     structured_catalog_item_count = 0
+    structured_entity_pages = 0
+    structured_entity_occurrences = 0
 
     for page in pages:
         if not isinstance(page, dict):
@@ -961,6 +963,16 @@ def analyze_pages(
                 value = structured_product.get(key)
                 if isinstance(value, (str, int, float)) and str(value).strip():
                     product_attributes[key] = str(value).strip()[:limit]
+            for key in ("same_as_ids", "brand_same_as_ids"):
+                values = structured_product.get(key)
+                if isinstance(values, list):
+                    cleaned = []
+                    for value in values[:5]:
+                        canonical = _external_identity({key: [value]}, key)
+                        if canonical and canonical not in cleaned:
+                            cleaned.append(canonical)
+                    if cleaned:
+                        product_attributes[key] = cleaned
             structured_product_pages += 1
 
         structured_lists = []
@@ -1022,6 +1034,81 @@ def analyze_pages(
             structured_catalog_list_count += len(structured_lists)
             structured_catalog_item_count += sum(len(item["items"]) for item in structured_lists)
 
+        structured_entities = []
+        raw_structured_entities = page.get("structured_entities") if is_eligible else []
+        for raw_entity in (raw_structured_entities or [])[:8]:
+            if not isinstance(raw_entity, dict):
+                continue
+            entity_kind = str(raw_entity.get("record_type") or "").casefold()
+            if entity_kind not in CATALOG_TYPE or entity_kind in {"media", "resource", "subject"}:
+                continue
+            entity_title = _title(raw_entity.get("name"))
+            if not _valid_title(entity_title):
+                continue
+            raw_attributes = raw_entity.get("attributes")
+            raw_attributes = raw_attributes if isinstance(raw_attributes, dict) else {}
+            entity_attributes = {}
+            attribute_limits = {
+                "schema_type": 120, "entity_url": 2048, "address_locality": 120,
+                "address_region": 80, "address_country": 80, "postal_code": 24,
+                "location_name": 120, "category": 120, "brand": 120, "model_number": 80,
+                "sku": 64, "mpn": 64, "gtin": 32, "price": 64, "currency": 8,
+                "availability": 80, "service_type": 120, "area_served": 120,
+                "provider_name": 120, "organizer_name": 120, "author_name": 120,
+                "publisher_name": 120, "job_title": 120, "affiliation": 120,
+                "works_for": 120, "parent_organization": 120, "founding_date": 40,
+                "start_date": 40, "end_date": 40, "date_published": 40,
+                "date_modified": 40, "event_status": 100, "attendance_mode": 100,
+                "identifier": 120, "license": 300, "temporal_coverage": 100,
+                "spatial_coverage": 120, "measurement_technique": 120,
+                "application_category": 120, "operating_system": 120,
+                "software_version": 80, "programming_language": 80,
+            }
+            for key in ("same_as_ids", "brand_same_as_ids"):
+                values = raw_attributes.get(key)
+                if isinstance(values, list):
+                    cleaned = []
+                    for value in values[:5]:
+                        canonical = _external_identity({key: [value]}, key)
+                        if canonical and canonical not in cleaned:
+                            cleaned.append(canonical)
+                    if cleaned:
+                        entity_attributes[key] = cleaned
+            for key, limit in attribute_limits.items():
+                value = raw_attributes.get(key)
+                if isinstance(value, (str, int, float)) and not isinstance(value, bool) and str(value).strip():
+                    entity_attributes[key] = str(value).strip()[:limit]
+            entity_url = canonical_url(raw_entity.get("entity_url"))
+            if entity_url:
+                entity_attributes["entity_url"] = entity_url
+            if entity_kind == "product" and not _has_commerce_signal(entity_attributes):
+                continue
+            if entity_kind == "model" and not any(
+                entity_attributes.get(key) for key in ("model_number", "sku", "gtin")
+            ):
+                continue
+            entity_description = re.sub(
+                r"\\s+", " ", str(raw_entity.get("description") or description or text[:500])
+            ).strip()[:500]
+            location_parts = [
+                entity_attributes.get("address_locality"),
+                entity_attributes.get("address_region"),
+                entity_attributes.get("address_country"),
+            ]
+            location_label = ", ".join(value for value in location_parts if value)
+            if location_label and location_label.casefold() not in entity_description.casefold():
+                suffix = "Location: " + location_label
+                entity_description = (entity_description + (" " if entity_description else "") + suffix)[:500]
+            structured_entities.append({
+                "record_type": entity_kind,
+                "title": entity_title,
+                "description": entity_description,
+                "attributes": entity_attributes,
+            })
+        if structured_entities:
+            structured_entity_pages += 1
+            structured_entity_occurrences += len(structured_entities)
+
         page_media = set()
         if is_eligible:
             page_media.update({
@@ -1056,21 +1143,37 @@ def analyze_pages(
         record_id = None
         page_record_ids = []
         if kind and not is_catalog_definition:
-            record_title = product_name if structured_product and kind == product_kind else title
-            entity_key = (
-                _product_entity_key(kind, host, record_title, product_attributes)
-                if structured_product and kind == product_kind
-                else _record_entity_key(kind, host, record_title)
+            matching_structured_entity = next((
+                entity for entity in structured_entities
+                if entity["record_type"] == kind and _norm(entity["title"]) == _norm(title)
+            ), None)
+            record_title = (
+                product_name if structured_product and kind == product_kind
+                else matching_structured_entity["title"] if matching_structured_entity
+                else title
             )
+            record_attributes = dict(matching_structured_entity["attributes"]) if matching_structured_entity else {}
+            if structured_product and kind == product_kind:
+                record_attributes.update(product_attributes)
+                entity_key = _product_entity_key(kind, host, record_title, record_attributes)
+            else:
+                entity_key = _record_entity_key(kind, host, record_title, record_attributes)
             record_id = stable_id("record", entity_key)
             item = records.setdefault(record_id, {
                 "record_id": record_id, "entity_id": stable_id("entity", entity_key),
                 "canonical_entity_key": entity_key, "record_type": kind,
-                "title": record_title, "description": description or text[:500],
+                "title": record_title,
+                "description": (
+                    matching_structured_entity["description"]
+                    if matching_structured_entity and matching_structured_entity["description"]
+                    else description or text[:500]
+                ),
                 "source_urls": [], "source_page_ids": [], "catalog_ids": [],
                 "last_seen_at": page.get("fetched_at"), "attributes": {},
             })
-            item.setdefault("attributes", {})
+            item.setdefault("attributes", {}).update(record_attributes)
+            if matching_structured_entity:
+                item["structured_entity"] = True
             if structured_product and kind == product_kind:
                 item["attributes"].update(product_attributes)
                 item["structured_product"] = True
@@ -1102,6 +1205,10 @@ def analyze_pages(
                 group_titles[key].append(title)
             page_group_keys.append(key)
 
+        product_record_id = None
+        product_targets = []
+        brand_record_id = None
+        brand_targets = []
         if structured_product:
             product_entity_key = _product_entity_key(product_kind, host, product_name, product_attributes)
             product_record_id = stable_id("record", product_entity_key)
@@ -1177,7 +1284,12 @@ def analyze_pages(
                     page_record_ids.append(brand_record_id)
 
         for entity_kind, entity_title, cue in content_entities:
-            entity_key = _record_entity_key(entity_kind, host, entity_title)
+            matching_structured_entity = next((
+                entity for entity in structured_entities
+                if entity["record_type"] == entity_kind and _norm(entity["title"]) == _norm(entity_title)
+            ), None)
+            entity_attributes = dict(matching_structured_entity["attributes"]) if matching_structured_entity else {}
+            entity_key = _record_entity_key(entity_kind, host, entity_title, entity_attributes)
             content_record_id = stable_id("record", entity_key)
             item = records.setdefault(content_record_id, {
                 "record_id": content_record_id, "entity_id": stable_id("entity", entity_key),
@@ -1192,7 +1304,11 @@ def analyze_pages(
                 "attributes": {},
             })
             item["content_extracted"] = True
-            item.setdefault("attributes", {})
+            item.setdefault("attributes", {}).update(entity_attributes)
+            if matching_structured_entity:
+                item["structured_entity"] = True
+                if matching_structured_entity["description"]:
+                    item["description"] = matching_structured_entity["description"]
             if url not in item["source_urls"]:
                 item["source_urls"].append(url)
             if page_id not in item["source_page_ids"]:
@@ -1223,6 +1339,64 @@ def analyze_pages(
                 if title and title not in group_titles[group_key_for_record]:
                     group_titles[group_key_for_record].append(title)
                 page_group_keys.append(group_key_for_record)
+
+        for structured_entity in structured_entities:
+            entity_kind = structured_entity["record_type"]
+            entity_title = structured_entity["title"]
+            entity_attributes = dict(structured_entity["attributes"])
+            if entity_kind == "brand":
+                entity_key = _brand_entity_key(entity_title, entity_attributes)
+            elif entity_kind in ("product", "model"):
+                entity_key = _product_entity_key(entity_kind, host, entity_title, entity_attributes)
+            else:
+                entity_key = _record_entity_key(entity_kind, host, entity_title, entity_attributes)
+            entity_record_id = stable_id("record", entity_key)
+            entity_item = records.setdefault(entity_record_id, {
+                "record_id": entity_record_id,
+                "entity_id": stable_id("entity", entity_key),
+                "canonical_entity_key": entity_key,
+                "record_type": entity_kind,
+                "title": entity_title,
+                "description": structured_entity["description"] or description or text[:500],
+                "source_urls": [], "source_page_ids": [], "catalog_ids": [],
+                "last_seen_at": page.get("fetched_at"), "attributes": {},
+                "structured_entity": True,
+            })
+            entity_item.setdefault("attributes", {}).update(entity_attributes)
+            entity_item["structured_entity"] = True
+            if structured_entity["description"] and (
+                len(structured_entity["description"]) > len(str(entity_item.get("description") or ""))
+            ):
+                entity_item["description"] = structured_entity["description"]
+            if url not in entity_item["source_urls"]:
+                entity_item["source_urls"].append(url)
+            if page_id not in entity_item["source_page_ids"]:
+                entity_item["source_page_ids"].append(page_id)
+            if page.get("fetched_at") and (
+                not entity_item.get("last_seen_at") or page["fetched_at"] > entity_item["last_seen_at"]
+            ):
+                entity_item["last_seen_at"] = page.get("fetched_at")
+
+            # The page-level, content-list, and structured-product paths above
+            # already assigned this entity to their evidence-backed groups.
+            # Do not create a second catalog association for the same page.
+            if entity_record_id not in page_record_ids:
+                target_keys = explicit_keys_by_kind.get(entity_kind)
+                if entity_record_id == product_record_id and product_targets:
+                    target_keys = product_targets
+                elif entity_record_id == brand_record_id and brand_targets:
+                    target_keys = brand_targets
+                if not target_keys:
+                    content_path = _content_group_path(entity_kind, segments)
+                    target_keys = [host + "|" + entity_kind + "|" + content_path]
+                for group_key_for_record in target_keys:
+                    record_groups[group_key_for_record].add(entity_record_id)
+                    group_pages[group_key_for_record].add(page_id)
+                    group_urls[group_key_for_record].add(url)
+                    if title and title not in group_titles[group_key_for_record]:
+                        group_titles[group_key_for_record].append(title)
+                    page_group_keys.append(group_key_for_record)
+                page_record_ids.append(entity_record_id)
 
         for structured_list in structured_lists:
             list_kind = structured_list["record_type"]
@@ -1312,7 +1486,7 @@ def analyze_pages(
 
         if group_key:
             page_group_keys.append(group_key)
-        if kind or explicit or content_entities or structured_product or structured_lists:
+        if kind or explicit or content_entities or structured_product or structured_lists or structured_entities:
             pages_with_signals += 1
         page_rows.append({
             "page_id": page_id, "url": url, "eligible": is_eligible,
@@ -1325,6 +1499,7 @@ def analyze_pages(
             "structured_product": bool(structured_product),
             "structured_catalog_list_count": len(structured_lists),
             "structured_catalog_item_count": sum(len(item["items"]) for item in structured_lists),
+            "structured_entity_count": len(structured_entities),
             "fetched_at": page.get("fetched_at"),
         })
 
@@ -1503,6 +1678,10 @@ def analyze_pages(
         "structured_catalog_lists": structured_catalog_list_count,
         "structured_catalog_items": structured_catalog_item_count,
         "structured_catalog_records": sum(1 for item in record_list if item.get("structured_catalog_item")),
+        "structured_entity_pages": structured_entity_pages,
+        "structured_entity_occurrences": structured_entity_occurrences,
+        "structured_entity_records": sum(1 for item in record_list if item.get("structured_entity")),
+        "structured_entity_records_by_type": dict(sorted(Counter(item.get("record_type") for item in record_list if item.get("structured_entity")).items())),
         "media_references": len(media_references),
         "unique_media_urls": len(media_urls),
         "records_staged": len(record_list),
@@ -1575,7 +1754,7 @@ def _merge_cross_host_records(records: list[dict]) -> tuple[list[dict], int]:
 
         for key in ("source_urls", "source_page_ids", "catalog_ids"):
             current[key] = sorted(set(current.get(key, [])) | set(item.get(key, [])))
-        for key in ("structured_product", "structured_brand", "content_extracted", "structured_catalog_item"):
+        for key in ("structured_product", "structured_brand", "content_extracted", "structured_catalog_item", "structured_entity"):
             if item.get(key):
                 current[key] = True
         current["commercial_eligible"] = False
