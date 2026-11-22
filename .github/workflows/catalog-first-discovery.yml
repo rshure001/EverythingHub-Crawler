@@ -23,6 +23,13 @@ on:
       - "project/**"
       - "learning/**"
       - ".github/workflows/catalog-first-discovery.yml"
+  pull_request:
+    paths:
+      - "crawler/catalog_discovery.py"
+      - "crawler/catalog_source_policy.py"
+      - "crawler/catalog-source-terms.json"
+      - "crawler/test_catalog_discovery.py"
+      - ".github/workflows/catalog-first-discovery.yml"
   workflow_dispatch:
     inputs:
       rows:
