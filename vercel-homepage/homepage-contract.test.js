@@ -20,6 +20,13 @@ test("homepage loads the tested media preview policy before its search code", ()
   assert.ok(fs.existsSync(path.join(root, "media-preview-policy.js")));
 });
 
+test("research mode calls the federated API and retains research result types", () => {
+  assert.match(html, /u\\.searchParams\\.set\\('lane','research'\\)/);
+  assert.match(html, /mediaType:x\\.mediaType\\|\\|'web'/);
+  assert.match(html, /x\\.mediaType==='research'/);
+  assert.match(html, /loadApiPage\\(1,'research'\\)/);
+});
+
 test("homepage keeps one search form and eight category modes", () => {
   assert.equal((html.match(/<form\b[^>]*id=["']search["']/gi) || []).length, 1);
   assert.equal((html.match(/id=["']q["']/gi) || []).length, 1);
