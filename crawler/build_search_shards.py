@@ -179,7 +179,7 @@ def query_tokens(page):
             continue
         normalized = unicodedata.normalize("NFKC", str(value)).casefold()
         tokens.update(
-            token for token in re.findall(r"[^\\W_]+", normalized, flags=re.UNICODE)
+            token for token in re.findall(r"[^\W_]+", normalized, flags=re.UNICODE)
             if len(token) >= 2 and token not in QUERY_STOP_TOKENS
         )
     return tokens
@@ -210,7 +210,7 @@ def write_query_index(output_dir, token_shards):
     posting_count = 0
 
     for prefix, payload in sorted(payloads.items()):
-        raw_json = json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\\n"
+        raw_json = json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n"
         raw = raw_json.encode("utf-8")
         compressed = gzip.compress(raw, compresslevel=9, mtime=0)
         if len(raw) > MAX_QUERY_INDEX_SHARD_UNCOMPRESSED_BYTES:
