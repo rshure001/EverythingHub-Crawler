@@ -2,6 +2,8 @@ name: Retroactive catalog inventory
 
 on:
   push:
+    branches:
+      - main
     paths:
       - "crawler/catalog_retro_discovery.py"
       - "crawler/catalog_page_analysis.py"
@@ -26,7 +28,7 @@ concurrency:
 jobs:
   inventory:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
         with:
@@ -84,7 +86,16 @@ jobs:
       - name: Inventory every existing indexed host
         run: python crawler/catalog_retro_discovery.py
       - name: Analyze every eligible existing indexed page
+        timeout-minutes: 110
+        env:
+          PYTHONUNBUFFERED: "1"
         run: python crawler/catalog_page_analysis.py --index public-search/manifest.json --query Rolex --query "Las Vegas" --query NASA
+      - name: Save resumable per-host catalog cache checkpoint
+        if: always() && hashFiles('data/.page-derived-catalog-cache/**') != ''
+        uses: actions/cache/save@v4
+        with:
+          path: data/.page-derived-catalog-cache
+          key: ${{ runner.os }}-catalog-cache-${{ github.ref_name }}-checkpoint-${{ github.run_id }}
       - name: Record persisted catalog and record throughput
         run: |
           python - <<'PY'
