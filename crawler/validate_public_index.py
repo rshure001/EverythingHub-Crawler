@@ -2,6 +2,7 @@
 """Validate public search shards and the compressed catalog against the crawler index."""
 from __future__ import annotations
 
+import re
 import zlib
 import hashlib
 import json
