@@ -2822,6 +2822,13 @@ def write_outputs(analysis: dict, output_dir: Path) -> dict:
         if relative_path not in expected_search_files:
             stale_path.unlink()
 
+    size, digest = _write_gzip(output_dir / "record-catalogs.json.gz", {
+        "version": 1,
+        "resolution": "virtual_shared_catalog_memberships",
+        "record_catalogs": analysis.get("record_catalogs", []),
+    })
+    files.append({"file": "record-catalogs.json.gz", "bytes": size, "sha256": digest,
+                  "items": len(analysis.get("record_catalogs", []))})
     size, digest = _write_gzip(output_dir / "records.json.gz", {
         "version": 1, "records": analysis["records"],
     })
@@ -2916,6 +2923,18 @@ def validate_outputs(output_dir: Path) -> dict:
         raise ValueError("media URL registry does not match its provenance references")
     records_raw = (output_dir / "records.json.gz").read_bytes()
     records = json.loads(gzip.decompress(records_raw).decode("utf-8"))["records"]
+    record_catalog_payload = json.loads(gzip.decompress(
+        (output_dir / "record-catalogs.json.gz").read_bytes()
+    ).decode("utf-8"))
+    record_catalog_rows = record_catalog_payload.get("record_catalogs", [])
+    record_catalogs_by_owner = {row.get("owner_record_id"): row for row in record_catalog_rows}
+    if (
+        record_catalog_payload.get("version") != 1
+        or record_catalog_payload.get("resolution") != "virtual_shared_catalog_memberships"
+        or len(record_catalog_rows) != len(records)
+        or len(record_catalogs_by_owner) != len(records)
+    ):
+        raise ValueError("every canonical record must have exactly one related-catalog definition")
     page_ids = {
         item["page_id"] for item in pages
         if isinstance(item, dict) and item.get("page_id")
@@ -2930,6 +2949,12 @@ def validate_outputs(output_dir: Path) -> dict:
             raise ValueError("source page record relationships are malformed or duplicated")
         if page.get("record_id") and page["record_id"] not in page_record_ids:
             raise ValueError("primary page record is missing from its record relationship list")
+        expected_record_catalog_ids = sorted({
+            records_by_id[record_id]["record_catalog_id"]
+            for record_id in page_record_ids if record_id in records_by_id
+        })
+        if page.get("record_catalog_ids") != expected_record_catalog_ids:
+            raise ValueError("record page is missing its per-record related-catalog links")
         for related_record_id in page_record_ids:
             related_record = records_by_id.get(related_record_id)
             if related_record is None:
@@ -2942,6 +2967,16 @@ def validate_outputs(output_dir: Path) -> dict:
                     f"{related_record_id}, but its provenance lists {related_record.get('source_page_ids', [])[:8]}"
                 )
     for record in records:
+        record_catalog = record_catalogs_by_owner.get(record.get("record_id"))
+        if (
+            record.get("record_catalog_id") != stable_id("record-catalog", record.get("record_id", ""))
+            or record_catalog is None
+            or record_catalog.get("record_catalog_id") != record.get("record_catalog_id")
+            or record_catalog.get("shared_catalog_ids") != sorted(set(record.get("catalog_ids", [])))
+            or record_catalog.get("exclude_owner_record") is not True
+            or record_catalog.get("deduplicate_by") != "record_id"
+        ):
+            raise ValueError("record-related catalog identity or virtual memberships are invalid")
         if stable_id("record", record.get("canonical_entity_key", "")) != record.get("record_id"):
             raise ValueError("record ID does not match its canonical entity key")
         if record.get("commercial_eligible") is not False or record.get("source_terms_status") != "not_reviewed":
