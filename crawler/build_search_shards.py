@@ -61,8 +61,15 @@ def is_publishable(doc):
 def compact(doc):
     url = str(doc.get("url", ""))[:2048]
     lane = doc.get("lane")
-    if not isinstance(lane, str) or lane not in VALID_LANES:
-        lane = classify_lane(url)
+    classified_lane = classify_lane(url)
+    if (
+        not isinstance(lane, str)
+        or lane not in VALID_LANES
+        or (lane == "general" and classified_lane != "general")
+    ):
+        # Reclassify legacy general-lane records when a source host receives
+        # an explicit category mapping. Preserve any existing non-general lane.
+        lane = classified_lane
     compact_page = {
         "url": url,
         "title": str(doc.get("title", ""))[:500],
