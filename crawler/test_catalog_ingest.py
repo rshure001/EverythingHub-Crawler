@@ -2,6 +2,7 @@ import gzip
 import hashlib
 import json
 import unittest
+from unittest.mock import patch
 from catalog_ingest import adapt, build_public_catalog_indexes
 
 class UniversalCatalogIngestTests(unittest.TestCase):
@@ -160,7 +161,7 @@ class UniversalCatalogIngestTests(unittest.TestCase):
                 "subject": "science",
             }],
         }
-        with unittest.mock.patch("catalog_ingest.policy_for_host", return_value=restricted_policy):
+        with patch("catalog_ingest.policy_for_host", return_value=restricted_policy):
             result = adapt(manifest)
         self.assertEqual(result["catalogs"], [])
         self.assertEqual(result["records"], [])
