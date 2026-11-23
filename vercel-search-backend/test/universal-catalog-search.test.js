@@ -7,6 +7,8 @@ const zlib = require('node:zlib');
 const {
   validateUniversalCatalogManifest,
   loadUniversalCatalogFromManifest,
+  loadUniversalCatalogNetwork,
+  clearUniversalCatalogCacheForTests,
   searchUniversalCatalogs
 } = require('../src/lib/universal-catalog-search');
 
@@ -141,6 +143,30 @@ test('validates and loads only the bounded root shards containing public search 
   assert.equal(network.rootSearchDocumentOccurrences, 2);
   assert.equal(network.documents.length, 1);
   assert.deepEqual(network.documents[0].catalog_ids, [f.rootA, f.rootB, f.sub]);
+});
+
+test('loads the current raw main catalog snapshot without the GitHub REST ref API', async () => {
+  const f = fixture();
+  const requests = [];
+  clearUniversalCatalogCacheForTests();
+  const fetchBuffer = async url => {
+    requests.push(url);
+    if (url.includes('/main/data/universal-catalog-indexes/manifest.json')) {
+      return Buffer.from(JSON.stringify(f.manifest));
+    }
+    const file = Array.from(f.buffers.keys()).find(key => url.endsWith('/' + key));
+    if (!file) throw new Error('unexpected_fetch_url');
+    return f.buffers.get(file);
+  };
+  try {
+    const network = await loadUniversalCatalogNetwork(fetchBuffer);
+    assert.equal(network.catalogCount, 3);
+    assert.equal(network.uniquePublicRecords, 1);
+    assert.ok(requests.every(url => url.startsWith('https://raw.githubusercontent.com/rshure001/EverythingHub-Crawler/main/')));
+    assert.equal(requests.some(url => url.includes('api.github.com')), false);
+  } finally {
+    clearUniversalCatalogCacheForTests();
+  }
 });
 
 test('searches metadata-only records and chooses the most relevant subcatalog membership', async () => {

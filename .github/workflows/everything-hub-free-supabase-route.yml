@@ -1,0 +1,93 @@
+name: Everything Hub free Supabase route check
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/everything-hub-free-supabase-route.yml"
+      - "site/index.html"
+      - "supabase/functions/everything-hub-web-search/**"
+      - "supabase/functions/everything-hub-independent-search/**"
+      - "supabase/functions/everything-hub-site/**"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: everythinghub-free-supabase-route
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      SITE_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-site/
+      SEARCH_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-web-search
+      API_KEY: sb_publishable_XlIsACWhtVS1jVODWYGTpg_GMs8v3vJ
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify free-hosted homepage
+        run: |
+          set -euo pipefail
+          code="$(curl --silent --show-error --location --max-time 30 -o /tmp/home.html -w '%{http_code}' "$SITE_URL")"
+          test "$code" = "200"
+          node <<'NODE'
+          const fs = require("node:fs");
+          const html = fs.readFileSync("/tmp/home.html", "utf8");
+          const required = [
+            "<title>Everything Hub — Everything within reach</title>",
+            "everythinghub-approved.png",
+            'id="searchForm"',
+            'id="q"',
+            'SEARCH_API=BASE+"/everything-hub-web-search"',
+            'data-mode="web"',
+            'data-mode="news"',
+            'data-mode="images"',
+            'data-mode="videos"',
+            'data-mode="shopping"',
+            'data-mode="places"',
+            'data-mode="business"',
+            'data-mode="research"'
+          ];
+          const missing = required.filter(value => !html.includes(value));
+          if (missing.length) throw new Error("Homepage contract missing: " + missing.join(", "));
+          console.log(JSON.stringify({
+            status: "homepage_http_200",
+            title: "Everything Hub — Everything within reach",
+            approvedArtworkReferenced: true,
+            searchInput: true,
+            categories: 8,
+            searchEndpoint: "Supabase Edge Function"
+          }, null, 2));
+          NODE
+      - name: Verify live Rolex search through the free Edge Function
+        run: |
+          set -euo pipefail
+          code="$(curl --silent --show-error --location --max-time 35 -G "$SEARCH_URL" \
+            -H "apikey: $API_KEY" \
+            -H "accept: application/json" \
+            --data-urlencode "q=Rolex" \
+            --data-urlencode "limit=10" \
+            -o /tmp/search.json -w '%{http_code}')"
+          test "$code" = "200"
+          node <<'NODE'
+          const fs = require("node:fs");
+          const data = JSON.parse(fs.readFileSync("/tmp/search.json", "utf8"));
+          const results = Array.isArray(data.results) ? data.results : [];
+          const catalogs = Array.isArray(data.catalogResults) ? data.catalogResults : [];
+          if (!results.length && !catalogs.length) {
+            throw new Error("Free search returned HTTP 200 but no visible web or catalog results: " + JSON.stringify({
+              error: data.error || null,
+              source: data.source || null,
+              fallbackReason: data.fallbackReason || null
+            }));
+          }
+          console.log(JSON.stringify({
+            status: "search_http_200",
+            query: data.query || "Rolex",
+            visibleWebResults: results.length,
+            visibleCatalogResults: catalogs.length,
+            source: data.source || null,
+            provider: data.provider || null,
+            independentOfDatabase: data.independentOfDatabase === true,
+            firstResult: results[0]?.title || catalogs[0]?.title || null
+          }, null, 2));
+          NODE
