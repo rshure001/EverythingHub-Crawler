@@ -17,7 +17,9 @@ test("primary site search renders catalogResults and falls back to the first-par
   assert.ok(search.includes('new URL(BASE+"/everything-hub-web-search")'));
   assert.ok(search.includes("data.catalogResults"));
   assert.ok(search.includes("catalogItems.concat(pageItems)"));
-  assert.ok(search.includes("catalogItems=offset===0&&Array.isArray(data.catalogResults)"));
+  assert.ok(search.includes("data.externalCatalogResults"));
+  assert.ok(search.includes("x.title||x.catalog_title"));
+  assert.ok(search.includes("data.catalogResults"));
   assert.ok(search.includes("if(!items.length){if(reset)message("));
   assert.ok(search.includes("apikey:KEY"));
 });
