@@ -97,6 +97,7 @@ function buildCatalogPreviewRecordResults(catalogs, limit = 10) {
         catalog_id: String(card?.catalog_id || ''),
         catalog_title: String(card?.catalog_title || card?.title || ''),
         record_id: String(record?.record_id || ''),
+        record_catalog_id: String(record?.record_catalog_id || ''),
         record_type: recordType,
         relevance_class: String(card?.relevance_class || 'record_match'),
         relevance_label: String(card?.relevance_label || 'Catalog record match'),
