@@ -26,8 +26,9 @@ function mockRes() {
   };
 }
 
-function feedXml(host) {
-  return "<rss><channel><item><title>Update from " + host + "</title><link>https://" + host + "/news/latest</link><pubDate>Sun, 22 Nov 2026 12:00:00 GMT</pubDate><description><![CDATA[<p>Current public update from " + host + ".</p>]]></description></item></channel></rss>";
+function feedXml(host, path = "/") {
+  const pathKey = path.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") || "root";
+  return "<rss><channel><item><title>Update from " + host + " " + pathKey + "</title><link>https://" + host + "/news/" + pathKey + "</link><pubDate>Sun, 22 Nov 2026 12:00:00 GMT</pubDate><description><![CDATA[<p>Current public update from " + host + ".</p>]]></description></item></channel></rss>";
 }
 
 test("NASA news releases provide a current headline-only feed in the public science lanes", () => {
@@ -77,7 +78,7 @@ test("news route aggregates only robots-permitted public RSS feeds with attribut
       return mockResponse(200, "User-agent: *\nAllow: /\n", value);
     }
     const host = new URL(value).hostname;
-    return mockResponse(200, feedXml(host), value);
+    return mockResponse(200, feedXml(host, new URL(value).pathname), value);
   };
   try {
     const feeds = NEWS_FEEDS["for-you"];
@@ -90,7 +91,8 @@ test("news route aggregates only robots-permitted public RSS feeds with attribut
     assert.equal(res.body.items.length, feeds.length);
     assert.equal(res.body.sources.length, feeds.length);
     assert.ok(res.body.items.every(item => item.url.startsWith("https://") && item.source && item.publishedAt));
-    assert.equal(calls.filter(url => url.endsWith("/robots.txt")).length, feeds.length);
+    const uniqueHosts = new Set(feeds.map(feed => new URL(feed.url).hostname)).size;
+    assert.equal(calls.filter(url => url.endsWith("/robots.txt")).length, uniqueHosts);
     assert.equal(calls.filter(url => !url.endsWith("/robots.txt")).length, feeds.length);
     assert.ok(Object.values(res.headers).some(value => String(value).includes("s-maxage=600")));
   } finally {
@@ -142,7 +144,7 @@ test("news route fails closed when every configured feed is disallowed", async (
     assert.equal(res.statusCode, 502);
     assert.equal(res.body.status, "unavailable");
     assert.equal(res.body.sourcesUnavailable.length, feeds.length);
-    assert.equal(calls.length, feeds.length);
+    assert.equal(calls.length, new Set(feeds.map(feed => new URL(feed.url).hostname)).size);
     assert.ok(calls.every(url => url.endsWith("/robots.txt")));
   } finally {
     global.fetch = originalFetch;
