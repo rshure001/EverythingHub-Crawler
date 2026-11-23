@@ -807,8 +807,8 @@ main,.hero,.dashboard,.eh-search-workspace,.eh-compact-search,.discover-feed,.li
 <script src="/media-preview-policy.js"></script>
 <script>
 const form=document.querySelector('#search'),input=document.querySelector('#q'),out=document.querySelector('#results');
-const EH_SUPABASE_URL='https://vdceayvfgkwpgwixrhwi.supabase.co';
-const EH_PUBLIC_KEY='sb_publishable_XlIsACWhtVS1jVODWYGTpg_GMs8v3vJ';
+const EH_SUPABASE_URL='https://ynleeweezwkdbisaiovq.supabase.co';
+const EH_PUBLIC_KEY='sb_publishable_-m5pJUkN9aKUox3NMexhQg_NvWhm520';
 const modeNames={web:'the web',news:'News',images:'Images',videos:'Videos',shopping:'Shopping',places:'Places',business:'Business',research:'Research'};
 let selectedMode=new URLSearchParams(location.search).get('mode')||'web';
 function setSelectedMode(mode){selectedMode=modeNames[mode]?mode:'web';input.placeholder='Search '+modeNames[selectedMode]+'…';document.querySelectorAll('.tile').forEach(tile=>tile.classList.toggle('selected',new URL(tile.href).searchParams.get('mode')===selectedMode));}
