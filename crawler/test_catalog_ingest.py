@@ -74,6 +74,54 @@ class UniversalCatalogIngestTests(unittest.TestCase):
         self.assertIsNot(record["attributes"].get("commercial_eligible"), True)
 
 
+    def test_explicit_restrictive_license_overrides_inconsistent_open_flag(self):
+        restrictive_licenses = (
+            {
+                "id": "cc-by-nc-4.0",
+                "title": "CC BY-NC 4.0",
+                "url": "https://creativecommons.org/licenses/by-nc/4.0/",
+                "is_open": True,
+            },
+            {
+                "id": "cc-by-nd-4.0",
+                "title": "CC BY-ND 4.0",
+                "url": "https://creativecommons.org/licenses/by-nd/4.0/",
+                "is_open": True,
+            },
+            {
+                "rights": "Noncommercial use only; redistribution is not permitted",
+                "is_open": True,
+            },
+        )
+        for index, license_info in enumerate(restrictive_licenses, start=1):
+            with self.subTest(license=license_info):
+                result = adapt({
+                    "updated_at": "2026-11-23T00:00:00Z",
+                    "catalogs": [{
+                        "id": "swiss-open-data",
+                        "name": "opendata.swiss",
+                        "base_url": "https://opendata.swiss",
+                        "source_terms_url": "https://opendata.swiss/en/terms-of-use",
+                        "source_terms_status": "reviewed_per_dataset",
+                        "source_terms_reviewed_at": "2026-11-21",
+                        "attribution_required": "per_dataset",
+                        "errors": [],
+                    }],
+                    "datasets": [{
+                        "catalog_id": "swiss-open-data",
+                        "id": f"swiss-open-data:restricted-{index}",
+                        "dataset_id": f"restricted-{index}",
+                        "title": f"Restricted Dataset {index}",
+                        "landing_url": f"https://opendata.swiss/dataset/restricted-{index}",
+                        "license": license_info,
+                        "resource_count": 0,
+                    }],
+                })
+                record = result["records"][0]
+                self.assertFalse(record["attributes"]["public_search_allowed"])
+                self.assertEqual(record["attributes"]["rights_status"], "closed_license")
+                self.assertEqual(result["metrics"]["restricted_records"], 1)
+
     def test_private_dataset_never_becomes_public_searchable(self):
         result = adapt({
             "updated_at": "2026-11-21T00:00:00Z",
