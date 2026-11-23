@@ -6,20 +6,33 @@ on:
     paths:
       - ".github/workflows/eh-free-fallback-acceptance.yml"
       - ".github/workflows/validate-vercel-search.yml"
+      - ".github/workflows/catalog-first-discovery.yml"
       - "vercel-search-backend/**"
       - "vercel-homepage/**"
+      - "crawler/catalog_*.py"
+      - "crawler/test_catalog_*.py"
+      - "data/universal-catalog-indexes/**"
+      - "data/page-derived-catalogs/**"
+      - "public-search/manifest.json"
   push:
     branches:
       - main
     paths:
       - ".github/workflows/eh-free-fallback-acceptance.yml"
       - ".github/workflows/validate-vercel-search.yml"
+      - ".github/workflows/catalog-first-discovery.yml"
       - "vercel-search-backend/**"
       - "vercel-homepage/**"
+      - "crawler/catalog_*.py"
+      - "crawler/test_catalog_*.py"
+      - "data/universal-catalog-indexes/**"
+      - "data/page-derived-catalogs/**"
+      - "public-search/manifest.json"
   workflow_dispatch:
   workflow_run:
     workflows:
       - "Retroactive catalog inventory"
+      - "Catalog-first discovery"
     types:
       - completed
     branches:
