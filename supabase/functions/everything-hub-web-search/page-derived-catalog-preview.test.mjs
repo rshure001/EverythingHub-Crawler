@@ -4,6 +4,7 @@ import {
   clearPageDerivedCatalogPreviewCache,
   loadPageDerivedCatalogPreview,
   searchPageDerivedCatalogPreview,
+  resolveRecordRelatedCatalogPreview,
 } from "./page-derived-catalog-preview.mjs";
 
 const encoder = new TextEncoder();
@@ -36,6 +37,7 @@ async function fileEntry(file, bytes, items) {
 function record({ id, entityId, type, title, description, catalogId, sourceUrl, attributes = {} }) {
   return {
     record_id: id,
+    record_catalog_id: "record-catalog:" + id,
     entity_id: entityId,
     record_type: type,
     title,
@@ -398,3 +400,76 @@ test("query-scoped catalog search fetches only matching per-catalog indexes", as
   assert.equal(fixture.requested.some((url) => url.endsWith("/" + fixture.vegasSubjectPath)), true);
   clearPageDerivedCatalogPreviewCache();
 });
+test("per-record related catalogs deduplicate shared records and exclude their owner", async () => {
+  clearPageDerivedCatalogPreviewCache();
+  const catalogId = "catalog:shared-products";
+  const path = "indexes/ab/abababababababababababab.json.gz";
+  const owner = record({
+    id: "record:owner",
+    entityId: "entity:owner",
+    type: "model",
+    title: "Rolex Submariner",
+    description: "Owner record",
+    catalogId,
+    sourceUrl: "https://www.rolex.com/watches/submariner",
+  });
+  const relatedA = record({
+    id: "record:related-a",
+    entityId: "entity:related-a",
+    type: "model",
+    title: "Rolex Sea-Dweller",
+    description: "Related model",
+    catalogId,
+    sourceUrl: "https://www.rolex.com/watches/sea-dweller",
+  });
+  const relatedB = record({
+    id: "record:related-b",
+    entityId: "entity:related-b",
+    type: "model",
+    title: "Rolex GMT-Master II",
+    description: "Related model",
+    catalogId,
+    sourceUrl: "https://www.rolex.com/watches/gmt-master-ii",
+  });
+  const records = [owner, relatedA, relatedB];
+  const bytes = await gzipJson({
+    version: 1,
+    catalog_id: catalogId,
+    title: "Shared Rolex Models",
+    status: "candidate",
+    records,
+  });
+  const entry = await fileEntry(path, bytes, records.length);
+  const catalog = {
+    catalog_id: catalogId,
+    index_file: path,
+    record_ids: records.map((item) => item.record_id),
+    record_count: records.length,
+  };
+  const network = {
+    catalogsById: new Map([[catalogId, catalog]]),
+    filesByPath: new Map([[path, entry]]),
+    gitCommit: commit,
+    baseUrl: rawBase + "data/page-derived-catalogs/",
+    sourcePolicyReview: policyReview,
+  };
+  const fetchImpl = async (url) => {
+    assert.equal(String(url), network.baseUrl + path);
+    return new Response(bytes);
+  };
+  const first = await resolveRecordRelatedCatalogPreview(
+    owner.record_catalog_id, [catalogId], network, 1, 0, fetchImpl,
+  );
+  assert.equal(first.owner_record.record_id, owner.record_id);
+  assert.equal(first.related_count, 2);
+  assert.equal(first.related_records.length, 1);
+  assert.equal(first.related_records[0].record_id, relatedA.record_id);
+  assert.equal(first.has_more, true);
+  const second = await resolveRecordRelatedCatalogPreview(
+    owner.record_catalog_id, [catalogId], network, 1, 1, fetchImpl,
+  );
+  assert.equal(second.related_records[0].record_id, relatedB.record_id);
+  assert.equal(await resolveRecordRelatedCatalogPreview("record-catalog:missing", [catalogId], network, 10, 0, fetchImpl), null);
+  clearPageDerivedCatalogPreviewCache();
+});
+
