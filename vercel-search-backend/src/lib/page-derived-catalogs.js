@@ -291,7 +291,7 @@ function searchPageDerivedCatalogs(query,network,limit=5){
   const c=g.catalog,matched=Array.from(g.matches.values()).sort((a,b)=>b.score-a.score||String(a.record.title||'').localeCompare(String(b.record.title||'')));
   if(!matched.length)continue;
   const matchedRecords=matched.slice(0,5).map(({record:r})=>({
-   record_id:r.record_id,record_catalog_id:String(r.record_catalog_id||''),title:String(r.title||'Untitled record').slice(0,240),
+   record_id:r.record_id,record_catalog_id:String(r.record_catalog_id||''),shared_catalog_ids:Array.isArray(r.catalog_ids)?r.catalog_ids:[],title:String(r.title||'Untitled record').slice(0,240),
    record_type:String(r.record_type||'record'),
    source_url:(r.source_urls||[]).map(safeUrl).find(Boolean)||'',
    last_seen_at:r.last_seen_at||null,
