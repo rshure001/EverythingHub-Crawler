@@ -921,11 +921,12 @@
     "after_updated_at": "2026-11-23T05:08:14Z",
     "elapsed_seconds": 3026,
     "run_duration_seconds": 423.9,
-    "new_unique_records": 600,
-    "records_per_minute": 84.93,
-    "records_per_hour": 5095.5,
-    "wall_clock_records_per_minute": 11.9,
-    "wall_clock_records_per_hour": 713.8
+    "new_unique_pages": 600,
+    "pages_per_minute": 84.93,
+    "pages_per_hour": 5095.5,
+    "wall_clock_pages_per_minute": 11.9,
+    "wall_clock_pages_per_hour": 713.8,
+    "metric_kind": "pages"
   },
   "recent_run_activity": {
     "fetch_attempts": 1559,
