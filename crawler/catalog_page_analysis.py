@@ -956,6 +956,50 @@ def _reconcile_page_record_provenance(page_rows: list[dict], records) -> int:
     return repaired
 
 
+def _attach_record_catalogs(page_rows: list[dict], records) -> dict[str, int]:
+    """Attach one stable virtual related-catalog identity to every canonical record.
+
+    Related records are resolved through shared catalog indexes on demand; this
+    stores references rather than quadratic copies of related record lists.
+    """
+    record_map = records if isinstance(records, dict) else {
+        item["record_id"]: item for item in records if isinstance(item, dict) and item.get("record_id")
+    }
+    rows = []
+    for record_id, record in sorted(record_map.items()):
+        catalog_ids = record.get("catalog_ids", [])
+        if not isinstance(catalog_ids, list):
+            raise ValueError("record catalog memberships must be a list")
+        record_catalog_id = stable_id("record-catalog", record_id)
+        record["record_catalog_id"] = record_catalog_id
+        rows.append({
+            "record_catalog_id": record_catalog_id,
+            "owner_record_id": record_id,
+            "title": "Related to " + str(record.get("title") or "this record")[:180],
+            "resolution": "virtual_shared_catalog_memberships",
+            "shared_catalog_ids": sorted(set(catalog_ids)),
+            "exclude_owner_record": True,
+            "deduplicate_by": "record_id",
+            "source_page_ids": sorted(set(record.get("source_page_ids", []))),
+        })
+    for page in page_rows:
+        if not isinstance(page, dict):
+            continue
+        page["record_catalog_ids"] = sorted({
+            record_map[record_id]["record_catalog_id"]
+            for record_id in page.get("record_ids", [])
+            if record_id in record_map
+        })
+    return {
+        "record_catalogs": len(rows),
+        "record_pages_with_catalogs": len(rows),
+        "record_catalog_membership_edges": sum(len(row["shared_catalog_ids"]) for row in rows),
+        "record_catalogs_with_shared_sources": sum(bool(row["shared_catalog_ids"]) for row in rows),
+        "record_catalogs_awaiting_related_items": sum(not row["shared_catalog_ids"] for row in rows),
+        "_rows": rows,
+    }
+
+
 def analyze_pages(
     pages: list[dict],
     source_total: int | None = None,
@@ -1665,6 +1709,7 @@ def analyze_pages(
     global_subject_catalogs = _add_global_subject_catalogs(pages, page_rows, records, catalogs)
     _reconcile_page_record_provenance(page_rows, records)
     global_typed_catalogs_by_type = _add_global_typed_entity_catalogs(page_rows, records, catalogs)
+    record_catalog_metrics = _attach_record_catalogs(page_rows, records)
 
     for item in records.values():
         item["source_urls"] = sorted(item["source_urls"])
@@ -1710,6 +1755,11 @@ def analyze_pages(
         "global_typed_catalog_record_associations": sum(len(x.get("record_ids", [])) for x in catalog_list if x.get("catalog_origin") == "derived_from_global_typed_records"),
         "catalogs_by_origin": dict(sorted(Counter(x.get("catalog_origin") or "unknown" for x in catalog_list).items())),
         "unique_catalogs_discovered": len(catalog_list),
+        "record_catalogs": record_catalog_metrics["record_catalogs"],
+        "record_pages_with_catalogs": record_catalog_metrics["record_pages_with_catalogs"],
+        "record_catalog_membership_edges": record_catalog_metrics["record_catalog_membership_edges"],
+        "record_catalogs_with_shared_sources": record_catalog_metrics["record_catalogs_with_shared_sources"],
+        "record_catalogs_awaiting_related_items": record_catalog_metrics["record_catalogs_awaiting_related_items"],
         "unique_catalogs_by_type": dict(sorted(Counter(x["catalog_type"] for x in catalog_list).items())),
         "source_declared_catalogs": sum(bool(x.get("is_source_declared_catalog")) for x in catalog_list),
         "derived_catalogs": sum(x.get("catalog_origin") in {"derived_from_repeated_records", "derived_from_global_typed_records"} for x in catalog_list),
@@ -1776,6 +1826,7 @@ def analyze_pages(
         "pages": page_rows,
         "media_urls": sorted(media_urls),
         "media_references": sorted(media_references.values(), key=lambda x: (x["media_url"], x["source_page_id"])),
+        "record_catalogs": record_catalog_metrics["_rows"],
     }
 
 
@@ -2019,6 +2070,7 @@ def analyze_pages_incremental(
         }, sort_keys=True), flush=True)
     _reconcile_page_record_provenance(all_page_rows, all_records)
     global_typed_catalogs_by_type = _add_global_typed_entity_catalogs(all_page_rows, all_records, all_catalogs)
+    record_catalog_metrics = _attach_record_catalogs(all_page_rows, all_records)
     if progress:
         print(json.dumps({
             "stage": "catalog_global_typed_catalogs_complete",
@@ -2065,6 +2117,11 @@ def analyze_pages_incremental(
         "global_typed_catalog_record_associations": sum(len(x.get("record_ids", [])) for x in all_catalogs if x.get("catalog_origin") == "derived_from_global_typed_records"),
         "catalogs_by_origin": dict(sorted(Counter(x.get("catalog_origin") or "unknown" for x in all_catalogs).items())),
         "unique_catalogs_discovered": len(all_catalogs),
+        "record_catalogs": record_catalog_metrics["record_catalogs"],
+        "record_pages_with_catalogs": record_catalog_metrics["record_pages_with_catalogs"],
+        "record_catalog_membership_edges": record_catalog_metrics["record_catalog_membership_edges"],
+        "record_catalogs_with_shared_sources": record_catalog_metrics["record_catalogs_with_shared_sources"],
+        "record_catalogs_awaiting_related_items": record_catalog_metrics["record_catalogs_awaiting_related_items"],
         "unique_catalogs_by_type": dict(sorted(Counter(x["catalog_type"] for x in all_catalogs).items())),
         "source_declared_catalogs": sum(bool(x.get("is_source_declared_catalog")) for x in all_catalogs),
         "derived_catalogs": sum(x.get("catalog_origin") in {"derived_from_repeated_records", "derived_from_global_typed_records"} for x in all_catalogs),
@@ -2120,6 +2177,7 @@ def analyze_pages_incremental(
         "source_index_sha256": source_index_sha256, "metrics": metrics,
         "catalogs": all_catalogs, "records": all_records, "pages": all_page_rows,
         "media_urls": sorted(all_media),
+        "record_catalogs": record_catalog_metrics["_rows"],
         "media_references": sorted(
             {(x["source_page_id"], x["media_url"]): x for x in all_media_references}.values(),
             key=lambda x: (x["media_url"], x["source_page_id"]),
