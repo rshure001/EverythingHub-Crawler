@@ -11,7 +11,7 @@ import re
 from typing import Any
 from urllib.parse import urlsplit
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 CATALOG_TYPES = {
     "commerce", "brand", "business_directory", "geographic", "government_registry",
     "open_data", "library_archive", "scholarly", "events", "media", "software",
@@ -174,6 +174,7 @@ def catalog_metrics(catalogs: list[dict[str, Any]], records: list[dict[str, Any]
     }
     return {
         "catalogs_discovered": len(catalog_ids),
+        "root_catalogs_discovered": len(catalog_ids - subcatalog_ids),
         "subcatalogs_discovered": len(subcatalog_ids),
         "catalog_records": len(record_ids),
         "record_catalog_memberships": len(memberships),
