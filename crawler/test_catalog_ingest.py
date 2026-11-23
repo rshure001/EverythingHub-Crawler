@@ -96,9 +96,49 @@ class UniversalCatalogIngestTests(unittest.TestCase):
         self.assertEqual(result["records"][0]["attributes"]["rights_status"], "private_dataset")
         self.assertFalse(result["source_pages"][0]["policy_allowed"])
 
-    def test_merges_library_archive_catalogs_and_document_records(self):
+    def test_reviewed_library_archive_catalogs_can_be_staged_but_not_publicly_indexed(self):
         result = adapt({
             "updated_at": "2026-11-20T00:00:00Z",
+            "catalogs": [{
+                "id": "swiss-library-archive",
+                "name": "Swiss Library Archive",
+                "base_url": "https://opendata.swiss",
+                "api_path": "/api/archive",
+                "category": "science",
+                "catalog_type": "library_archive",
+                "coverage_status": "partial",
+                "errors": [],
+            }],
+            "datasets": [{
+                "catalog_id": "swiss-library-archive",
+                "id": "swiss-library-archive:OL123W",
+                "dataset_id": "OL123W",
+                "title": "A Science Book",
+                "landing_url": "https://opendata.swiss/works/OL123W",
+                "record_type": "document",
+                "canonical_entity_key": "swiss-library:work:OL123W",
+                "subject": "science",
+                "attributes": {"edition_count": 4},
+            }],
+        })
+        self.assertEqual(result["metrics"]["catalogs_discovered"], 1)
+        self.assertEqual(result["metrics"]["catalog_records"], 1)
+        self.assertEqual(result["records"][0]["record_type"], "document")
+        self.assertEqual(result["records"][0]["attributes"]["edition_count"], 4)
+        self.assertFalse(result["records"][0]["attributes"]["public_search_allowed"])
+        self.assertFalse(result["source_pages"][0]["policy_allowed"])
+        self.assertEqual(result["metrics"]["restricted_records"], 1)
+        self.assertEqual(result["catalogs"][0]["catalog_type"], "library_archive")
+
+    def test_restricted_source_catalogs_and_records_are_excluded_from_staging(self):
+        restricted_policy = {
+            "discovery_allowed": False,
+            "terms_status": "restricted",
+            "terms_url": "https://openlibrary.org/terms",
+            "reviewed_at": "",
+        }
+        manifest = {
+            "updated_at": "2026-11-23T00:00:00Z",
             "catalogs": [{
                 "id": "openlibrary-subject-science",
                 "name": "Open Library — Science",
@@ -118,17 +158,42 @@ class UniversalCatalogIngestTests(unittest.TestCase):
                 "record_type": "document",
                 "canonical_entity_key": "openlibrary:work:OL123W",
                 "subject": "science",
-                "attributes": {"edition_count": 4},
             }],
-        })
-        self.assertEqual(result["metrics"]["catalogs_discovered"], 1)
-        self.assertEqual(result["metrics"]["catalog_records"], 1)
-        self.assertEqual(result["records"][0]["record_type"], "document")
-        self.assertEqual(result["records"][0]["attributes"]["edition_count"], 4)
-        self.assertFalse(result["records"][0]["attributes"]["public_search_allowed"])
-        self.assertFalse(result["source_pages"][0]["policy_allowed"])
-        self.assertEqual(result["metrics"]["restricted_records"], 1)
-        self.assertEqual(result["catalogs"][0]["catalog_type"], "library_archive")
+        }
+        with unittest.mock.patch("catalog_ingest.policy_for_host", return_value=restricted_policy):
+            result = adapt(manifest)
+        self.assertEqual(result["catalogs"], [])
+        self.assertEqual(result["records"], [])
+        self.assertEqual(result["source_pages"], [])
+        self.assertEqual(result["metrics"]["restricted_source_catalogs_excluded"], 1)
+        self.assertEqual(result["metrics"]["restricted_source_records_excluded"], 1)
+        self.assertEqual(result["excluded_sources"][0]["catalog_id"], "openlibrary-subject-science")
+
+    def test_prior_restricted_snapshot_exclusions_are_reported_separately(self):
+        manifest = {
+            "updated_at": "2026-11-23T00:00:00Z",
+            "catalogs": [{
+                "id": "canada-open-data",
+                "name": "Open Government Canada",
+                "base_url": "https://open.canada.ca",
+                "source_terms_url": "https://open.canada.ca/en/terms",
+                "source_terms_status": "reviewed_per_dataset",
+                "source_terms_reviewed_at": "2026-11-21",
+            }],
+            "datasets": [],
+            "restricted_source_exclusions": [{
+                "catalog_id": "openlibrary",
+                "source_url": "https://openlibrary.org",
+                "source_terms_status": "restricted",
+                "records_excluded": 10500,
+                "catalogs_excluded": 22,
+                "reason": "source terms restrict bulk discovery",
+            }],
+        }
+        result = adapt(manifest)
+        self.assertEqual(result["metrics"]["restricted_source_records_excluded"], 10500)
+        self.assertEqual(result["metrics"]["restricted_source_catalogs_excluded"], 22)
+        self.assertEqual(result["excluded_sources"][0]["catalog_id"], "openlibrary")
 
     def test_ckan_metadata_creates_bounded_organization_and_tag_subcatalogs(self):
         result = adapt({
