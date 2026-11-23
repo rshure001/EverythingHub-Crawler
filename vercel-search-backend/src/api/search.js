@@ -13,7 +13,7 @@ const MAX_BING_BYTES = 1000000;
 const bingCache = new Map();
 const CATALOG_LOAD_BUDGET_MS = 8500;
 const PAGE_DERIVED_LOAD_BUDGET_MS = 7000;
-const UNIVERSAL_CATALOG_LOAD_BUDGET_MS = 3500;
+const UNIVERSAL_CATALOG_LOAD_BUDGET_MS = 7000;
 
 function withTimeout(promise, milliseconds, code) {
   let timer;
