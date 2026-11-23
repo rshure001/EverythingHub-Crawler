@@ -3064,7 +3064,10 @@ def validate_outputs(output_dir: Path) -> dict:
         raise ValueError("source policy review summary is missing or overstates record-level clearance")
     pages_raw = (output_dir / "pages.json.gz").read_bytes()
     pages = json.loads(gzip.decompress(pages_raw).decode("utf-8"))["pages"]
-    page_by_id = {item["page_id"]: item for item in pages if item.get("page_id")}
+    page_by_id = {
+        item["page_id"]: item for item in pages
+        if item.get("page_id") and item.get("url")
+    }
     media_payload = json.loads(gzip.decompress((output_dir / "media-references.json.gz").read_bytes()).decode("utf-8"))
     media_references = media_payload.get("references", [])
     media_pairs = [(x.get("source_page_id"), x.get("media_url")) for x in media_references]
@@ -3148,8 +3151,12 @@ def validate_outputs(output_dir: Path) -> dict:
         ):
             raise ValueError("identity sidecar overstates verification, rights, or publication status")
 
-    page_identity_catalog_ids = set()
-    seen_page_identity_ids = set()
+    registry_catalog_ids = {
+        item.get("catalog_id") for item in registry.get("catalogs", [])
+        if isinstance(item, dict) and item.get("catalog_id")
+    }
+    seen_page_identity_count = 0
+    previous_page_identity_id = None
     with gzip.open(page_identity_path, "rt", encoding="utf-8") as stream:
         header = json.loads(stream.readline())
         if (
@@ -3166,9 +3173,11 @@ def validate_outputs(output_dir: Path) -> dict:
             page = page_by_id.get(page_id)
             if (
                 page is None
-                or page_id in seen_page_identity_ids
+                or not isinstance(page_id, str)
+                or (previous_page_identity_id is not None and page_id <= previous_page_identity_id)
                 or item.get("identity_type") != "page"
                 or item.get("catalog_id") != stable_id("catalog", "__page__|" + page_id)
+                or item.get("catalog_id") in registry_catalog_ids
                 or item.get("source_key") != "__page__|" + page_id
                 or item.get("source_page_ids") != [page_id]
                 or item.get("source_url") != page.get("url")
@@ -3178,13 +3187,13 @@ def validate_outputs(output_dir: Path) -> dict:
             ):
                 raise ValueError("page identity catalog provenance or stable ID is invalid")
             validate_private_identity_status(item)
-            seen_page_identity_ids.add(page_id)
-            page_identity_catalog_ids.add(item["catalog_id"])
-    if len(seen_page_identity_ids) != expected_page_identity_count:
+            seen_page_identity_count += 1
+            previous_page_identity_id = page_id
+    if seen_page_identity_count != expected_page_identity_count:
         raise ValueError("page identity sidecar does not contain exactly one row per source page")
 
-    record_identity_catalog_ids = set()
-    seen_record_identity_ids = set()
+    seen_record_identity_count = 0
+    previous_record_identity_id = None
     with gzip.open(record_identity_path, "rt", encoding="utf-8") as stream:
         header = json.loads(stream.readline())
         if (
@@ -3207,9 +3216,11 @@ def validate_outputs(output_dir: Path) -> dict:
             })
             if (
                 record is None
-                or record_id in seen_record_identity_ids
+                or not isinstance(record_id, str)
+                or (previous_record_identity_id is not None and record_id <= previous_record_identity_id)
                 or item.get("identity_type") != "record"
                 or item.get("catalog_id") != stable_id("record-catalog", record_id)
+                or item.get("catalog_id") in registry_catalog_ids
                 or item.get("source_key") != "__record__|" + record_id
                 or item.get("record_ids") != [record_id]
                 or item.get("record_type") != record.get("record_type")
@@ -3221,9 +3232,9 @@ def validate_outputs(output_dir: Path) -> dict:
             ):
                 raise ValueError("record identity catalog provenance or stable ID is invalid")
             validate_private_identity_status(item)
-            seen_record_identity_ids.add(record_id)
-            record_identity_catalog_ids.add(item["catalog_id"])
-    if len(seen_record_identity_ids) != expected_record_identity_count:
+            seen_record_identity_count += 1
+            previous_record_identity_id = record_id
+    if seen_record_identity_count != expected_record_identity_count:
         raise ValueError("record identity sidecar does not contain exactly one row per record")
     for page in pages:
         page_record_ids = page.get("record_ids", [])
@@ -3289,12 +3300,6 @@ def validate_outputs(output_dir: Path) -> dict:
     catalogs_by_id = {x["catalog_id"]: x for x in catalogs}
     if len(catalog_ids) != len(set(catalog_ids)):
         raise ValueError("duplicate catalog IDs remain after deduplication")
-    real_catalog_ids = set(catalog_ids)
-    if (
-        page_identity_catalog_ids & real_catalog_ids
-        or record_identity_catalog_ids & real_catalog_ids
-    ):
-        raise ValueError("identity sidecars must remain separate from evidence-backed catalog definitions")
     for catalog in catalogs:
         if stable_id("catalog", catalog.get("source_key", "")) != catalog.get("catalog_id"):
             raise ValueError("catalog ID does not match its canonical source key")
@@ -3441,8 +3446,8 @@ def validate_outputs(output_dir: Path) -> dict:
         "catalogs": len(catalog_ids),
         "pages_analyzed": len(pages),
         "records_validated": len(records),
-        "page_identity_catalogs_validated": len(seen_page_identity_ids),
-        "record_identity_catalogs_validated": len(seen_record_identity_ids),
+        "page_identity_catalogs_validated": seen_page_identity_count,
+        "record_identity_catalogs_validated": seen_record_identity_count,
         "media_references_validated": len(media_references),
         "unique_media_urls": len(unique_media_urls),
         "files_validated": len(manifest["files"]),
