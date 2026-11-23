@@ -1032,11 +1032,6 @@ def _add_page_and_record_catalogs(page_rows: list[dict], records, catalogs: list
             "record_level_clearance": "not_reviewed", "commercial_eligible": False,
             "public_search_allowed": False, "verified": False,
         }
-        for record_id in record_ids:
-            memberships = record_map[record_id].setdefault("catalog_ids", [])
-            if page_catalog_id not in memberships:
-                memberships.append(page_catalog_id)
-
     owned_record_catalogs = 0
     for record_id, record in record_map.items():
         record_catalog_id = record.get("record_catalog_id") or stable_id("record-catalog", record_id)
@@ -1065,9 +1060,7 @@ def _add_page_and_record_catalogs(page_rows: list[dict], records, catalogs: list
             "record_level_clearance": "not_reviewed", "commercial_eligible": False,
             "public_search_allowed": False, "verified": False,
         }
-        memberships = record.setdefault("catalog_ids", [])
-        if record_catalog_id not in memberships:
-            memberships.append(record_catalog_id)
+        record["page_catalog_ids"] = parent_ids
         owned_record_catalogs += 1
 
     catalogs[:] = sorted(catalog_map.values(), key=lambda item: (
@@ -1809,6 +1802,10 @@ def analyze_pages(
 
     record_list = sorted(records.values(), key=lambda x: (x["record_type"], x["title"].casefold(), x["record_id"]))
     catalog_list = sorted(catalogs.values(), key=lambda x: (x["catalog_type"], x["title"].casefold(), x["catalog_id"]))
+    discovered_catalog_list = [
+        item for item in catalog_list
+        if item.get("catalog_origin") not in {"page_owned_identity_catalog", "record_owned_identity_catalog"}
+    ]
     type_counts = dict(sorted(Counter(x["record_type"] for x in record_list).items()))
     source_total = max(source_total if isinstance(source_total, int) and source_total >= 0 else source_page_rows, source_page_rows)
     unique_source_total = max(len(pages), source_total - duplicate_source_page_rows)
@@ -1821,7 +1818,7 @@ def analyze_pages(
     eligible_coverage = 100.0 if source_set_complete else None
     eligibility_rate = (eligible / len(pages) * 100.0) if pages else 0.0
     source_row_deduplication = (duplicate_source_page_rows / source_page_rows * 100.0) if source_page_rows else 0.0
-    page_refs = sum(len(x.get("source_page_ids", [])) for x in catalog_list)
+    page_refs = sum(len(x.get("source_page_ids", [])) for x in discovered_catalog_list)
     metrics = {
         "pages_analyzed": len(pages),
         "source_page_rows": source_page_rows,
@@ -1837,10 +1834,11 @@ def analyze_pages(
         "global_subject_catalogs": global_subject_catalogs,
         "global_typed_catalogs": sum(global_typed_catalogs_by_type.values()),
         "global_typed_catalogs_by_type": global_typed_catalogs_by_type,
-        "global_typed_catalog_page_associations": sum(len(x.get("source_page_ids", [])) for x in catalog_list if x.get("catalog_origin") == "derived_from_global_typed_records"),
-        "global_typed_catalog_record_associations": sum(len(x.get("record_ids", [])) for x in catalog_list if x.get("catalog_origin") == "derived_from_global_typed_records"),
-        "catalogs_by_origin": dict(sorted(Counter(x.get("catalog_origin") or "unknown" for x in catalog_list).items())),
-        "unique_catalogs_discovered": len(catalog_list),
+        "global_typed_catalog_page_associations": sum(len(x.get("source_page_ids", [])) for x in discovered_catalog_list if x.get("catalog_origin") == "derived_from_global_typed_records"),
+        "global_typed_catalog_record_associations": sum(len(x.get("record_ids", [])) for x in discovered_catalog_list if x.get("catalog_origin") == "derived_from_global_typed_records"),
+        "catalogs_by_origin": dict(sorted(Counter(x.get("catalog_origin") or "unknown" for x in discovered_catalog_list).items())),
+        "unique_catalogs_discovered": len(discovered_catalog_list),
+        "identity_catalogs_total": len(catalog_list) - len(discovered_catalog_list),
         "record_catalogs": record_catalog_metrics["record_catalogs"],
         "page_catalogs": identity_catalog_metrics["page_catalogs"],
         "page_catalogs_with_records": identity_catalog_metrics["page_catalogs_with_records"],
@@ -1852,14 +1850,14 @@ def analyze_pages(
         "record_catalog_membership_edges": record_catalog_metrics["record_catalog_membership_edges"],
         "record_catalogs_with_shared_sources": record_catalog_metrics["record_catalogs_with_shared_sources"],
         "record_catalogs_awaiting_related_items": record_catalog_metrics["record_catalogs_awaiting_related_items"],
-        "unique_catalogs_by_type": dict(sorted(Counter(x["catalog_type"] for x in catalog_list).items())),
-        "source_declared_catalogs": sum(bool(x.get("is_source_declared_catalog")) for x in catalog_list),
-        "derived_catalogs": sum(x.get("catalog_origin") in {"derived_from_repeated_records", "derived_from_global_typed_records"} for x in catalog_list),
-        "content_list_catalogs": sum(x.get("catalog_origin") == "content_list_declared_collection" for x in catalog_list),
-        "structured_schema_catalogs": sum(x.get("catalog_origin") == "structured_schema_collection" for x in catalog_list),
-        "catalogs_with_records": sum(bool(x.get("record_ids")) for x in catalog_list),
-        "catalogs_without_records": sum(not x.get("record_ids") for x in catalog_list),
-        "catalogs_with_multiple_records": sum(len(x.get("record_ids", [])) >= 2 for x in catalog_list),
+        "unique_catalogs_by_type": dict(sorted(Counter(x["catalog_type"] for x in discovered_catalog_list).items())),
+        "source_declared_catalogs": sum(bool(x.get("is_source_declared_catalog")) for x in discovered_catalog_list),
+        "derived_catalogs": sum(x.get("catalog_origin") in {"derived_from_repeated_records", "derived_from_global_typed_records"} for x in discovered_catalog_list),
+        "content_list_catalogs": sum(x.get("catalog_origin") == "content_list_declared_collection" for x in discovered_catalog_list),
+        "structured_schema_catalogs": sum(x.get("catalog_origin") == "structured_schema_collection" for x in discovered_catalog_list),
+        "catalogs_with_records": sum(bool(x.get("record_ids")) for x in discovered_catalog_list),
+        "catalogs_without_records": sum(not x.get("record_ids") for x in discovered_catalog_list),
+        "catalogs_with_multiple_records": sum(len(x.get("record_ids", [])) >= 2 for x in discovered_catalog_list),
         "records_assigned_to_catalogs": sum(bool(x.get("catalog_ids")) for x in record_list),
         "unassigned_records": sum(not x.get("catalog_ids") for x in record_list),
         "records_with_provenance": sum(bool(x.get("source_urls") and x.get("source_page_ids")) for x in record_list),
@@ -1872,7 +1870,7 @@ def analyze_pages(
         "catalog_candidate_occurrences": page_refs,
         "duplicate_catalog_candidates": max(0, page_refs - len(catalog_list)),
         "duplicate_catalog_candidate_page_references": max(0, page_refs - len(catalog_list)),
-        "subcatalogs_discovered": sum(bool(x["parent_catalog_id"]) for x in catalog_list),
+        "subcatalogs_discovered": sum(bool(x["parent_catalog_id"]) for x in discovered_catalog_list),
         "catalog_definition_pages": sum(bool(x.get("catalog_definition")) for x in page_rows),
         "unique_records": len(record_list),
         "cross_host_record_merges": 0,
@@ -2188,7 +2186,11 @@ def analyze_pages_incremental(
     eligible_coverage = 100.0 if source_set_complete else None
     eligibility_rate = (eligible / len(pages) * 100.0) if pages else 0.0
     source_row_deduplication = (duplicate_source_page_rows / source_page_rows * 100.0) if source_page_rows else 0.0
-    page_refs = sum(len(x.get("source_page_ids", [])) for x in all_catalogs)
+    discovered_catalogs = [
+        item for item in all_catalogs
+        if item.get("catalog_origin") not in {"page_owned_identity_catalog", "record_owned_identity_catalog"}
+    ]
+    page_refs = sum(len(x.get("source_page_ids", [])) for x in discovered_catalogs)
     type_counts = dict(sorted(Counter(x["record_type"] for x in all_records).items()))
     metrics = {
         "pages_analyzed": len(pages),
@@ -2205,23 +2207,23 @@ def analyze_pages_incremental(
         "global_subject_catalogs": global_subject_catalogs,
         "global_typed_catalogs": sum(global_typed_catalogs_by_type.values()),
         "global_typed_catalogs_by_type": global_typed_catalogs_by_type,
-        "global_typed_catalog_page_associations": sum(len(x.get("source_page_ids", [])) for x in all_catalogs if x.get("catalog_origin") == "derived_from_global_typed_records"),
-        "global_typed_catalog_record_associations": sum(len(x.get("record_ids", [])) for x in all_catalogs if x.get("catalog_origin") == "derived_from_global_typed_records"),
-        "catalogs_by_origin": dict(sorted(Counter(x.get("catalog_origin") or "unknown" for x in all_catalogs).items())),
-        "unique_catalogs_discovered": len(all_catalogs),
+        "global_typed_catalog_page_associations": sum(len(x.get("source_page_ids", [])) for x in discovered_catalogs if x.get("catalog_origin") == "derived_from_global_typed_records"),
+        "global_typed_catalog_record_associations": sum(len(x.get("record_ids", [])) for x in discovered_catalogs if x.get("catalog_origin") == "derived_from_global_typed_records"),
+        "catalogs_by_origin": dict(sorted(Counter(x.get("catalog_origin") or "unknown" for x in discovered_catalogs).items())),
+        "unique_catalogs_discovered": len(discovered_catalogs),
         "record_catalogs": record_catalog_metrics["record_catalogs"],
         "record_pages_with_catalogs": record_catalog_metrics["record_pages_with_catalogs"],
         "record_catalog_membership_edges": record_catalog_metrics["record_catalog_membership_edges"],
         "record_catalogs_with_shared_sources": record_catalog_metrics["record_catalogs_with_shared_sources"],
         "record_catalogs_awaiting_related_items": record_catalog_metrics["record_catalogs_awaiting_related_items"],
-        "unique_catalogs_by_type": dict(sorted(Counter(x["catalog_type"] for x in all_catalogs).items())),
-        "source_declared_catalogs": sum(bool(x.get("is_source_declared_catalog")) for x in all_catalogs),
-        "derived_catalogs": sum(x.get("catalog_origin") in {"derived_from_repeated_records", "derived_from_global_typed_records"} for x in all_catalogs),
-        "content_list_catalogs": sum(x.get("catalog_origin") == "content_list_declared_collection" for x in all_catalogs),
-        "structured_schema_catalogs": sum(x.get("catalog_origin") == "structured_schema_collection" for x in all_catalogs),
-        "catalogs_with_records": sum(bool(x.get("record_ids")) for x in all_catalogs),
-        "catalogs_without_records": sum(not x.get("record_ids") for x in all_catalogs),
-        "catalogs_with_multiple_records": sum(len(x.get("record_ids", [])) >= 2 for x in all_catalogs),
+        "unique_catalogs_by_type": dict(sorted(Counter(x["catalog_type"] for x in discovered_catalogs).items())),
+        "source_declared_catalogs": sum(bool(x.get("is_source_declared_catalog")) for x in discovered_catalogs),
+        "derived_catalogs": sum(x.get("catalog_origin") in {"derived_from_repeated_records", "derived_from_global_typed_records"} for x in discovered_catalogs),
+        "content_list_catalogs": sum(x.get("catalog_origin") == "content_list_declared_collection" for x in discovered_catalogs),
+        "structured_schema_catalogs": sum(x.get("catalog_origin") == "structured_schema_collection" for x in discovered_catalogs),
+        "catalogs_with_records": sum(bool(x.get("record_ids")) for x in discovered_catalogs),
+        "catalogs_without_records": sum(not x.get("record_ids") for x in discovered_catalogs),
+        "catalogs_with_multiple_records": sum(len(x.get("record_ids", [])) >= 2 for x in discovered_catalogs),
         "records_assigned_to_catalogs": sum(bool(x.get("catalog_ids")) for x in all_records),
         "unassigned_records": sum(not x.get("catalog_ids") for x in all_records),
         "records_with_provenance": sum(bool(x.get("source_urls") and x.get("source_page_ids")) for x in all_records),
@@ -2234,7 +2236,7 @@ def analyze_pages_incremental(
         "catalog_candidate_occurrences": page_refs,
         "duplicate_catalog_candidates": max(0, page_refs - len(all_catalogs)),
         "duplicate_catalog_candidate_page_references": max(0, page_refs - len(all_catalogs)),
-        "subcatalogs_discovered": sum(bool(x["parent_catalog_id"]) for x in all_catalogs),
+        "subcatalogs_discovered": sum(bool(x["parent_catalog_id"]) for x in discovered_catalogs),
         "catalog_definition_pages": sum(bool(x.get("catalog_definition")) for x in all_page_rows),
         "unique_records": len(all_records),
         "cross_host_record_merges": cross_host_record_merges,
