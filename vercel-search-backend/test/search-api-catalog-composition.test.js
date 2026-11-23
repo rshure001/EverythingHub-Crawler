@@ -31,7 +31,7 @@ test('curated external catalogs do not bypass the indexed catalog loader', async
   }};
   require.cache[modulePaths[3]] = { id: modulePaths[3], filename: modulePaths[3], loaded: true, exports: {
     searchCatalog: (_pages, _query, lane) => { capturedLane = lane; return []; },
-    resolveLaneFilters: lane => lane === 'shopping' ? new Set(['commerce']) : new Set(),
+    resolveLaneFilters: lane => lane === 'shopping' ? new Set(['business']) : new Set(),
     parseBingRss: () => [],
     buildResponse: options => { capturedBingResults = options.bingResults; return { status: 'ok', providers: [], results: [], count: 0, totalMatches: 0 }; }
   }};
