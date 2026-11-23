@@ -160,6 +160,7 @@ def catalog_metrics(catalogs: list[dict[str, Any]], records: list[dict[str, Any]
         for catalog_id in catalog_memberships:
             if isinstance(catalog_id, str) and catalog_id:
                 memberships.add((record["record_id"], catalog_id))
+    catalogs_with_records = {catalog_id for _, catalog_id in memberships}
     referenced_urls = {
         _text(page.get("canonical_url") or page.get("url"))
         for page in source_pages
@@ -172,24 +173,32 @@ def catalog_metrics(catalogs: list[dict[str, Any]], records: list[dict[str, Any]
         and (page.get("canonical_url") or page.get("url"))
         and page.get("fetched") is True
     }
+    indexed_record_ids = {
+        record["record_id"] for record in records
+        if isinstance(record, dict) and record.get("record_id") and record.get("indexed") is True
+    }
+    published_record_ids = {
+        record["record_id"] for record in records
+        if isinstance(record, dict) and record.get("record_id") and record.get("published") is True
+    }
     return {
         "catalogs_discovered": len(catalog_ids),
         "root_catalogs_discovered": len(catalog_ids - subcatalog_ids),
         "subcatalogs_discovered": len(subcatalog_ids),
+        "catalogs_with_records": len(catalogs_with_records),
+        "catalogs_without_records": len(catalog_ids - catalogs_with_records),
         "catalog_records": len(record_ids),
         "record_catalog_memberships": len(memberships),
         "unique_entities": len({
-            record.get("canonical_entity_key") or record.get("record_id")
+            (record.get("record_type", ""), record.get("canonical_entity_key") or record.get("record_id"))
             for record in records
             if isinstance(record, dict) and record.get("record_id")
         }),
         "source_page_references": len(referenced_urls),
         "source_page_associations": len(source_pages),
         "source_pages_fetched": len(fetched_urls),
-        "indexed_records": len({
-            record["record_id"] for record in records
-            if isinstance(record, dict) and record.get("record_id") and record.get("indexed") is True
-        }),
+        "indexed_records": len(indexed_record_ids),
+        "records_published": len(published_record_ids),
     }
 
 
