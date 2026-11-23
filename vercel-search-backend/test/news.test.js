@@ -98,7 +98,7 @@ test("news route aggregates only robots-permitted public RSS feeds with attribut
     const uniqueHosts = new Set(feeds.map(feed => new URL(feed.url).hostname)).size;
     assert.equal(calls.filter(url => url.endsWith("/robots.txt")).length, uniqueHosts);
     assert.equal(calls.filter(url => !url.endsWith("/robots.txt")).length, feeds.length);
-    assert.ok(Object.values(res.headers).some(value => String(value).includes("s-maxage=600")));
+    assert.ok(Object.values(res.headers).some(value => String(value).includes("s-maxage=300")));
   } finally {
     global.fetch = originalFetch;
   }
