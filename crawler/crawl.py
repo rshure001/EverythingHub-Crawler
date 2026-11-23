@@ -283,7 +283,7 @@ def build_page_record(url, title, description, text, depth, directives, publishe
             record["product"] = {"type": "product", **product}
     if isinstance(structured_catalog_metadata, dict) and structured_catalog_metadata.get("version") == 1:
         safe_lists = []
-        for raw_list in (structured_catalog_metadata.get("lists") or [])[:2]:
+        for raw_list in (structured_catalog_metadata.get("lists") or [])[:8]:
             if not isinstance(raw_list, dict):
                 continue
             list_name = normalize_text(raw_list.get("name"), 120)
@@ -333,7 +333,7 @@ def build_page_record(url, title, description, text, depth, directives, publishe
                 safe_items.append(item)
             if len(safe_items) >= 2:
                 safe_lists.append({"name": list_name, "record_type": record_type, "items": safe_items})
-        while safe_lists and len(json.dumps({"version": 1, "lists": safe_lists}, ensure_ascii=False, separators=(",", ":")).encode("utf-8")) > 8192:
+        while safe_lists and len(json.dumps({"version": 1, "lists": safe_lists}, ensure_ascii=False, separators=(",", ":")).encode("utf-8")) > 16384:
             largest = max(range(len(safe_lists)), key=lambda index: len(safe_lists[index]["items"]))
             if len(safe_lists[largest]["items"]) > 2:
                 safe_lists[largest]["items"].pop()
