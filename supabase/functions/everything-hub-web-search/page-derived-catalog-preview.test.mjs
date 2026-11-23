@@ -375,6 +375,7 @@ test("query-scoped catalog search fetches only matching per-catalog indexes", as
   assert.equal(rolex[0].catalog_id, "catalog:rolex-models");
   assert.equal(rolex[0].relevance_class, "typed_product_match");
   assert.equal(rolex[0].matched_records[0].record_id, "record:rolex-submariner");
+  assert.deepEqual(rolex[0].matched_records[0].shared_catalog_ids, ["catalog:rolex-models"]);
   assert.equal(rolex.some((item) => item.catalog_id === "catalog:global-geographic-subject"), false);
   const rolexWithStopword = await searchPageDerivedCatalogPreview("The Rolex", network, 5, fixture.fetchImpl);
   assert.equal(rolexWithStopword[0].catalog_id, "catalog:rolex-models");
