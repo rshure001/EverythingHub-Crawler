@@ -318,6 +318,7 @@ module.exports = async function handler(req, res) {
   payload.universalCatalogPreview = universalCatalogPreview;
   if (pageDerivedCatalogResults.length) payload.providers.push('Everything Hub Catalog Preview');
   if (universalCatalogResults.length) payload.providers.push('Everything Hub Universal Catalog Preview');
+  if (externalCatalogResults.length) payload.providers.push('Curated External Catalog Directory');
   if (bingResult.status !== 'fulfilled') payload.providers = payload.providers.filter(x => x !== 'Bing Web Search');
   if (catalog.refreshError) payload.catalogRefreshError = safeCatalogError({ message: catalog.refreshError });
   res.setHeader('X-Index-Updated-At', String(catalog.updatedAt));
