@@ -33,34 +33,36 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Validate ten-at-a-time expansion engine
+      - name: Validate evidence-backed catalog expansion engine
         working-directory: crawler
         run: python -m unittest test_catalog_seed_expansion.py test_catalog_source_policy.py -v
-      - name: Measure real main-branch seed eligibility without fetching sources
+      - name: Measure eligible catalog landing pages from current main review queue without fetching
         if: github.ref != 'refs/heads/main'
         run: |
           set -euo pipefail
           git fetch --depth=1 origin main
-          git checkout origin/main -- data/page-catalog-seeds.json.gz
+          git checkout origin/main -- data/page-derived-catalogs/source-host-review-queue.json public-search/manifest.json
           PYTHONPATH=crawler python - <<'PY'
-          import gzip, json
-          from collections import Counter
+          import json
           from pathlib import Path
-          from catalog_seed_expansion import _eligible_seed
-          payload = json.loads(gzip.decompress(Path("data/page-catalog-seeds.json.gz").read_bytes()))
-          pages = payload.get("pages", [])
-          eligible = [row for row in pages if _eligible_seed(row)]
-          hosts = Counter((row.get("host") or row.get("source_url", "").split("/")[2]) for row in eligible)
+          from catalog_seed_expansion import _eligible_seed, _queue_matches_current_index
+
+          queue = json.loads(
+              Path("data/page-derived-catalogs/source-host-review-queue.json").read_text(encoding="utf-8")
+          )
+          current = _queue_matches_current_index(queue, Path("public-search/manifest.json"))
+          candidates = queue.get("candidate_urls", []) if isinstance(queue, dict) else []
+          eligible = [row for row in candidates if _eligible_seed(row)] if current else []
           print(json.dumps({
-              "source_index_pages": payload.get("source_index_pages"),
-              "page_backed_seed_rows": len(pages),
-              "eligible_metadata_listing_seeds": len(eligible),
-              "eligible_seed_hosts": dict(hosts),
+              "source_index_pages": queue.get("source_index_pages"),
+              "review_queue_matches_current_index": current,
+              "catalog_definition_source_urls": len(candidates),
+              "eligible_catalog_landing_pages": len(eligible),
               "network_requests_made": 0,
               "records_published": 0
           }, indent=2))
           PY
-      - name: Expand one bounded batch of ten page-backed seeds
+      - name: Expand one bounded batch of ten evidence-backed catalog landing pages
         if: github.ref == 'refs/heads/main'
         run: python crawler/catalog_seed_expansion.py --limit 10
       - name: Publish metadata-only expansion ledger
@@ -73,7 +75,7 @@ jobs:
             echo "No expansion ledger changes."
             exit 0
           fi
-          git commit -m "Expand ten page-backed catalog seeds"
+          git commit -m "Expand ten evidence-backed catalog landing pages"
           for attempt in 1 2 3; do
             if git push origin HEAD:main; then
               exit 0
@@ -86,7 +88,7 @@ jobs:
               echo "Latest main already contains this expansion batch."
               exit 0
             fi
-            git commit -m "Expand ten page-backed catalog seeds"
+            git commit -m "Expand ten evidence-backed catalog landing pages"
           done
           echo "Unable to publish expansion ledger after three bounded attempts."
           exit 1
