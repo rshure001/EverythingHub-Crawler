@@ -371,8 +371,8 @@ jobs:
               });
               const relevantVideoTitles = videoStats.titles.filter(title => {
                 const lower = title.toLowerCase();
-                return /\\bnasa\\b/.test(lower) ||
-                  /\\b(?:apollo|artemis|hubble|space shuttle|international space station|mars|curiosity|perseverance|voyager|james webb|geminids|meteor shower|earth|universe)\\b/.test(lower);
+                return /\bnasa\b/.test(lower) ||
+                  /\b(?:apollo|artemis|hubble|space shuttle|international space station|mars|curiosity|perseverance|voyager|james webb|geminids|meteor shower|earth|universe)\b/.test(lower);
               });
               const irrelevantVideoTitles = videoStats.titles.filter(title =>
                 !relevantVideoTitles.includes(title) || unrelatedVideoTitles.includes(title)
