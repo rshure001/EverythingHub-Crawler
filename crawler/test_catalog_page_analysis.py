@@ -2240,7 +2240,7 @@ class AdditionalSourcePolicyReviewTests(unittest.TestCase):
             self.assertEqual(record["source_terms_status"], "not_reviewed")
             self.assertFalse(record["commercial_eligible"])
 
-    def test_every_record_gets_its_own_virtual_related_catalog(self):
+    def test_record_and_page_ids_are_not_promoted_to_identity_catalogs(self):
         pages = [
             {
                 "url": "https://www.rolex.com/watches/submariner",
@@ -2259,46 +2259,46 @@ class AdditionalSourcePolicyReviewTests(unittest.TestCase):
         ]
         result = analyze_pages(pages, source_total=2)
         records = {item["record_id"]: item for item in result["records"]}
-        self.assertEqual(result["metrics"]["record_catalogs"], len(records))
-        self.assertEqual(result["metrics"]["record_pages_with_catalogs"], len(records))
-        for record_id, record in records.items():
-            self.assertEqual(record["record_catalog_id"], stable_id("record-catalog", record_id))
-            self.assertIsInstance(record["catalog_ids"], list)
+        self.assertTrue(records)
+        self.assertNotIn("page_catalogs", result)
+        self.assertNotIn("record_catalogs", result)
+        self.assertNotIn("page_catalogs", result["metrics"])
+        self.assertNotIn("record_catalogs", result["metrics"])
+        real_catalog_ids = {item["catalog_id"] for item in result["catalogs"]}
         for page in result["pages"]:
-            expected = sorted(records[x]["record_catalog_id"] for x in page["record_ids"])
-            self.assertEqual(page["record_catalog_ids"], expected)
+            self.assertTrue(page["page_id"])
+            self.assertNotIn("page_catalog_id", page)
+            self.assertNotIn("record_catalog_ids", page)
+            for record_id in page["record_ids"]:
+                self.assertIn(page["page_id"], records[record_id]["source_page_ids"])
+        for record in records.values():
+            self.assertEqual(
+                record["record_id"],
+                stable_id("record", record["canonical_entity_key"]),
+            )
+            self.assertNotIn("record_catalog_id", record)
+            self.assertNotIn("page_catalog_ids", record)
+            self.assertTrue(record["source_page_ids"])
+            self.assertTrue(set(record.get("catalog_ids", [])).issubset(real_catalog_ids))
 
-    def test_record_catalog_identity_is_persisted_without_duplicate_catalog_rows(self):
-        pages = [
-            {"url": "https://shop.example/products/a", "title": "Product A",
-             "text": "Product details and specifications.", "lane": "shopping"},
-            {"url": "https://shop.example/products/b", "title": "Product B",
-             "text": "Product details and specifications.", "lane": "shopping"},
-        ]
-        result = analyze_pages(pages, source_total=2)
         with tempfile.TemporaryDirectory() as tmp:
             output = Path(tmp)
             manifest = write_outputs(result, output)
             listed_files = {item["file"] for item in manifest["files"]}
-            self.assertIn("page-catalogs.json.gz", listed_files)
-            self.assertIn("record-catalogs.json.gz", listed_files)
-            payload = json.loads(gzip.decompress((output / "records.json.gz").read_bytes()))
-            records = payload["records"]
-            self.assertEqual(len(records), len(result["records"]))
-            for record in records:
-                self.assertEqual(record["record_catalog_id"], stable_id("record-catalog", record["record_id"]))
-            record_catalog_payload = json.loads(
-                gzip.decompress((output / "record-catalogs.json.gz").read_bytes())
+            self.assertNotIn("page-catalogs.json.gz", listed_files)
+            self.assertNotIn("record-catalogs.json.gz", listed_files)
+            pages_payload = json.loads(
+                gzip.decompress((output / "pages.json.gz").read_bytes())
             )
-            self.assertEqual(len(record_catalog_payload["catalogs"]), len(records))
-            self.assertEqual(
-                {item["record_id"] for item in record_catalog_payload["catalogs"]},
-                {item["record_id"] for item in records},
+            records_payload = json.loads(
+                gzip.decompress((output / "records.json.gz").read_bytes())
             )
-            page_catalog_payload = json.loads(
-                gzip.decompress((output / "page-catalogs.json.gz").read_bytes())
-            )
-            self.assertEqual(len(page_catalog_payload["catalogs"]), result["metrics"]["page_catalogs"])
+            for page in pages_payload["pages"]:
+                self.assertNotIn("page_catalog_id", page)
+                self.assertNotIn("record_catalog_ids", page)
+            for record in records_payload["records"]:
+                self.assertNotIn("record_catalog_id", record)
+                self.assertNotIn("page_catalog_ids", record)
             validated = validate_outputs(output)
             self.assertEqual(validated["records_validated"], len(result["records"]))
 
