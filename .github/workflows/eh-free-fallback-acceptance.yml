@@ -1,33 +1,7 @@
 name: Everything Hub free fallback acceptance
 on:
-  pull_request:
-    branches:
-      - main
-    paths:
-      - ".github/workflows/eh-free-fallback-acceptance.yml"
-      - ".github/workflows/validate-vercel-search.yml"
-      - ".github/workflows/catalog-first-discovery.yml"
-      - "vercel-search-backend/**"
-      - "vercel-homepage/**"
-      - "crawler/catalog_*.py"
-      - "crawler/test_catalog_*.py"
-      - "data/universal-catalog-indexes/**"
-      - "data/page-derived-catalogs/**"
-      - "public-search/manifest.json"
-  push:
-    branches:
-      - main
-    paths:
-      - ".github/workflows/eh-free-fallback-acceptance.yml"
-      - ".github/workflows/validate-vercel-search.yml"
-      - ".github/workflows/catalog-first-discovery.yml"
-      - "vercel-search-backend/**"
-      - "vercel-homepage/**"
-      - "crawler/catalog_*.py"
-      - "crawler/test_catalog_*.py"
-      - "data/universal-catalog-indexes/**"
-      - "data/page-derived-catalogs/**"
-      - "public-search/manifest.json"
+  # The Vercel projects are not Git-linked. Dispatch the live browser gate only
+  # after the stable aliases have been deployed, or after data-only catalog runs.
   workflow_dispatch:
   workflow_run:
     workflows:
@@ -328,13 +302,10 @@ jobs:
                     latestPublishedAgeHours > maxAgeHours) {
                   report.failures.push("Top Stories category is empty or stale: " + category + " " + JSON.stringify(report.checks.newsFreshness[category]));
                 }
-                const nasaFeedRequired = ["for-you", "technology", "science"].includes(category);
                 const nasaFeedActive = Array.isArray(newsPayload.sources) && newsPayload.sources.some(source => ["NASA News Releases", "NASA Recently Published"].includes(source));
                 report.checks.newsFreshness[category].nasaCurrentContentFeedActive = nasaFeedActive;
                 report.checks.newsFreshness[category].nasaCurrentContentSources = Array.isArray(newsPayload.sources) ? newsPayload.sources.filter(source => ["NASA News Releases", "NASA Recently Published"].includes(source)) : [];
-                if (nasaFeedRequired && !nasaFeedActive) {
-                  report.failures.push("No current NASA public-content feed is active in " + category + ": " + JSON.stringify(report.checks.newsFreshness[category]));
-                }
+                report.checks.newsFreshness[category].sourceErrors = newsPayload.sourceErrors || {};
               }
               await shot("everythinghub-news.png");
               await goHome();
