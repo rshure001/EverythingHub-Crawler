@@ -531,12 +531,17 @@ def _add_global_subject_catalogs(pages: list[dict], page_rows: list[dict], recor
             "tokens": tokens,
         }
 
+    # Parse each eligible page title only once. The previous two-pass
+    # implementation repeated URL canonicalization, stable-ID hashing, title
+    # tokenization, and description normalization across the full corpus.
     topic_counts: Counter = Counter()
     topic_hosts: dict[str, set[str]] = defaultdict(set)
+    page_members: list[dict] = []
     for page in pages:
         member = member_for_page(page)
         if member is None:
             continue
+        page_members.append(member)
         for token in member["tokens"]:
             topic_counts[token] += 1
             topic_hosts[token].add(member["host"])
@@ -550,16 +555,14 @@ def _add_global_subject_catalogs(pages: list[dict], page_rows: list[dict], recor
 
     topic_pages: dict[str, list[str]] = defaultdict(list)
     page_info: dict[str, dict] = {}
-    for page in pages:
-        member = member_for_page(page)
-        if member is None:
-            continue
+    for member in page_members:
         matched_tokens = member["tokens"].intersection(qualified_tokens)
         if not matched_tokens:
             continue
         page_id = member["page_id"]
-        member.pop("tokens", None)
-        page_info[page_id] = member
+        page_info[page_id] = {
+            key: value for key, value in member.items() if key != "tokens"
+        }
         for token in matched_tokens:
             topic_pages[token].append(page_id)
 
