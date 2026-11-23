@@ -285,7 +285,10 @@ def adapt(manifest: dict[str, Any]) -> dict[str, Any]:
                     for row in provenance_rows
                 ):
                     provenance_rows.append(provenance)
-                existing["source_provenance"] = provenance_rows
+                existing["source_provenance"] = sorted(
+                    provenance_rows,
+                    key=lambda row: (row.get("catalog_id", ""), row.get("source_url", "")),
+                )
                 existing_attributes = existing.get("attributes") or {}
                 for attribute_key, attribute_value in attributes.items():
                     if (
