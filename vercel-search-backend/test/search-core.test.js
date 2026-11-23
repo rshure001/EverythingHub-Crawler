@@ -98,7 +98,7 @@ test('maps all homepage search categories to supported corpus lanes', () => {
   assert.deepEqual([...resolveLaneFilters('news')], ['news']);
   assert.deepEqual([...resolveLaneFilters('shopping')], ['business']);
   assert.deepEqual([...resolveLaneFilters('places')], ['culture', 'nature', 'government']);
-  assert.deepEqual([...resolveLaneFilters('business')], ['business']);
+  assert.deepEqual([...resolveLaneFilters('business')], ['business', 'culture']);
   assert.deepEqual([...resolveLaneFilters('research')], ['science', 'technology']);
   assert.deepEqual([...resolveLaneFilters('images')], []);
   assert.deepEqual([...resolveLaneFilters('videos')], []);
@@ -137,6 +137,10 @@ test('places and research aliases search multiple relevant lanes', () => {
   assert.deepEqual(
     searchCatalog(pages, 'Las Vegas', 'places').map(item => item.url),
     ['https://example.com/city', 'https://example.com/refuge', 'https://example.com/visitor-guide']
+  );
+  assert.deepEqual(
+    searchCatalog(pages, 'Las Vegas', 'business').map(item => item.url),
+    ['https://example.com/visitor-guide']
   );
   assert.deepEqual(
     searchCatalog(pages, 'NASA research', 'research').map(item => item.url),
