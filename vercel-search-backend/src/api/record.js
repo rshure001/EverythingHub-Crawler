@@ -1,5 +1,5 @@
 'use strict';
-const { loadPageDerivedCatalogs, resolveRecordRelatedCatalog } = require('../lib/page-derived-catalogs');
+const { loadPageDerivedCatalogs, resolveRelatedRecords } = require('../lib/page-derived-catalogs');
 
 const MAX_LIMIT = 50;
 const MAX_OFFSET = 5000;
@@ -17,9 +17,9 @@ module.exports = async function handler(req, res) {
   }
 
   const params = new URL(req.url, 'https://everythinghub.invalid').searchParams;
-  const recordCatalogId = String(params.get('record_catalog_id') || '').trim();
-  if (!recordCatalogId || recordCatalogId.length > 160) {
-    return res.status(400).json({ error: 'record_catalog_id_required' });
+  const recordId = String(params.get('record_id') || '').trim();
+  if (!recordId || recordId.length > 160) {
+    return res.status(400).json({ error: 'record_id_required' });
   }
   const limit = Number(params.get('limit') || 20);
   const offset = Number(params.get('offset') || 0);
@@ -30,8 +30,8 @@ module.exports = async function handler(req, res) {
 
   try {
     const network = await loadPageDerivedCatalogs();
-    const result = resolveRecordRelatedCatalog(recordCatalogId, network, limit, offset);
-    if (!result) return res.status(404).json({ error: 'record_catalog_not_found' });
+    const result = resolveRelatedRecords(recordId, network, limit, offset);
+    if (!result) return res.status(404).json({ error: 'record_not_found' });
     return res.status(200).json({
       status: 'candidate-preview',
       preview_only: true,
@@ -41,9 +41,9 @@ module.exports = async function handler(req, res) {
       ...result
     });
   } catch (error) {
-    const code = String(error && error.message || 'record_catalog_unavailable')
+    const code = String(error && error.message || 'related_records_unavailable')
       .split(':', 1)[0].replace(/[^a-z0-9_-]/gi, '_').slice(0, 80);
-    console.warn('[record-catalog-load-failed]', code || 'record_catalog_unavailable');
-    return res.status(503).json({ error: 'record_catalog_temporarily_unavailable' });
+    console.warn('[related-records-load-failed]', code || 'related_records_unavailable');
+    return res.status(503).json({ error: 'related_records_temporarily_unavailable' });
   }
 };
