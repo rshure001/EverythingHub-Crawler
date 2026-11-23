@@ -400,10 +400,11 @@ function resolveRecordRelatedCatalog(recordCatalogId,network,limit=20,offset=0){
  const owner=records.find(r=>r&&r.record_catalog_id===key);
  if(!owner)return null;
  const catalogs=Array.isArray(network?.catalogs)?network.catalogs:[];
+ const catalogsById=new Map(catalogs.map(c=>[c.catalog_id,c]));
  const recordsById=new Map(records.map(r=>[r.record_id,r]));
  const related=new Map();
  for(const catalogId of Array.isArray(owner.catalog_ids)?owner.catalog_ids:[]){
-  const catalog=catalogs.find(c=>c&&c.catalog_id===catalogId);
+  const catalog=catalogsById.get(catalogId);
   if(!catalog)continue;
   for(const recordId of Array.isArray(catalog.record_ids)?catalog.record_ids:[]){
    if(recordId===owner.record_id||related.has(recordId))continue;
