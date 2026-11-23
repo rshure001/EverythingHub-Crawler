@@ -118,6 +118,10 @@ def _queue_snapshot_status(queue: object, current: dict | None) -> dict:
     compatible = (
         0 <= page_lag <= MAX_QUEUE_PAGE_LAG
         and 0 <= age_seconds <= MAX_QUEUE_AGE_SECONDS
+        # A same-size manifest with a different hash is not an append-only
+        # advance; fail closed rather than treating changed/replaced pages as
+        # compatible with an older review queue.
+        and (page_lag > 0 or source_sha == current["sha256"])
     )
     status.update({
         "compatible": compatible,
