@@ -232,7 +232,7 @@ def main():
     if before_pages is None or before_updated_at is None:
         raise SystemExit(
             "Canonical manifest baseline is missing; refusing to label per-run "
-            "upserts as new unique records."
+            "upserts as new unique pages."
         )
 
     manifest_before = {
@@ -257,7 +257,7 @@ def main():
 
     interval = snapshot["latest_manifest_interval"]
     activity = snapshot["recent_run_activity"]
-    report = ["## Everything Hub — canonical manifest growth"]
+    report = ["## Everything Hub — canonical manifest page growth"]
     if interval["valid"]:
         delta = interval["new_unique_pages"]
         report.extend([
@@ -274,7 +274,7 @@ def main():
                 else "- Unique-page rate: **not measured** (crawler duration unavailable)"
             ),
             (
-                f"- Gap-inclusive rate: **{interval['wall_clock_pages_per_minute']:.2f}/minute**; "
+                f"- Gap-inclusive rate: **{interval['wall_clock_pages_per_minute']:.2f} pages/minute**; "
                 f"**{interval['wall_clock_pages_per_hour']:.1f}/hour**"
             ),
             f"- Total indexed pages: **{interval['after_pages']:,}**",
@@ -299,7 +299,7 @@ def main():
             f"- Recent crawl activity (last hour by run timestamp): "
             f"{activity['pages_processed']:,} processed/upserted pages across "
             f"{activity['run_count']} runs; {activity['fetch_attempts']:,} fetch attempts. "
-            "This is not a unique-record count."
+            "This is not a unique-page count."
         ),
     ])
     text = "\n".join(report) + "\n"
