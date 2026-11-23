@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "updated_at": "2026-11-23T20:11:20Z",
-  "reason": "Recover the interrupted page-derived catalog inventory after the GitHub runner shut down during global reconciliation; reuse the persisted per-host cache and analyze the current public-search manifest. One bounded recovery crawl; robots.txt, host pacing, and source-policy checks unchanged.",
+  "updated_at": "2026-11-23T20:16:46.278Z",
+  "reason": "Explicit workflow_dispatch fallback after scheduled crawl delivery was 15905s old (>10 minutes); no queued or running crawler; public manifest was 1695s old (>10 minutes). One bounded recovery crawl; normal schedule unchanged.",
   "manifest_before_pages": 208952,
   "manifest_before_updated_at": "2026-11-23T19:48:31Z"
 }
