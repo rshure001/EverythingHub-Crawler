@@ -5,12 +5,18 @@ from urllib.parse import urlsplit
 
 VALID_LANES = frozenset({
     "general", "science", "news", "technology",
-    "business", "government", "culture", "nature",
+    "business", "government", "culture", "nature", "commerce",
 })
 
 # Curated source-host routing. Exact domain boundaries prevent lookalike hosts
 # such as nasa.gov.example.com from inheriting a trusted source's lane.
 HOST_LANES = {
+    "bucherer.com": "commerce",
+    "visitlasvegas.com": "culture",
+    "lasvegasnevada.gov": "government",
+    "clarkcountynv.gov": "government",
+    "rtcsnv.com": "government",
+    "fws.gov": "nature",
     "nasa.gov": "science",
     "noaa.gov": "science",
     "usgs.gov": "science",
