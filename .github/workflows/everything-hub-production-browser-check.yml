@@ -284,7 +284,13 @@ jobs:
                   if (isExternalDirectory(index)) {
                     return /External links only/.test(text) && /destination terms and rights apply/.test(text) && /no source-page records republished/.test(text);
                   }
-                  return /Candidate preview only/.test(text) && /Record rights not cleared/.test(text) && /Commercial use not cleared/.test(text);
+                  const unreviewedCandidate = /Candidate preview only/.test(text) &&
+                    /Record rights not cleared/.test(text) && /Commercial use not cleared/.test(text);
+                  const reviewedRecordCandidate = /Candidate preview only/.test(text) &&
+                    /Source terms reviewed per dataset/.test(text) &&
+                    /Record rights:\s*eligible per record/.test(text) &&
+                    /Commercial use not cleared/.test(text);
+                  return unreviewedCandidate || reviewedRecordCandidate;
                 });
                 const pageDerivedCatalogVisible = catalogDisplaySources.some((source, index) => !isExternalDirectory(index) && source === "page-derived");
                 if (query !== "Rolex" && !pageDerivedCatalogVisible) {
