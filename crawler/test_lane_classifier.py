@@ -33,7 +33,6 @@ class LaneClassifierTests(unittest.TestCase):
             "government": "https://www.irs.gov/",
             "culture": "https://www.loc.gov/",
             "nature": "https://www.nationalgeographic.com/",
-            "commerce": "https://www.bucherer.com/",
         }
         self.assertEqual(set(examples), set(VALID_LANES))
         for expected, url in examples.items():
@@ -64,7 +63,7 @@ class LaneClassifierTests(unittest.TestCase):
 
     def test_public_shard_compaction_reclassifies_legacy_general_lanes(self):
         examples = {
-            "https://www.bucherer.com/rolex": "commerce",
+            "https://www.bucherer.com/rolex": "business",
             "https://www.visitlasvegas.com/listing/badlands-las-vegas/35627/": "culture",
             "https://www.lasvegasnevada.gov/Business/Business-License": "government",
             "https://www.fws.gov/": "nature",
