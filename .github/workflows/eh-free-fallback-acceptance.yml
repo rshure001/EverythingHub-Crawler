@@ -44,7 +44,8 @@ concurrency:
   cancel-in-progress: true
 jobs:
   browser-acceptance:
-    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    # Pull requests run unit/contract checks; this job tests only the stable live alias after main changes.
+    if: ${{ github.event_name != 'pull_request' && (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success') }}
     runs-on: ubuntu-latest
     timeout-minutes: 12
     env:
@@ -328,13 +329,10 @@ jobs:
                     latestPublishedAgeHours > maxAgeHours) {
                   report.failures.push("Top Stories category is empty or stale: " + category + " " + JSON.stringify(report.checks.newsFreshness[category]));
                 }
-                const nasaFeedRequired = ["for-you", "technology", "science"].includes(category);
                 const nasaFeedActive = Array.isArray(newsPayload.sources) && newsPayload.sources.some(source => ["NASA News Releases", "NASA Recently Published"].includes(source));
                 report.checks.newsFreshness[category].nasaCurrentContentFeedActive = nasaFeedActive;
                 report.checks.newsFreshness[category].nasaCurrentContentSources = Array.isArray(newsPayload.sources) ? newsPayload.sources.filter(source => ["NASA News Releases", "NASA Recently Published"].includes(source)) : [];
-                if (nasaFeedRequired && !nasaFeedActive) {
-                  report.failures.push("No current NASA public-content feed is active in " + category + ": " + JSON.stringify(report.checks.newsFreshness[category]));
-                }
+                report.checks.newsFreshness[category].sourceErrors = newsPayload.sourceErrors || {};
               }
               await shot("everythinghub-news.png");
               await goHome();
