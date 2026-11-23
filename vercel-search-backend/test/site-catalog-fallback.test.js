@@ -13,7 +13,8 @@ test("primary site search renders catalogResults and falls back to the first-par
   const searchEnd = site.indexOf("form.addEventListener", searchStart);
   assert.ok(searchStart >= 0 && searchEnd > searchStart);
   const search = site.slice(searchStart, searchEnd);
-  assert.ok(site.includes('const BASE="https://ynleeweezwkdbisaiovq.supabase.co/functions/v1"'));
+  assert.ok(site.includes('const SEARCH_API=BASE+"/everything-hub-web-search"'));
+  assert.ok(search.includes("new URL(SEARCH_API)"));
   assert.ok(search.includes('new URL(BASE+"/everything-hub-web-search")'));
   assert.ok(search.includes("data.catalogResults"));
   assert.ok(search.includes("catalogItems.concat(pageItems)"));
@@ -23,6 +24,7 @@ test("primary site search renders catalogResults and falls back to the first-par
 });
 
 test("Vercel homepage crawler fallback preserves first-party catalog preview cards", () => {
+  assert.ok(vercelHomepage.includes("https://everythinghub-search-backend.vercel.app/api/search"));
   const start = vercelHomepage.indexOf("async function searchCrawlerIndex(query)");
   const end = vercelHomepage.indexOf("async function searchPublicSources(query)", start);
   assert.ok(start >= 0 && end > start);

@@ -24,7 +24,7 @@ let cache = null;
 let failureCache = null;
 let inFlight = null;
 
-function getBuffer(url, maxBytes, timeoutMs = 9000) {
+function getBuffer(url, maxBytes, timeoutMs = 20000) {
   return new Promise((resolve, reject) => {
     let settled = false;
     let request;
@@ -249,7 +249,7 @@ async function loadUniversalCatalogFromManifest(manifest, commitSha, manifestRaw
   const base = RAW + commitSha + '/data/universal-catalog-indexes/';
   const rootShardResults = await Promise.all(checked.rootFiles.map(async file => {
     const entry = checked.shardByFile.get(file);
-    const compressed = await fetchBuffer(base + file.split('/').map(encodeURIComponent).join('/'), entry.bytes, 9000);
+    const compressed = await fetchBuffer(base + file.split('/').map(encodeURIComponent).join('/'), entry.bytes, 20000);
     const decoded = decodeRootShard(entry, compressed, file.slice('shards/'.length, -'.json.gz'.length));
     if (decoded.decodedBytes > MAX_ROOT_SHARD_JSON_BYTES) {
       throw new Error('universal_catalog_root_shard_uncompressed_limit');
@@ -371,7 +371,7 @@ async function loadUniversalCatalogNetwork(fetchBuffer = getBuffer) {
 
   inFlight = (async () => {
     try {
-      const refRaw = await fetchBuffer(REF + '?v=' + Date.now(), 4096, 7000);
+      const refRaw = await fetchBuffer(REF + '?v=' + Date.now(), 4096, 12000);
       let ref;
       try { ref = JSON.parse(refRaw.toString('utf8')); } catch {
         throw new Error('universal_catalog_git_ref_json_invalid');
