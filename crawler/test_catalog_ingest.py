@@ -640,8 +640,12 @@ class UniversalCatalogIngestTests(unittest.TestCase):
         for document in root_documents:
             self.assertTrue(document["public_search_allowed"])
             self.assertTrue(document["source_url"].startswith("https://"))
+            self.assertIn(document["source_url"], document["source_urls"])
             self.assertIn(root["catalog_id"], document["catalog_ids"])
             self.assertTrue(document["search_text"])
+            self.assertNotIn("description", document)
+            self.assertNotIn("attributes", document)
+            self.assertNotIn("resources", document)
             self.assertNotIn(document["record_id"], {
                 private_record["record_id"], closed_record["record_id"], unknown_record["record_id"]
             })
