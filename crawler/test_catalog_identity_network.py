@@ -102,10 +102,12 @@ class PageAndRecordCatalogIdentityTests(unittest.TestCase):
     def test_empty_page_gets_catalog_and_shared_record_links_all_source_pages(self):
         page_a = stable_id("page", "https://example.com/a")
         page_b = stable_id("page", "https://example.com/b")
+        page_c = stable_id("page", "https://example.com/c")
         record_id = stable_id("record", "article|example.com|story")
         pages = [
             {"page_id": page_a, "url": "https://example.com/a", "title": "A", "record_ids": []},
             {"page_id": page_b, "url": "https://example.com/b", "title": "B", "record_ids": [record_id]},
+            {"page_id": page_c, "url": "https://example.com/c", "title": "C", "record_ids": []},
         ]
         records = {
             record_id: {
@@ -119,9 +121,9 @@ class PageAndRecordCatalogIdentityTests(unittest.TestCase):
         }
         metrics, page_catalogs, record_catalogs = _add_page_catalogs(pages, records)
         by_id = {item["catalog_id"]: item for item in page_catalogs}
-        self.assertEqual(metrics["page_catalogs"], 2)
+        self.assertEqual(metrics["page_catalogs"], 3)
         self.assertEqual(metrics["page_catalogs_without_records"], 1)
-        self.assertEqual(by_id[pages[0]["page_catalog_id"]]["record_ids"], [])
+        self.assertEqual(by_id[pages[2]["page_catalog_id"]]["record_ids"], [])
         self.assertEqual(
             set(records[record_id]["page_catalog_ids"]),
             {pages[0]["page_catalog_id"], pages[1]["page_catalog_id"]},
