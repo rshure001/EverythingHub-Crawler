@@ -956,6 +956,34 @@ def _reconcile_page_record_provenance(page_rows: list[dict], records) -> int:
     return repaired
 
 
+def _catalog_membership_coverage_by_source_page(page_rows: list[dict], catalogs: list[dict]) -> dict[str, int]:
+    """Count eligible source pages with zero, one, or multiple real catalog memberships."""
+    catalog_counts: Counter[str] = Counter()
+    for catalog in catalogs:
+        if not isinstance(catalog, dict):
+            continue
+        page_ids = {
+            page_id for page_id in catalog.get("source_page_ids", [])
+            if isinstance(page_id, str) and page_id
+        }
+        for page_id in page_ids:
+            catalog_counts[page_id] += 1
+
+    eligible_page_ids = {
+        page.get("page_id")
+        for page in page_rows
+        if isinstance(page, dict)
+        and page.get("eligible") is True
+        and isinstance(page.get("page_id"), str)
+        and page.get("page_id")
+    }
+    return {
+        "eligible_source_pages_with_catalogs": sum(catalog_counts.get(page_id, 0) > 0 for page_id in eligible_page_ids),
+        "eligible_source_pages_without_catalogs": sum(catalog_counts.get(page_id, 0) == 0 for page_id in eligible_page_ids),
+        "eligible_source_pages_with_multiple_catalogs": sum(catalog_counts.get(page_id, 0) > 1 for page_id in eligible_page_ids),
+    }
+
+
 def analyze_pages(
     pages: list[dict],
     source_total: int | None = None,
@@ -1679,6 +1707,7 @@ def analyze_pages(
     record_list = sorted(records.values(), key=lambda x: (x["record_type"], x["title"].casefold(), x["record_id"]))
     catalog_list = sorted(catalogs.values(), key=lambda x: (x["catalog_type"], x["title"].casefold(), x["catalog_id"]))
     discovered_catalog_list = catalog_list
+    catalog_coverage_by_source_page = _catalog_membership_coverage_by_source_page(page_rows, discovered_catalog_list)
     type_counts = dict(sorted(Counter(x["record_type"] for x in record_list).items()))
     source_total = max(source_total if isinstance(source_total, int) and source_total >= 0 else source_page_rows, source_page_rows)
     unique_source_total = max(len(pages), source_total - duplicate_source_page_rows)
@@ -1711,7 +1740,8 @@ def analyze_pages(
         "global_typed_catalog_record_associations": sum(len(x.get("record_ids", [])) for x in discovered_catalog_list if x.get("catalog_origin") == "derived_from_global_typed_records"),
         "catalogs_by_origin": dict(sorted(Counter(x.get("catalog_origin") or "unknown" for x in discovered_catalog_list).items())),
         "unique_catalogs_discovered": len(discovered_catalog_list),
-        "unique_catalogs_by_type": dict(sorted(Counter(x["catalog_type"] for x in discovered_catalog_list).items())),
+        **catalog_coverage_by_source_page,
+                "unique_catalogs_by_type": dict(sorted(Counter(x["catalog_type"] for x in discovered_catalog_list).items())),
         "source_declared_catalogs": sum(bool(x.get("is_source_declared_catalog")) for x in discovered_catalog_list),
         "derived_catalogs": sum(x.get("catalog_origin") in {"derived_from_repeated_records", "derived_from_global_typed_records"} for x in discovered_catalog_list),
         "content_list_catalogs": sum(x.get("catalog_origin") == "content_list_declared_collection" for x in discovered_catalog_list),
@@ -2046,6 +2076,7 @@ def analyze_pages_incremental(
     eligibility_rate = (eligible / len(pages) * 100.0) if pages else 0.0
     source_row_deduplication = (duplicate_source_page_rows / source_page_rows * 100.0) if source_page_rows else 0.0
     discovered_catalogs = all_catalogs
+    catalog_coverage_by_source_page = _catalog_membership_coverage_by_source_page(all_page_rows, discovered_catalogs)
     page_refs = sum(len(x.get("source_page_ids", [])) for x in discovered_catalogs)
     type_counts = dict(sorted(Counter(x["record_type"] for x in all_records).items()))
     metrics = {
@@ -2067,6 +2098,7 @@ def analyze_pages_incremental(
         "global_typed_catalog_record_associations": sum(len(x.get("record_ids", [])) for x in discovered_catalogs if x.get("catalog_origin") == "derived_from_global_typed_records"),
         "catalogs_by_origin": dict(sorted(Counter(x.get("catalog_origin") or "unknown" for x in discovered_catalogs).items())),
         "unique_catalogs_discovered": len(discovered_catalogs),
+        **catalog_coverage_by_source_page,
         "unique_catalogs_by_type": dict(sorted(Counter(x["catalog_type"] for x in discovered_catalogs).items())),
         "source_declared_catalogs": sum(bool(x.get("is_source_declared_catalog")) for x in discovered_catalogs),
         "derived_catalogs": sum(x.get("catalog_origin") in {"derived_from_repeated_records", "derived_from_global_typed_records"} for x in discovered_catalogs),
@@ -2717,6 +2749,10 @@ def build_search_index(analysis: dict) -> dict[str, dict]:
 def write_outputs(analysis: dict, output_dir: Path) -> dict:
     apply_source_policy_reviews(analysis)
     output_dir.mkdir(parents=True, exist_ok=True)
+    for obsolete_name in ("page-catalogs.json.gz", "record-catalogs.json.gz"):
+        obsolete_path = output_dir / obsolete_name
+        if obsolete_path.is_file():
+            obsolete_path.unlink()
     files = []
     for catalog in analysis["catalogs"]:
         index_digest = hashlib.sha256(catalog["catalog_id"].encode("utf-8")).hexdigest()
@@ -2729,3 +2765,501 @@ def write_outputs(analysis: dict, output_dir: Path) -> dict:
         "pages": analysis["pages"],
     })
     files.append({"file": "pages.json.gz", "bytes": size, "sha256": digest, "items": len(analysis["pages"])})
+    search_shards = build_search_index(analysis)
+    if not search_shards:
+        search_shards = {"00": {"version": 1, "prefix": "00", "tokens": {}}}
+    analysis["metrics"]["search_index_tokens"] = sum(len(item["tokens"]) for item in search_shards.values())
+    analysis["metrics"]["search_index_shards"] = len(search_shards)
+    analysis["metrics"]["search_index_catalog_postings"] = sum(
+        len(catalog_ids)
+        for item in search_shards.values()
+        for catalog_ids in item["tokens"].values()
+    )
+    size, digest = _write_gzip(output_dir / "registry.json.gz", {
+        "version": 1, "analysis_version": analysis.get("analysis_version", ANALYZER_VERSION),
+        "status": "candidate_staging_not_production",
+        "metrics": analysis["metrics"], "source_policy_review": analysis.get("source_policy_review"), "catalogs": analysis["catalogs"],
+    })
+    files.append({"file": "registry.json.gz", "bytes": size, "sha256": digest, "items": len(analysis["catalogs"])})
+    records_by_catalog = defaultdict(list)
+    for record in analysis["records"]:
+        for catalog_id in record.get("catalog_ids", []):
+            records_by_catalog[catalog_id].append(record)
+    for catalog in analysis["catalogs"]:
+        related = records_by_catalog.get(catalog["catalog_id"], [])
+        size, digest = _write_gzip(output_dir / catalog["index_file"], {
+            "version": 1, "catalog_id": catalog["catalog_id"],
+            "title": catalog["title"], "status": catalog["status"], "records": related,
+        })
+        files.append({"file": catalog["index_file"], "bytes": size, "sha256": digest, "items": len(related)})
+    search_index_dir = output_dir / "search-index"
+    search_index_dir.mkdir(parents=True, exist_ok=True)
+    expected_search_files = set()
+    for prefix, payload in search_shards.items():
+        relative_path = "search-index/" + prefix + ".json.gz"
+        expected_search_files.add(relative_path)
+        size, digest = _write_gzip(output_dir / relative_path, payload)
+        files.append({"file": relative_path, "bytes": size, "sha256": digest, "items": len(payload["tokens"])})
+    for stale_path in search_index_dir.glob("*.json.gz"):
+        relative_path = stale_path.relative_to(output_dir).as_posix()
+        if relative_path not in expected_search_files:
+            stale_path.unlink()
+
+    size, digest = _write_gzip(output_dir / "records.json.gz", {
+        "version": 1, "records": analysis["records"],
+    })
+    files.append({"file": "records.json.gz", "bytes": size, "sha256": digest, "items": len(analysis["records"])})
+    size, digest = _write_gzip(output_dir / "media-references.json.gz", {
+        "version": 2, "references": analysis["media_references"],
+        "unique_media_urls": analysis["media_urls"],
+    })
+    files.append({"file": "media-references.json.gz", "bytes": size, "sha256": digest, "items": len(analysis["media_references"])})
+    snapshot_fields = {
+        "analysis_started_at": analysis.get("analysis_started_at"),
+        "analysis_finished_at": analysis.get("analysis_finished_at"),
+        "persisted_snapshot_at": analysis.get("persisted_snapshot_at", analysis.get("generated_at")),
+        "analysis_elapsed_seconds": analysis.get("analysis_elapsed_seconds"),
+        "elapsed_wall_clock_seconds": analysis.get("elapsed_wall_clock_seconds"),
+        "previous_counts": analysis.get("previous_counts"),
+        "count_deltas": analysis.get("count_deltas"),
+        "negative_count_deltas": analysis.get("negative_count_deltas"),
+        "throughput": analysis.get("throughput"),
+    }
+    report = {
+        "schema_version": 1, "analysis_version": analysis.get("analysis_version", ANALYZER_VERSION),
+        "generated_at": analysis["generated_at"],
+        "source_index_pages": analysis["source_index_pages"],
+        "source_index_updated_at": analysis["source_index_updated_at"],
+        "source_index_sha256": analysis.get("source_index_sha256"),
+        "metrics": analysis["metrics"],
+        "source_policy_review": analysis.get("source_policy_review"),
+        "catalogs_verified": 0, "records_published": 0,
+        **snapshot_fields,
+    }
+    (output_dir / "report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    manifest = {
+        "version": 1, "analysis_version": analysis.get("analysis_version", ANALYZER_VERSION),
+        "integrity": "sha256",
+        "source_index_pages": analysis["source_index_pages"],
+        "source_index_updated_at": analysis["source_index_updated_at"],
+        "source_index_sha256": analysis.get("source_index_sha256"),
+        "catalog_count": len(analysis["catalogs"]), "record_count": len(analysis["records"]),
+        "generated_at": analysis["generated_at"],
+        "metrics": analysis["metrics"],
+        "source_policy_review": analysis.get("source_policy_review"),
+        **snapshot_fields,
+        "files": sorted(files, key=lambda x: x["file"]),
+    }
+    (output_dir / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    validate_outputs(output_dir)
+    return manifest
+
+
+def validate_outputs(output_dir: Path) -> dict:
+    manifest = json.loads((output_dir / "manifest.json").read_text(encoding="utf-8"))
+    source_index_sha256 = manifest.get("source_index_sha256")
+    if source_index_sha256 is not None and not re.fullmatch(r"[0-9a-f]{64}", str(source_index_sha256)):
+        raise ValueError("source index SHA-256 is malformed")
+    registry_raw = (output_dir / "registry.json.gz").read_bytes()
+    registry = json.loads(gzip.decompress(registry_raw).decode("utf-8"))
+    report = json.loads((output_dir / "report.json").read_text(encoding="utf-8"))
+    if manifest.get("metrics") != report.get("metrics"):
+        raise ValueError("report and manifest metrics do not match")
+    policy_review = manifest.get("source_policy_review")
+    if (
+        policy_review != report.get("source_policy_review")
+        or not isinstance(policy_review, dict)
+        or not re.fullmatch(r"[0-9a-f]{64}", str(policy_review.get("register_sha256", "")))
+        or policy_review.get("scope") != "source-level-only"
+        or policy_review.get("record_level_clearance") != "not_reviewed"
+        or policy_review.get("commercial_eligibility") is not False
+        or policy_review.get("republication") != "not_cleared"
+    ):
+        raise ValueError("source policy review summary is missing or overstates record-level clearance")
+    pages_raw = (output_dir / "pages.json.gz").read_bytes()
+    pages = json.loads(gzip.decompress(pages_raw).decode("utf-8"))["pages"]
+    page_by_id = {item["page_id"]: item for item in pages if item.get("page_id")}
+    media_payload = json.loads(gzip.decompress((output_dir / "media-references.json.gz").read_bytes()).decode("utf-8"))
+    media_references = media_payload.get("references", [])
+    media_pairs = [(x.get("source_page_id"), x.get("media_url")) for x in media_references]
+    if len(media_pairs) != len(set(media_pairs)):
+        raise ValueError("media references contain duplicate page/media pairs")
+    for reference in media_references:
+        source_page = page_by_id.get(reference.get("source_page_id"))
+        media_url = reference.get("media_url", "")
+        if (
+            source_page is None
+            or reference.get("source_url") != source_page.get("url")
+            or canonical_url(media_url) != media_url
+            or stable_id("media", media_url) != reference.get("media_id")
+        ):
+            raise ValueError("media reference provenance or stable ID is invalid")
+    unique_media_urls = sorted({x.get("media_url") for x in media_references})
+    if unique_media_urls != media_payload.get("unique_media_urls", []):
+        raise ValueError("media URL registry does not match its provenance references")
+    records_raw = (output_dir / "records.json.gz").read_bytes()
+    records = json.loads(gzip.decompress(records_raw).decode("utf-8"))["records"]
+    page_ids = {
+        item["page_id"] for item in pages
+        if isinstance(item, dict) and item.get("page_id")
+    }
+    source_page_ids = [item.get("page_id") for item in pages if isinstance(item, dict) and item.get("page_id")]
+    if len(source_page_ids) != len(set(source_page_ids)):
+        raise ValueError("source page registry contains duplicate page IDs")
+    for page in pages:
+        if page.get("eligible") is True and not page.get("page_id"):
+            raise ValueError("eligible source page is missing its canonical page ID")
+        if page.get("page_id"):
+            canonical_page_url = canonical_url(page.get("url"))
+            if not canonical_page_url or stable_id("page", canonical_page_url) != page.get("page_id"):
+                raise ValueError("source page ID does not match its canonical URL")
+    record_ids = [x["record_id"] for x in records]
+    records_by_id = {x["record_id"]: x for x in records}
+    if len(record_ids) != len(set(record_ids)) or len(records) != manifest["record_count"]:
+        raise ValueError("global record registry contains duplicates or a count mismatch")
+    for page in pages:
+        page_record_ids = page.get("record_ids", [])
+        if not isinstance(page_record_ids, list) or len(page_record_ids) != len(set(page_record_ids)):
+            raise ValueError("source page record relationships are malformed or duplicated")
+        if page.get("record_id") and page["record_id"] not in page_record_ids:
+            raise ValueError("primary page record is missing from its record relationship list")
+        if "page_catalog_id" in page or "record_catalog_ids" in page:
+            raise ValueError("source pages must remain distinct from catalog definitions")
+        for related_record_id in page_record_ids:
+            related_record = records_by_id.get(related_record_id)
+            if related_record is None:
+                raise ValueError(
+                    f"source page {page.get('page_id')} ({page.get('url')}) references missing record {related_record_id}"
+                )
+            if page.get("page_id") not in related_record.get("source_page_ids", []):
+                raise ValueError(
+                    f"source page {page.get('page_id')} ({page.get('url')}) references record "
+                    f"{related_record_id}, but its provenance lists {related_record.get('source_page_ids', [])[:8]}"
+                )
+    for record in records:
+        if "record_catalog_id" in record or "page_catalog_ids" in record:
+            raise ValueError("individual records must remain distinct from catalog definitions")
+        if stable_id("record", record.get("canonical_entity_key", "")) != record.get("record_id"):
+            raise ValueError("record ID does not match its canonical entity key")
+        if record.get("commercial_eligible") is not False or record.get("source_terms_status") != "not_reviewed":
+            raise ValueError("candidate records cannot be marked commercially eligible or source-cleared")
+        if (
+            record.get("source_policy_review_status") not in (
+                "not_reviewed", "conditional_source_review", "partial_source_review"
+            )
+            or record.get("record_level_clearance") != "not_reviewed"
+        ):
+            raise ValueError("source-level policy review cannot clear an individual record")
+        if record.get("source_policy_review_status") != "not_reviewed" and (
+            not record.get("source_policy_review_hosts")
+            or not record.get("source_policy_review_evidence_urls")
+            or record.get("source_policy_review_scope") != "source-level-only"
+        ):
+            raise ValueError("conditional source-policy annotations lack evidence or scope")
+        canonical_subject_key = record.get("canonical_subject_key")
+        if canonical_subject_key is not None:
+            if (
+                record.get("record_type") != "subject"
+                or not isinstance(canonical_subject_key, str)
+                or not canonical_subject_key.startswith("subject|")
+            ):
+                raise ValueError("canonical subject key is invalid for this record")
+            entity_key = canonical_subject_key
+        else:
+            entity_key = record.get("canonical_entity_key", "")
+        if stable_id("entity", entity_key) != record.get("entity_id"):
+            raise ValueError("entity ID does not match its canonical entity key")
+        if not set(record.get("source_page_ids", [])).issubset(page_ids):
+            raise ValueError("record provenance references an unknown source page")
+        source_urls = record.get("source_urls", [])
+        if not source_urls or any(canonical_url(url) != url for url in source_urls):
+            raise ValueError("record source URL is missing or not canonical")
+    catalogs = registry["catalogs"]
+    if len(catalogs) != manifest["catalog_count"]:
+        raise ValueError("registry catalog count does not match manifest")
+    catalog_ids = [x["catalog_id"] for x in catalogs]
+    catalogs_by_id = {x["catalog_id"]: x for x in catalogs}
+    if len(catalog_ids) != len(set(catalog_ids)):
+        raise ValueError("duplicate catalog IDs remain after deduplication")
+    for catalog in catalogs:
+        if stable_id("catalog", catalog.get("source_key", "")) != catalog.get("catalog_id"):
+            raise ValueError("catalog ID does not match its canonical source key")
+        if catalog.get("catalog_origin") not in ("source_declared_collection", "content_list_declared_collection", "structured_schema_collection", "derived_from_repeated_records", "derived_from_global_typed_records"):
+            raise ValueError(f"catalog origin is missing or invalid: id={catalog.get('catalog_id')} origin={catalog.get('catalog_origin')!r} source_key={catalog.get('source_key')!r}")
+        if catalog.get("commercial_eligible") is not False or catalog.get("source_terms_status") != "not_reviewed":
+            raise ValueError("candidate catalogs cannot be marked commercially eligible or source-cleared")
+        if (
+            catalog.get("source_policy_review_status") not in (
+                "not_reviewed", "conditional_source_review", "partial_source_review"
+            )
+            or catalog.get("record_level_clearance") != "not_reviewed"
+        ):
+            raise ValueError("source-level policy review cannot clear an individual catalog")
+        if catalog.get("source_policy_review_status") != "not_reviewed" and (
+            not catalog.get("source_policy_review_hosts")
+            or not catalog.get("source_policy_review_evidence_urls")
+            or catalog.get("source_policy_review_scope") != "source-level-only"
+        ):
+            raise ValueError("conditional catalog policy annotations lack evidence or scope")
+        if catalog.get("record_count") != len(catalog.get("record_ids", [])):
+            raise ValueError("catalog record count does not match its membership")
+        if catalog.get("source_page_count") != len(catalog.get("source_page_ids", [])):
+            raise ValueError("catalog source-page count does not match its provenance")
+        if len(catalog.get("source_page_ids", [])) != len(set(catalog.get("source_page_ids", []))):
+            raise ValueError("catalog source-page provenance contains duplicates")
+        if not set(catalog.get("source_page_ids", [])).issubset(page_ids):
+            raise ValueError("catalog provenance references an unknown source page")
+        related_ids = catalog.get("record_ids", [])
+        if len(related_ids) != len(set(related_ids)) or any(x not in records_by_id for x in related_ids):
+            raise ValueError("catalog references duplicate or unknown record IDs")
+        parent_id = catalog.get("parent_catalog_id")
+        if parent_id is not None and parent_id not in catalogs_by_id:
+            raise ValueError("catalog references an unknown parent catalog")
+    listed_index_files = [x["file"] for x in manifest["files"]]
+    if len(listed_index_files) != len(set(listed_index_files)):
+        raise ValueError("catalog manifest contains duplicate file paths")
+    if any(x.get("index_file") not in set(listed_index_files) for x in catalogs):
+        raise ValueError("registry references a missing per-catalog index")
+    index_catalog_ids = set()
+    search_index_prefixes = set()
+    search_index_tokens = set()
+    search_index_postings = 0
+    for entry in manifest["files"]:
+        path = output_dir / entry["file"]
+        raw = path.read_bytes()
+        if len(raw) != entry["bytes"] or hashlib.sha256(raw).hexdigest() != entry["sha256"]:
+            raise ValueError("catalog analysis artifact integrity mismatch: " + entry["file"])
+        payload = json.loads(gzip.decompress(raw).decode("utf-8"))
+        if entry["file"].startswith("indexes/"):
+            index_parts = Path(entry["file"]).parts
+            if (
+                len(index_parts) != 3
+                or index_parts[0] != "indexes"
+                or index_parts[1] != index_parts[2][:2]
+                or not re.fullmatch(r"[0-9a-f]{24}\.json\.gz", index_parts[2])
+            ):
+                raise ValueError("per-catalog index path is not prefix-sharded")
+            catalog_id = payload.get("catalog_id")
+            if catalog_id not in catalogs_by_id or catalog_id in index_catalog_ids:
+                raise ValueError("orphan or duplicate per-catalog index detected")
+            index_catalog_ids.add(catalog_id)
+            indexed_ids = [x["record_id"] for x in payload.get("records", [])]
+            expected_ids = set(catalogs_by_id[catalog_id].get("record_ids", []))
+            if len(indexed_ids) != len(set(indexed_ids)) or set(indexed_ids) != expected_ids:
+                missing_ids = sorted(expected_ids - set(indexed_ids))[:5]
+                extra_ids = sorted(set(indexed_ids) - expected_ids)[:5]
+                raise ValueError(
+                    f"per-catalog index {catalog_id} membership mismatch: "
+                    f"indexed={len(indexed_ids)}, registry={len(expected_ids)}, "
+                    f"missing={missing_ids}, extra={extra_ids}"
+                )
+            if any(catalog_id not in records_by_id[x].get("catalog_ids", []) for x in indexed_ids):
+                raise ValueError("per-catalog index record is missing its catalog relationship")
+        elif entry["file"].startswith("search-index/"):
+            search_parts = Path(entry["file"]).parts
+            if (
+                len(search_parts) != 2
+                or not re.fullmatch(r"[0-9a-f]{2}\.json\.gz", search_parts[1])
+            ):
+                raise ValueError("search index shard path is invalid")
+            prefix = search_parts[1][:2]
+            payload_tokens = payload.get("tokens")
+            if (
+                payload.get("version") != 1
+                or payload.get("prefix") != prefix
+                or not isinstance(payload_tokens, dict)
+                or len(payload_tokens) != entry["items"]
+                or prefix in search_index_prefixes
+            ):
+                raise ValueError("search index shard schema or item count is invalid")
+            for token, related_catalog_ids in payload_tokens.items():
+                if (
+                    not isinstance(token, str)
+                    or len(token) < 2
+                    or token != unicodedata.normalize("NFKC", token).casefold()
+                    or token in STOP_TOKENS
+                    or hashlib.sha256(token.encode("utf-8")).hexdigest()[:2] != prefix
+                    or token in search_index_tokens
+                    or not isinstance(related_catalog_ids, list)
+                    or not related_catalog_ids
+                    or len(related_catalog_ids) != len(set(related_catalog_ids))
+                    or any(catalog_id not in catalogs_by_id for catalog_id in related_catalog_ids)
+                    or related_catalog_ids != sorted(
+                        related_catalog_ids,
+                        key=lambda catalog_id: _search_catalog_priority(catalogs_by_id[catalog_id]),
+                    )
+                ):
+                    raise ValueError("search index token postings are invalid")
+                search_index_tokens.add(token)
+                search_index_postings += len(related_catalog_ids)
+            search_index_prefixes.add(prefix)
+    if index_catalog_ids != set(catalog_ids):
+        raise ValueError("one or more catalogs are missing a per-catalog index")
+    metrics = manifest.get("metrics", {})
+    eligible_page_count = sum(1 for item in pages if item.get("eligible") is True)
+    with_catalogs = metrics.get("eligible_source_pages_with_catalogs")
+    without_catalogs = metrics.get("eligible_source_pages_without_catalogs")
+    multiple_catalogs = metrics.get("eligible_source_pages_with_multiple_catalogs")
+    if not all(isinstance(value, int) and value >= 0 for value in (with_catalogs, without_catalogs, multiple_catalogs)):
+        raise ValueError("source-page catalog coverage metrics are missing or invalid")
+    if with_catalogs + without_catalogs != eligible_page_count or multiple_catalogs > with_catalogs:
+        raise ValueError("source-page catalog coverage metrics do not match eligible pages")
+    if (
+        not search_index_prefixes
+        or metrics.get("search_index_tokens") != len(search_index_tokens)
+        or metrics.get("search_index_shards") != len(search_index_prefixes)
+        or metrics.get("search_index_catalog_postings") != search_index_postings
+    ):
+        raise ValueError("search index metrics do not match validated token postings")
+    if registry["status"] != "candidate_staging_not_production":
+        raise ValueError("candidate registry must not be advertised as production")
+    return {
+        "catalogs": len(catalog_ids),
+        "pages_analyzed": len(pages),
+        "records_validated": len(records),
+        "media_references_validated": len(media_references),
+        "unique_media_urls": len(unique_media_urls),
+        "files_validated": len(manifest["files"]),
+        "per_catalog_indexes_validated": len(index_catalog_ids),
+        "search_index_shards_validated": len(search_index_prefixes),
+        "search_index_tokens_validated": len(search_index_tokens),
+        "search_index_catalog_postings_validated": search_index_postings,
+    }
+
+
+def _read_previous_snapshot(output_dir: Path) -> dict | None:
+    report_path = output_dir / "report.json"
+    if not report_path.exists():
+        return None
+    try:
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+        if report.get("analysis_version") != ANALYZER_VERSION:
+            return None
+        metrics = report.get("metrics", {})
+        snapshot_at = report.get("persisted_snapshot_at") or report.get("generated_at")
+        if not snapshot_at:
+            return None
+        counts = {
+            key: metrics.get(key)
+            for key in ("pages_analyzed", "eligible_pages", "unique_catalogs_discovered", "subcatalogs_discovered", "unique_records", "media_references")
+        }
+        if any(value is None for value in counts.values()):
+            return None
+        return {"snapshot_at": snapshot_at, "counts": counts}
+    except (OSError, ValueError, json.JSONDecodeError):
+        return None
+
+
+def measure_persisted_count_deltas(previous_counts: dict, current_counts: dict,
+                                     wall_seconds: float) -> dict:
+    """Keep signed count changes visible while rates remain non-negative.
+
+    A stricter analyzer can remove previously counted false-positive candidates.
+    Such decreases are real count corrections, not negative production throughput.
+    """
+    minutes = max(0.001, float(wall_seconds)) / 60.0
+    deltas = {
+        key: int(current_counts.get(key, 0)) - int(previous_counts.get(key, 0))
+        for key in previous_counts
+    }
+    negative_deltas = {key: value for key, value in deltas.items() if value < 0}
+    rate_keys = {
+        "pages_per_minute": "pages_analyzed",
+        "catalogs_per_minute": "unique_catalogs_discovered",
+        "records_per_minute": "unique_records",
+        "subcatalogs_per_minute": "subcatalogs_discovered",
+        "media_references_per_minute": "media_references",
+    }
+    throughput = {
+        rate: round(max(0, deltas.get(count_key, 0)) / minutes, 4)
+        for rate, count_key in rate_keys.items()
+    }
+    throughput.update({
+        "measurement": "persisted_count_delta_over_wall_clock_interval",
+        "negative_count_deltas_excluded": True,
+    })
+    return {
+        "count_deltas": deltas,
+        "negative_count_deltas": negative_deltas,
+        "throughput": throughput,
+    }
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--index", type=Path, default=DEFAULT_INDEX)
+    parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--query", action="append", default=[])
+    parser.add_argument("--validate-only", action="store_true")
+    parser.add_argument("--no-incremental", action="store_true")
+    parser.add_argument("--cache-only", action="store_true", help="Build and persist per-host cache shards without catalog aggregation")
+    parser.add_argument("--cache-dir", type=Path, default=ROOT / "data" / ".page-derived-catalog-cache")
+    args = parser.parse_args()
+    if args.validate_only:
+        print(json.dumps(validate_outputs(args.output_dir), indent=2))
+        return
+    previous_snapshot = _read_previous_snapshot(args.output_dir)
+    started_at = datetime.now(timezone.utc)
+    started_monotonic = time.monotonic()
+    source_manifest = json.loads(args.index.read_text(encoding="utf-8"))
+    index = load_index(args.index)
+    analyze = analyze_pages if args.no_incremental else analyze_pages_incremental
+    analysis = analyze(
+        index.get("pages", []),
+        source_total=source_manifest.get("total_pages"),
+        source_updated_at=datetime.fromtimestamp(source_manifest.get("updated_at", 0), timezone.utc).isoformat().replace("+00:00", "Z") if source_manifest.get("updated_at") else None,
+        source_index_sha256=hashlib.sha256(args.index.read_bytes()).hexdigest(),
+        **({} if args.no_incremental else {"cache_dir": args.cache_dir, "progress": True, "cache_only": args.cache_only}),
+    )
+    if args.cache_only:
+        print(json.dumps(analysis, indent=2))
+        return
+    finished_at = datetime.now(timezone.utc)
+    finished_iso = finished_at.replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    analysis["generated_at"] = finished_iso
+    analysis["analysis_started_at"] = started_at.replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    analysis["analysis_finished_at"] = finished_iso
+    analysis["persisted_snapshot_at"] = finished_iso
+    analysis["analysis_elapsed_seconds"] = round(time.monotonic() - started_monotonic, 3)
+    if previous_snapshot:
+        previous_at = datetime.fromisoformat(previous_snapshot["snapshot_at"].replace("Z", "+00:00"))
+        wall_seconds = max(0.001, (finished_at - previous_at).total_seconds())
+        current_counts = {key: analysis["metrics"].get(key, 0) for key in previous_snapshot["counts"]}
+        measured = measure_persisted_count_deltas(
+            previous_snapshot["counts"], current_counts, wall_seconds
+        )
+        analysis["previous_counts"] = previous_snapshot["counts"]
+        analysis["count_deltas"] = measured["count_deltas"]
+        analysis["negative_count_deltas"] = measured["negative_count_deltas"]
+        analysis["elapsed_wall_clock_seconds"] = round(wall_seconds, 3)
+        analysis["throughput"] = measured["throughput"]
+    else:
+        analysis["previous_counts"] = None
+        analysis["count_deltas"] = None
+        analysis["elapsed_wall_clock_seconds"] = None
+        analysis["throughput"] = None
+    manifest = write_outputs(analysis, args.output_dir)
+    print(json.dumps({
+        "metrics": analysis["metrics"],
+        "previous_counts": analysis["previous_counts"],
+        "count_deltas": analysis["count_deltas"],
+        "elapsed_wall_clock_seconds": analysis["elapsed_wall_clock_seconds"],
+        "analysis_elapsed_seconds": analysis["analysis_elapsed_seconds"],
+        "throughput": analysis["throughput"],
+        "catalog_index_files": manifest["catalog_count"],
+        "files": len(manifest["files"]),
+    }, indent=2))
+    for query in (args.query or ["Rolex", "Las Vegas"]):
+        print(json.dumps({
+            "query": query,
+            "results": search_catalog_network(query, analysis),
+            "source_page_evidence": search_source_page_evidence(query, index.get("pages", []), limit=5),
+        }, ensure_ascii=False))
+
+
+if __name__ == "__main__":
+    main()
+
+# Incremental catalog analysis trigger checkpoint 2026-11-21 16:31Z.
+
+# Inventory recovery checkpoint: reanalyze the refreshed 185,860-page public manifest.

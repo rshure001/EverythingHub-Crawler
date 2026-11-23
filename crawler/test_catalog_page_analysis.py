@@ -57,6 +57,8 @@ class PageDerivedCatalogAnalysisTests(unittest.TestCase):
         self.assertEqual(result["metrics"]["unique_catalogs_discovered"], 0)
         self.assertEqual(result["metrics"]["unique_records"], 0)
         self.assertEqual(result["metrics"]["records_published"], 0)
+        self.assertEqual(result["metrics"]["eligible_source_pages_with_catalogs"], 0)
+        self.assertEqual(result["metrics"]["eligible_source_pages_without_catalogs"], 1)
 
     def test_gzip_writer_streams_json_without_materializing_full_payload(self):
         payload = {
@@ -161,6 +163,9 @@ class PageDerivedCatalogAnalysisTests(unittest.TestCase):
         }], source_total=1)
         self.assertGreaterEqual(result["metrics"]["unique_catalogs_discovered"], 2)
         self.assertEqual(result["metrics"]["pages_analyzed"], 1)
+        self.assertEqual(result["metrics"]["eligible_source_pages_with_catalogs"], 1)
+        self.assertEqual(result["metrics"]["eligible_source_pages_without_catalogs"], 0)
+        self.assertEqual(result["metrics"]["eligible_source_pages_with_multiple_catalogs"], 1)
 
     def test_robots_denied_pages_are_not_eligible_or_catalog_sources(self):
         result = analyze_pages([{
@@ -181,6 +186,8 @@ class PageDerivedCatalogAnalysisTests(unittest.TestCase):
         result = analyze_pages(pages, source_total=2)
         with tempfile.TemporaryDirectory() as tmp:
             output = Path(tmp)
+            (output / "page-catalogs.json.gz").write_bytes(b"obsolete")
+            (output / "record-catalogs.json.gz").write_bytes(b"obsolete")
             manifest = write_outputs(result, output)
             verified = validate_outputs(output)
             registry = json.loads(gzip.decompress((output / "registry.json.gz").read_bytes()))
@@ -2287,6 +2294,8 @@ class AdditionalSourcePolicyReviewTests(unittest.TestCase):
             listed_files = {item["file"] for item in manifest["files"]}
             self.assertNotIn("page-catalogs.json.gz", listed_files)
             self.assertNotIn("record-catalogs.json.gz", listed_files)
+            self.assertFalse((output / "page-catalogs.json.gz").exists())
+            self.assertFalse((output / "record-catalogs.json.gz").exists())
             pages_payload = json.loads(
                 gzip.decompress((output / "pages.json.gz").read_bytes())
             )

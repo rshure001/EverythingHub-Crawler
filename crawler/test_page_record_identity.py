@@ -18,6 +18,9 @@ class PageRecordIdentityTests(unittest.TestCase):
         self.assertEqual(len(result["pages"]), 1)
         self.assertEqual(result["catalogs"], [])
         self.assertEqual(result["metrics"]["unique_catalogs_discovered"], 0)
+        self.assertEqual(result["metrics"]["eligible_source_pages_with_catalogs"], 0)
+        self.assertEqual(result["metrics"]["eligible_source_pages_without_catalogs"], 1)
+        self.assertEqual(result["metrics"]["eligible_source_pages_with_multiple_catalogs"], 0)
         self.assertNotIn("page_catalogs", result)
         self.assertNotIn("record_catalogs", result)
         page = result["pages"][0]
@@ -49,6 +52,9 @@ class PageRecordIdentityTests(unittest.TestCase):
         )
         records = {record["record_id"]: record for record in result["records"]}
         self.assertTrue(records)
+        self.assertEqual(result["metrics"]["eligible_source_pages_with_catalogs"], 2)
+        self.assertEqual(result["metrics"]["eligible_source_pages_without_catalogs"], 0)
+        self.assertEqual(result["metrics"]["eligible_source_pages_with_multiple_catalogs"], 0)
         real_catalog_ids = {catalog["catalog_id"] for catalog in result["catalogs"]}
         for record in records.values():
             self.assertEqual(
