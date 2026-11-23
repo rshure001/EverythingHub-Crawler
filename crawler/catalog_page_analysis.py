@@ -2163,7 +2163,6 @@ def analyze_pages_incremental(
         "source_index_sha256": source_index_sha256, "metrics": metrics,
         "catalogs": all_catalogs, "records": all_records, "pages": all_page_rows,
         "media_urls": sorted(all_media),
-        "record_catalogs": record_catalog_metrics["_rows"],
         "media_references": sorted(
             {(x["source_page_id"], x["media_url"]): x for x in all_media_references}.values(),
             key=lambda x: (x["media_url"], x["source_page_id"]),
