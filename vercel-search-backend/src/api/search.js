@@ -245,7 +245,8 @@ module.exports = async function handler(req, res) {
     if (pageDerivedCatalogResults.length || catalogPreviewRecordResults.length) providers.push('Everything Hub Catalog Preview');
     if (universalCatalogResults.length) providers.push('Everything Hub Universal Catalog Preview');
     if (externalCatalogResults.length) providers.push('Curated External Catalog Directory');
-    const fallbackMode = catalogPreviewRecordResults.length ? 'catalog-preview-fallback' : 'unavailable';
+    const hasCatalogPreviewFallback = catalogPreviewRecordResults.length > 0 || universalCatalogResults.length > 0;
+    const fallbackMode = hasCatalogPreviewFallback ? 'catalog-preview-fallback' : 'unavailable';
     if (!results.length && !catalogResults.length) {
       return res.status(503).json({
         error: 'search_temporarily_unavailable',
@@ -256,6 +257,7 @@ module.exports = async function handler(req, res) {
         catalogResults,
         externalCatalogResults,
         catalogPreview,
+        universalCatalogPreview,
         providers
       });
     }
@@ -264,14 +266,16 @@ module.exports = async function handler(req, res) {
       page: Math.floor(offset / limit) + 1,
       pageSize: limit, offset, hasMore: false,
       indexedPages: 0,
-      indexStatus: catalogPreviewRecordResults.length ? 'catalog-preview-fallback' : 'catalog-unavailable',
-      searchScope: catalogPreviewRecordResults.length ? 'page-derived-catalog-preview' : 'external-fallback',
+      indexStatus: hasCatalogPreviewFallback ? 'catalog-preview-fallback' : 'catalog-unavailable',
+      searchScope: catalogPreviewRecordResults.length ? 'page-derived-catalog-preview' :
+        (universalCatalogResults.length ? 'universal-catalog-preview' : 'external-fallback'),
       indexScan: {
         mode: fallbackMode,
         indexedPages: 0,
         scannedPages: 0,
         candidateShardCount: 0,
         previewRecords: catalogPreviewRecordResults.length,
+        universalCatalogPreviewResults: universalCatalogResults.length,
         error: catalogError
       },
       catalogError, database_required: false,
