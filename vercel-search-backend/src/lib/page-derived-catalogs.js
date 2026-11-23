@@ -393,6 +393,37 @@ function searchPageDerivedCatalogs(query,network,limit=5){
  const n=Number.isInteger(limit)?Math.max(1,Math.min(8,limit)):5;
  return results.sort((a,b)=>b.score-a.score||b.matched_records.length-a.matched_records.length||a.title.localeCompare(b.title)).slice(0,n);
 }
+function resolveRecordRelatedCatalog(recordCatalogId,network,limit=20,offset=0){
+ const key=String(recordCatalogId||'').trim();
+ if(!key||key.length>160)throw new Error('record_catalog_id_invalid');
+ const records=Array.isArray(network?.records)?network.records:[];
+ const owner=records.find(r=>r&&r.record_catalog_id===key);
+ if(!owner)return null;
+ const catalogs=Array.isArray(network?.catalogs)?network.catalogs:[];
+ const recordsById=new Map(records.map(r=>[r.record_id,r]));
+ const related=new Map();
+ for(const catalogId of Array.isArray(owner.catalog_ids)?owner.catalog_ids:[]){
+  const catalog=catalogs.find(c=>c&&c.catalog_id===catalogId);
+  if(!catalog)continue;
+  for(const recordId of Array.isArray(catalog.record_ids)?catalog.record_ids:[]){
+   if(recordId===owner.record_id||related.has(recordId))continue;
+   const record=recordsById.get(recordId);
+   if(record)related.set(recordId,record);
+  }
+ }
+ const ordered=Array.from(related.values()).sort((a,b)=>String(a.title||'').localeCompare(String(b.title||''))||String(a.record_id).localeCompare(String(b.record_id)));
+ const start=Math.max(0,Math.min(5000,Number.isInteger(offset)?offset:0));
+ const size=Math.max(1,Math.min(50,Number.isInteger(limit)?limit:20));
+ return {
+  record_catalog_id:key,
+  owner_record:{record_id:owner.record_id,record_catalog_id:owner.record_catalog_id,title:owner.title,record_type:owner.record_type,description:owner.description||'',source_urls:owner.source_urls||[],source_page_ids:owner.source_page_ids||[],catalog_ids:owner.catalog_ids||[]},
+  related_count:ordered.length,
+  offset:start,
+  limit:size,
+  has_more:start+size<ordered.length,
+  related_records:ordered.slice(start,start+size).map(r=>({record_id:r.record_id,record_catalog_id:r.record_catalog_id||'',title:r.title,record_type:r.record_type,description:r.description||'',source_urls:r.source_urls||[],source_page_ids:r.source_page_ids||[],catalog_ids:r.catalog_ids||[],last_seen_at:r.last_seen_at||null,source_terms_status:r.source_terms_status||'not_reviewed',record_level_clearance:r.record_level_clearance||'not_reviewed',commercial_eligible:false}))
+ };
+}
 function matchesPageIndexSnapshot(pageDerived,pageIndex){
  const sourceTime=Date.parse(String(pageDerived&&pageDerived.sourceIndexUpdatedAt||''));
  const pageTime=Number(pageIndex&&pageIndex.updatedAt)*1000;
@@ -401,4 +432,4 @@ function matchesPageIndexSnapshot(pageDerived,pageIndex){
   Number.isFinite(pageTime)&&Math.abs(sourceTime-pageTime)<=60000;
 }
 function clearPageDerivedCatalogsCache(){cache=null;manifestCache=null;queryCache.clear();}
-module.exports={validateManifest,validatePageDerivedCatalogs,loadPageDerivedCatalogsFromManifest,loadPageDerivedCatalogs,loadQueryScopedPageDerivedCatalogs,searchPageDerivedCatalogs,matchesPageIndexSnapshot,clearPageDerivedCatalogsCache};
+module.exports={validateManifest,validatePageDerivedCatalogs,loadPageDerivedCatalogsFromManifest,loadPageDerivedCatalogs,loadQueryScopedPageDerivedCatalogs,searchPageDerivedCatalogs,resolveRecordRelatedCatalog,matchesPageIndexSnapshot,clearPageDerivedCatalogsCache};
