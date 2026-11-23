@@ -1312,13 +1312,16 @@ class CatalogInventoryTriggerTests(unittest.TestCase):
         self.assertEqual(metrics["structured_catalog_records"], 10)
         self.assertGreaterEqual(metrics["unique_catalogs_discovered"], 5)
         self.assertGreaterEqual(metrics["unique_records"], 10)
-        self.assertGreaterEqual(metrics["subcatalogs_discovered"], 5)
+        # These five lists are independent collections: the source provides
+        # no parent-catalog evidence, so do not invent parent relationships.
+        self.assertEqual(metrics["subcatalogs_discovered"], 0)
         structured_catalogs = [
             catalog for catalog in result["catalogs"]
             if catalog["catalog_origin"] == "structured_schema_collection"
         ]
         self.assertEqual(len(structured_catalogs), 5)
         self.assertTrue(all(catalog["record_count"] == 2 for catalog in structured_catalogs))
+        self.assertTrue(all(catalog["parent_catalog_id"] is None for catalog in structured_catalogs))
         structured_records = [
             record for record in result["records"]
             if record.get("structured_catalog_item")
