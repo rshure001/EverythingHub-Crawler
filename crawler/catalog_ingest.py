@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
-from catalog_model import catalog_metrics, normalize_catalog, normalize_record
+from catalog_model import SCHEMA_VERSION, catalog_metrics, normalize_catalog, normalize_record
 from catalog_source_policy import policy_for_host
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -60,24 +60,28 @@ def _build_subcatalogs(
         if organization:
             key = organization.casefold()
             groups["organization"][key].add(dataset_key)
-            labels[("organization", key)] = organization
+            label_key = ("organization", key)
+            current_label = labels.get(label_key)
+            if current_label is None or (organization.casefold(), organization) < (current_label.casefold(), current_label):
+                labels[label_key] = organization
 
         raw_tags = dataset.get("tags") or []
         if not isinstance(raw_tags, list):
             continue
-        seen_tags: set[str] = set()
-        for raw_tag in raw_tags[:MAX_TAGS_PER_DATASET]:
+        normalized_tags = set()
+        for raw_tag in raw_tags:
             if isinstance(raw_tag, dict):
                 raw_tag = raw_tag.get("name")
             label = _group_text(raw_tag, 80)
-            if not label:
-                continue
+            if label:
+                normalized_tags.add(label)
+        for label in sorted(normalized_tags, key=lambda value: (value.casefold(), value))[:MAX_TAGS_PER_DATASET]:
             key = label.casefold()
-            if key in seen_tags:
-                continue
-            seen_tags.add(key)
             groups["tag"][key].add(dataset_key)
-            labels[("tag", key)] = label
+            label_key = ("tag", key)
+            current_label = labels.get(label_key)
+            if current_label is None or (label.casefold(), label) < (current_label.casefold(), current_label):
+                labels[label_key] = label
 
     candidates: list[tuple[str, str, str, list[str]]] = []
     for kind, minimum, maximum in (
@@ -172,8 +176,10 @@ def adapt(manifest: dict[str, Any]) -> dict[str, Any]:
         })
         catalog["source_terms_url"] = source_terms_url
         catalog["source_terms_status"] = source_terms_status
-        catalog["source_terms_reviewed_at"] = source.get("source_terms_reviewed_at") or ""
-        catalog["attribution_required"] = source.get("attribution_required", "per_dataset")
+        catalog["source_terms_reviewed_at"] = source_terms_reviewed_at
+        catalog["attribution_required"] = source_policy.get(
+            "attribution_required", source.get("attribution_required", "per_dataset")
+        )
         catalog["public_search_allowed"] = catalog_policy_approved
         catalogs.append(catalog)
         subcatalogs, subcatalog_memberships = (
@@ -324,7 +330,7 @@ def adapt(manifest: dict[str, Any]) -> dict[str, Any]:
     )
     metrics["unique_records_by_type"] = dict(sorted(Counter(record["record_type"] for record in records).items()))
     return {
-        "schema_version": 1,
+        "schema_version": SCHEMA_VERSION,
         "strategy": "universal-catalog-staging",
         "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
         "production_indexed": False,
