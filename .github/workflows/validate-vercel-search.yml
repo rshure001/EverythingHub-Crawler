@@ -26,6 +26,9 @@ jobs:
           node-version: '26'
       - name: Run search integrity and pagination tests
         run: node --test vercel-search-backend/test/*.test.js
+      - name: Validate current main universal catalog manifest and root record shards
+        if: github.event_name == 'pull_request' || github.event_name == 'push'
+        run: node vercel-search-backend/scripts/validate-universal-catalog-live.js
   staging-smoke:
     if: github.event_name == 'pull_request' && contains(fromJSON('["fix/bounded-catalog-search-20261121","eh/search-load-budget-20261121","eh/catalog-search-relevance-20261121","fix/live-search-watchdog-recovery-20261122","fix/query-index-consumer-main-20261122","fix/bounded-query-shard-ranking-20261122"]'), github.head_ref)
     runs-on: ubuntu-latest
