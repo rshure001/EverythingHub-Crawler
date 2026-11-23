@@ -409,6 +409,78 @@ class UniversalCatalogIngestTests(unittest.TestCase):
         self.assertFalse(record["attributes"]["public_search_allowed"])
         self.assertEqual(result["metrics"]["indexed_records"], 0)
 
+    def test_cross_catalog_duplicate_with_any_restricted_source_is_fail_closed(self):
+        reviewed_policy = {
+            "discovery_allowed": True,
+            "terms_status": "reviewed_per_dataset",
+            "terms_url": "https://example.org/terms",
+            "reviewed_at": "2026-11-21",
+            "attribution_required": "per_dataset",
+        }
+        with patch("catalog_ingest.policy_for_host", return_value=reviewed_policy):
+            result = adapt({
+                "updated_at": "2026-11-23T00:00:00Z",
+                "catalogs": [
+                    {
+                        "id": "public-source",
+                        "name": "Public Source",
+                        "base_url": "https://public.example",
+                        "errors": [],
+                    },
+                    {
+                        "id": "restricted-source",
+                        "name": "Restricted Source",
+                        "base_url": "https://restricted.example",
+                        "errors": [],
+                    },
+                ],
+                "datasets": [
+                    {
+                        "catalog_id": "public-source",
+                        "id": "public-source:shared",
+                        "dataset_id": "shared",
+                        "canonical_entity_key": "dataset:shared-record",
+                        "title": "Shared Dataset",
+                        "landing_url": "https://public.example/dataset/shared",
+                        "license": {
+                            "id": "cc-by",
+                            "url": "https://creativecommons.org/licenses/by/4.0/",
+                            "is_open": True,
+                        },
+                    },
+                    {
+                        "catalog_id": "restricted-source",
+                        "id": "restricted-source:shared",
+                        "dataset_id": "shared",
+                        "canonical_entity_key": "dataset:shared-record",
+                        "title": "Shared Dataset",
+                        "landing_url": "https://restricted.example/dataset/shared",
+                        "license": {
+                            "id": "cc-by-nc-4.0",
+                            "url": "https://creativecommons.org/licenses/by-nc/4.0/",
+                            "is_open": True,
+                        },
+                    },
+                ],
+            })
+
+        self.assertEqual(len(result["records"]), 1)
+        record = result["records"][0]
+        self.assertFalse(record["attributes"]["public_search_allowed"])
+        self.assertEqual(set(record["source_urls"]), {
+            "https://public.example/dataset/shared",
+            "https://restricted.example/dataset/shared",
+        })
+        self.assertEqual(
+            {row["public_search_allowed"] for row in record["source_provenance"]},
+            {True, False},
+        )
+        manifest, _ = build_public_catalog_indexes(result)
+        self.assertEqual(manifest["unique_public_records"], 0)
+        self.assertEqual(manifest["public_record_memberships"], 0)
+        self.assertEqual(manifest["restricted_records_not_indexed"], 1)
+        self.assertEqual(manifest["records_published"], 0)
+
     def test_rejects_untrusted_http_landing_url(self):
         with self.assertRaises(ValueError):
             adapt({
