@@ -112,10 +112,11 @@ class CatalogSeedExpansionTests(unittest.TestCase):
             index_path = root / "manifest.json"
             queue_path = root / "queue.json"
             state_path = root / "state.json.gz"
-            self._write_payload(index_path, {"total_pages": 5})
+            self._write_payload(index_path, {"total_pages": 5, "updated_at": 1795429785})
             queue = {
                 "status": "source_review_backlog_not_a_fetch_queue",
                 "source_index_pages": 4,
+                "source_index_updated_at": "2026-11-22T00:00:00Z",
                 "source_index_sha256": "0" * 64,
                 "candidate_urls": [self._queue_row(0)],
             }
@@ -124,8 +125,82 @@ class CatalogSeedExpansionTests(unittest.TestCase):
                 result = expansion.run_batch(queue_path, state_path, 10, index_path)
             self.assertEqual(result["status"], "waiting_for_fresh_source_review_queue")
             self.assertFalse(result["queue_matches_current_index"])
+            self.assertFalse(result["queue_snapshot_compatible_with_current_index"])
             self.assertEqual(result["eligible_catalog_landing_pages"], 0)
+            self.assertFalse(state_path.exists())
             request.assert_not_called()
+
+            # An existing resumable ledger must also remain byte-for-byte intact.
+            self._write_payload(state_path, {"records": [], "source_outcomes": {}})
+            previous_state = state_path.read_bytes()
+            with patch.object(expansion, "request_source_bytes") as request:
+                result = expansion.run_batch(queue_path, state_path, 10, index_path)
+            self.assertEqual(result["status"], "waiting_for_fresh_source_review_queue")
+            self.assertEqual(state_path.read_bytes(), previous_state)
+            request.assert_not_called()
+
+    def test_same_page_count_with_changed_index_hash_is_not_append_only(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            queue_path = root / "queue.json"
+            state_path = root / "state.json.gz"
+            index_path = root / "manifest.json"
+            self._write_payload(index_path, {"total_pages": 5, "updated_at": 1795429785})
+            queue = {
+                "status": "source_review_backlog_not_a_fetch_queue",
+                "source_index_pages": 5,
+                "source_index_updated_at": "2026-11-23T10:20:00Z",
+                "source_index_sha256": "0" * 64,
+                "candidate_urls": [self._queue_row(0)],
+            }
+            self._write_payload(queue_path, queue)
+            with patch.object(expansion, "request_source_bytes") as request:
+                result = expansion.run_batch(queue_path, state_path, 10, index_path)
+            self.assertEqual(result["status"], "waiting_for_fresh_source_review_queue")
+            self.assertFalse(result["queue_snapshot_compatible_with_current_index"])
+            self.assertEqual(result["eligible_catalog_landing_pages"], 0)
+            self.assertFalse(state_path.exists())
+            request.assert_not_called()
+
+    def test_recent_append_only_queue_remains_compatible_after_crawler_adds_pages(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            queue_path = root / "queue.json"
+            state_path = root / "state.json.gz"
+            index_path = root / "manifest.json"
+            self._write_payload(index_path, {"total_pages": 5, "updated_at": 1795429785})
+            queue = {
+                "status": "source_review_backlog_not_a_fetch_queue",
+                "source_index_pages": 4,
+                "source_index_updated_at": "2026-11-23T10:20:00Z",
+                "source_index_sha256": "0" * 64,
+                "candidate_urls": [self._queue_row(0)],
+            }
+            self._write_payload(queue_path, queue)
+            policy = self._policy()
+
+            with patch.object(expansion, "policy_for_host", return_value=policy), patch.object(
+                expansion, "_purpose_path_allowed", return_value=True
+            ), patch.object(
+                expansion,
+                "request_source_bytes",
+                return_value=(
+                    b'<html><a href="/journals/demo0/articles/one">Article One</a></html>',
+                    200,
+                    {"Content-Type": "text/html; charset=utf-8"},
+                    policy,
+                ),
+            ) as request:
+                self.assertTrue(expansion._queue_snapshot_compatible_with_current_index(queue, index_path))
+                self.assertFalse(expansion._queue_matches_current_index(queue, index_path))
+                result = expansion.run_batch(queue_path, state_path, 10, index_path)
+
+            self.assertFalse(result["queue_matches_current_index"])
+            self.assertTrue(result["queue_snapshot_compatible_with_current_index"])
+            self.assertEqual(result["queue_source_index_page_lag"], 1)
+            self.assertEqual(result["last_batch_processed"], 1)
+            self.assertEqual(result["last_batch_new_unique_child_records"], 1)
+            request.assert_called_once()
 
     def test_batch_processes_at_most_ten_and_deduplicates_records(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -133,10 +208,11 @@ class CatalogSeedExpansionTests(unittest.TestCase):
             queue_path = root / "queue.json"
             state_path = root / "state.json.gz"
             index_path = root / "manifest.json"
-            index_raw = self._write_payload(index_path, {"total_pages": 13})
+            index_raw = self._write_payload(index_path, {"total_pages": 13, "updated_at": 1795429785})
             queue = {
                 "status": "source_review_backlog_not_a_fetch_queue",
                 "source_index_pages": 13,
+                "source_index_updated_at": "2026-11-23T10:29:45Z",
                 "source_index_sha256": hashlib.sha256(index_raw).hexdigest(),
                 "candidate_urls": [self._queue_row(i) for i in range(13)],
             }
@@ -192,6 +268,7 @@ class CatalogSeedExpansionTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn("source-host-review-queue.json", workflow)
         self.assertIn("public-search/manifest.json", workflow)
+        self.assertIn("_queue_snapshot_compatible_with_current_index", workflow)
         self.assertNotIn("page-catalog-seeds.json.gz", workflow)
 
     def test_batch_limit_cannot_exceed_ten(self):

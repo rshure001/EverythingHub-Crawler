@@ -32,6 +32,8 @@ STATE = ROOT / "data" / "page-catalog-expansion.json.gz"
 MAX_BATCH = 10
 MAX_CHILDREN_PER_PAGE = 200
 MAX_HTML_BYTES = 1_500_000
+MAX_QUEUE_AGE_SECONDS = 6 * 60 * 60
+MAX_QUEUE_PAGE_LAG = 10_000
 REVIEWED_STATUSES = {"reviewed", "reviewed_per_dataset"}
 
 
@@ -56,6 +58,18 @@ def _write_payload(path: Path, value: dict) -> None:
     temp.replace(path)
 
 
+def _parse_utc_timestamp(value: object) -> datetime | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    if parsed.tzinfo is None:
+        return None
+    return parsed.astimezone(timezone.utc)
+
+
 def _current_index_snapshot(index_path: Path = INDEX) -> dict | None:
     try:
         raw = index_path.read_bytes()
@@ -63,23 +77,67 @@ def _current_index_snapshot(index_path: Path = INDEX) -> dict | None:
     except (OSError, UnicodeDecodeError, json.JSONDecodeError):
         return None
     pages = manifest.get("total_pages")
+    updated_at = manifest.get("updated_at")
     if isinstance(pages, bool) or not isinstance(pages, int) or pages < 0:
         return None
-    return {"pages": pages, "sha256": hashlib.sha256(raw).hexdigest()}
+    if isinstance(updated_at, bool) or not isinstance(updated_at, (int, float)) or updated_at <= 0:
+        return None
+    try:
+        updated = datetime.fromtimestamp(updated_at, timezone.utc)
+    except (OverflowError, OSError, ValueError):
+        return None
+    return {"pages": pages, "sha256": hashlib.sha256(raw).hexdigest(), "updated_at": updated}
+
+
+def _queue_snapshot_status(queue: object, current: dict | None) -> dict:
+    status = {
+        "compatible": False,
+        "exact_match": False,
+        "page_lag": None,
+        "age_seconds": None,
+    }
+    if not isinstance(queue, dict) or current is None:
+        return status
+    if queue.get("status") != "source_review_backlog_not_a_fetch_queue":
+        return status
+    source_pages = queue.get("source_index_pages")
+    source_sha = queue.get("source_index_sha256")
+    source_updated = _parse_utc_timestamp(queue.get("source_index_updated_at"))
+    if isinstance(source_pages, bool) or not isinstance(source_pages, int) or source_pages < 0:
+        return status
+    if (
+        not isinstance(source_sha, str)
+        or len(source_sha) != 64
+        or any(char not in "0123456789abcdef" for char in source_sha.lower())
+        or source_updated is None
+    ):
+        return status
+    page_lag = current["pages"] - source_pages
+    age_seconds = (current["updated_at"] - source_updated).total_seconds()
+    exact_match = page_lag == 0 and source_sha == current["sha256"]
+    compatible = (
+        0 <= page_lag <= MAX_QUEUE_PAGE_LAG
+        and 0 <= age_seconds <= MAX_QUEUE_AGE_SECONDS
+        # A same-size manifest with a different hash is not an append-only
+        # advance; fail closed rather than treating changed/replaced pages as
+        # compatible with an older review queue.
+        and (page_lag > 0 or source_sha == current["sha256"])
+    )
+    status.update({
+        "compatible": compatible,
+        "exact_match": exact_match,
+        "page_lag": page_lag,
+        "age_seconds": age_seconds,
+    })
+    return status
+
+
+def _queue_snapshot_compatible_with_current_index(queue: object, index_path: Path = INDEX) -> bool:
+    return _queue_snapshot_status(queue, _current_index_snapshot(index_path))["compatible"]
 
 
 def _queue_matches_current_index(queue: object, index_path: Path = INDEX) -> bool:
-    if not isinstance(queue, dict):
-        return False
-    if queue.get("status") != "source_review_backlog_not_a_fetch_queue":
-        return False
-    current = _current_index_snapshot(index_path)
-    if current is None:
-        return False
-    return (
-        queue.get("source_index_pages") == current["pages"]
-        and queue.get("source_index_sha256") == current["sha256"]
-    )
+    return _queue_snapshot_status(queue, _current_index_snapshot(index_path))["exact_match"]
 
 
 def _eligible_seed(seed: object) -> bool:
@@ -312,17 +370,24 @@ def run_batch(
         outcomes = {}
 
     current_index = _current_index_snapshot(index_path)
-    queue_is_current = _queue_matches_current_index(queue, index_path)
+    queue_status = _queue_snapshot_status(queue, current_index)
+    queue_is_compatible = queue_status["compatible"]
     queue_pages = queue.get("source_index_pages") if isinstance(queue, dict) else None
     queue_sha = queue.get("source_index_sha256") if isinstance(queue, dict) else None
-    if not queue_is_current:
+    queue_updated_at = queue.get("source_index_updated_at") if isinstance(queue, dict) else None
+    if not queue_is_compatible:
         result = {
             "schema_version": 2,
             "status": "waiting_for_fresh_source_review_queue",
             "generated_at": datetime.now(timezone.utc).isoformat(),
-            "queue_matches_current_index": False,
+            "queue_matches_current_index": queue_status["exact_match"],
+            "queue_snapshot_compatible_with_current_index": False,
+            "queue_source_index_sha_matches_current": queue_status["exact_match"],
+            "queue_source_index_page_lag": queue_status["page_lag"],
+            "queue_source_index_age_seconds": queue_status["age_seconds"],
             "queue_source_index_pages": queue_pages,
             "queue_source_index_sha256": queue_sha,
+            "queue_source_index_updated_at": queue_updated_at,
             "source_index_pages": current_index["pages"] if current_index else None,
             "source_index_sha256": current_index["sha256"] if current_index else None,
             "eligible_catalog_landing_pages": 0,
@@ -346,7 +411,9 @@ def run_batch(
                 "media_fetched": 0,
             },
         }
-        _write_payload(state_path, result)
+        # A stale review queue is not a progress event. Preserve the previous
+        # resumable ledger (or leave it absent) so the scheduled workflow does
+        # not create a timestamp-only commit while waiting for a fresh queue.
         return result
 
     candidate_urls = queue.get("candidate_urls", [])
@@ -437,9 +504,14 @@ def run_batch(
         "schema_version": 2,
         "status": "metadata_only_staging_not_production",
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "queue_matches_current_index": True,
+        "queue_matches_current_index": queue_status["exact_match"],
+        "queue_snapshot_compatible_with_current_index": True,
+        "queue_source_index_sha_matches_current": queue_status["exact_match"],
+        "queue_source_index_page_lag": queue_status["page_lag"],
+        "queue_source_index_age_seconds": queue_status["age_seconds"],
         "queue_source_index_pages": queue_pages,
         "queue_source_index_sha256": queue_sha,
+        "queue_source_index_updated_at": queue_updated_at,
         "source_index_pages": current_index["pages"] if current_index else None,
         "source_index_sha256": current_index["sha256"] if current_index else None,
         "eligible_catalog_landing_pages": len(eligible),
@@ -465,6 +537,12 @@ def run_batch(
     }
     if not eligible:
         result["status"] = "no_policy_preapproved_catalog_landing_pages"
+    elif not batch:
+        result["status"] = "no_unprocessed_catalog_landing_pages"
+    if not batch:
+        # Nothing changed: preserve the prior checkpoint and avoid a
+        # timestamp-only commit on every scheduled cycle.
+        return result
     _write_payload(state_path, result)
     return result
 
@@ -484,6 +562,9 @@ def main() -> None:
                 for key in (
                     "status",
                     "queue_matches_current_index",
+                    "queue_snapshot_compatible_with_current_index",
+                    "queue_source_index_page_lag",
+                    "queue_source_index_age_seconds",
                     "eligible_catalog_landing_pages",
                     "last_batch_size",
                     "last_batch_processed",

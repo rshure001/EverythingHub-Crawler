@@ -45,17 +45,17 @@ jobs:
           PYTHONPATH=crawler python - <<'PY'
           import json
           from pathlib import Path
-          from catalog_seed_expansion import _eligible_seed, _queue_matches_current_index
+          from catalog_seed_expansion import _eligible_seed, _queue_snapshot_compatible_with_current_index
 
           queue = json.loads(
               Path("data/page-derived-catalogs/source-host-review-queue.json").read_text(encoding="utf-8")
           )
-          current = _queue_matches_current_index(queue, Path("public-search/manifest.json"))
+          compatible = _queue_snapshot_compatible_with_current_index(queue, Path("public-search/manifest.json"))
           candidates = queue.get("candidate_urls", []) if isinstance(queue, dict) else []
-          eligible = [row for row in candidates if _eligible_seed(row)] if current else []
+          eligible = [row for row in candidates if _eligible_seed(row)] if compatible else []
           print(json.dumps({
               "source_index_pages": queue.get("source_index_pages"),
-              "review_queue_matches_current_index": current,
+              "review_queue_snapshot_compatible_with_current_index": compatible,
               "catalog_definition_source_urls": len(candidates),
               "eligible_catalog_landing_pages": len(eligible),
               "network_requests_made": 0,
