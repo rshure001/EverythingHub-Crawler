@@ -987,6 +987,102 @@ def _attach_record_catalogs(page_rows: list[dict], records) -> dict[str, int]:
     }
 
 
+def _add_page_and_record_catalogs(page_rows: list[dict], records, catalogs: list[dict]) -> dict[str, int]:
+    """Give every valid indexed page and every extracted record a stable owned catalog.
+
+    These identity containers are staging structures, not claims that a source
+    declared a catalog or granted redistribution rights. They remain excluded
+    from public publication until separately validated.
+    """
+    record_map = records if isinstance(records, dict) else {
+        item["record_id"]: item for item in records
+        if isinstance(item, dict) and item.get("record_id")
+    }
+    catalog_map = {
+        item["catalog_id"]: item for item in catalogs
+        if isinstance(item, dict) and item.get("catalog_id")
+    }
+    page_catalog_ids = {}
+    page_rows_by_id = {}
+    for page in page_rows:
+        if not isinstance(page, dict) or not page.get("page_id") or not page.get("url"):
+            continue
+        page_id = page["page_id"]
+        page_rows_by_id[page_id] = page
+        page_catalog_id = stable_id("catalog", "__page__|" + page_id)
+        page_catalog_ids[page_id] = page_catalog_id
+        page["page_catalog_id"] = page_catalog_id
+        page["page_catalog_status"] = "identity_container_pending_validation"
+        record_ids = sorted(set(record_id for record_id in page.get("record_ids", []) if record_id in record_map))
+        catalog_map[page_catalog_id] = {
+            "catalog_id": page_catalog_id, "source_key": "__page__|" + page_id,
+            "title": (_title(page.get("title")) or page["url"])[:240] + " — Page Catalog",
+            "catalog_type": "knowledge_base", "record_type": "page",
+            "subject": _title(page.get("title")) or page["url"],
+            "source_host": urlsplit(page["url"]).hostname or "", "source_url": page["url"],
+            "source_page_ids": [page_id], "source_page_count": 1,
+            "first_seen_at": _timestamp_iso(page.get("fetched_at")),
+            "last_seen_at": _timestamp_iso(page.get("fetched_at")),
+            "record_ids": record_ids, "record_count": len(record_ids),
+            "parent_catalog_id": None, "evidence": ["one_to_one_indexed_page_identity"],
+            "catalog_origin": "page_owned_identity_catalog", "catalog_definition": False,
+            "catalog_status": "identity_container_pending_validation",
+            "source_terms_status": "not_reviewed",
+            "rights_status": "publicly_accessible_not_cleared_for_redistribution",
+            "record_level_clearance": "not_reviewed", "commercial_eligible": False,
+            "public_search_allowed": False, "verified": False,
+        }
+        for record_id in record_ids:
+            memberships = record_map[record_id].setdefault("catalog_ids", [])
+            if page_catalog_id not in memberships:
+                memberships.append(page_catalog_id)
+
+    owned_record_catalogs = 0
+    for record_id, record in record_map.items():
+        record_catalog_id = record.get("record_catalog_id") or stable_id("record-catalog", record_id)
+        record["record_catalog_id"] = record_catalog_id
+        source_page_ids = sorted({page_id for page_id in record.get("source_page_ids", []) if page_id in page_rows_by_id})
+        parent_ids = sorted({page_catalog_ids[page_id] for page_id in source_page_ids})
+        source_urls = record.get("source_urls") if isinstance(record.get("source_urls"), list) else []
+        catalog_map[record_catalog_id] = {
+            "catalog_id": record_catalog_id, "source_key": "__record__|" + record_id,
+            "title": (_title(record.get("title")) or record_id)[:240] + " — Record Catalog",
+            "catalog_type": CATALOG_TYPE.get(record.get("record_type"), "general"),
+            "record_type": record.get("record_type", "other"),
+            "subject": _title(record.get("title")) or record_id, "source_host": "",
+            "source_url": record.get("source_url") or (source_urls[0] if source_urls else ""),
+            "source_page_ids": source_page_ids, "source_page_count": len(source_page_ids),
+            "first_seen_at": _timestamp_iso(record.get("last_seen_at")),
+            "last_seen_at": _timestamp_iso(record.get("last_seen_at")),
+            "record_ids": [record_id], "record_count": 1,
+            "parent_catalog_id": parent_ids[0] if len(parent_ids) == 1 else None,
+            "parent_page_catalog_ids": parent_ids,
+            "evidence": ["one_to_one_record_identity", "source_page_provenance"],
+            "catalog_origin": "record_owned_identity_catalog", "catalog_definition": False,
+            "catalog_status": "identity_container_pending_validation",
+            "source_terms_status": "not_reviewed",
+            "rights_status": "publicly_accessible_not_cleared_for_redistribution",
+            "record_level_clearance": "not_reviewed", "commercial_eligible": False,
+            "public_search_allowed": False, "verified": False,
+        }
+        memberships = record.setdefault("catalog_ids", [])
+        if record_catalog_id not in memberships:
+            memberships.append(record_catalog_id)
+        owned_record_catalogs += 1
+
+    catalogs[:] = sorted(catalog_map.values(), key=lambda item: (
+        item.get("catalog_type", ""), str(item.get("title", "")).casefold(), item.get("catalog_id", "")
+    ))
+    return {
+        "page_catalogs": len(page_catalog_ids),
+        "page_catalogs_with_records": sum(bool(catalog_map[page_catalog_ids[page_id]].get("record_ids")) for page_id in page_catalog_ids),
+        "page_catalogs_without_records": sum(not bool(catalog_map[page_catalog_ids[page_id]].get("record_ids")) for page_id in page_catalog_ids),
+        "record_owned_catalogs": owned_record_catalogs,
+        "pages_with_page_catalogs": len(page_catalog_ids),
+        "records_with_owned_catalogs": owned_record_catalogs,
+    }
+
+
 def analyze_pages(
     pages: list[dict],
     source_total: int | None = None,
@@ -1697,6 +1793,9 @@ def analyze_pages(
     _reconcile_page_record_provenance(page_rows, records)
     global_typed_catalogs_by_type = _add_global_typed_entity_catalogs(page_rows, records, catalogs)
     record_catalog_metrics = _attach_record_catalogs(page_rows, records)
+    catalog_rows = list(catalogs.values())
+    identity_catalog_metrics = _add_page_and_record_catalogs(page_rows, records, catalog_rows)
+    catalogs = {item['source_key']: item for item in catalog_rows if item.get('source_key')}
 
     for item in records.values():
         item["source_urls"] = sorted(item["source_urls"])
@@ -1743,6 +1842,12 @@ def analyze_pages(
         "catalogs_by_origin": dict(sorted(Counter(x.get("catalog_origin") or "unknown" for x in catalog_list).items())),
         "unique_catalogs_discovered": len(catalog_list),
         "record_catalogs": record_catalog_metrics["record_catalogs"],
+        "page_catalogs": identity_catalog_metrics["page_catalogs"],
+        "page_catalogs_with_records": identity_catalog_metrics["page_catalogs_with_records"],
+        "page_catalogs_without_records": identity_catalog_metrics["page_catalogs_without_records"],
+        "record_owned_catalogs": identity_catalog_metrics["record_owned_catalogs"],
+        "pages_with_page_catalogs": identity_catalog_metrics["pages_with_page_catalogs"],
+        "records_with_owned_catalogs": identity_catalog_metrics["records_with_owned_catalogs"],
         "record_pages_with_catalogs": record_catalog_metrics["record_pages_with_catalogs"],
         "record_catalog_membership_edges": record_catalog_metrics["record_catalog_membership_edges"],
         "record_catalogs_with_shared_sources": record_catalog_metrics["record_catalogs_with_shared_sources"],
@@ -2057,6 +2162,7 @@ def analyze_pages_incremental(
     _reconcile_page_record_provenance(all_page_rows, all_records)
     global_typed_catalogs_by_type = _add_global_typed_entity_catalogs(all_page_rows, all_records, all_catalogs)
     record_catalog_metrics = _attach_record_catalogs(all_page_rows, all_records)
+    identity_catalog_metrics = _add_page_and_record_catalogs(all_page_rows, all_records, all_catalogs)
     if progress:
         print(json.dumps({
             "stage": "catalog_global_typed_catalogs_complete",
