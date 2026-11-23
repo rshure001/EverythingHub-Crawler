@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_INDEX = ROOT / "data" / "index.json"
 DEFAULT_OUTPUT = ROOT / "data" / "page-derived-catalogs"
 DEFAULT_SOURCE_POLICY_REVIEWS = ROOT / "data" / "source-policy-reviews.json"
-ANALYZER_VERSION = 18
+ANALYZER_VERSION = 19
 TRACKING_KEYS = {"fbclid", "gclid", "dclid", "mc_cid", "mc_eid", "ref", "source"}
 STOP_TOKENS = {
     "the", "and", "for", "with", "from", "our", "your", "all", "new", "home", "page",
@@ -957,31 +957,19 @@ def _reconcile_page_record_provenance(page_rows: list[dict], records) -> int:
 
 
 def _attach_record_catalogs(page_rows: list[dict], records) -> dict[str, int]:
-    """Attach one stable virtual related-catalog identity to every canonical record.
-
-    Related records are resolved through shared catalog indexes on demand; this
-    stores references rather than quadratic copies of related record lists.
-    """
+    """Assign a stable related-catalog identity without duplicating catalog rows."""
     record_map = records if isinstance(records, dict) else {
         item["record_id"]: item for item in records if isinstance(item, dict) and item.get("record_id")
     }
-    rows = []
-    for record_id, record in sorted(record_map.items()):
+    shared_edges = 0
+    records_with_shared_catalogs = 0
+    for record_id, record in record_map.items():
         catalog_ids = record.get("catalog_ids", [])
         if not isinstance(catalog_ids, list):
             raise ValueError("record catalog memberships must be a list")
-        record_catalog_id = stable_id("record-catalog", record_id)
-        record["record_catalog_id"] = record_catalog_id
-        rows.append({
-            "record_catalog_id": record_catalog_id,
-            "owner_record_id": record_id,
-            "title": "Related to " + str(record.get("title") or "this record")[:180],
-            "resolution": "virtual_shared_catalog_memberships",
-            "shared_catalog_ids": sorted(set(catalog_ids)),
-            "exclude_owner_record": True,
-            "deduplicate_by": "record_id",
-            "source_page_ids": sorted(set(record.get("source_page_ids", []))),
-        })
+        record["record_catalog_id"] = stable_id("record-catalog", record_id)
+        shared_edges += len(set(catalog_ids))
+        records_with_shared_catalogs += bool(catalog_ids)
     for page in page_rows:
         if not isinstance(page, dict):
             continue
@@ -991,12 +979,11 @@ def _attach_record_catalogs(page_rows: list[dict], records) -> dict[str, int]:
             if record_id in record_map
         })
     return {
-        "record_catalogs": len(rows),
+        "record_catalogs": len(record_map),
         "record_pages_with_catalogs": sum(bool(page.get("record_catalog_ids")) for page in page_rows if isinstance(page, dict)),
-        "record_catalog_membership_edges": sum(len(row["shared_catalog_ids"]) for row in rows),
-        "record_catalogs_with_shared_sources": sum(bool(row["shared_catalog_ids"]) for row in rows),
-        "record_catalogs_awaiting_related_items": sum(not row["shared_catalog_ids"] for row in rows),
-        "_rows": rows,
+        "record_catalog_membership_edges": shared_edges,
+        "record_catalogs_with_shared_sources": records_with_shared_catalogs,
+        "record_catalogs_awaiting_related_items": sum(not bool(record.get("catalog_ids")) for record in record_map.values()),
     }
 
 
@@ -1826,7 +1813,6 @@ def analyze_pages(
         "pages": page_rows,
         "media_urls": sorted(media_urls),
         "media_references": sorted(media_references.values(), key=lambda x: (x["media_url"], x["source_page_id"])),
-        "record_catalogs": record_catalog_metrics["_rows"],
     }
 
 
@@ -2822,13 +2808,6 @@ def write_outputs(analysis: dict, output_dir: Path) -> dict:
         if relative_path not in expected_search_files:
             stale_path.unlink()
 
-    size, digest = _write_gzip(output_dir / "record-catalogs.json.gz", {
-        "version": 1,
-        "resolution": "virtual_shared_catalog_memberships",
-        "record_catalogs": analysis.get("record_catalogs", []),
-    })
-    files.append({"file": "record-catalogs.json.gz", "bytes": size, "sha256": digest,
-                  "items": len(analysis.get("record_catalogs", []))})
     size, digest = _write_gzip(output_dir / "records.json.gz", {
         "version": 1, "records": analysis["records"],
     })
@@ -2923,18 +2902,6 @@ def validate_outputs(output_dir: Path) -> dict:
         raise ValueError("media URL registry does not match its provenance references")
     records_raw = (output_dir / "records.json.gz").read_bytes()
     records = json.loads(gzip.decompress(records_raw).decode("utf-8"))["records"]
-    record_catalog_payload = json.loads(gzip.decompress(
-        (output_dir / "record-catalogs.json.gz").read_bytes()
-    ).decode("utf-8"))
-    record_catalog_rows = record_catalog_payload.get("record_catalogs", [])
-    record_catalogs_by_owner = {row.get("owner_record_id"): row for row in record_catalog_rows}
-    if (
-        record_catalog_payload.get("version") != 1
-        or record_catalog_payload.get("resolution") != "virtual_shared_catalog_memberships"
-        or len(record_catalog_rows) != len(records)
-        or len(record_catalogs_by_owner) != len(records)
-    ):
-        raise ValueError("every canonical record must have exactly one related-catalog definition")
     page_ids = {
         item["page_id"] for item in pages
         if isinstance(item, dict) and item.get("page_id")
@@ -2967,16 +2934,8 @@ def validate_outputs(output_dir: Path) -> dict:
                     f"{related_record_id}, but its provenance lists {related_record.get('source_page_ids', [])[:8]}"
                 )
     for record in records:
-        record_catalog = record_catalogs_by_owner.get(record.get("record_id"))
-        if (
-            record.get("record_catalog_id") != stable_id("record-catalog", record.get("record_id", ""))
-            or record_catalog is None
-            or record_catalog.get("record_catalog_id") != record.get("record_catalog_id")
-            or record_catalog.get("shared_catalog_ids") != sorted(set(record.get("catalog_ids", [])))
-            or record_catalog.get("exclude_owner_record") is not True
-            or record_catalog.get("deduplicate_by") != "record_id"
-        ):
-            raise ValueError("record-related catalog identity or virtual memberships are invalid")
+        if record.get("record_catalog_id") != stable_id("record-catalog", record.get("record_id", "")):
+            raise ValueError("record-related catalog identity is invalid")
         if stable_id("record", record.get("canonical_entity_key", "")) != record.get("record_id"):
             raise ValueError("record ID does not match its canonical entity key")
         if record.get("commercial_eligible") is not False or record.get("source_terms_status") != "not_reviewed":
@@ -3019,14 +2978,6 @@ def validate_outputs(output_dir: Path) -> dict:
     catalogs_by_id = {x["catalog_id"]: x for x in catalogs}
     if len(catalog_ids) != len(set(catalog_ids)):
         raise ValueError("duplicate catalog IDs remain after deduplication")
-    for record_id, record_catalog in record_catalogs_by_owner.items():
-        if (
-            not set(record_catalog.get("shared_catalog_ids", [])).issubset(catalogs_by_id)
-            or not set(record_catalog.get("source_page_ids", [])).issubset(records_by_id[record_id].get("source_page_ids", []))
-            or any(record_id not in catalogs_by_id[catalog_id].get("record_ids", [])
-                   for catalog_id in record_catalog.get("shared_catalog_ids", []))
-        ):
-            raise ValueError("record-related catalog points to an invalid shared catalog or provenance")
     for catalog in catalogs:
         if stable_id("catalog", catalog.get("source_key", "")) != catalog.get("catalog_id"):
             raise ValueError("catalog ID does not match its canonical source key")
