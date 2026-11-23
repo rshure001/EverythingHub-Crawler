@@ -1,4 +1,9 @@
+import gzip
+import json
+import sys
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 import catalog_openlibrary
@@ -39,6 +44,54 @@ class OpenLibraryCatalogTests(unittest.TestCase):
                 result = catalog_openlibrary.discover(pause=0, allow_api=True)
         self.assertEqual(result["datasets_discovered"], 0)
 
+
+    def test_restricted_policy_disables_even_explicit_api_flag(self):
+        restricted = {
+            "discovery_allowed": False,
+            "terms_status": "restricted",
+            "terms_url": "https://openlibrary.org/terms",
+            "reviewed_at": "",
+        }
+        with patch.object(catalog_openlibrary, "policy_for_host", return_value=restricted), patch.object(
+            catalog_openlibrary, "request_subject"
+        ) as request:
+            result = catalog_openlibrary.discover(pause=0, allow_api=True)
+        request.assert_not_called()
+        self.assertEqual(result["catalog_count"], 0)
+        self.assertEqual(result["datasets_discovered"], 0)
+        self.assertEqual(result["source_policy_status"], "restricted")
+        self.assertEqual(result["catalogs"], [])
+        self.assertEqual(result["datasets"], [])
+
+    def test_main_replaces_restricted_previous_snapshot_with_empty_manifest(self):
+        restricted = {
+            "discovery_allowed": False,
+            "terms_status": "restricted",
+            "terms_url": "https://openlibrary.org/terms",
+            "reviewed_at": "",
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "openlibrary-catalogs.json.gz"
+            old = {
+                "catalog_count": 22,
+                "datasets_discovered": 10500,
+                "catalogs": [{"id": "openlibrary-subject-science"}],
+                "datasets": [{"id": "old-record"}] * 10500,
+            }
+            output.write_bytes(gzip.compress(json.dumps(old).encode("utf-8"), mtime=0))
+            with patch.object(catalog_openlibrary, "policy_for_host", return_value=restricted), patch.object(
+                catalog_openlibrary, "request_subject"
+            ) as request, patch.object(sys, "argv", ["catalog_openlibrary.py", "--output", str(output)]):
+                catalog_openlibrary.main()
+            request.assert_not_called()
+            current = json.loads(gzip.decompress(output.read_bytes()).decode("utf-8"))
+        self.assertEqual(current["catalog_count"], 0)
+        self.assertEqual(current["datasets_discovered"], 0)
+        self.assertEqual(current["previous_snapshot_records_excluded"], 10500)
+        self.assertEqual(current["previous_snapshot_catalogs_excluded"], 1)
+        self.assertEqual(current["source_policy_status"], "restricted")
+        self.assertEqual(current["datasets"], [])
+        self.assertEqual(current["catalogs"], [])
 
     def test_default_api_discovery_is_disabled(self):
         with patch.object(catalog_openlibrary, "request_subject") as request:
