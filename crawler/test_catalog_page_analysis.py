@@ -2127,5 +2127,40 @@ class CatalogInventoryTriggerTests(unittest.TestCase):
         self.assertEqual(result["metrics"]["unique_catalogs_discovered"], 0)
         self.assertEqual(result["metrics"]["structured_entity_records"], 1)
 
+
+class AdditionalSourcePolicyReviewTests(unittest.TestCase):
+    def test_public_sector_reviews_remain_conditional_and_metadata_only(self):
+        repository_root = Path(__file__).resolve().parents[1]
+        register = json.loads(
+            (repository_root / "data" / "source-policy-reviews.json").read_text(encoding="utf-8")
+        )
+        by_host = {item["host"]: item for item in register["reviews"]}
+        expected_hosts = {"nasa.gov", "usgs.gov", "loc.gov", "sba.gov"}
+        self.assertTrue(expected_hosts.issubset(by_host))
+        for host in expected_hosts:
+            review = by_host[host]
+            self.assertEqual(review["status"], "source_policy_reviewed_conditional")
+            self.assertEqual(review["discovery_scope"], "metadata_and_source_links_only")
+            self.assertEqual(review["record_level_clearance"], "not_reviewed")
+            self.assertFalse(review["commercial_eligibility"])
+            self.assertTrue(review["evidence_urls"])
+            self.assertTrue(all(url.startswith("https://") for url in review["evidence_urls"]))
+
+        analysis = {
+            "records": [
+                {"record_id": host, "source_urls": [f"https://www.{host}/public/example"]}
+                for host in expected_hosts
+            ],
+            "catalogs": [],
+            "metrics": {},
+        }
+        apply_source_policy_reviews(analysis)
+        for record in analysis["records"]:
+            self.assertEqual(record["source_policy_review_status"], "conditional_source_review")
+            self.assertEqual(record["source_policy_review_scope"], "source-level-only")
+            self.assertEqual(record["record_level_clearance"], "not_reviewed")
+            self.assertEqual(record["source_terms_status"], "not_reviewed")
+            self.assertFalse(record["commercial_eligible"])
+
 if __name__ == "__main__":
     unittest.main()

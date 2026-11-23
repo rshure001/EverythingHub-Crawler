@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "purpose": "Auditable source-level policy evidence for catalog discovery and safe ingestion. These reviews are not legal advice and do not grant record-level rights clearance.",
-  "reviewed_at": "2026-11-21T01:28:00Z",
+  "reviewed_at": "2026-11-23T07:18:16Z",
   "policy": {
     "default_status": "candidate_only",
     "record_level_clearance": "not_reviewed",
@@ -129,6 +129,99 @@
         "https://files.lasvegasnevada.gov/open-data/Open_Data_Guide_for_CLV__ODSC_Approved_.pdf",
         "https://files.lasvegasnevada.gov/open-data/CLVOpenDataPolicy.pdf",
         "https://opendataportal-lasvegas.opendata.arcgis.com/api/search/definition/"
+      ]
+    },
+    {
+      "host": "nasa.gov",
+      "status": "source_policy_reviewed_conditional",
+      "discovery_scope": "metadata_and_source_links_only",
+      "content_reuse": "conditional_by_record",
+      "findings": [
+        "NASA's media guidance says NASA identifiers, insignia, logotypes, and seals are protected; third-party material appearing on NASA sites may retain separate copyright or permission requirements.",
+        "NASA's Science Data Portal says records may carry their own license; NASA-led mission data without a restrictive notice are CC0, while other data may originate from third parties and require source-level rights validation."
+      ],
+      "mandatory_checks": [
+        "Keep page-derived records to factual metadata and canonical source links unless item-level rights are recorded.",
+        "For data records, preserve the explicit item license; apply CC0 only when the record is NASA-led mission data and no restrictive notice is present.",
+        "Do not reuse images, video, audio, insignia, logotypes, or identifiable-person media without item-level rights and privacy/publicity review.",
+        "Do not imply NASA endorsement or use NASA identifiers as Everything Hub branding."
+      ],
+      "api_access": "No general NASA page or media API access approval is inferred by this source-level review; images-api.nasa.gov remains separately governed by the catalog-source-terms registry.",
+      "commercial_eligibility": false,
+      "record_level_clearance": "not_reviewed",
+      "evidence_urls": [
+        "https://www.nasa.gov/nasa-brand-center/images-and-media/",
+        "https://science.data.nasa.gov/about/license",
+        "https://www.nasa.gov/nasa-brand-center/"
+      ]
+    },
+    {
+      "host": "usgs.gov",
+      "status": "source_policy_reviewed_conditional",
+      "discovery_scope": "metadata_and_source_links_only",
+      "content_reuse": "conditional_by_record",
+      "findings": [
+        "USGS-authored or produced information is generally public domain and USGS requests source acknowledgement.",
+        "Non-USGS photographs, images, graphics, and other third-party material appearing on USGS pages may be copyrighted and require permission from the rights holder."
+      ],
+      "mandatory_checks": [
+        "Classify each record as USGS-authored/produced, third-party, or unknown before any reuse.",
+        "Preserve USGS attribution for USGS material.",
+        "Do not reuse third-party images or graphics without item-level permission or license evidence.",
+        "Do not infer commercial eligibility or republication clearance from the host-level review."
+      ],
+      "api_access": "No API access approval is inferred by this page-level review; any API use requires a separate allowlist entry, robots check, and rate-limit review.",
+      "commercial_eligibility": false,
+      "record_level_clearance": "not_reviewed",
+      "evidence_urls": [
+        "https://www.usgs.gov/faqs/are-usgs-reportspublications-copyrighted",
+        "https://www.usgs.gov/information-policies-and-instructions/acknowledging-or-crediting-usgs"
+      ]
+    },
+    {
+      "host": "loc.gov",
+      "status": "source_policy_reviewed_conditional",
+      "discovery_scope": "metadata_and_source_links_only",
+      "content_reuse": "conditional_by_record",
+      "findings": [
+        "The Library of Congress provides public JSON/YAML APIs for structured item, collection, image, and metadata discovery without an API key.",
+        "LOC enforces rate limits and limits deep paging; individual items and media can have different rights or third-party restrictions, so API accessibility does not establish reuse rights."
+      ],
+      "mandatory_checks": [
+        "Keep page-derived records to descriptive metadata and canonical source links unless the individual item's rights statement is reviewed.",
+        "Respect current LOC rate limits, response headers, and the documented deep-paging limit; use bounded pagination and facets.",
+        "Do not fetch OCR full text, image-service derivatives, or streaming media under this source-level review.",
+        "Preserve item-level rights statements and attribution; unknown rights remain metadata-only and non-commercial."
+      ],
+      "api_access": "The public JSON/YAML API is documented and does not require an API key, but this review does not authorize requests; a separate catalog-source-terms allowlist, robots check, bounded pagination, and rate-limit controls are required.",
+      "commercial_eligibility": false,
+      "record_level_clearance": "not_reviewed",
+      "evidence_urls": [
+        "https://www.loc.gov/apis/",
+        "https://www.loc.gov/apis/json-and-yaml",
+        "https://www.loc.gov/collections/selected-datasets/about-this-collection/rights-and-access/"
+      ]
+    },
+    {
+      "host": "sba.gov",
+      "status": "source_policy_reviewed_conditional",
+      "discovery_scope": "metadata_and_source_links_only",
+      "content_reuse": "conditional_by_record",
+      "findings": [
+        "SBA states that government information on SBA.gov is public domain and may be copied with appropriate acknowledgement.",
+        "SBA warns that documents, illustrations, photographs, and other materials contributed or licensed by private parties may remain protected by copyright; privacy and third-party site policies also apply."
+      ],
+      "mandatory_checks": [
+        "Classify each record as SBA/U.S. Government-authored, third-party contributed/licensed, or unknown.",
+        "Preserve SBA acknowledgement for government information.",
+        "Do not reuse third-party documents, images, or media without item-level rights evidence.",
+        "Exclude personal information from forms, account portals, or other non-public interactions; do not imply SBA endorsement."
+      ],
+      "api_access": "No API access approval is inferred by this page-level review; separate API allowlisting and robots/rate-limit checks are required before requests.",
+      "commercial_eligibility": false,
+      "record_level_clearance": "not_reviewed",
+      "evidence_urls": [
+        "https://www.sba.gov/about-sba/open-government/about-the-sba-gov-website/"
       ]
     }
   ],
