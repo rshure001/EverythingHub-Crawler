@@ -291,7 +291,7 @@ function searchPageDerivedCatalogs(query,network,limit=5){
   const c=g.catalog,matched=Array.from(g.matches.values()).sort((a,b)=>b.score-a.score||String(a.record.title||'').localeCompare(String(b.record.title||'')));
   if(!matched.length)continue;
   const matchedRecords=matched.slice(0,5).map(({record:r})=>({
-   record_id:r.record_id,record_catalog_id:String(r.record_catalog_id||''),shared_catalog_ids:Array.isArray(r.catalog_ids)?r.catalog_ids:[],title:String(r.title||'Untitled record').slice(0,240),
+   record_id:r.record_id,shared_catalog_ids:Array.isArray(r.catalog_ids)?r.catalog_ids:[],title:String(r.title||'Untitled record').slice(0,240),
    record_type:String(r.record_type||'record'),
    source_url:(r.source_urls||[]).map(safeUrl).find(Boolean)||'',
    last_seen_at:r.last_seen_at||null,
@@ -393,11 +393,11 @@ function searchPageDerivedCatalogs(query,network,limit=5){
  const n=Number.isInteger(limit)?Math.max(1,Math.min(8,limit)):5;
  return results.sort((a,b)=>b.score-a.score||b.matched_records.length-a.matched_records.length||a.title.localeCompare(b.title)).slice(0,n);
 }
-function resolveRecordRelatedCatalog(recordCatalogId,network,limit=20,offset=0){
- const key=String(recordCatalogId||'').trim();
- if(!key||key.length>160)throw new Error('record_catalog_id_invalid');
+function resolveRelatedRecords(recordId,network,limit=20,offset=0){
+ const key=String(recordId||'').trim();
+ if(!key||key.length>160)throw new Error('record_id_invalid');
  const records=Array.isArray(network?.records)?network.records:[];
- const owner=records.find(r=>r&&r.record_catalog_id===key);
+ const owner=records.find(r=>r&&r.record_id===key);
  if(!owner)return null;
  const catalogs=Array.isArray(network?.catalogs)?network.catalogs:[];
  const catalogsById=new Map(catalogs.map(c=>[c.catalog_id,c]));
@@ -406,23 +406,23 @@ function resolveRecordRelatedCatalog(recordCatalogId,network,limit=20,offset=0){
  for(const catalogId of Array.isArray(owner.catalog_ids)?owner.catalog_ids:[]){
   const catalog=catalogsById.get(catalogId);
   if(!catalog)continue;
-  for(const recordId of Array.isArray(catalog.record_ids)?catalog.record_ids:[]){
-   if(recordId===owner.record_id||related.has(recordId))continue;
-   const record=recordsById.get(recordId);
-   if(record)related.set(recordId,record);
+  for(const relatedId of Array.isArray(catalog.record_ids)?catalog.record_ids:[]){
+   if(relatedId===owner.record_id||related.has(relatedId))continue;
+   const record=recordsById.get(relatedId);
+   if(record)related.set(relatedId,record);
   }
  }
  const ordered=Array.from(related.values()).sort((a,b)=>String(a.title||'').localeCompare(String(b.title||''))||String(a.record_id).localeCompare(String(b.record_id)));
  const start=Math.max(0,Math.min(5000,Number.isInteger(offset)?offset:0));
  const size=Math.max(1,Math.min(50,Number.isInteger(limit)?limit:20));
  return {
-  record_catalog_id:key,
-  owner_record:{record_id:owner.record_id,record_catalog_id:owner.record_catalog_id,title:owner.title,record_type:owner.record_type,description:owner.description||'',source_urls:owner.source_urls||[],source_page_ids:owner.source_page_ids||[],catalog_ids:owner.catalog_ids||[]},
+  record_id:key,
+  owner_record:{record_id:owner.record_id,title:owner.title,record_type:owner.record_type,description:owner.description||'',source_urls:owner.source_urls||[],source_page_ids:owner.source_page_ids||[],catalog_ids:owner.catalog_ids||[]},
   related_count:ordered.length,
   offset:start,
   limit:size,
   has_more:start+size<ordered.length,
-  related_records:ordered.slice(start,start+size).map(r=>({record_id:r.record_id,record_catalog_id:r.record_catalog_id||'',title:r.title,record_type:r.record_type,description:r.description||'',source_urls:r.source_urls||[],source_page_ids:r.source_page_ids||[],catalog_ids:r.catalog_ids||[],last_seen_at:r.last_seen_at||null,source_terms_status:r.source_terms_status||'not_reviewed',record_level_clearance:r.record_level_clearance||'not_reviewed',commercial_eligible:false}))
+  related_records:ordered.slice(start,start+size).map(record=>({record_id:record.record_id,title:record.title,record_type:record.record_type,description:record.description||'',source_urls:record.source_urls||[],source_page_ids:record.source_page_ids||[],catalog_ids:record.catalog_ids||[],last_seen_at:record.last_seen_at||null,source_terms_status:record.source_terms_status||'not_reviewed',record_level_clearance:record.record_level_clearance||'not_reviewed',commercial_eligible:false}))
  };
 }
 function matchesPageIndexSnapshot(pageDerived,pageIndex){
@@ -433,4 +433,4 @@ function matchesPageIndexSnapshot(pageDerived,pageIndex){
   Number.isFinite(pageTime)&&Math.abs(sourceTime-pageTime)<=60000;
 }
 function clearPageDerivedCatalogsCache(){cache=null;manifestCache=null;queryCache.clear();}
-module.exports={validateManifest,validatePageDerivedCatalogs,loadPageDerivedCatalogsFromManifest,loadPageDerivedCatalogs,loadQueryScopedPageDerivedCatalogs,searchPageDerivedCatalogs,resolveRecordRelatedCatalog,matchesPageIndexSnapshot,clearPageDerivedCatalogsCache};
+module.exports={validateManifest,validatePageDerivedCatalogs,loadPageDerivedCatalogsFromManifest,loadPageDerivedCatalogs,loadQueryScopedPageDerivedCatalogs,searchPageDerivedCatalogs,resolveRelatedRecords,matchesPageIndexSnapshot,clearPageDerivedCatalogsCache};

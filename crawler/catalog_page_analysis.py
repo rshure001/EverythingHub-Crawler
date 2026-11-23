@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_INDEX = ROOT / "data" / "index.json"
 DEFAULT_OUTPUT = ROOT / "data" / "page-derived-catalogs"
 DEFAULT_SOURCE_POLICY_REVIEWS = ROOT / "data" / "source-policy-reviews.json"
-ANALYZER_VERSION = 20
+ANALYZER_VERSION = 21
 TRACKING_KEYS = {"fbclid", "gclid", "dclid", "mc_cid", "mc_eid", "ref", "source"}
 STOP_TOKENS = {
     "the", "and", "for", "with", "from", "our", "your", "all", "new", "home", "page",
@@ -956,142 +956,32 @@ def _reconcile_page_record_provenance(page_rows: list[dict], records) -> int:
     return repaired
 
 
-def _attach_record_catalogs(page_rows: list[dict], records) -> dict[str, int]:
-    """Assign a stable related-catalog identity without duplicating catalog rows."""
-    record_map = records if isinstance(records, dict) else {
-        item["record_id"]: item for item in records if isinstance(item, dict) and item.get("record_id")
-    }
-    shared_edges = 0
-    records_with_shared_catalogs = 0
-    for record_id, record in record_map.items():
-        catalog_ids = record.get("catalog_ids", [])
-        if not isinstance(catalog_ids, list):
-            raise ValueError("record catalog memberships must be a list")
-        record["record_catalog_id"] = stable_id("record-catalog", record_id)
-        shared_edges += len(set(catalog_ids))
-        records_with_shared_catalogs += bool(catalog_ids)
-    for page in page_rows:
-        if not isinstance(page, dict):
+def _catalog_membership_coverage_by_source_page(page_rows: list[dict], catalogs: list[dict]) -> dict[str, int]:
+    """Count eligible source pages with zero, one, or multiple real catalog memberships."""
+    catalog_counts: Counter[str] = Counter()
+    for catalog in catalogs:
+        if not isinstance(catalog, dict):
             continue
-        page["record_catalog_ids"] = sorted({
-            record_map[record_id]["record_catalog_id"]
-            for record_id in page.get("record_ids", [])
-            if record_id in record_map
-        })
+        page_ids = {
+            page_id for page_id in catalog.get("source_page_ids", [])
+            if isinstance(page_id, str) and page_id
+        }
+        for page_id in page_ids:
+            catalog_counts[page_id] += 1
+
+    eligible_page_ids = {
+        page.get("page_id")
+        for page in page_rows
+        if isinstance(page, dict)
+        and page.get("eligible") is True
+        and isinstance(page.get("page_id"), str)
+        and page.get("page_id")
+    }
     return {
-        "record_catalogs": len(record_map),
-        "record_pages_with_catalogs": sum(bool(page.get("record_catalog_ids")) for page in page_rows if isinstance(page, dict)),
-        "record_catalog_membership_edges": shared_edges,
-        "record_catalogs_with_shared_sources": records_with_shared_catalogs,
-        "record_catalogs_awaiting_related_items": sum(not bool(record.get("catalog_ids")) for record in record_map.values()),
+        "eligible_source_pages_with_catalogs": sum(catalog_counts.get(page_id, 0) > 0 for page_id in eligible_page_ids),
+        "eligible_source_pages_without_catalogs": sum(catalog_counts.get(page_id, 0) == 0 for page_id in eligible_page_ids),
+        "eligible_source_pages_with_multiple_catalogs": sum(catalog_counts.get(page_id, 0) > 1 for page_id in eligible_page_ids),
     }
-
-
-def _add_page_catalogs(page_rows: list[dict], records) -> tuple[dict[str, int], list[dict], list[dict]]:
-    """Create compact identity catalogs for every valid indexed page and record.
-
-    Record-owned catalog IDs are already stored on records; page catalogs are
-    persisted separately so they do not create millions of tiny index shards
-    or inflate source-discovered catalog counts.
-    """
-    record_map = records if isinstance(records, dict) else {
-        item["record_id"]: item for item in records
-        if isinstance(item, dict) and item.get("record_id")
-    }
-    page_catalogs = []
-    page_rows_by_id = {
-        page["page_id"]: page for page in page_rows
-        if isinstance(page, dict) and page.get("page_id") and page.get("url")
-    }
-    record_ids_by_page: dict[str, set[str]] = defaultdict(set)
-    for page_id, page in page_rows_by_id.items():
-        record_ids_by_page[page_id].update(
-            record_id for record_id in page.get("record_ids", [])
-            if record_id in record_map
-        )
-    for record_id, record in record_map.items():
-        for page_id in record.get("source_page_ids", []):
-            if page_id in page_rows_by_id:
-                record_ids_by_page[page_id].add(record_id)
-
-    for page in page_rows:
-        if not isinstance(page, dict) or not page.get("page_id") or not page.get("url"):
-            continue
-        page_id = page["page_id"]
-        page_catalog_id = stable_id("catalog", "__page__|" + page_id)
-        page["page_catalog_id"] = page_catalog_id
-        page["page_catalog_status"] = "identity_container_pending_validation"
-        record_ids = sorted(record_ids_by_page.get(page_id, set()))
-        page_catalogs.append({
-            "catalog_id": page_catalog_id,
-            "source_key": "__page__|" + page_id,
-            "title": (_title(page.get("title")) or page["url"])[:240] + " — Page Catalog",
-            "catalog_type": "knowledge_base",
-            "record_type": "page",
-            "subject": _title(page.get("title")) or page["url"],
-            "source_host": urlsplit(page["url"]).hostname or "",
-            "source_url": page["url"],
-            "source_page_ids": [page_id],
-            "source_page_count": 1,
-            "first_seen_at": _timestamp_iso(page.get("fetched_at")),
-            "last_seen_at": _timestamp_iso(page.get("fetched_at")),
-            "record_ids": record_ids,
-            "record_count": len(record_ids),
-            "evidence": ["one_to_one_indexed_page_identity"],
-            "catalog_origin": "page_owned_identity_catalog",
-            "catalog_status": "identity_container_pending_validation",
-            "status": "identity_container_pending_validation",
-            "source_terms_status": "not_reviewed",
-            "rights_status": "publicly_accessible_not_cleared_for_redistribution",
-            "record_level_clearance": "not_reviewed",
-            "commercial_eligible": False,
-            "public_search_allowed": False,
-            "verified": False,
-        })
-        for record_id in record_ids:
-            record = record_map[record_id]
-            page_catalog_ids = record.setdefault("page_catalog_ids", [])
-            if page_catalog_id not in page_catalog_ids:
-                page_catalog_ids.append(page_catalog_id)
-                page_catalog_ids.sort()
-
-    page_catalogs.sort(key=lambda item: item["catalog_id"])
-    record_catalogs = []
-    for record_id, record in sorted(record_map.items()):
-        record_page_ids = sorted({
-            page_id for page_id in record.get("source_page_ids", [])
-            if page_id in page_rows_by_id
-        })
-        record_page_catalog_ids = sorted({
-            stable_id("catalog", "__page__|" + page_id)
-            for page_id in record_page_ids
-        })
-        record["page_catalog_ids"] = record_page_catalog_ids
-        record_catalogs.append({
-            "catalog_id": record.get("record_catalog_id") or stable_id("record-catalog", record_id),
-            "record_id": record_id,
-            "title": _title(record.get("title")) or record_id,
-            "record_type": record.get("record_type", "other"),
-            "page_catalog_ids": record_page_catalog_ids,
-            "source_catalog_ids": sorted(set(record.get("catalog_ids", []))),
-            "source_page_ids": sorted(set(record.get("source_page_ids", []))),
-            "source_urls": sorted(set(record.get("source_urls", []))),
-            "record_ids": [record_id],
-            "catalog_origin": "record_owned_identity_catalog",
-            "status": "identity_container_pending_validation",
-            "source_terms_status": "not_reviewed",
-            "rights_status": "publicly_accessible_not_cleared_for_redistribution",
-            "public_search_allowed": False,
-            "verified": False,
-        })
-    metrics = {
-        "page_catalogs": len(page_catalogs),
-        "page_catalogs_with_records": sum(bool(item["record_ids"]) for item in page_catalogs),
-        "page_catalogs_without_records": sum(not bool(item["record_ids"]) for item in page_catalogs),
-        "pages_with_page_catalogs": len(page_catalogs),
-        "record_owned_catalogs": len(record_catalogs),
-    }
-    return metrics, page_catalogs, record_catalogs
 
 
 def analyze_pages(
@@ -1803,8 +1693,6 @@ def analyze_pages(
     global_subject_catalogs = _add_global_subject_catalogs(pages, page_rows, records, catalogs)
     _reconcile_page_record_provenance(page_rows, records)
     global_typed_catalogs_by_type = _add_global_typed_entity_catalogs(page_rows, records, catalogs)
-    record_catalog_metrics = _attach_record_catalogs(page_rows, records)
-    page_catalog_metrics, page_catalog_list, record_catalog_list = _add_page_catalogs(page_rows, records)
 
     for item in records.values():
         item["source_urls"] = sorted(item["source_urls"])
@@ -1819,6 +1707,7 @@ def analyze_pages(
     record_list = sorted(records.values(), key=lambda x: (x["record_type"], x["title"].casefold(), x["record_id"]))
     catalog_list = sorted(catalogs.values(), key=lambda x: (x["catalog_type"], x["title"].casefold(), x["catalog_id"]))
     discovered_catalog_list = catalog_list
+    catalog_coverage_by_source_page = _catalog_membership_coverage_by_source_page(page_rows, discovered_catalog_list)
     type_counts = dict(sorted(Counter(x["record_type"] for x in record_list).items()))
     source_total = max(source_total if isinstance(source_total, int) and source_total >= 0 else source_page_rows, source_page_rows)
     unique_source_total = max(len(pages), source_total - duplicate_source_page_rows)
@@ -1851,18 +1740,8 @@ def analyze_pages(
         "global_typed_catalog_record_associations": sum(len(x.get("record_ids", [])) for x in discovered_catalog_list if x.get("catalog_origin") == "derived_from_global_typed_records"),
         "catalogs_by_origin": dict(sorted(Counter(x.get("catalog_origin") or "unknown" for x in discovered_catalog_list).items())),
         "unique_catalogs_discovered": len(discovered_catalog_list),
-                "record_catalogs": record_catalog_metrics["record_catalogs"],
-        "page_catalogs": page_catalog_metrics["page_catalogs"],
-        "page_catalogs_with_records": page_catalog_metrics["page_catalogs_with_records"],
-        "page_catalogs_without_records": page_catalog_metrics["page_catalogs_without_records"],
-        "record_owned_catalogs": page_catalog_metrics["record_owned_catalogs"],
-        "pages_with_page_catalogs": page_catalog_metrics["pages_with_page_catalogs"],
-        "records_with_owned_catalogs": page_catalog_metrics["record_owned_catalogs"],
-        "record_pages_with_catalogs": record_catalog_metrics["record_pages_with_catalogs"],
-        "record_catalog_membership_edges": record_catalog_metrics["record_catalog_membership_edges"],
-        "record_catalogs_with_shared_sources": record_catalog_metrics["record_catalogs_with_shared_sources"],
-        "record_catalogs_awaiting_related_items": record_catalog_metrics["record_catalogs_awaiting_related_items"],
-        "unique_catalogs_by_type": dict(sorted(Counter(x["catalog_type"] for x in discovered_catalog_list).items())),
+        **catalog_coverage_by_source_page,
+                "unique_catalogs_by_type": dict(sorted(Counter(x["catalog_type"] for x in discovered_catalog_list).items())),
         "source_declared_catalogs": sum(bool(x.get("is_source_declared_catalog")) for x in discovered_catalog_list),
         "derived_catalogs": sum(x.get("catalog_origin") in {"derived_from_repeated_records", "derived_from_global_typed_records"} for x in discovered_catalog_list),
         "content_list_catalogs": sum(x.get("catalog_origin") == "content_list_declared_collection" for x in discovered_catalog_list),
@@ -1924,8 +1803,6 @@ def analyze_pages(
         "source_index_sha256": source_index_sha256,
         "metrics": metrics,
         "catalogs": catalog_list,
-        "page_catalogs": page_catalog_list,
-        "record_catalogs": record_catalog_list,
         "records": record_list,
         "pages": page_rows,
         "media_urls": sorted(media_urls),
@@ -2173,8 +2050,6 @@ def analyze_pages_incremental(
         }, sort_keys=True), flush=True)
     _reconcile_page_record_provenance(all_page_rows, all_records)
     global_typed_catalogs_by_type = _add_global_typed_entity_catalogs(all_page_rows, all_records, all_catalogs)
-    record_catalog_metrics = _attach_record_catalogs(all_page_rows, all_records)
-    page_catalog_metrics, page_catalog_list, record_catalog_list = _add_page_catalogs(all_page_rows, all_records)
     if progress:
         print(json.dumps({
             "stage": "catalog_global_typed_catalogs_complete",
@@ -2201,6 +2076,7 @@ def analyze_pages_incremental(
     eligibility_rate = (eligible / len(pages) * 100.0) if pages else 0.0
     source_row_deduplication = (duplicate_source_page_rows / source_page_rows * 100.0) if source_page_rows else 0.0
     discovered_catalogs = all_catalogs
+    catalog_coverage_by_source_page = _catalog_membership_coverage_by_source_page(all_page_rows, discovered_catalogs)
     page_refs = sum(len(x.get("source_page_ids", [])) for x in discovered_catalogs)
     type_counts = dict(sorted(Counter(x["record_type"] for x in all_records).items()))
     metrics = {
@@ -2222,11 +2098,7 @@ def analyze_pages_incremental(
         "global_typed_catalog_record_associations": sum(len(x.get("record_ids", [])) for x in discovered_catalogs if x.get("catalog_origin") == "derived_from_global_typed_records"),
         "catalogs_by_origin": dict(sorted(Counter(x.get("catalog_origin") or "unknown" for x in discovered_catalogs).items())),
         "unique_catalogs_discovered": len(discovered_catalogs),
-        "record_catalogs": record_catalog_metrics["record_catalogs"],
-        "record_pages_with_catalogs": record_catalog_metrics["record_pages_with_catalogs"],
-        "record_catalog_membership_edges": record_catalog_metrics["record_catalog_membership_edges"],
-        "record_catalogs_with_shared_sources": record_catalog_metrics["record_catalogs_with_shared_sources"],
-        "record_catalogs_awaiting_related_items": record_catalog_metrics["record_catalogs_awaiting_related_items"],
+        **catalog_coverage_by_source_page,
         "unique_catalogs_by_type": dict(sorted(Counter(x["catalog_type"] for x in discovered_catalogs).items())),
         "source_declared_catalogs": sum(bool(x.get("is_source_declared_catalog")) for x in discovered_catalogs),
         "derived_catalogs": sum(x.get("catalog_origin") in {"derived_from_repeated_records", "derived_from_global_typed_records"} for x in discovered_catalogs),
@@ -2280,8 +2152,7 @@ def analyze_pages_incremental(
         "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
         "source_index_pages": source_total, "source_index_updated_at": source_updated_at,
         "source_index_sha256": source_index_sha256, "metrics": metrics,
-        "catalogs": all_catalogs, "page_catalogs": page_catalog_list,
-        "record_catalogs": record_catalog_list,
+        "catalogs": all_catalogs,
         "records": all_records, "pages": all_page_rows,
         "media_urls": sorted(all_media),
         "media_references": sorted(
@@ -2878,6 +2749,10 @@ def build_search_index(analysis: dict) -> dict[str, dict]:
 def write_outputs(analysis: dict, output_dir: Path) -> dict:
     apply_source_policy_reviews(analysis)
     output_dir.mkdir(parents=True, exist_ok=True)
+    for obsolete_name in ("page-catalogs.json.gz", "record-catalogs.json.gz"):
+        obsolete_path = output_dir / obsolete_name
+        if obsolete_path.is_file():
+            obsolete_path.unlink()
     files = []
     for catalog in analysis["catalogs"]:
         index_digest = hashlib.sha256(catalog["catalog_id"].encode("utf-8")).hexdigest()
@@ -2890,14 +2765,6 @@ def write_outputs(analysis: dict, output_dir: Path) -> dict:
         "pages": analysis["pages"],
     })
     files.append({"file": "pages.json.gz", "bytes": size, "sha256": digest, "items": len(analysis["pages"])})
-    size, digest = _write_gzip(output_dir / "page-catalogs.json.gz", {
-        "version": 1, "catalogs": analysis.get("page_catalogs", []),
-    })
-    files.append({"file": "page-catalogs.json.gz", "bytes": size, "sha256": digest, "items": len(analysis.get("page_catalogs", []))})
-    size, digest = _write_gzip(output_dir / "record-catalogs.json.gz", {
-        "version": 1, "catalogs": analysis.get("record_catalogs", []),
-    })
-    files.append({"file": "record-catalogs.json.gz", "bytes": size, "sha256": digest, "items": len(analysis.get("record_catalogs", []))})
     search_shards = build_search_index(analysis)
     if not search_shards:
         search_shards = {"00": {"version": 1, "prefix": "00", "tokens": {}}}
@@ -3036,6 +2903,16 @@ def validate_outputs(output_dir: Path) -> dict:
         item["page_id"] for item in pages
         if isinstance(item, dict) and item.get("page_id")
     }
+    source_page_ids = [item.get("page_id") for item in pages if isinstance(item, dict) and item.get("page_id")]
+    if len(source_page_ids) != len(set(source_page_ids)):
+        raise ValueError("source page registry contains duplicate page IDs")
+    for page in pages:
+        if page.get("eligible") is True and not page.get("page_id"):
+            raise ValueError("eligible source page is missing its canonical page ID")
+        if page.get("page_id"):
+            canonical_page_url = canonical_url(page.get("url"))
+            if not canonical_page_url or stable_id("page", canonical_page_url) != page.get("page_id"):
+                raise ValueError("source page ID does not match its canonical URL")
     record_ids = [x["record_id"] for x in records]
     records_by_id = {x["record_id"]: x for x in records}
     if len(record_ids) != len(set(record_ids)) or len(records) != manifest["record_count"]:
@@ -3046,12 +2923,8 @@ def validate_outputs(output_dir: Path) -> dict:
             raise ValueError("source page record relationships are malformed or duplicated")
         if page.get("record_id") and page["record_id"] not in page_record_ids:
             raise ValueError("primary page record is missing from its record relationship list")
-        expected_record_catalog_ids = sorted({
-            records_by_id[record_id]["record_catalog_id"]
-            for record_id in page_record_ids if record_id in records_by_id
-        })
-        if page.get("record_catalog_ids") != expected_record_catalog_ids:
-            raise ValueError("record page is missing its per-record related-catalog links")
+        if "page_catalog_id" in page or "record_catalog_ids" in page:
+            raise ValueError("source pages must remain distinct from catalog definitions")
         for related_record_id in page_record_ids:
             related_record = records_by_id.get(related_record_id)
             if related_record is None:
@@ -3064,8 +2937,8 @@ def validate_outputs(output_dir: Path) -> dict:
                     f"{related_record_id}, but its provenance lists {related_record.get('source_page_ids', [])[:8]}"
                 )
     for record in records:
-        if record.get("record_catalog_id") != stable_id("record-catalog", record.get("record_id", "")):
-            raise ValueError("record-related catalog identity is invalid")
+        if "record_catalog_id" in record or "page_catalog_ids" in record:
+            raise ValueError("individual records must remain distinct from catalog definitions")
         if stable_id("record", record.get("canonical_entity_key", "")) != record.get("record_id"):
             raise ValueError("record ID does not match its canonical entity key")
         if record.get("commercial_eligible") is not False or record.get("source_terms_status") != "not_reviewed":
@@ -3132,6 +3005,8 @@ def validate_outputs(output_dir: Path) -> dict:
             raise ValueError("catalog record count does not match its membership")
         if catalog.get("source_page_count") != len(catalog.get("source_page_ids", [])):
             raise ValueError("catalog source-page count does not match its provenance")
+        if len(catalog.get("source_page_ids", [])) != len(set(catalog.get("source_page_ids", []))):
+            raise ValueError("catalog source-page provenance contains duplicates")
         if not set(catalog.get("source_page_ids", [])).issubset(page_ids):
             raise ValueError("catalog provenance references an unknown source page")
         related_ids = catalog.get("record_ids", [])
@@ -3221,6 +3096,14 @@ def validate_outputs(output_dir: Path) -> dict:
     if index_catalog_ids != set(catalog_ids):
         raise ValueError("one or more catalogs are missing a per-catalog index")
     metrics = manifest.get("metrics", {})
+    eligible_page_count = sum(1 for item in pages if item.get("eligible") is True)
+    with_catalogs = metrics.get("eligible_source_pages_with_catalogs")
+    without_catalogs = metrics.get("eligible_source_pages_without_catalogs")
+    multiple_catalogs = metrics.get("eligible_source_pages_with_multiple_catalogs")
+    if not all(isinstance(value, int) and value >= 0 for value in (with_catalogs, without_catalogs, multiple_catalogs)):
+        raise ValueError("source-page catalog coverage metrics are missing or invalid")
+    if with_catalogs + without_catalogs != eligible_page_count or multiple_catalogs > with_catalogs:
+        raise ValueError("source-page catalog coverage metrics do not match eligible pages")
     if (
         not search_index_prefixes
         or metrics.get("search_index_tokens") != len(search_index_tokens)
