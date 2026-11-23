@@ -16,6 +16,7 @@ test('search API exposes validated universal catalog record matches as preview c
   const handlerPath = require.resolve('../src/api/search');
   const originalHandler = require.cache[handlerPath];
   const originalHttpsGet = https.get;
+  const originalConsoleWarn = console.warn;
 
   const universalCard = {
     catalog_id: 'catalog:las-vegas-transit',
@@ -64,11 +65,7 @@ test('search API exposes validated universal catalog record matches as preview c
   require.cache[modulePaths[0]] = {
     id: modulePaths[0], filename: modulePaths[0], loaded: true,
     exports: {
-      loadCatalog: async () => ({
-        pages: [], indexedPages: 1, updatedAt: 1795290000,
-        sha256: 'a'.repeat(64), source: 'test', integrity: 'sha256',
-        shardCount: 1, transport: 'test', stale: false
-      })
+      loadCatalog: async () => { throw new Error('query_index_too_broad'); }
     }
   };
   require.cache[modulePaths[1]] = {
@@ -109,6 +106,7 @@ test('search API exposes validated universal catalog record matches as preview c
     }
   };
   https.get = () => { throw new Error('bing_disabled_for_test'); };
+  console.warn = () => {};
 
   try {
     delete require.cache[handlerPath];
@@ -121,6 +119,10 @@ test('search API exposes validated universal catalog record matches as preview c
     };
     await handler({ method: 'GET', url: '/api/search?q=Las%20Vegas&limit=10&lane=shopping' }, response);
     assert.equal(response.statusCode, 200);
+    assert.equal(response.body.fallback, true);
+    assert.equal(response.body.indexStatus, 'catalog-preview-fallback');
+    assert.equal(response.body.searchScope, 'universal-catalog-preview');
+    assert.equal(response.body.indexScan.universalCatalogPreviewResults, 1);
     assert.equal(response.body.catalogResults.length, 1);
     assert.equal(response.body.catalogResults[0].catalog_id, 'catalog:las-vegas-transit');
     assert.equal(response.body.catalogResults[0].preview_only, true);
@@ -132,6 +134,7 @@ test('search API exposes validated universal catalog record matches as preview c
     assert.ok(response.body.providers.includes('Everything Hub Universal Catalog Preview'));
   } finally {
     https.get = originalHttpsGet;
+    console.warn = originalConsoleWarn;
     delete require.cache[handlerPath];
     if (originalHandler) require.cache[handlerPath] = originalHandler;
     modulePaths.forEach((path, index) => {
