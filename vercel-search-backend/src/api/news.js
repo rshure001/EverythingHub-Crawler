@@ -32,6 +32,8 @@ const NEWS_FEEDS = {
     { source: "The White House", url: "https://www.whitehouse.gov/releases/feed/" },
     { source: "NASA News Releases", url: "https://www.nasa.gov/news-release/feed/", headlinesOnly: true },
     { source: "NASA Recently Published", url: "https://www.nasa.gov/feed/", headlinesOnly: true },
+    { source: "NIST", url: "https://www.nist.gov/news-events/news/rss.xml", headlinesOnly: true },
+    { source: "National Science Foundation", url: "https://www.nsf.gov/rss/rss_www_news.xml", headlinesOnly: true },
     { source: "NOAA", url: "https://www.noaa.gov/rss.xml" },
     { source: "Federal Reserve", url: "https://www.federalreserve.gov/feeds/press_all.xml" }
   ],
