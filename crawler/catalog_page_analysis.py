@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_INDEX = ROOT / "data" / "index.json"
 DEFAULT_OUTPUT = ROOT / "data" / "page-derived-catalogs"
 DEFAULT_SOURCE_POLICY_REVIEWS = ROOT / "data" / "source-policy-reviews.json"
-ANALYZER_VERSION = 19
+ANALYZER_VERSION = 20
 TRACKING_KEYS = {"fbclid", "gclid", "dclid", "mc_cid", "mc_eid", "ref", "source"}
 STOP_TOKENS = {
     "the", "and", "for", "with", "from", "our", "your", "all", "new", "home", "page",
@@ -2339,6 +2339,8 @@ def search_catalog_network(query: str, analysis: dict, limit: int = 10) -> list[
     location_business_intent = business_intent and not content_intent
     results = []
     for catalog in analysis.get("catalogs", []):
+        if catalog.get("public_search_allowed") is False:
+            continue
         related = [records[x] for x in catalog.get("record_ids", []) if x in records]
         catalog_text = _norm(" ".join((catalog.get("title", ""), catalog.get("subject", ""))))
         catalog_tokens = set(catalog_text.split())
@@ -2808,7 +2810,7 @@ def build_search_index(analysis: dict) -> dict[str, dict]:
     token_catalogs: dict[str, set[str]] = defaultdict(set)
 
     for catalog in analysis.get("catalogs", []):
-        if not isinstance(catalog, dict):
+        if not isinstance(catalog, dict) or catalog.get("public_search_allowed") is False:
             continue
         catalog_id = catalog.get("catalog_id")
         if catalog_id not in catalog_ids:
