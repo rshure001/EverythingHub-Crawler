@@ -506,6 +506,88 @@ async function loadCatalogIndex(network, catalog, fetchImpl) {
   return payload.records;
 }
 
+export async function resolveRecordRelatedCatalogPreview(
+  recordCatalogId,
+  sharedCatalogIds,
+  network,
+  limit = 20,
+  offset = 0,
+  fetchImpl = fetch,
+) {
+  const key = String(recordCatalogId || "").trim();
+  if (!key || key.length > 160 || !Array.isArray(sharedCatalogIds) ||
+      !sharedCatalogIds.length || sharedCatalogIds.length > MAX_CATALOG_INDEX_FETCHES ||
+      !network || !network.catalogsById || typeof fetchImpl !== "function") {
+    throw new Error("record_catalog_request_invalid");
+  }
+  const ids = Array.from(new Set(sharedCatalogIds.map((id) => String(id || "").trim())));
+  if (ids.length !== sharedCatalogIds.length || ids.some((id) => !id || !network.catalogsById.has(id))) {
+    throw new Error("record_catalog_membership_invalid");
+  }
+  const catalogs = ids.map((id) => network.catalogsById.get(id));
+  const batches = [];
+  for (let i = 0; i < catalogs.length; i += 4) batches.push(catalogs.slice(i, i + 4));
+  const indexGroups = await Promise.all(batches.map((batch) =>
+    Promise.all(batch.map((catalog) => loadCatalogIndex(network, catalog, fetchImpl)))
+  ));
+  let owner = null;
+  const related = new Map();
+  for (const records of indexGroups.flat()) {
+    for (const record of records) {
+      if (record.record_catalog_id === key) {
+        if (owner && owner.record_id !== record.record_id) {
+          throw new Error("record_catalog_identity_collision");
+        }
+        owner = record;
+      }
+      if (owner && record.record_id === owner.record_id) continue;
+      related.set(record.record_id, record);
+    }
+  }
+  if (!owner) return null;
+  if (ids.some((id) => !owner.catalog_ids.includes(id))) {
+    throw new Error("record_catalog_membership_mismatch");
+  }
+  related.delete(owner.record_id);
+  const ordered = Array.from(related.values()).sort((a, b) =>
+    String(a.title || "").localeCompare(String(b.title || "")) ||
+    String(a.record_id || "").localeCompare(String(b.record_id || ""))
+  );
+  const safeOffset = Math.max(0, Math.min(5000, Number.isInteger(offset) ? offset : 0));
+  const safeLimit = Math.max(1, Math.min(50, Number.isInteger(limit) ? limit : 20));
+  return {
+    record_catalog_id: key,
+    owner_record: {
+      record_id: owner.record_id,
+      record_catalog_id: owner.record_catalog_id,
+      title: owner.title,
+      record_type: owner.record_type,
+      description: String(owner.description || "").slice(0, 700),
+      source_urls: owner.source_urls || [],
+      source_page_ids: owner.source_page_ids || [],
+      shared_catalog_ids: owner.catalog_ids || [],
+    },
+    related_count: ordered.length,
+    offset: safeOffset,
+    limit: safeLimit,
+    has_more: safeOffset + safeLimit < ordered.length,
+    related_records: ordered.slice(safeOffset, safeOffset + safeLimit).map((record) => ({
+      record_id: record.record_id,
+      record_catalog_id: String(record.record_catalog_id || ""),
+      title: String(record.title || "Untitled record").slice(0, 240),
+      record_type: String(record.record_type || "record"),
+      description: String(record.description || "").slice(0, 700),
+      source_urls: record.source_urls || [],
+      source_page_ids: record.source_page_ids || [],
+      shared_catalog_ids: record.catalog_ids || [],
+      last_seen_at: record.last_seen_at || null,
+      source_terms_status: record.source_terms_status || "not_reviewed",
+      record_level_clearance: record.record_level_clearance || "not_reviewed",
+      commercial_eligible: false,
+    })),
+  };
+}
+
 export async function loadPageDerivedCatalogPreview({ fetchImpl = fetch } = {}) {
   if (typeof fetchImpl !== "function") throw new TypeError("fetchImpl must be a function");
   const now = Date.now();
@@ -755,6 +837,8 @@ function searchCatalogRecords(query, network, limit = 5) {
     if (!matched.length) continue;
     const matchedRecords = matched.slice(0, 5).map(({ record }) => ({
       record_id: record.record_id,
+      record_catalog_id: String(record.record_catalog_id || ""),
+      shared_catalog_ids: Array.isArray(record.catalog_ids) ? record.catalog_ids : [],
       title: String(record.title || "Untitled record").slice(0, 240),
       record_type: String(record.record_type || "record"),
       source_url: (record.source_urls || []).map(safeUrl).find(Boolean) || "",
