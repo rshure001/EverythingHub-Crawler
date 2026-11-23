@@ -61,6 +61,39 @@ def _request_json(url: str) -> dict[str, Any]:
     return payload
 
 def _clean_text(value: Any, limit: int = 2000) -> str:
+    """Return readable CKAN metadata, selecting a stable localized string when needed."""
+    if isinstance(value, dict):
+        # CKAN portals such as opendata.swiss return localized fields as
+        # {"de": "...", "en": "", "fr": "", "it": ""}. Prefer English,
+        # then French, German, and Italian, skipping empty translations.
+        localized = [
+            (str(key).casefold().replace("_", "-").split("-", 1)[0], item)
+            for key, item in value.items()
+        ]
+        for language in ("en", "fr", "de", "it"):
+            candidate = next(
+                (
+                    item for key, item in sorted(localized, key=lambda pair: pair[0])
+                    if key == language and isinstance(item, str) and item.strip()
+                ),
+                None,
+            )
+            if candidate is not None:
+                value = candidate
+                break
+        else:
+            # Some CKAN extensions use a nonstandard locale key. Use the
+            # first non-empty string deterministically rather than exposing
+            # Python's dictionary representation in public search results.
+            value = next(
+                (
+                    item for _key, item in sorted(value.items(), key=lambda pair: str(pair[0]))
+                    if isinstance(item, str) and item.strip()
+                ),
+                "",
+            )
+    elif isinstance(value, (list, tuple)):
+        value = " ".join(item.strip() for item in value if isinstance(item, str) and item.strip())
     return " ".join(str(value or "").split())[:limit]
 
 def normalize_dataset(dataset: dict[str, Any], source: dict[str, Any]) -> dict[str, Any] | None:
