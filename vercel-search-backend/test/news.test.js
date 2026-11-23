@@ -28,7 +28,8 @@ function mockRes() {
 
 function feedXml(host, path = "/") {
   const pathKey = path.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") || "root";
-  return "<rss><channel><item><title>Update from " + host + " " + pathKey + "</title><link>https://" + host + "/news/" + pathKey + "</link><pubDate>Sun, 22 Nov 2026 12:00:00 GMT</pubDate><description><![CDATA[<p>Current public update from " + host + ".</p>]]></description></item></channel></rss>";
+  const publishedAt = new Date(Date.now() - 60 * 60 * 1000).toUTCString();
+  return "<rss><channel><item><title>Update from " + host + " " + pathKey + "</title><link>https://" + host + "/news/" + pathKey + "</link><pubDate>" + publishedAt + "</pubDate><description><![CDATA[<p>Current public update from " + host + ".</p>]]></description></item></channel></rss>";
 }
 
 test("NASA news releases provide a current headline-only feed in the public science lanes", () => {
@@ -61,6 +62,47 @@ test("NASA Recently Published provides a headline-only fallback in the public ne
   assert.equal(items[0].source, "NASA Recently Published");
   assert.equal(items[0].publishedAt, "2026-11-22T12:00:00.000Z");
   assert.equal(items[0].summary, "");
+});
+
+test("For You includes NIST and NSF as headline-only current-news fallbacks", () => {
+  const expected = [
+    { source: "NIST", url: "https://www.nist.gov/news-events/news/rss.xml" },
+    { source: "National Science Foundation", url: "https://www.nsf.gov/rss/rss_www_news.xml" }
+  ];
+  for (const item of expected) {
+    assert.ok(NEWS_FEEDS["for-you"].some(feed =>
+      feed.source === item.source && feed.url === item.url && feed.headlinesOnly === true
+    ));
+  }
+});
+
+test("For You stays current when NASA feeds are temporarily unavailable", async () => {
+  const originalFetch = global.fetch;
+  global.fetch = async url => {
+    const value = String(url);
+    if (value.endsWith("/robots.txt")) {
+      return mockResponse(200, "User-agent: *\nAllow: /\n", value);
+    }
+    if (new URL(value).hostname === "www.nasa.gov") {
+      return mockResponse(503, "temporary upstream outage", value);
+    }
+    const parsed = new URL(value);
+    return mockResponse(200, feedXml(parsed.hostname, parsed.pathname), value);
+  };
+  try {
+    const res = mockRes();
+    await handler({ method: "GET", query: { category: "for-you" } }, res);
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.body.status, "ok");
+    assert.ok(res.body.sources.includes("NIST"));
+    assert.ok(res.body.sources.includes("National Science Foundation"));
+    assert.ok(res.body.sourcesUnavailable.includes("NASA News Releases"));
+    assert.ok(res.body.sourcesUnavailable.includes("NASA Recently Published"));
+    const newest = Math.max(...res.body.items.map(item => Date.parse(item.publishedAt)));
+    assert.ok(Date.now() - newest < 24 * 60 * 60 * 1000);
+  } finally {
+    global.fetch = originalFetch;
+  }
 });
 
 test.beforeEach(() => {
