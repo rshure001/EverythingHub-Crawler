@@ -25,6 +25,7 @@ DEFAULT_INDEX = ROOT / "data" / "index.json"
 DEFAULT_OUTPUT = ROOT / "data" / "page-derived-catalogs"
 DEFAULT_SOURCE_POLICY_REVIEWS = ROOT / "data" / "source-policy-reviews.json"
 ANALYZER_VERSION = 21
+HOST_CACHE_VERSION = 2
 TRACKING_KEYS = {"fbclid", "gclid", "dclid", "mc_cid", "mc_eid", "ref", "source"}
 STOP_TOKENS = {
     "the", "and", "for", "with", "from", "our", "your", "all", "new", "home", "page",
@@ -2084,7 +2085,11 @@ def analyze_pages_incremental(
         if cache_path.exists():
             try:
                 cached = json.loads(gzip.decompress(cache_path.read_bytes()).decode("utf-8"))
-                if cached.get("analyzer_version") == ANALYZER_VERSION and cached.get("input_sha256") == digest:
+                if (
+                    cached.get("analyzer_version") == ANALYZER_VERSION
+                    and cached.get("host_cache_version") == HOST_CACHE_VERSION
+                    and cached.get("input_sha256") == digest
+                ):
                     shard = cached.get("analysis")
                     cache_status = "reused"
                     reused += 1
@@ -2107,7 +2112,12 @@ def analyze_pages_incremental(
                 progress_callback=report_host_progress if progress else None,
                 include_identity_catalogs=False,
             )
-            raw = json.dumps({"analyzer_version": ANALYZER_VERSION, "input_sha256": digest, "analysis": shard}, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+            raw = json.dumps({
+                "analyzer_version": ANALYZER_VERSION,
+                "host_cache_version": HOST_CACHE_VERSION,
+                "input_sha256": digest,
+                "analysis": shard,
+            }, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
             temp = cache_path.with_suffix(".tmp")
             temp.write_bytes(gzip.compress(raw, compresslevel=6, mtime=0))
             temp.replace(cache_path)
