@@ -210,7 +210,24 @@ def adapt(manifest: dict[str, Any]) -> dict[str, Any]:
                 or resource_rights_present
             )
             private_dataset = license_info.get("private") is True
-            closed_license = license_info.get("is_open") is False
+            rights_values = [license_info.get("rights"), license_info.get("title"), license_info.get("id")]
+            rights_values.extend(
+                resource.get("rights")
+                for resource in (dataset.get("resources") or [])
+                if isinstance(resource, dict)
+            )
+            rights_text = " ".join(str(value or "").casefold() for value in rights_values)
+            explicit_open_rights = (
+                any(marker in rights_text for marker in (
+                    "open use", "public domain", "cc0", "cc-by",
+                    "creative commons attribution", "open government licence",
+                    "open government license",
+                ))
+                and not any(marker in rights_text for marker in (
+                    "noncommercial", "non-commercial", "no derivatives", "cc-by-nc", "cc-by-nd",
+                ))
+            )
+            closed_license = license_info.get("is_open") is False and not explicit_open_rights
             public_search_allowed = (
                 catalog_policy_approved
                 and rights_metadata_present
