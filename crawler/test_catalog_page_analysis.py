@@ -1771,7 +1771,7 @@ class CatalogInventoryTriggerTests(unittest.TestCase):
         self.assertEqual(nasa_catalog["record_count"], 3)
         self.assertEqual(nasa_catalog["source_page_count"], 3)
 
-    def test_cache_only_builds_host_checkpoints_without_global_record_merges(self):
+    def test_cache_only_builds_host_checkpoints_without_global_record_map(self):
         pages = [
             {"url": "https://one.example/nasa/one", "title": "NASA Apollo Alpha", "description": "Spaceflight history", "fetched_at": 100, "robots_allowed": True},
             {"url": "https://two.example/nasa/two", "title": "NASA Hubble Beta", "description": "Space telescope", "fetched_at": 200, "robots_allowed": True},
@@ -1779,7 +1779,7 @@ class CatalogInventoryTriggerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             with patch.object(
                 analysis_module,
-                "_merge_cross_host_record_into",
+                "_prepare_cross_host_record",
                 side_effect=AssertionError("cache-only mode must not build the global record map"),
             ):
                 result = analyze_pages_incremental(
