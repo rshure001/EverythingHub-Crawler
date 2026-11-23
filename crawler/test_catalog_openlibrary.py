@@ -23,9 +23,11 @@ class OpenLibraryCatalogTests(unittest.TestCase):
                 "subject": ["science", "history"],
             }],
         }
-        with patch.object(catalog_openlibrary, "request_subject", return_value=payload):
-            with patch.object(catalog_openlibrary, "SUBJECTS", ("science",)):
-                result = catalog_openlibrary.discover(pause=0, allow_api=True)
+        approved = {"discovery_allowed": True, "terms_status": "reviewed_per_dataset", "reviewed_at": "2026-11-21"}
+        with patch.object(catalog_openlibrary, "policy_for_host", return_value=approved):
+            with patch.object(catalog_openlibrary, "request_subject", return_value=payload):
+                with patch.object(catalog_openlibrary, "SUBJECTS", ("science",)):
+                    result = catalog_openlibrary.discover(pause=0, allow_api=True)
 
         self.assertEqual(result["catalog_count"], 1)
         self.assertEqual(result["datasets_discovered"], 1)
@@ -39,9 +41,11 @@ class OpenLibraryCatalogTests(unittest.TestCase):
 
     def test_ignores_invalid_work_keys(self):
         payload = {"work_count": 1, "works": [{"key": "/authors/OL9A", "title": "Not a work"}]}
-        with patch.object(catalog_openlibrary, "request_subject", return_value=payload):
-            with patch.object(catalog_openlibrary, "SUBJECTS", ("science",)):
-                result = catalog_openlibrary.discover(pause=0, allow_api=True)
+        approved = {"discovery_allowed": True, "terms_status": "reviewed_per_dataset", "reviewed_at": "2026-11-21"}
+        with patch.object(catalog_openlibrary, "policy_for_host", return_value=approved):
+            with patch.object(catalog_openlibrary, "request_subject", return_value=payload):
+                with patch.object(catalog_openlibrary, "SUBJECTS", ("science",)):
+                    result = catalog_openlibrary.discover(pause=0, allow_api=True)
         self.assertEqual(result["datasets_discovered"], 0)
 
 
