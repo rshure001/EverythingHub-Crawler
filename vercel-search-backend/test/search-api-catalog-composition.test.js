@@ -14,6 +14,8 @@ test('curated external catalogs do not bypass the indexed catalog loader', async
   const httpsGet = https.get;
   let pageDerivedCalls = 0;
   let externalCalls = 0;
+  let capturedLane = null;
+  let capturedBingResults = null;
 
   require.cache[modulePaths[0]] = { id: modulePaths[0], filename: modulePaths[0], loaded: true, exports: {
     loadCatalog: async () => ({ pages: [], indexedPages: 1, updatedAt: 1795290000, sha256: 'a'.repeat(64), source: 'test', integrity: 'sha256', shardCount: 1, transport: 'test', stale: false })
@@ -28,9 +30,10 @@ test('curated external catalogs do not bypass the indexed catalog loader', async
     getExternalCatalogStats: () => ({ catalogCount: 1, recordCount: 6 })
   }};
   require.cache[modulePaths[3]] = { id: modulePaths[3], filename: modulePaths[3], loaded: true, exports: {
-    searchCatalog: () => [],
+    searchCatalog: (_pages, _query, lane) => { capturedLane = lane; return []; },
+    resolveLaneFilters: lane => lane === 'shopping' ? new Set(['commerce']) : new Set(),
     parseBingRss: () => [],
-    buildResponse: () => ({ status: 'ok', providers: [], results: [], count: 0, totalMatches: 0 })
+    buildResponse: options => { capturedBingResults = options.bingResults; return { status: 'ok', providers: [], results: [], count: 0, totalMatches: 0 }; }
   }};
   https.get = () => { throw new Error('bing_disabled_for_test'); };
 
@@ -44,12 +47,14 @@ test('curated external catalogs do not bypass the indexed catalog loader', async
       status(code) { this.statusCode = code; return this; },
       json(value) { this.body = value; return this; }
     };
-    await handler({ method: 'GET', url: '/api/search?q=Rolex&limit=10' }, response);
+    await handler({ method: 'GET', url: '/api/search?q=Rolex&limit=10&lane=shopping' }, response);
     assert.equal(response.statusCode, 200);
     assert.equal(pageDerivedCalls, 1, 'query-scoped catalog loader should run');
     assert.equal(externalCalls, 1, 'curated external catalog should still be included');
     assert.equal(response.body.externalCatalogResults[0].catalog_id, 'external:rolex');
     assert.equal(response.body.catalogPreview.status, 'candidate-preview');
+    assert.equal(capturedLane, 'shopping');
+    assert.deepEqual(capturedBingResults, [], 'lane-scoped searches must not include unfiltered Bing results');
   } finally {
     https.get = httpsGet;
     delete require.cache[require.resolve('../src/api/search')];
@@ -86,6 +91,7 @@ test('fallback responses keep curated external catalogs visible when either inde
   }};
   require.cache[modulePaths[3]] = { id: modulePaths[3], filename: modulePaths[3], loaded: true, exports: {
     searchCatalog: () => [],
+    resolveLaneFilters: () => new Set(),
     parseBingRss: () => [],
     buildResponse: () => ({ status: 'ok', providers: [], results: [], count: 0, totalMatches: 0 })
   }};
@@ -171,6 +177,7 @@ test('broad-query fallback surfaces provenance-backed page-derived catalog recor
   }};
   require.cache[modulePaths[3]] = { id: modulePaths[3], filename: modulePaths[3], loaded: true, exports: {
     searchCatalog: () => [],
+    resolveLaneFilters: () => new Set(),
     parseBingRss: () => [],
     buildResponse: () => ({ status: 'ok', providers: [], results: [], count: 0, totalMatches: 0 })
   }};
