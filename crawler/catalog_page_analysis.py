@@ -984,6 +984,113 @@ def _catalog_membership_coverage_by_source_page(page_rows: list[dict], catalogs:
     }
 
 
+def _build_identity_catalogs(page_rows: list[dict], records, stream_catalogs: bool = False):
+    """Build private one-to-one page/record identity registries.
+
+    These sidecars are deliberately separate from evidence-backed catalog
+    definitions, source page rows, record rows, and public search indexes.
+    """
+    record_map = records if isinstance(records, dict) else {
+        item["record_id"]: item for item in records
+        if isinstance(item, dict) and item.get("record_id")
+    }
+    page_rows_by_id = {
+        page["page_id"]: page for page in page_rows
+        if isinstance(page, dict) and page.get("page_id") and page.get("url")
+    }
+    record_ids_by_page: dict[str, set[str]] = defaultdict(set)
+    for page_id, page in page_rows_by_id.items():
+        record_ids_by_page[page_id].update(
+            record_id for record_id in page.get("record_ids", [])
+            if record_id in record_map
+        )
+    for record_id, record in record_map.items():
+        for page_id in record.get("source_page_ids", []):
+            if page_id in page_rows_by_id:
+                record_ids_by_page[page_id].add(record_id)
+
+    def iter_page_catalogs():
+        for page_id in sorted(page_rows_by_id):
+            page = page_rows_by_id[page_id]
+            url = page["url"]
+            title = _title(page.get("title")) or url
+            record_ids = sorted(record_ids_by_page.get(page_id, set()))
+            yield {
+                "catalog_id": stable_id("catalog", "__page__|" + page_id),
+                "source_key": "__page__|" + page_id,
+                "identity_type": "page",
+                "page_id": page_id,
+                "title": (title[:220] + " — Page Catalog"),
+                "catalog_type": "knowledge_base",
+                "record_type": "page",
+                "subject": title,
+                "source_host": urlsplit(url).hostname or "",
+                "source_url": url,
+                "source_page_ids": [page_id],
+                "source_page_count": 1,
+                "first_seen_at": _timestamp_iso(page.get("fetched_at")),
+                "last_seen_at": _timestamp_iso(page.get("fetched_at")),
+                "record_ids": record_ids,
+                "record_count": len(record_ids),
+                "evidence": ["one_to_one_indexed_page_identity"],
+                "catalog_origin": "page_owned_identity_catalog",
+                "status": "identity_container_pending_validation",
+                "source_terms_status": "not_reviewed",
+                "rights_status": "publicly_accessible_not_cleared_for_redistribution",
+                "record_level_clearance": "not_reviewed",
+                "commercial_eligible": False,
+                "public_search_allowed": False,
+                "verified": False,
+            }
+
+    def iter_record_catalogs():
+        for record_id in sorted(record_map):
+            record = record_map[record_id]
+            source_page_ids = sorted(set(record.get("source_page_ids", [])))
+            page_catalog_ids = sorted({
+                stable_id("catalog", "__page__|" + page_id)
+                for page_id in source_page_ids
+                if page_id in page_rows_by_id
+            })
+            yield {
+                "catalog_id": stable_id("record-catalog", record_id),
+                "source_key": "__record__|" + record_id,
+                "identity_type": "record",
+                "record_id": record_id,
+                "title": _title(record.get("title")) or record_id,
+                "record_type": record.get("record_type", "other"),
+                "page_catalog_ids": page_catalog_ids,
+                "source_catalog_ids": sorted(set(record.get("catalog_ids", []))),
+                "source_page_ids": source_page_ids,
+                "source_urls": sorted(set(record.get("source_urls", []))),
+                "record_ids": [record_id],
+                "catalog_origin": "record_owned_identity_catalog",
+                "status": "identity_container_pending_validation",
+                "source_terms_status": "not_reviewed",
+                "rights_status": "publicly_accessible_not_cleared_for_redistribution",
+                "record_level_clearance": "not_reviewed",
+                "commercial_eligible": False,
+                "public_search_allowed": False,
+                "verified": False,
+            }
+
+    page_catalog_count = len(page_rows_by_id)
+    page_catalogs_with_records = sum(bool(record_ids_by_page.get(page_id)) for page_id in page_rows_by_id)
+    metrics = {
+        "page_owned_identity_catalogs": page_catalog_count,
+        "page_owned_identity_catalogs_with_records": page_catalogs_with_records,
+        "page_owned_identity_catalogs_without_records": page_catalog_count - page_catalogs_with_records,
+        "record_owned_identity_catalogs": len(record_map),
+        "identity_catalogs_total": page_catalog_count + len(record_map),
+    }
+    page_catalogs = iter_page_catalogs()
+    record_catalogs = iter_record_catalogs()
+    if not stream_catalogs:
+        page_catalogs = list(page_catalogs)
+        record_catalogs = list(record_catalogs)
+    return metrics, page_catalogs, record_catalogs
+
+
 def analyze_pages(
     pages: list[dict],
     source_total: int | None = None,
@@ -991,6 +1098,7 @@ def analyze_pages(
     source_index_sha256: str | None = None,
     progress_callback=None,
     progress_interval: int = 500,
+    include_identity_catalogs: bool = True,
 ) -> dict:
     source_page_rows = len(pages)
     pages, duplicate_source_page_rows = _dedupe_source_pages(pages)
@@ -1721,6 +1829,20 @@ def analyze_pages(
     eligibility_rate = (eligible / len(pages) * 100.0) if pages else 0.0
     source_row_deduplication = (duplicate_source_page_rows / source_page_rows * 100.0) if source_page_rows else 0.0
     page_refs = sum(len(x.get("source_page_ids", [])) for x in discovered_catalog_list)
+    if include_identity_catalogs:
+        identity_metrics, page_identity_catalogs, record_identity_catalogs = _build_identity_catalogs(
+            page_rows, record_list, stream_catalogs=False
+        )
+    else:
+        identity_metrics = {
+            "page_owned_identity_catalogs": 0,
+            "page_owned_identity_catalogs_with_records": 0,
+            "page_owned_identity_catalogs_without_records": 0,
+            "record_owned_identity_catalogs": 0,
+            "identity_catalogs_total": 0,
+        }
+        page_identity_catalogs, record_identity_catalogs = [], []
+
     metrics = {
         "pages_analyzed": len(pages),
         "source_page_rows": source_page_rows,
@@ -1793,6 +1915,7 @@ def analyze_pages(
         "eligible_page_coverage_percentage": round(eligible_coverage, 4) if eligible_coverage is not None else None,
         "eligible_unique_source_page_coverage_percentage": round(eligible_coverage, 4) if eligible_coverage is not None else None,
     }
+    metrics.update(identity_metrics)
     return {
         "schema_version": 1,
         "analysis_version": ANALYZER_VERSION,
@@ -1802,6 +1925,8 @@ def analyze_pages(
         "source_index_updated_at": source_updated_at,
         "source_index_sha256": source_index_sha256,
         "metrics": metrics,
+        "page_catalogs": page_identity_catalogs,
+        "record_catalogs": record_identity_catalogs,
         "catalogs": catalog_list,
         "records": record_list,
         "pages": page_rows,
@@ -1980,6 +2105,7 @@ def analyze_pages_incremental(
                 host_pages,
                 source_total=len(host_pages),
                 progress_callback=report_host_progress if progress else None,
+                include_identity_catalogs=False,
             )
             raw = json.dumps({"analyzer_version": ANALYZER_VERSION, "input_sha256": digest, "analysis": shard}, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
             temp = cache_path.with_suffix(".tmp")
@@ -2057,9 +2183,11 @@ def analyze_pages_incremental(
             "records": len(all_records),
             "elapsed_seconds": round(time.monotonic() - global_started, 3),
         }, sort_keys=True), flush=True)
+    identity_metrics, page_identity_catalogs, record_identity_catalogs = _build_identity_catalogs(
+        all_page_rows, all_records, stream_catalogs=True
+    )
     # Keep the canonical record map through all global reconciliation passes.
-    # These helpers accept a dict keyed by record_id; rebuilding a second
-    # million-entry map in each pass needlessly raises peak memory.
+    # The sidecar generators retain this map and stream one identity row at a time.
     all_records = list(all_records.values())
     all_catalogs.sort(key=lambda x: (x["catalog_type"], x["title"].casefold(), x["catalog_id"]))
     all_records.sort(key=lambda x: (x["record_type"], x["title"].casefold(), x["record_id"]))
@@ -2146,12 +2274,15 @@ def analyze_pages_incremental(
         "eligible_unique_source_page_coverage_percentage": round(eligible_coverage, 4) if eligible_coverage is not None else None,
         "host_partitions_reused": reused, "host_partitions_rebuilt": rebuilt,
     }
+    metrics.update(identity_metrics)
     return {
         "schema_version": 1, "analysis_version": ANALYZER_VERSION,
         "strategy": "incremental-host-partitioned-page-content-derived-catalog-candidates",
         "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
         "source_index_pages": source_total, "source_index_updated_at": source_updated_at,
         "source_index_sha256": source_index_sha256, "metrics": metrics,
+        "page_catalogs": page_identity_catalogs,
+        "record_catalogs": record_identity_catalogs,
         "catalogs": all_catalogs,
         "records": all_records, "pages": all_page_rows,
         "media_urls": sorted(all_media),
