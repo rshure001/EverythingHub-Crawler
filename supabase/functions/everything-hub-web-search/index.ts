@@ -6,7 +6,7 @@ import { searchStaticPages } from "./static-search.mjs";
 import { normalizeManifestTimestamp } from "./manifest-time.mjs";
 import { isValidStaticManifest } from "./static-manifest.mjs";
 import { readBoundedText } from "./bounded-stream.mjs";
-import { loadPageDerivedCatalogPreview, searchPageDerivedCatalogPreview } from "./page-derived-catalog-preview.mjs";
+import { loadPageDerivedCatalogPreview, searchPageDerivedCatalogPreview, resolveRecordRelatedCatalogPreview } from "./page-derived-catalog-preview.mjs";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -167,6 +167,35 @@ Deno.serve(async (req: Request) => {
   const validLane = normalizeLane(url.searchParams.get("tentacle"), lanes);
   const limit = boundedInteger(url.searchParams.get("limit"), 10, 1, 20);
   const offset = boundedInteger(url.searchParams.get("offset"), 0, 0, 5000);
+
+  const recordCatalogId = String(url.searchParams.get("record_catalog_id") || "").trim();
+  if (recordCatalogId) {
+    const rawCatalogIds = String(url.searchParams.get("catalog_ids") || "");
+    if (rawCatalogIds.length > 4000) return json({ error: "record_catalog_membership_invalid" }, 400);
+    const sharedCatalogIds = rawCatalogIds.split(",").map((value) => value.trim()).filter(Boolean);
+    if (!sharedCatalogIds.length || sharedCatalogIds.length > 12) {
+      return json({ error: "record_catalog_membership_invalid" }, 400);
+    }
+    try {
+      const network = await loadPageDerivedCatalogPreview();
+      const related = await resolveRecordRelatedCatalogPreview(
+        recordCatalogId, sharedCatalogIds, network, limit, offset,
+      );
+      if (!related) return json({ error: "record_catalog_not_found" }, 404);
+      return json({
+        status: "candidate-preview",
+        preview_only: true,
+        generated_at: network.generatedAt || null,
+        analysis_version: network.analysisVersion || null,
+        source_index_pages: network.sourceIndexPages || 0,
+        ...related,
+      }, 200, "public, max-age=15, stale-while-revalidate=30");
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      console.error("Per-record related catalog unavailable:", detail.slice(0, 160));
+      return json({ error: "record_catalog_temporarily_unavailable" }, 503);
+    }
+  }
 
   if (query.length < 2) return json({ results: [], count: 0, query, offset, limit, hasMore: false });
 
