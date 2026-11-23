@@ -526,7 +526,7 @@ def _add_global_subject_catalogs(pages: list[dict], page_rows: list[dict], recor
             "url": url,
             "host": host,
             "title": title,
-            "description": re.sub(r"\\s+", " ", str(page.get("description") or page.get("text") or "")).strip()[:500],
+            "description": re.sub(r"\s+", " ", str(page.get("description") or page.get("text") or "")).strip()[:500],
             "fetched_at": page.get("fetched_at"),
             "tokens": tokens,
         }
