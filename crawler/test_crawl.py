@@ -1066,6 +1066,35 @@ class CrawlerTests(unittest.TestCase):
             pretty = crawl.json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
             self.assertLess(len(raw), len(pretty))
 
+    def test_build_page_record_preserves_up_to_eight_structured_catalog_lists(self):
+        metadata = {
+            "version": 1,
+            "lists": [{
+                "name": f"Collection {index}",
+                "record_type": "product",
+                "items": [
+                    {"record_type": "product", "name": f"Product {index} A",
+                     "url": f"https://shop.example/products/{index}-a"},
+                    {"record_type": "product", "name": f"Product {index} B",
+                     "url": f"https://shop.example/products/{index}-b"},
+                ],
+            } for index in range(1, 10)],
+        }
+        record = crawl.build_page_record(
+            "https://shop.example/catalog", "Product collections", "",
+            "Structured catalog page.", 1, set(),
+            structured_catalog_metadata=metadata,
+        )
+        stored = record["structured_catalog"]
+        self.assertEqual([item["name"] for item in stored["lists"]], [
+            f"Collection {index}" for index in range(1, 9)
+        ])
+        self.assertTrue(all(len(item["items"]) == 2 for item in stored["lists"]))
+        self.assertLessEqual(
+            len(crawl.json.dumps(stored, ensure_ascii=False, separators=(",", ":")).encode("utf-8")),
+            16384,
+        )
+
     def test_build_page_record_preserves_safe_structured_entity_metadata(self):
         metadata = [{
             "record_type": "place",
