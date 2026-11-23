@@ -1282,6 +1282,52 @@ class CatalogInventoryTriggerTests(unittest.TestCase):
             self.assertEqual(validated["catalogs"], metrics["unique_catalogs_discovered"])
             self.assertEqual(validated["records_validated"], metrics["unique_records"])
 
+    def test_one_page_can_create_multiple_evidence_backed_structured_catalogs(self):
+        lists = []
+        for index in range(1, 6):
+            lists.append({
+                "name": f"Collection {index}",
+                "record_type": "model",
+                "items": [
+                    {"record_type": "model", "name": f"Model {index} A",
+                     "url": f"https://shop.example/collections/{index}/a"},
+                    {"record_type": "model", "name": f"Model {index} B",
+                     "url": f"https://shop.example/collections/{index}/b"},
+                ],
+            })
+        result = analyze_pages([{
+            "url": "https://shop.example/collections",
+            "title": "Structured collections",
+            "description": "Five distinct structured collections.",
+            "text": "Each collection contains two linked models.",
+            "lane": "general",
+            "robots_allowed": True,
+            "fetched_at": 1795400000,
+            "structured_catalog": {"version": 1, "lists": lists},
+        }], source_total=1)
+        metrics = result["metrics"]
+        self.assertEqual(metrics["structured_catalog_pages"], 1)
+        self.assertEqual(metrics["structured_catalog_lists"], 5)
+        self.assertEqual(metrics["structured_catalog_items"], 10)
+        self.assertEqual(metrics["structured_catalog_records"], 10)
+        self.assertGreaterEqual(metrics["unique_catalogs_discovered"], 5)
+        self.assertGreaterEqual(metrics["unique_records"], 10)
+        # These five lists are independent collections: the source provides
+        # no parent-catalog evidence, so do not invent parent relationships.
+        self.assertEqual(metrics["subcatalogs_discovered"], 0)
+        structured_catalogs = [
+            catalog for catalog in result["catalogs"]
+            if catalog["catalog_origin"] == "structured_schema_collection"
+        ]
+        self.assertEqual(len(structured_catalogs), 5)
+        self.assertTrue(all(catalog["record_count"] == 2 for catalog in structured_catalogs))
+        self.assertTrue(all(catalog["parent_catalog_id"] is None for catalog in structured_catalogs))
+        structured_records = [
+            record for record in result["records"]
+            if record.get("structured_catalog_item")
+        ]
+        self.assertEqual(len(structured_records), 10)
+
     def test_structured_item_list_with_one_item_does_not_force_a_catalog(self):
         result = analyze_pages([{
             "url": "https://shop.example/about",

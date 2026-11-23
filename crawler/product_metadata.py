@@ -271,9 +271,9 @@ _SCHEMA_RECORD_TYPES = {
     "audioobject": "media",
 }
 
-_MAX_STRUCTURED_LISTS = 2
+_MAX_STRUCTURED_LISTS = 8
 _MAX_STRUCTURED_ITEMS_PER_LIST = 50
-_MAX_STRUCTURED_CATALOG_BYTES = 8192
+_MAX_STRUCTURED_CATALOG_BYTES = 16384
 _STRUCTURED_CATALOG_MARKERS = (
     "itemlist", "datacatalog", "collectionpage", "productgroup", "offercatalog",
 )

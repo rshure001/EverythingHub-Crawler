@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_INDEX = ROOT / "data" / "index.json"
 DEFAULT_OUTPUT = ROOT / "data" / "page-derived-catalogs"
 DEFAULT_SOURCE_POLICY_REVIEWS = ROOT / "data" / "source-policy-reviews.json"
-ANALYZER_VERSION = 16
+ANALYZER_VERSION = 17
 TRACKING_KEYS = {"fbclid", "gclid", "dclid", "mc_cid", "mc_eid", "ref", "source"}
 STOP_TOKENS = {
     "the", "and", "for", "with", "from", "our", "your", "all", "new", "home", "page",
@@ -985,7 +985,7 @@ def analyze_pages(
         structured_lists = []
         structured_catalog = page.get("structured_catalog") if is_eligible else None
         if isinstance(structured_catalog, dict) and structured_catalog.get("version") == 1:
-            for raw_list in (structured_catalog.get("lists") or [])[:2]:
+            for raw_list in (structured_catalog.get("lists") or [])[:8]:
                 if not isinstance(raw_list, dict):
                     continue
                 list_name = _title(raw_list.get("name"))
