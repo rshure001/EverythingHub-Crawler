@@ -96,7 +96,7 @@ test('keeps an empty category lane empty so the homepage can label its explicit 
 test('maps all homepage search categories to supported corpus lanes', () => {
   assert.deepEqual([...resolveLaneFilters('web')], []);
   assert.deepEqual([...resolveLaneFilters('news')], ['news']);
-  assert.deepEqual([...resolveLaneFilters('shopping')], ['commerce']);
+  assert.deepEqual([...resolveLaneFilters('shopping')], ['business']);
   assert.deepEqual([...resolveLaneFilters('places')], ['culture', 'nature', 'government']);
   assert.deepEqual([...resolveLaneFilters('business')], ['business']);
   assert.deepEqual([...resolveLaneFilters('research')], ['science', 'technology']);
@@ -104,14 +104,14 @@ test('maps all homepage search categories to supported corpus lanes', () => {
   assert.deepEqual([...resolveLaneFilters('videos')], []);
 });
 
-test('shopping searches commerce pages and excludes unrelated general pages', () => {
+test('shopping searches retailer pages in the existing business lane', () => {
   const pages = [
     {
       url: 'https://www.bucherer.com/rolex',
       title: 'Rolex watches',
       description: 'Official retailer Rolex collection',
       text: 'Rolex watches and watchmaking',
-      lane: 'commerce'
+      lane: 'business'
     },
     {
       url: 'https://example.com/rolex-mention',
