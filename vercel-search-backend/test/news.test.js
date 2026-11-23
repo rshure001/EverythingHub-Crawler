@@ -46,6 +46,22 @@ test("NASA news releases provide a current headline-only feed in the public scie
   assert.equal(items[0].summary, "");
 });
 
+test("NASA Recently Published provides a headline-only fallback in the public news lanes", () => {
+  const nasa = { source: "NASA Recently Published", url: "https://www.nasa.gov/feed/", headlinesOnly: true };
+  for (const category of ["for-you", "technology", "science"]) {
+    assert.ok(NEWS_FEEDS[category].some(feed => feed.url === nasa.url && feed.headlinesOnly === true));
+  }
+  const items = parseFeed(
+    "<rss><channel><item><title>NASA recently published update</title><link>https://www.nasa.gov/news/example</link>" +
+    "<pubDate>Sun, 22 Nov 2026 12:00:00 GMT</pubDate><description>Do not republish this summary.</description></item></channel></rss>",
+    nasa
+  );
+  assert.equal(items.length, 1);
+  assert.equal(items[0].source, "NASA Recently Published");
+  assert.equal(items[0].publishedAt, "2026-11-22T12:00:00.000Z");
+  assert.equal(items[0].summary, "");
+});
+
 test.beforeEach(() => resetRobotsForTests());
 test.afterEach(() => {
   resetRobotsForTests();
