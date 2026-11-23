@@ -143,5 +143,5 @@ test("news query normalization and feed selection remain bounded", () => {
   assert.ok(selected.some(feed => feed.source === "NASA News Releases"));
   const matched = searchNewsItems([{ title: "NASA Artemis", summary: "Space flight", source: "NASA", url: "https://nasa.gov/story" }], "NASA");
   assert.equal(matched.results.length, 1);
-  assert.equal(NEWS_FEEDS.science.length, 3);
+  assert.equal(NEWS_FEEDS.science.length, 4);
 });

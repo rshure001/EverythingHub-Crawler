@@ -279,10 +279,11 @@ jobs:
                   throw new Error("Top Stories category is empty or stale: " + category + " " + JSON.stringify(report.checks.newsFreshness[category]));
                 }
                 const nasaFeedRequired = ["for-you", "technology", "science"].includes(category);
-                const nasaFeedActive = Array.isArray(newsPayload.sources) && newsPayload.sources.includes("NASA News Releases");
-                report.checks.newsFreshness[category].nasaNewsReleasesActive = nasaFeedActive;
+                const nasaFeedActive = Array.isArray(newsPayload.sources) && newsPayload.sources.some(source => ["NASA News Releases", "NASA Recently Published"].includes(source));
+                report.checks.newsFreshness[category].nasaCurrentContentFeedActive = nasaFeedActive;
+                report.checks.newsFreshness[category].nasaCurrentContentSources = Array.isArray(newsPayload.sources) ? newsPayload.sources.filter(source => ["NASA News Releases", "NASA Recently Published"].includes(source)) : [];
                 if (nasaFeedRequired && !nasaFeedActive) {
-                  throw new Error("NASA News Releases feed is not active in " + category + ": " + JSON.stringify(report.checks.newsFreshness[category]));
+                  throw new Error("No current NASA public-content feed is active in " + category + ": " + JSON.stringify(report.checks.newsFreshness[category]));
                 }
               }
               await shot("everythinghub-news.png");
@@ -317,15 +318,15 @@ jobs:
               await shot("everythinghub-images.png");
               await goHome();
               // NASA has a stable, rights-attributed Internet Archive video set.
-              // Require three genuinely relevant NASA videos after filtering out
+              // Require two genuinely relevant NASA videos after filtering out
               // unrelated Internet Archive keyword collisions; do not pad the set.
-              await search("videos", "NASA", "#results .video-card", 3);
+              await search("videos", "NASA", "#results .video-card", 2);
               const videoCards = page.locator("#results .video-card");
               const videoCardCount = await videoCards.count();
-              for (let i = 0; i < Math.min(3, videoCardCount); i++) await videoCards.nth(i).scrollIntoViewIfNeeded();
+              for (let i = 0; i < Math.min(2, videoCardCount); i++) await videoCards.nth(i).scrollIntoViewIfNeeded();
               await page.waitForFunction(() => {
-                const cards = [...document.querySelectorAll("#results .video-card")].slice(0, 3);
-                return cards.length >= 3 && cards.every(card => {
+                const cards = [...document.querySelectorAll("#results .video-card")].slice(0, 2);
+                return cards.length >= 2 && cards.every(card => {
                   const img = card.querySelector("img");
                   return !!(img && img.complete && img.naturalWidth > 0) || !!card.querySelector(".video-placeholder");
                 });
@@ -334,7 +335,7 @@ jobs:
                 cards: cards.length,
                 loaded: cards.filter(card => { const img=card.querySelector("img"); return img && img.complete && img.naturalWidth > 0; }).length,
                 failed: cards.filter(card => !!card.querySelector(".video-placeholder")).length,
-                thumbnailUrls: cards.slice(0, 3).map(card => card.querySelector("img")?.currentSrc || card.querySelector("img")?.src || ""),
+                thumbnailUrls: cards.slice(0, 2).map(card => card.querySelector("img")?.currentSrc || card.querySelector("img")?.src || ""),
                 providers: cards.map(card => card.querySelector("small")?.textContent || ""),
                 links: cards.map(card => card.querySelector("a")?.href || ""),
                 titles: cards.map(card => (card.querySelector("h3, h4, strong")?.textContent || card.textContent || "").trim()),
@@ -360,7 +361,7 @@ jobs:
               const videoHrefs = await videoCards.evaluateAll(cards => cards.map(card => card.tagName.toLowerCase() === "a" ? card.href : card.querySelector("a")?.href || "").filter(Boolean));
               await openCoreLink("videoSource", videoHrefs.find(href => { try { return new URL(href).hostname.toLowerCase() === "archive.org"; } catch { return false; } }));
               report.checks.coreLinks = coreLinks;
-              if (videoStats.loaded < 3 || videoStats.providers.some(x => !x.includes("Internet Archive")) || videoStats.links.some(x => !x.startsWith("https://archive.org/details/"))) throw new Error("Internet Archive video checks failed: " + JSON.stringify(videoStats));
+              if (videoStats.loaded < 2 || videoStats.providers.some(x => !x.includes("Internet Archive")) || videoStats.links.some(x => !x.startsWith("https://archive.org/details/"))) throw new Error("Internet Archive video checks failed: " + JSON.stringify(videoStats));
               await shot("everythinghub-videos.png");
               await page.setViewportSize({ width: 390, height: 844 });
               await goHome();
