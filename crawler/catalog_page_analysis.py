@@ -999,6 +999,21 @@ def _add_page_catalogs(page_rows: list[dict], records) -> tuple[dict[str, int], 
         if isinstance(item, dict) and item.get("record_id")
     }
     page_catalogs = []
+    page_rows_by_id = {
+        page["page_id"]: page for page in page_rows
+        if isinstance(page, dict) and page.get("page_id") and page.get("url")
+    }
+    record_ids_by_page: dict[str, set[str]] = defaultdict(set)
+    for page_id, page in page_rows_by_id.items():
+        record_ids_by_page[page_id].update(
+            record_id for record_id in page.get("record_ids", [])
+            if record_id in record_map
+        )
+    for record_id, record in record_map.items():
+        for page_id in record.get("source_page_ids", []):
+            if page_id in page_rows_by_id:
+                record_ids_by_page[page_id].add(record_id)
+
     for page in page_rows:
         if not isinstance(page, dict) or not page.get("page_id") or not page.get("url"):
             continue
@@ -1006,10 +1021,7 @@ def _add_page_catalogs(page_rows: list[dict], records) -> tuple[dict[str, int], 
         page_catalog_id = stable_id("catalog", "__page__|" + page_id)
         page["page_catalog_id"] = page_catalog_id
         page["page_catalog_status"] = "identity_container_pending_validation"
-        record_ids = sorted(set(
-            record_id for record_id in page.get("record_ids", [])
-            if record_id in record_map
-        ))
+        record_ids = sorted(record_ids_by_page.get(page_id, set()))
         page_catalogs.append({
             "catalog_id": page_catalog_id,
             "source_key": "__page__|" + page_id,
@@ -1046,12 +1058,21 @@ def _add_page_catalogs(page_rows: list[dict], records) -> tuple[dict[str, int], 
     page_catalogs.sort(key=lambda item: item["catalog_id"])
     record_catalogs = []
     for record_id, record in sorted(record_map.items()):
+        record_page_ids = sorted({
+            page_id for page_id in record.get("source_page_ids", [])
+            if page_id in page_rows_by_id
+        })
+        record_page_catalog_ids = sorted({
+            stable_id("catalog", "__page__|" + page_id)
+            for page_id in record_page_ids
+        })
+        record["page_catalog_ids"] = record_page_catalog_ids
         record_catalogs.append({
             "catalog_id": record.get("record_catalog_id") or stable_id("record-catalog", record_id),
             "record_id": record_id,
             "title": _title(record.get("title")) or record_id,
             "record_type": record.get("record_type", "other"),
-            "page_catalog_ids": sorted(set(record.get("page_catalog_ids", []))),
+            "page_catalog_ids": record_page_catalog_ids,
             "source_catalog_ids": sorted(set(record.get("catalog_ids", []))),
             "source_page_ids": sorted(set(record.get("source_page_ids", []))),
             "source_urls": sorted(set(record.get("source_urls", []))),
