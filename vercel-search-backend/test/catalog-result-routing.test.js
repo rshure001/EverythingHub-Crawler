@@ -47,9 +47,23 @@ test("catalog result merge deduplicates stable IDs and respects the five-card li
   ]);
 });
 
-test("page-derived search is query-scoped and bounded", () => {
+test("catalog result merge preserves external, universal, and page-derived catalog sources", () => {
+  const external = [{ catalog_id: "external:rolex" }];
+  const universal = [{ catalog_id: "catalog:las-vegas-transit" }];
+  const pageDerived = [
+    { catalog_id: "catalog:las-vegas-transit" },
+    { catalog_id: "page:las-vegas-places" }
+  ];
+  const results = mergeCatalogResults(external, universal, pageDerived);
+  assert.deepEqual(results.map(item => item.catalog_id), [
+    "external:rolex", "catalog:las-vegas-transit", "page:las-vegas-places"
+  ]);
+});
+
+test("universal catalog search is bounded and does not replace the page-derived preview", () => {
   assert.match(source, /withTimeout\(loadCatalog\(query\), CATALOG_LOAD_BUDGET_MS/);
   assert.match(source, /withTimeout\(loadPageDerivedCatalogs\(query\), PAGE_DERIVED_LOAD_BUDGET_MS/);
-  assert.match(source, /mergeCatalogResults\(externalCatalogResults, pageDerivedCatalogResults\)/);
+  assert.match(source, /withTimeout\(loadUniversalCatalogNetwork\(\), UNIVERSAL_CATALOG_LOAD_BUDGET_MS/);
+  assert.match(source, /mergeCatalogResults\(externalCatalogResults, universalCatalogResults, pageDerivedCatalogResults\)/);
   assert.doesNotMatch(source, /earlyExternalCatalogResults/);
 });
