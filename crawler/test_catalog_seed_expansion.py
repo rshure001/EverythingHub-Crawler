@@ -125,6 +125,7 @@ class CatalogSeedExpansionTests(unittest.TestCase):
                 result = expansion.run_batch(queue_path, state_path, 10, index_path)
             self.assertEqual(result["status"], "waiting_for_fresh_source_review_queue")
             self.assertFalse(result["queue_matches_current_index"])
+            self.assertFalse(result["queue_snapshot_compatible_with_current_index"])
             self.assertEqual(result["eligible_catalog_landing_pages"], 0)
             self.assertFalse(state_path.exists())
             request.assert_not_called()
@@ -168,7 +169,7 @@ class CatalogSeedExpansionTests(unittest.TestCase):
                 ),
             ) as request:
                 self.assertTrue(expansion._queue_snapshot_compatible_with_current_index(queue, index_path))
-                self.assertTrue(expansion._queue_matches_current_index(queue, index_path))
+                self.assertFalse(expansion._queue_matches_current_index(queue, index_path))
                 result = expansion.run_batch(queue_path, state_path, 10, index_path)
 
             self.assertFalse(result["queue_matches_current_index"])
