@@ -129,8 +129,8 @@ class CatalogSeedExpansionTests(unittest.TestCase):
             request.assert_not_called()
 
             # An existing resumable ledger must also remain byte-for-byte intact.
-            previous_state = b"previous-valid-ledger"
-            state_path.write_bytes(previous_state)
+            self._write_payload(state_path, {"records": [], "source_outcomes": {}})
+            previous_state = state_path.read_bytes()
             with patch.object(expansion, "request_source_bytes") as request:
                 result = expansion.run_batch(queue_path, state_path, 10, index_path)
             self.assertEqual(result["status"], "waiting_for_fresh_source_review_queue")
