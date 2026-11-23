@@ -3,7 +3,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const handler = require("../src/api/search-fast");
 const { queryTerms, selectFeeds, searchNewsItems, clearCacheForTests } = handler._test;
-const { NEWS_FEEDS } = require("../src/api/news")._test;
+const { NEWS_FEEDS, resetNewsCacheForTests } = require("../src/api/news")._test;
 const { resetRobotsForTests } = require("../src/lib/robots");
 
 function mockResponse(status, body, url) {
@@ -33,8 +33,8 @@ function feedXml(host) {
   return "<rss><channel><item><title>" + title + "</title><link>https://" + host + "/news/latest</link><pubDate>Sun, 22 Nov 2026 12:00:00 GMT</pubDate><description><![CDATA[" + summary + "]]></description></item></channel></rss>";
 }
 
-test.beforeEach(() => { clearCacheForTests(); resetRobotsForTests(); });
-test.afterEach(() => { clearCacheForTests(); resetRobotsForTests(); });
+test.beforeEach(() => { clearCacheForTests(); resetRobotsForTests(); resetNewsCacheForTests(); });
+test.afterEach(() => { clearCacheForTests(); resetRobotsForTests(); resetNewsCacheForTests(); });
 
 test("web fast-fallback does not call robots-disallowed external search providers", async () => {
   const originalFetch = global.fetch;
