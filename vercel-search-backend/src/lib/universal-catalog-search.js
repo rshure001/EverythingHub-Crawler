@@ -21,6 +21,7 @@ const MAX_PUBLIC_RECORDS = 250000;
 const MAX_DOCUMENT_TEXT = 1200;
 const agent = new https.Agent({ keepAlive: true, maxSockets: 4 });
 let cache = null;
+let failureCache = null;
 
 function getBuffer(url, maxBytes, timeoutMs = 9000) {
   return new Promise((resolve, reject) => {
@@ -148,6 +149,7 @@ function validateUniversalCatalogManifest(manifest) {
         !Number.isSafeInteger(entry.record_count) || entry.record_count < 0 ||
         !Number.isSafeInteger(entry.record_search_document_count) ||
         entry.record_search_document_count < 0 ||
+        typeof entry.index_sha256 !== 'string' || !/^[a-f0-9]{64}$/i.test(entry.index_sha256) ||
         typeof entry.file !== 'string' || !shardByFile.has(entry.file) ||
         typeof entry.title !== 'string' || !entry.title.trim()) {
       throw new Error('universal_catalog_entry_invalid');
@@ -176,7 +178,7 @@ function validateUniversalCatalogManifest(manifest) {
   return { catalogById, rootCatalogs, rootFiles, shardByFile };
 }
 
-function decodeRootShard(entry, compressed) {
+function decodeRootShard(entry, compressed, expectedShardId) {
   if (!Buffer.isBuffer(compressed) || compressed.length !== entry.bytes ||
       sha256(compressed).toLowerCase() !== entry.sha256.toLowerCase()) {
     throw new Error('universal_catalog_shard_integrity_mismatch');
@@ -193,7 +195,7 @@ function decodeRootShard(entry, compressed) {
   } catch {
     throw new Error('universal_catalog_shard_json_invalid');
   }
-  if (!payload || payload.schema_version !== 1 ||
+  if (!payload || payload.schema_version !== 1 || payload.shard_id !== expectedShardId ||
       !Array.isArray(payload.catalog_indexes) ||
       payload.catalog_indexes.length !== entry.catalog_count) {
     throw new Error('universal_catalog_shard_schema_invalid');
@@ -247,7 +249,7 @@ async function loadUniversalCatalogFromManifest(manifest, commitSha, manifestRaw
   const rootShardResults = await Promise.all(checked.rootFiles.map(async file => {
     const entry = checked.shardByFile.get(file);
     const compressed = await fetchBuffer(base + file.split('/').map(encodeURIComponent).join('/'), entry.bytes, 9000);
-    const decoded = decodeRootShard(entry, compressed);
+    const decoded = decodeRootShard(entry, compressed, file.slice('shards/'.length, -'.json.gz'.length));
     if (decoded.decodedBytes > MAX_ROOT_SHARD_JSON_BYTES) {
       throw new Error('universal_catalog_root_shard_uncompressed_limit');
     }
@@ -357,6 +359,9 @@ async function loadUniversalCatalogFromManifest(manifest, commitSha, manifestRaw
 
 async function loadUniversalCatalogNetwork(fetchBuffer = getBuffer) {
   if (cache && Date.now() - cache.loadedAt < CACHE_MS) return { ...cache, stale: false };
+  if (failureCache && Date.now() - failureCache.failedAt < 30000) {
+    throw new Error(failureCache.message);
+  }
   try {
     const refRaw = await fetchBuffer(REF + '?v=' + Date.now(), 4096, 7000);
     let ref;
@@ -378,8 +383,10 @@ async function loadUniversalCatalogNetwork(fetchBuffer = getBuffer) {
     }
     const loaded = await loadUniversalCatalogFromManifest(manifest, commitSha, manifestRaw, fetchBuffer);
     cache = loaded;
+    failureCache = null;
     return { ...cache, stale: false };
   } catch (error) {
+    failureCache = { failedAt: Date.now(), message: String(error && error.message || error).slice(0, 160) };
     if (cache && Date.now() - cache.loadedAt < STALE_MS) {
       return {
         ...cache,
@@ -503,6 +510,7 @@ function searchUniversalCatalogs(query, network, limit = 5) {
 
 function clearUniversalCatalogCacheForTests() {
   cache = null;
+  failureCache = null;
 }
 
 module.exports = {
