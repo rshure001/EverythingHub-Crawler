@@ -125,6 +125,16 @@ class CatalogSeedExpansionTests(unittest.TestCase):
             self.assertEqual(result["status"], "waiting_for_fresh_source_review_queue")
             self.assertFalse(result["queue_matches_current_index"])
             self.assertEqual(result["eligible_catalog_landing_pages"], 0)
+            self.assertFalse(state_path.exists())
+            request.assert_not_called()
+
+            # An existing resumable ledger must also remain byte-for-byte intact.
+            previous_state = b"previous-valid-ledger"
+            state_path.write_bytes(previous_state)
+            with patch.object(expansion, "request_source_bytes") as request:
+                result = expansion.run_batch(queue_path, state_path, 10, index_path)
+            self.assertEqual(result["status"], "waiting_for_fresh_source_review_queue")
+            self.assertEqual(state_path.read_bytes(), previous_state)
             request.assert_not_called()
 
     def test_batch_processes_at_most_ten_and_deduplicates_records(self):
