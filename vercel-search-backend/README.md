@@ -5,7 +5,7 @@ kept here so production behavior is reviewable and testable in GitHub.
 
 ## Runtime
 
-- Entry points: src/api/search.js and src/api/health.js
+- Entry points: src/api/search.js, src/api/record.js, and src/api/health.js
 - Runtime: Node.js 26, built-in modules only
 - Catalog source: the versioned public-search manifest and either its optional
   compressed catalog or bounded SHA-pinned shards from the same immutable Git commit
@@ -123,3 +123,15 @@ GitHub auto-deployment is not configured for this project. The controlled direct
 - The API returns these as candidate catalog preview cards. It does not mark records as published or production-indexed; the response preserves the manifest records_published and production_indexed values.
 - Search documents contain bounded title/type/subject/geography/tag metadata only. Descriptions, full attributes, resource URLs and source-page content are not copied into the projection.
 - Root shard reads are capped at 16 files, 8 MB per shard, 16 MB aggregate compressed, and 128 MB aggregate decoded. The verified network is cached for five minutes with a one-hour last-known-good fallback.
+
+
+## Per-record related catalogs
+
+Every canonical record now receives one stable `record_catalog_id`. The
+`GET /api/record?record_catalog_id=<id>&limit=20&offset=0` endpoint resolves
+its related records from shared catalog indexes, excludes the owner record,
+deduplicates by canonical record ID, and paginates the result. The stored
+record-catalog artifact contains only shared catalog references, not copied
+related-record lists. This keeps the relationship graph compact and avoids
+quadratic snapshot growth. Results remain candidate previews; source rights
+and commercial eligibility are not changed.
