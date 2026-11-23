@@ -356,6 +356,22 @@ class UniversalCatalogIngestTests(unittest.TestCase):
                         "private": True,
                     },
                 },
+                {
+                    "catalog_id": "canada-open-data",
+                    "id": "canada-open-data:roads-4",
+                    "dataset_id": "roads-4",
+                    "title": "Road Network Four",
+                    "landing_url": "https://open.canada.ca/data/en/dataset/roads-4",
+                    "organization": "Transport Canada",
+                    "tags": ["roads", "transport"],
+                    "license": {
+                        "id": "proprietary-license",
+                        "title": "Proprietary License",
+                        "url": "https://open.canada.ca/en/dataset/roads-4/license",
+                        "is_open": False,
+                        "private": False,
+                    },
+                },
             ],
         })
         manifest, shards = build_public_catalog_indexes(result)
@@ -364,6 +380,7 @@ class UniversalCatalogIngestTests(unittest.TestCase):
         public_record = next(r for r in result["records"] if r["title"] == "Road Network One")
         second_public_record = next(r for r in result["records"] if r["title"] == "Road Network Two")
         private_record = next(r for r in result["records"] if r["title"] == "Road Network Three")
+        closed_record = next(r for r in result["records"] if r["title"] == "Road Network Four")
 
         self.assertEqual(manifest["catalog_count"], len(result["catalogs"]))
         self.assertEqual(len(manifest["catalog_indexes"]), len(result["catalogs"]))
@@ -371,14 +388,16 @@ class UniversalCatalogIngestTests(unittest.TestCase):
         self.assertEqual(manifest["catalogs_without_public_records"], len(subcatalogs))
         self.assertEqual(manifest["unique_public_records"], 2)
         self.assertEqual(manifest["public_record_memberships"], 2)
-        self.assertEqual(manifest["restricted_records_not_indexed"], 1)
+        self.assertEqual(manifest["restricted_records_not_indexed"], 2)
         self.assertEqual(manifest["eligible_records_without_public_index"], 0)
         self.assertEqual(manifest["records_published"], 0)
         self.assertFalse(manifest["production_indexed"])
         self.assertEqual(result["metrics"]["catalog_indexes_built"], len(result["catalogs"]))
         self.assertEqual(result["metrics"]["unique_public_records_indexed"], 2)
         self.assertEqual(result["metrics"]["public_record_catalog_memberships"], 2)
-        self.assertEqual(result["metrics"]["restricted_records_excluded_from_public_indexes"], 1)
+        self.assertEqual(result["metrics"]["restricted_records_excluded_from_public_indexes"], 2)
+        self.assertEqual(result["metrics"]["production_eligible_records"], 2)
+        self.assertEqual(result["metrics"]["restricted_records"], 2)
         self.assertEqual(result["metrics"]["records_published"], 0)
         self.assertEqual(result["metrics"]["indexed_records"], 0)
 
@@ -399,9 +418,11 @@ class UniversalCatalogIngestTests(unittest.TestCase):
         self.assertEqual(rows[root["catalog_id"]]["record_ids"], sorted([
             public_record["record_id"], second_public_record["record_id"]
         ]))
-        self.assertNotIn(private_record["record_id"], {
-            record_id for row in rows.values() for record_id in row["record_ids"]
-        })
+        indexed_record_ids = {record_id for row in rows.values() for record_id in row["record_ids"]}
+        self.assertNotIn(private_record["record_id"], indexed_record_ids)
+        self.assertNotIn(closed_record["record_id"], indexed_record_ids)
+        self.assertFalse(closed_record["attributes"]["public_search_allowed"])
+        self.assertEqual(closed_record["attributes"]["rights_status"], "closed_license")
         self.assertTrue(all(not rows[c["catalog_id"]]["record_ids"] for c in subcatalogs))
 
         catalog_by_id = {c["catalog_id"]: c for c in result["catalogs"]}
