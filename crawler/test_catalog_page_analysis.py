@@ -4,10 +4,10 @@ import hashlib
 import json
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 import catalog_page_analysis as analysis_module
-from unittest.mock import patch
 
 from catalog_page_analysis import (
     ANALYZER_VERSION, analyze_pages, analyze_pages_incremental, build_search_index,
