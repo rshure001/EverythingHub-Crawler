@@ -11,7 +11,7 @@ import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
-from catalog_source_policy import SourcePolicyError, request_source_bytes
+from catalog_source_policy import SourcePolicyError, policy_for_host, request_source_bytes
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "data" / "openlibrary-catalogs.json.gz"
@@ -25,6 +25,38 @@ SUBJECTS = (
 LIMIT = 500
 TIMEOUT = 20
 USER_AGENT = "EverythingHubCatalogDiscovery/1.0 (+https://github.com/rshure001/EverythingHub-Crawler)"
+
+
+def _source_policy() -> dict:
+    return policy_for_host("openlibrary.org") or {}
+
+
+def _source_terms_approved(policy: dict) -> bool:
+    return (
+        policy.get("discovery_allowed") is True
+        and policy.get("terms_status") in ("reviewed", "reviewed_per_dataset")
+        and bool(policy.get("reviewed_at"))
+    )
+
+
+def _empty_snapshot(reason: str, policy: dict, previous_records_excluded=None, previous_catalogs_excluded=None) -> dict:
+    return {
+        "schema_version": 1,
+        "strategy": "openlibrary-restricted-source-exclusion",
+        "updated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+        "source_policy_status": policy.get("terms_status", "unreviewed"),
+        "discovery_allowed": False,
+        "reason": reason,
+        "previous_snapshot_records_excluded": previous_records_excluded,
+        "previous_snapshot_catalogs_excluded": previous_catalogs_excluded,
+        "catalog_count": 0,
+        "datasets_discovered": 0,
+        "resources_discovered": 0,
+        "errors": [],
+        "catalogs": [],
+        "datasets": [],
+    }
+
 
 
 def request_subject(slug: str) -> dict:
@@ -44,6 +76,12 @@ def request_subject(slug: str) -> dict:
 def discover(pause: float = 1.0, allow_api: bool = False) -> dict:
     if not allow_api:
         raise SourcePolicyError("Open Library API discovery is disabled pending approved bulk-use terms or an official dump workflow.")
+    policy = _source_policy()
+    if not _source_terms_approved(policy):
+        return _empty_snapshot(
+            "Source policy does not authorize Open Library bulk discovery; no API requests were made.",
+            policy,
+        )
     catalogs, datasets = [], []
     errors = []
     for index, slug in enumerate(SUBJECTS):
@@ -120,10 +158,34 @@ def discover(pause: float = 1.0, allow_api: bool = False) -> dict:
         "catalog_count": len(catalogs),
         "datasets_discovered": len(datasets),
         "resources_discovered": 0,
+        "source_policy_status": policy.get("terms_status", "unreviewed"),
+        "discovery_allowed": True,
         "errors": errors,
         "catalogs": catalogs,
         "datasets": datasets,
     }
+
+
+def _previous_snapshot_counts(path: Path) -> tuple[int | None, int | None]:
+    if not path.exists():
+        return 0, 0
+    try:
+        raw = gzip.decompress(path.read_bytes()) if path.suffix == ".gz" else path.read_bytes()
+        previous = json.loads(raw.decode("utf-8"))
+        return len(previous.get("datasets") or []), len(previous.get("catalogs") or [])
+    except (OSError, ValueError, json.JSONDecodeError, gzip.BadGzipFile):
+        return None, None
+
+
+def _write_snapshot(path: Path, result: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp = path.with_suffix(path.suffix + ".tmp")
+    payload = json.dumps(result, ensure_ascii=False, separators=(",", ":")).encode("utf-8") + b"\\n"
+    if path.suffix == ".gz":
+        temp.write_bytes(gzip.compress(payload, mtime=0))
+    else:
+        temp.write_bytes(payload)
+    temp.replace(path)
 
 
 def main():
@@ -134,18 +196,33 @@ def main():
     args = parser.parse_args()
     if not 0 <= args.pause <= 5:
         parser.error("pause must be between 0 and 5 seconds")
-    if not args.allow_api:
-        print(json.dumps({"skipped": True, "reason": "Open Library API is not approved for bulk catalog backend use; previous snapshot preserved."}, indent=2))
+
+    policy = _source_policy()
+    if not _source_terms_approved(policy):
+        previous_records, previous_catalogs = _previous_snapshot_counts(args.output)
+        result = _empty_snapshot(
+            "Open Library source terms do not authorize bulk catalog discovery; prior snapshot excluded from current public artifacts.",
+            policy,
+            previous_records,
+            previous_catalogs,
+        )
+        _write_snapshot(args.output, result)
+        print(json.dumps({
+            "skipped": True,
+            "reason": result["reason"],
+            "catalogs_discovered": 0,
+            "catalog_records_discovered": 0,
+            "previous_snapshot_records_excluded": previous_records,
+            "previous_snapshot_catalogs_excluded": previous_catalogs,
+        }, indent=2))
         return
+
+    if not args.allow_api:
+        print(json.dumps({"skipped": True, "reason": "Open Library API discovery remains disabled until explicitly enabled after source-policy approval; approved prior snapshot preserved."}, indent=2))
+        return
+
     result = discover(args.pause, allow_api=True)
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    temp = args.output.with_suffix(args.output.suffix + ".tmp")
-    payload = json.dumps(result, ensure_ascii=False, separators=(",", ":")).encode("utf-8") + b"\n"
-    if args.output.suffix == ".gz":
-        temp.write_bytes(gzip.compress(payload, mtime=0))
-    else:
-        temp.write_bytes(payload)
-    temp.replace(args.output)
+    _write_snapshot(args.output, result)
     print(json.dumps({
         "catalogs_discovered": result["catalog_count"],
         "catalog_records_discovered": result["datasets_discovered"],
