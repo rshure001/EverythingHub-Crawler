@@ -984,6 +984,113 @@ def _catalog_membership_coverage_by_source_page(page_rows: list[dict], catalogs:
     }
 
 
+def _build_identity_catalogs(page_rows: list[dict], records, stream_catalogs: bool = False):
+    """Build private one-to-one page/record identity registries.
+
+    These sidecars are deliberately separate from evidence-backed catalog
+    definitions, source page rows, record rows, and public search indexes.
+    """
+    record_map = records if isinstance(records, dict) else {
+        item["record_id"]: item for item in records
+        if isinstance(item, dict) and item.get("record_id")
+    }
+    page_rows_by_id = {
+        page["page_id"]: page for page in page_rows
+        if isinstance(page, dict) and page.get("page_id") and page.get("url")
+    }
+    record_ids_by_page: dict[str, set[str]] = defaultdict(set)
+    for page_id, page in page_rows_by_id.items():
+        record_ids_by_page[page_id].update(
+            record_id for record_id in page.get("record_ids", [])
+            if record_id in record_map
+        )
+    for record_id, record in record_map.items():
+        for page_id in record.get("source_page_ids", []):
+            if page_id in page_rows_by_id:
+                record_ids_by_page[page_id].add(record_id)
+
+    def iter_page_catalogs():
+        for page_id in sorted(page_rows_by_id):
+            page = page_rows_by_id[page_id]
+            url = page["url"]
+            title = _title(page.get("title")) or url
+            record_ids = sorted(record_ids_by_page.get(page_id, set()))
+            yield {
+                "catalog_id": stable_id("catalog", "__page__|" + page_id),
+                "source_key": "__page__|" + page_id,
+                "identity_type": "page",
+                "page_id": page_id,
+                "title": (title[:220] + " — Page Catalog"),
+                "catalog_type": "knowledge_base",
+                "record_type": "page",
+                "subject": title,
+                "source_host": urlsplit(url).hostname or "",
+                "source_url": url,
+                "source_page_ids": [page_id],
+                "source_page_count": 1,
+                "first_seen_at": _timestamp_iso(page.get("fetched_at")),
+                "last_seen_at": _timestamp_iso(page.get("fetched_at")),
+                "record_ids": record_ids,
+                "record_count": len(record_ids),
+                "evidence": ["one_to_one_indexed_page_identity"],
+                "catalog_origin": "page_owned_identity_catalog",
+                "status": "identity_container_pending_validation",
+                "source_terms_status": "not_reviewed",
+                "rights_status": "publicly_accessible_not_cleared_for_redistribution",
+                "record_level_clearance": "not_reviewed",
+                "commercial_eligible": False,
+                "public_search_allowed": False,
+                "verified": False,
+            }
+
+    def iter_record_catalogs():
+        for record_id in sorted(record_map):
+            record = record_map[record_id]
+            source_page_ids = sorted(set(record.get("source_page_ids", [])))
+            page_catalog_ids = sorted({
+                stable_id("catalog", "__page__|" + page_id)
+                for page_id in source_page_ids
+                if page_id in page_rows_by_id
+            })
+            yield {
+                "catalog_id": stable_id("record-catalog", record_id),
+                "source_key": "__record__|" + record_id,
+                "identity_type": "record",
+                "record_id": record_id,
+                "title": _title(record.get("title")) or record_id,
+                "record_type": record.get("record_type", "other"),
+                "page_catalog_ids": page_catalog_ids,
+                "source_catalog_ids": sorted(set(record.get("catalog_ids", []))),
+                "source_page_ids": source_page_ids,
+                "source_urls": sorted(set(record.get("source_urls", []))),
+                "record_ids": [record_id],
+                "catalog_origin": "record_owned_identity_catalog",
+                "status": "identity_container_pending_validation",
+                "source_terms_status": "not_reviewed",
+                "rights_status": "publicly_accessible_not_cleared_for_redistribution",
+                "record_level_clearance": "not_reviewed",
+                "commercial_eligible": False,
+                "public_search_allowed": False,
+                "verified": False,
+            }
+
+    page_catalog_count = len(page_rows_by_id)
+    page_catalogs_with_records = sum(bool(record_ids_by_page.get(page_id)) for page_id in page_rows_by_id)
+    metrics = {
+        "page_owned_identity_catalogs": page_catalog_count,
+        "page_owned_identity_catalogs_with_records": page_catalogs_with_records,
+        "page_owned_identity_catalogs_without_records": page_catalog_count - page_catalogs_with_records,
+        "record_owned_identity_catalogs": len(record_map),
+        "identity_catalogs_total": page_catalog_count + len(record_map),
+    }
+    page_catalogs = iter_page_catalogs()
+    record_catalogs = iter_record_catalogs()
+    if not stream_catalogs:
+        page_catalogs = list(page_catalogs)
+        record_catalogs = list(record_catalogs)
+    return metrics, page_catalogs, record_catalogs
+
+
 def analyze_pages(
     pages: list[dict],
     source_total: int | None = None,
@@ -991,6 +1098,7 @@ def analyze_pages(
     source_index_sha256: str | None = None,
     progress_callback=None,
     progress_interval: int = 500,
+    include_identity_catalogs: bool = True,
 ) -> dict:
     source_page_rows = len(pages)
     pages, duplicate_source_page_rows = _dedupe_source_pages(pages)
@@ -1721,6 +1829,20 @@ def analyze_pages(
     eligibility_rate = (eligible / len(pages) * 100.0) if pages else 0.0
     source_row_deduplication = (duplicate_source_page_rows / source_page_rows * 100.0) if source_page_rows else 0.0
     page_refs = sum(len(x.get("source_page_ids", [])) for x in discovered_catalog_list)
+    if include_identity_catalogs:
+        identity_metrics, page_identity_catalogs, record_identity_catalogs = _build_identity_catalogs(
+            page_rows, record_list, stream_catalogs=False
+        )
+    else:
+        identity_metrics = {
+            "page_owned_identity_catalogs": 0,
+            "page_owned_identity_catalogs_with_records": 0,
+            "page_owned_identity_catalogs_without_records": 0,
+            "record_owned_identity_catalogs": 0,
+            "identity_catalogs_total": 0,
+        }
+        page_identity_catalogs, record_identity_catalogs = [], []
+
     metrics = {
         "pages_analyzed": len(pages),
         "source_page_rows": source_page_rows,
@@ -1793,6 +1915,7 @@ def analyze_pages(
         "eligible_page_coverage_percentage": round(eligible_coverage, 4) if eligible_coverage is not None else None,
         "eligible_unique_source_page_coverage_percentage": round(eligible_coverage, 4) if eligible_coverage is not None else None,
     }
+    metrics.update(identity_metrics)
     return {
         "schema_version": 1,
         "analysis_version": ANALYZER_VERSION,
@@ -1802,6 +1925,8 @@ def analyze_pages(
         "source_index_updated_at": source_updated_at,
         "source_index_sha256": source_index_sha256,
         "metrics": metrics,
+        "page_catalogs": page_identity_catalogs,
+        "record_catalogs": record_identity_catalogs,
         "catalogs": catalog_list,
         "records": record_list,
         "pages": page_rows,
@@ -1980,6 +2105,7 @@ def analyze_pages_incremental(
                 host_pages,
                 source_total=len(host_pages),
                 progress_callback=report_host_progress if progress else None,
+                include_identity_catalogs=False,
             )
             raw = json.dumps({"analyzer_version": ANALYZER_VERSION, "input_sha256": digest, "analysis": shard}, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
             temp = cache_path.with_suffix(".tmp")
@@ -2057,9 +2183,11 @@ def analyze_pages_incremental(
             "records": len(all_records),
             "elapsed_seconds": round(time.monotonic() - global_started, 3),
         }, sort_keys=True), flush=True)
+    identity_metrics, page_identity_catalogs, record_identity_catalogs = _build_identity_catalogs(
+        all_page_rows, all_records, stream_catalogs=True
+    )
     # Keep the canonical record map through all global reconciliation passes.
-    # These helpers accept a dict keyed by record_id; rebuilding a second
-    # million-entry map in each pass needlessly raises peak memory.
+    # The sidecar generators retain this map and stream one identity row at a time.
     all_records = list(all_records.values())
     all_catalogs.sort(key=lambda x: (x["catalog_type"], x["title"].casefold(), x["catalog_id"]))
     all_records.sort(key=lambda x: (x["record_type"], x["title"].casefold(), x["record_id"]))
@@ -2146,12 +2274,15 @@ def analyze_pages_incremental(
         "eligible_unique_source_page_coverage_percentage": round(eligible_coverage, 4) if eligible_coverage is not None else None,
         "host_partitions_reused": reused, "host_partitions_rebuilt": rebuilt,
     }
+    metrics.update(identity_metrics)
     return {
         "schema_version": 1, "analysis_version": ANALYZER_VERSION,
         "strategy": "incremental-host-partitioned-page-content-derived-catalog-candidates",
         "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
         "source_index_pages": source_total, "source_index_updated_at": source_updated_at,
         "source_index_sha256": source_index_sha256, "metrics": metrics,
+        "page_catalogs": page_identity_catalogs,
+        "record_catalogs": record_identity_catalogs,
         "catalogs": all_catalogs,
         "records": all_records, "pages": all_page_rows,
         "media_urls": sorted(all_media),
@@ -2628,6 +2759,41 @@ def _write_gzip(path: Path, payload: dict) -> tuple[int, str]:
     return path.stat().st_size, digest.hexdigest()
 
 
+def _write_gzip_jsonl_catalogs(path: Path, kind: str, catalogs, expected_count: int) -> tuple[int, str, int]:
+    """Write large identity registries as deterministic, line-streamed gzip JSONL."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp = path.with_suffix(path.suffix + ".tmp")
+    encoder = json.JSONEncoder(ensure_ascii=False, separators=(",", ":"))
+    count = 0
+    with temp.open("wb") as raw_file:
+        with gzip.GzipFile(
+            fileobj=raw_file,
+            mode="wb",
+            filename="",
+            compresslevel=9,
+            mtime=0,
+        ) as compressed_file:
+            header = {
+                "schema_version": 1,
+                "kind": kind,
+                "items": expected_count,
+            }
+            compressed_file.write(encoder.encode(header).encode("utf-8") + b"\n")
+            for item in catalogs:
+                compressed_file.write(encoder.encode(item).encode("utf-8") + b"\n")
+                count += 1
+            if count != expected_count:
+                raise ValueError(
+                    f"{kind} stream count mismatch: expected {expected_count}, wrote {count}"
+                )
+    temp.replace(path)
+    digest = hashlib.sha256()
+    with path.open("rb") as compressed_file:
+        for chunk in iter(lambda: compressed_file.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return path.stat().st_size, digest.hexdigest(), count
+
+
 def _singular_search_token(token: str) -> str | None:
     if token in {"news", "series", "species", "politics", "physics", "mathematics", "economics", "ethics"}:
         return None
@@ -2765,6 +2931,28 @@ def write_outputs(analysis: dict, output_dir: Path) -> dict:
         "pages": analysis["pages"],
     })
     files.append({"file": "pages.json.gz", "bytes": size, "sha256": digest, "items": len(analysis["pages"])})
+    page_identity_count = analysis["metrics"].get("page_owned_identity_catalogs", 0)
+    size, digest, written_page_identity_count = _write_gzip_jsonl_catalogs(
+        output_dir / "page-catalogs.jsonl.gz",
+        "page_identity_catalogs",
+        analysis.get("page_catalogs", []),
+        page_identity_count,
+    )
+    files.append({
+        "file": "page-catalogs.jsonl.gz", "bytes": size, "sha256": digest,
+        "items": written_page_identity_count, "format": "jsonl",
+    })
+    record_identity_count = analysis["metrics"].get("record_owned_identity_catalogs", 0)
+    size, digest, written_record_identity_count = _write_gzip_jsonl_catalogs(
+        output_dir / "record-catalogs.jsonl.gz",
+        "record_identity_catalogs",
+        analysis.get("record_catalogs", []),
+        record_identity_count,
+    )
+    files.append({
+        "file": "record-catalogs.jsonl.gz", "bytes": size, "sha256": digest,
+        "items": written_record_identity_count, "format": "jsonl",
+    })
     search_shards = build_search_index(analysis)
     if not search_shards:
         search_shards = {"00": {"version": 1, "prefix": "00", "tokens": {}}}
@@ -2844,6 +3032,8 @@ def write_outputs(analysis: dict, output_dir: Path) -> dict:
         "source_index_updated_at": analysis["source_index_updated_at"],
         "source_index_sha256": analysis.get("source_index_sha256"),
         "catalog_count": len(analysis["catalogs"]), "record_count": len(analysis["records"]),
+        "page_identity_catalog_count": analysis["metrics"].get("page_owned_identity_catalogs", 0),
+        "record_identity_catalog_count": analysis["metrics"].get("record_owned_identity_catalogs", 0),
         "generated_at": analysis["generated_at"],
         "metrics": analysis["metrics"],
         "source_policy_review": analysis.get("source_policy_review"),
@@ -2878,7 +3068,10 @@ def validate_outputs(output_dir: Path) -> dict:
         raise ValueError("source policy review summary is missing or overstates record-level clearance")
     pages_raw = (output_dir / "pages.json.gz").read_bytes()
     pages = json.loads(gzip.decompress(pages_raw).decode("utf-8"))["pages"]
-    page_by_id = {item["page_id"]: item for item in pages if item.get("page_id")}
+    page_by_id = {
+        item["page_id"]: item for item in pages
+        if item.get("page_id") and item.get("url")
+    }
     media_payload = json.loads(gzip.decompress((output_dir / "media-references.json.gz").read_bytes()).decode("utf-8"))
     media_references = media_payload.get("references", [])
     media_pairs = [(x.get("source_page_id"), x.get("media_url")) for x in media_references]
@@ -2917,6 +3110,136 @@ def validate_outputs(output_dir: Path) -> dict:
     records_by_id = {x["record_id"]: x for x in records}
     if len(record_ids) != len(set(record_ids)) or len(records) != manifest["record_count"]:
         raise ValueError("global record registry contains duplicates or a count mismatch")
+
+    record_ids_by_page: dict[str, set[str]] = defaultdict(set)
+    for page in pages:
+        page_id = page.get("page_id")
+        if page_id:
+            record_ids_by_page[page_id].update(
+                record_id for record_id in page.get("record_ids", [])
+                if record_id in records_by_id
+            )
+    for record in records:
+        for page_id in record.get("source_page_ids", []):
+            if page_id in page_by_id:
+                record_ids_by_page[page_id].add(record["record_id"])
+
+    manifest_entries = {item["file"]: item for item in manifest.get("files", [])}
+    page_identity_path = output_dir / "page-catalogs.jsonl.gz"
+    record_identity_path = output_dir / "record-catalogs.jsonl.gz"
+    page_identity_entry = manifest_entries.get("page-catalogs.jsonl.gz")
+    record_identity_entry = manifest_entries.get("record-catalogs.jsonl.gz")
+    expected_page_identity_count = len(page_by_id)
+    expected_record_identity_count = len(records_by_id)
+    if (
+        page_identity_entry is None
+        or record_identity_entry is None
+        or page_identity_entry.get("format") != "jsonl"
+        or record_identity_entry.get("format") != "jsonl"
+        or page_identity_entry.get("items") != expected_page_identity_count
+        or record_identity_entry.get("items") != expected_record_identity_count
+        or manifest.get("page_identity_catalog_count") != expected_page_identity_count
+        or manifest.get("record_identity_catalog_count") != expected_record_identity_count
+    ):
+        raise ValueError("page/record identity sidecar manifest counts are missing or inconsistent")
+
+    def validate_private_identity_status(item: dict) -> None:
+        if (
+            item.get("status") != "identity_container_pending_validation"
+            or item.get("source_terms_status") != "not_reviewed"
+            or item.get("rights_status") != "publicly_accessible_not_cleared_for_redistribution"
+            or item.get("record_level_clearance") != "not_reviewed"
+            or item.get("commercial_eligible") is not False
+            or item.get("public_search_allowed") is not False
+            or item.get("verified") is not False
+        ):
+            raise ValueError("identity sidecar overstates verification, rights, or publication status")
+
+    registry_catalog_ids = {
+        item.get("catalog_id") for item in registry.get("catalogs", [])
+        if isinstance(item, dict) and item.get("catalog_id")
+    }
+    seen_page_identity_count = 0
+    previous_page_identity_id = None
+    with gzip.open(page_identity_path, "rt", encoding="utf-8") as stream:
+        header = json.loads(stream.readline())
+        if (
+            header.get("schema_version") != 1
+            or header.get("kind") != "page_identity_catalogs"
+            or header.get("items") != expected_page_identity_count
+        ):
+            raise ValueError("page identity sidecar header is invalid")
+        for line in stream:
+            if not line.strip():
+                continue
+            item = json.loads(line)
+            page_id = item.get("page_id")
+            page = page_by_id.get(page_id)
+            if (
+                page is None
+                or not isinstance(page_id, str)
+                or (previous_page_identity_id is not None and page_id <= previous_page_identity_id)
+                or item.get("identity_type") != "page"
+                or item.get("catalog_id") != stable_id("catalog", "__page__|" + page_id)
+                or item.get("catalog_id") in registry_catalog_ids
+                or item.get("source_key") != "__page__|" + page_id
+                or item.get("source_page_ids") != [page_id]
+                or item.get("source_url") != page.get("url")
+                or item.get("record_ids") != sorted(record_ids_by_page.get(page_id, set()))
+                or item.get("record_count") != len(record_ids_by_page.get(page_id, set()))
+                or item.get("catalog_origin") != "page_owned_identity_catalog"
+            ):
+                raise ValueError("page identity catalog provenance or stable ID is invalid")
+            validate_private_identity_status(item)
+            seen_page_identity_count += 1
+            previous_page_identity_id = page_id
+    if seen_page_identity_count != expected_page_identity_count:
+        raise ValueError("page identity sidecar does not contain exactly one row per source page")
+
+    seen_record_identity_count = 0
+    previous_record_identity_id = None
+    with gzip.open(record_identity_path, "rt", encoding="utf-8") as stream:
+        header = json.loads(stream.readline())
+        if (
+            header.get("schema_version") != 1
+            or header.get("kind") != "record_identity_catalogs"
+            or header.get("items") != expected_record_identity_count
+        ):
+            raise ValueError("record identity sidecar header is invalid")
+        for line in stream:
+            if not line.strip():
+                continue
+            item = json.loads(line)
+            record_id = item.get("record_id")
+            record = records_by_id.get(record_id)
+            expected_source_pages = sorted(set(record.get("source_page_ids", []))) if record else []
+            expected_page_catalog_ids = sorted({
+                stable_id("catalog", "__page__|" + page_id)
+                for page_id in expected_source_pages
+                if page_id in page_by_id
+            })
+            if (
+                record is None
+                or not isinstance(record_id, str)
+                or (previous_record_identity_id is not None and record_id <= previous_record_identity_id)
+                or item.get("identity_type") != "record"
+                or item.get("catalog_id") != stable_id("record-catalog", record_id)
+                or item.get("catalog_id") in registry_catalog_ids
+                or item.get("source_key") != "__record__|" + record_id
+                or item.get("record_ids") != [record_id]
+                or item.get("record_type") != record.get("record_type")
+                or item.get("page_catalog_ids") != expected_page_catalog_ids
+                or item.get("source_catalog_ids") != sorted(set(record.get("catalog_ids", [])))
+                or item.get("source_page_ids") != expected_source_pages
+                or item.get("source_urls") != sorted(set(record.get("source_urls", [])))
+                or item.get("catalog_origin") != "record_owned_identity_catalog"
+            ):
+                raise ValueError("record identity catalog provenance or stable ID is invalid")
+            validate_private_identity_status(item)
+            seen_record_identity_count += 1
+            previous_record_identity_id = record_id
+    if seen_record_identity_count != expected_record_identity_count:
+        raise ValueError("record identity sidecar does not contain exactly one row per record")
     for page in pages:
         page_record_ids = page.get("record_ids", [])
         if not isinstance(page_record_ids, list) or len(page_record_ids) != len(set(page_record_ids)):
@@ -3029,6 +3352,10 @@ def validate_outputs(output_dir: Path) -> dict:
         raw = path.read_bytes()
         if len(raw) != entry["bytes"] or hashlib.sha256(raw).hexdigest() != entry["sha256"]:
             raise ValueError("catalog analysis artifact integrity mismatch: " + entry["file"])
+        if entry["file"] in ("page-catalogs.jsonl.gz", "record-catalogs.jsonl.gz"):
+            if entry.get("format") != "jsonl":
+                raise ValueError("identity sidecar format declaration is invalid")
+            continue
         payload = json.loads(gzip.decompress(raw).decode("utf-8"))
         if entry["file"].startswith("indexes/"):
             index_parts = Path(entry["file"]).parts
@@ -3105,6 +3432,12 @@ def validate_outputs(output_dir: Path) -> dict:
     if with_catalogs + without_catalogs != eligible_page_count or multiple_catalogs > with_catalogs:
         raise ValueError("source-page catalog coverage metrics do not match eligible pages")
     if (
+        metrics.get("page_owned_identity_catalogs") != expected_page_identity_count
+        or metrics.get("record_owned_identity_catalogs") != expected_record_identity_count
+        or metrics.get("identity_catalogs_total") != expected_page_identity_count + expected_record_identity_count
+    ):
+        raise ValueError("identity sidecar metrics do not match validated registries")
+    if (
         not search_index_prefixes
         or metrics.get("search_index_tokens") != len(search_index_tokens)
         or metrics.get("search_index_shards") != len(search_index_prefixes)
@@ -3117,6 +3450,8 @@ def validate_outputs(output_dir: Path) -> dict:
         "catalogs": len(catalog_ids),
         "pages_analyzed": len(pages),
         "records_validated": len(records),
+        "page_identity_catalogs_validated": seen_page_identity_count,
+        "record_identity_catalogs_validated": seen_record_identity_count,
         "media_references_validated": len(media_references),
         "unique_media_urls": len(unique_media_urls),
         "files_validated": len(manifest["files"]),
