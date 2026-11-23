@@ -68,7 +68,7 @@ HOST_LANES = {
 
 
 def classify_lane(url: str) -> str:
-    """Return one of the eight supported lanes; unknown hosts remain general."""
+    """Return one of the supported search lanes; unknown hosts remain general."""
     try:
         host = (urlsplit(str(url)).hostname or "").lower().rstrip(".")
     except ValueError:
