@@ -2247,7 +2247,7 @@ class AdditionalSourcePolicyReviewTests(unittest.TestCase):
             self.assertEqual(record["source_terms_status"], "not_reviewed")
             self.assertFalse(record["commercial_eligible"])
 
-    def test_record_and_page_ids_are_not_promoted_to_identity_catalogs(self):
+    def test_record_and_page_identity_catalogs_are_private_sidecars(self):
         pages = [
             {
                 "url": "https://www.rolex.com/watches/submariner",
@@ -2267,15 +2267,27 @@ class AdditionalSourcePolicyReviewTests(unittest.TestCase):
         result = analyze_pages(pages, source_total=2)
         records = {item["record_id"]: item for item in result["records"]}
         self.assertTrue(records)
-        self.assertNotIn("page_catalogs", result)
-        self.assertNotIn("record_catalogs", result)
-        self.assertNotIn("page_catalogs", result["metrics"])
-        self.assertNotIn("record_catalogs", result["metrics"])
+        self.assertEqual(len(result["page_catalogs"]), 2)
+        self.assertEqual(len(result["record_catalogs"]), len(records))
+        self.assertEqual(result["metrics"]["page_owned_identity_catalogs"], 2)
+        self.assertEqual(result["metrics"]["record_owned_identity_catalogs"], len(records))
+        self.assertEqual(
+            result["metrics"]["identity_catalogs_total"],
+            2 + len(records),
+        )
         real_catalog_ids = {item["catalog_id"] for item in result["catalogs"]}
+        page_identities = {item["page_id"]: item for item in result["page_catalogs"]}
+        record_identities = {item["record_id"]: item for item in result["record_catalogs"]}
         for page in result["pages"]:
             self.assertTrue(page["page_id"])
             self.assertNotIn("page_catalog_id", page)
             self.assertNotIn("record_catalog_ids", page)
+            identity = page_identities[page["page_id"]]
+            self.assertEqual(identity["catalog_id"], stable_id("catalog", "__page__|" + page["page_id"]))
+            self.assertEqual(identity["record_ids"], page["record_ids"])
+            self.assertFalse(identity["public_search_allowed"])
+            self.assertFalse(identity["verified"])
+            self.assertNotIn(identity["catalog_id"], real_catalog_ids)
             for record_id in page["record_ids"]:
                 self.assertIn(page["page_id"], records[record_id]["source_page_ids"])
         for record in records.values():
@@ -2287,21 +2299,42 @@ class AdditionalSourcePolicyReviewTests(unittest.TestCase):
             self.assertNotIn("page_catalog_ids", record)
             self.assertTrue(record["source_page_ids"])
             self.assertTrue(set(record.get("catalog_ids", [])).issubset(real_catalog_ids))
+            identity = record_identities[record["record_id"]]
+            self.assertEqual(identity["catalog_id"], stable_id("record-catalog", record["record_id"]))
+            self.assertEqual(identity["record_ids"], [record["record_id"]])
+            self.assertEqual(identity["source_catalog_ids"], record["catalog_ids"])
+            self.assertEqual(
+                identity["page_catalog_ids"],
+                sorted(stable_id("catalog", "__page__|" + page_id) for page_id in record["source_page_ids"]),
+            )
+            self.assertFalse(identity["public_search_allowed"])
+            self.assertFalse(identity["verified"])
+            self.assertNotIn(identity["catalog_id"], real_catalog_ids)
 
         with tempfile.TemporaryDirectory() as tmp:
             output = Path(tmp)
             manifest = write_outputs(result, output)
             listed_files = {item["file"] for item in manifest["files"]}
+            self.assertIn("page-catalogs.jsonl.gz", listed_files)
+            self.assertIn("record-catalogs.jsonl.gz", listed_files)
             self.assertNotIn("page-catalogs.json.gz", listed_files)
             self.assertNotIn("record-catalogs.json.gz", listed_files)
-            self.assertFalse((output / "page-catalogs.json.gz").exists())
-            self.assertFalse((output / "record-catalogs.json.gz").exists())
-            pages_payload = json.loads(
-                gzip.decompress((output / "pages.json.gz").read_bytes())
-            )
-            records_payload = json.loads(
-                gzip.decompress((output / "records.json.gz").read_bytes())
-            )
+            with gzip.open(output / "page-catalogs.jsonl.gz", "rt", encoding="utf-8") as stream:
+                page_header = json.loads(stream.readline())
+                page_rows = [json.loads(line) for line in stream if line.strip()]
+            with gzip.open(output / "record-catalogs.jsonl.gz", "rt", encoding="utf-8") as stream:
+                record_header = json.loads(stream.readline())
+                record_rows = [json.loads(line) for line in stream if line.strip()]
+            self.assertEqual(page_header["items"], 2)
+            self.assertEqual(record_header["items"], len(records))
+            self.assertEqual(len(page_rows), 2)
+            self.assertEqual(len(record_rows), len(records))
+            pages_payload = json.loads(gzip.decompress((output / "pages.json.gz").read_bytes()))
+            records_payload = json.loads(gzip.decompress((output / "records.json.gz").read_bytes()))
+            registry = json.loads(gzip.decompress((output / "registry.json.gz").read_bytes()))
+            registry_ids = {item["catalog_id"] for item in registry["catalogs"]}
+            self.assertTrue(all(item["catalog_id"] not in registry_ids for item in page_rows))
+            self.assertTrue(all(item["catalog_id"] not in registry_ids for item in record_rows))
             for page in pages_payload["pages"]:
                 self.assertNotIn("page_catalog_id", page)
                 self.assertNotIn("record_catalog_ids", page)
@@ -2310,6 +2343,8 @@ class AdditionalSourcePolicyReviewTests(unittest.TestCase):
                 self.assertNotIn("page_catalog_ids", record)
             validated = validate_outputs(output)
             self.assertEqual(validated["records_validated"], len(result["records"]))
+            self.assertEqual(validated["page_identity_catalogs_validated"], 2)
+            self.assertEqual(validated["record_identity_catalogs_validated"], len(records))
 
 if __name__ == "__main__":
     unittest.main()
