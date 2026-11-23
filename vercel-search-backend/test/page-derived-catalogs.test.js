@@ -3,7 +3,7 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const crypto=require('node:crypto');
 const zlib=require('node:zlib');
-const {validatePageDerivedCatalogs,loadPageDerivedCatalogsFromManifest,loadQueryScopedPageDerivedCatalogs,searchPageDerivedCatalogs,resolveRecordRelatedCatalog}=require('../src/lib/page-derived-catalogs');
+const {validatePageDerivedCatalogs,loadPageDerivedCatalogsFromManifest,loadQueryScopedPageDerivedCatalogs,searchPageDerivedCatalogs,resolveRelatedRecords}=require('../src/lib/page-derived-catalogs');
 const gzip=value=>zlib.gzipSync(Buffer.from(JSON.stringify(value)));
 const hash=buffer=>crypto.createHash('sha256').update(buffer).digest('hex');
 
@@ -14,7 +14,7 @@ function fixture(){
   {catalog_id:'catalog-articles',title:'General Articles',catalog_type:'knowledge_base',record_type:'article',subject:'articles',source_host:'example.org',source_url:'https://example.org/articles',source_page_ids:['page-article'],source_page_count:1,record_ids:['record-article'],record_count:1,is_source_declared_catalog:true,catalog_origin:'source_declared_collection',evidence_strength:'high',catalog_status:'candidate_needs_source_validation',source_terms_status:'not_reviewed',rights_status:'publicly_accessible_not_cleared_for_redistribution',commercial_eligible:false,status:'candidate_needs_source_validation'}
  ];
  const records=[
-  {record_id:'record-rolex',record_catalog_id:'record-catalog-rolex',entity_id:'entity-rolex',canonical_entity_key:'product:rolex-submariner',record_type:'product',title:'Rolex Submariner Date',description:'Swiss dive watch',source_urls:['https://example.com/rolex/submariner'],source_page_ids:['page-rolex'],catalog_ids:['catalog-rolex'],last_seen_at:'2026-11-20T20:00:00Z',attributes:{brand:'Rolex',model:'Submariner Date'},commercial_eligible:false,source_terms_status:'not_reviewed',rights_status:'publicly_accessible_not_cleared_for_redistribution'},
+  {record_id:'record-rolex',entity_id:'entity-rolex',canonical_entity_key:'product:rolex-submariner',record_type:'product',title:'Rolex Submariner Date',description:'Swiss dive watch',source_urls:['https://example.com/rolex/submariner'],source_page_ids:['page-rolex'],catalog_ids:['catalog-rolex'],last_seen_at:'2026-11-20T20:00:00Z',attributes:{brand:'Rolex',model:'Submariner Date'},commercial_eligible:false,source_terms_status:'not_reviewed',rights_status:'publicly_accessible_not_cleared_for_redistribution'},
   {record_id:'record-vegas',entity_id:'entity-vegas',canonical_entity_key:'place:las-vegas-strip',record_type:'place',title:'Las Vegas Strip',description:'Las Vegas, Nevada',source_urls:['https://example.net/places/las-vegas-strip'],source_page_ids:['page-vegas'],catalog_ids:['catalog-vegas'],last_seen_at:'2026-11-20T20:00:00Z',attributes:{},commercial_eligible:false,source_terms_status:'not_reviewed',rights_status:'publicly_accessible_not_cleared_for_redistribution'},
   {record_id:'record-article',entity_id:'entity-article',canonical_entity_key:'article:general-reference',record_type:'article',title:'General reference article',description:'Mentions Rolex once in passing',source_urls:['https://example.org/articles/general-reference'],source_page_ids:['page-article'],catalog_ids:['catalog-articles'],last_seen_at:'2026-11-20T20:00:00Z',attributes:{},commercial_eligible:false,source_terms_status:'not_reviewed',rights_status:'publicly_accessible_not_cleared_for_redistribution'}
  ];
@@ -24,13 +24,13 @@ function fixture(){
  return {manifest,registry,recordsFile,manifestRaw:Buffer.from(JSON.stringify(manifest))};
 }
 
-test('per-record related catalogs deduplicate shared memberships and exclude the owner',()=>{
+test('related records use canonical record IDs and deduplicate shared memberships',()=>{
  const network={
   records:[
-   {record_id:'owner',record_catalog_id:'rc-owner',title:'Owner record',record_type:'model',catalog_ids:['shared-a','shared-b'],source_urls:['https://example.com/owner']},
-   {record_id:'related-a',record_catalog_id:'rc-a',title:'Related A',record_type:'model',catalog_ids:['shared-a'],source_urls:['https://example.com/a']},
-   {record_id:'related-b',record_catalog_id:'rc-b',title:'Related B',record_type:'model',catalog_ids:['shared-a','shared-b'],source_urls:['https://example.com/b']},
-   {record_id:'unrelated',record_catalog_id:'rc-unrelated',title:'Unrelated',record_type:'place',catalog_ids:['other'],source_urls:['https://example.com/other']}
+   {record_id:'owner',title:'Owner record',record_type:'model',catalog_ids:['shared-a','shared-b'],source_urls:['https://example.com/owner']},
+   {record_id:'related-a',title:'Related A',record_type:'model',catalog_ids:['shared-a'],source_urls:['https://example.com/a']},
+   {record_id:'related-b',title:'Related B',record_type:'model',catalog_ids:['shared-a','shared-b'],source_urls:['https://example.com/b']},
+   {record_id:'unrelated',title:'Unrelated',record_type:'place',catalog_ids:['other'],source_urls:['https://example.com/other']}
   ],
   catalogs:[
    {catalog_id:'shared-a',record_ids:['owner','related-a','related-b']},
@@ -38,15 +38,15 @@ test('per-record related catalogs deduplicate shared memberships and exclude the
    {catalog_id:'other',record_ids:['unrelated']}
   ]
  };
- const result=resolveRecordRelatedCatalog('rc-owner',network,1,0);
+ const result=resolveRelatedRecords('owner',network,1,0);
  assert.equal(result.owner_record.record_id,'owner');
  assert.equal(result.related_count,2);
  assert.equal(result.related_records.length,1);
  assert.equal(result.related_records[0].record_id,'related-a');
  assert.equal(result.has_more,true);
- const next=resolveRecordRelatedCatalog('rc-owner',network,1,1);
+ const next=resolveRelatedRecords('owner',network,1,1);
  assert.equal(next.related_records[0].record_id,'related-b');
- assert.equal(resolveRecordRelatedCatalog('missing',network),null);
+ assert.equal(resolveRelatedRecords('missing',network),null);
 });
 
 test('validates the compressed registry and global records against the manifest',()=>{
@@ -85,7 +85,8 @@ test('Rolex favors the product catalog and excludes weak article-only mentions',
 });
 test('search results carry the dedicated related-catalog identity for each record',()=>{
  const f=fixture(),network=validatePageDerivedCatalogs(f.manifest,f.registry,f.recordsFile),results=searchPageDerivedCatalogs('Rolex',network,5);
- assert.equal(results[0].matched_records[0].record_catalog_id,'record-catalog-rolex');
+ assert.equal(results[0].matched_records[0].record_id,'record-rolex');
+  assert.equal('record_catalog_id' in results[0].matched_records[0],false);
 });
 
 test('Las Vegas ranks the geographic place catalog',()=>{
