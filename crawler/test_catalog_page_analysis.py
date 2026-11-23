@@ -58,6 +58,31 @@ class PageDerivedCatalogAnalysisTests(unittest.TestCase):
         self.assertEqual(result["metrics"]["unique_records"], 0)
         self.assertEqual(result["metrics"]["records_published"], 0)
 
+    def test_gzip_writer_streams_json_without_materializing_full_payload(self):
+        payload = {
+            "records": [
+                {"record_id": f"record:{index}", "title": "Catalog item " + str(index), "tags": ["one", "two"]}
+                for index in range(250)
+            ],
+            "unicode": "Las Vegas — NASA — Rolex",
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            first_path = Path(tmp) / "first.json.gz"
+            second_path = Path(tmp) / "second.json.gz"
+            with patch.object(analysis_module.json, "dumps", side_effect=AssertionError("full-payload json.dumps is not allowed")):
+                first_size, first_digest = analysis_module._write_gzip(first_path, payload)
+                second_size, second_digest = analysis_module._write_gzip(second_path, payload)
+
+            first_bytes = first_path.read_bytes()
+            second_bytes = second_path.read_bytes()
+            self.assertEqual(first_bytes, second_bytes)
+            self.assertEqual(first_size, len(first_bytes))
+            self.assertEqual(second_size, len(second_bytes))
+            self.assertEqual(first_digest, hashlib.sha256(first_bytes).hexdigest())
+            self.assertEqual(second_digest, first_digest)
+            self.assertEqual(json.loads(gzip.decompress(first_bytes)), payload)
+            self.assertFalse(first_path.with_suffix(first_path.suffix + ".tmp").exists())
+
     def test_analyze_pages_emits_bounded_progress_callbacks(self):
         pages = [{
             "url": "https://example.org/about/" + str(index),
