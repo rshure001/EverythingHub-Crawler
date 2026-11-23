@@ -319,8 +319,13 @@ class UniversalCatalogIngestTests(unittest.TestCase):
         self.assertEqual(len(subcatalogs), 2)
         self.assertEqual({c["subcategory_kind"] for c in subcatalogs}, {"organization", "tag"})
         self.assertTrue(all(c["parent_catalog_id"] == root["catalog_id"] for c in subcatalogs))
-        self.assertTrue(all(c["record_level_clearance"] == "not_reviewed" for c in subcatalogs))
-        self.assertTrue(all(c["public_search_allowed"] is False for c in subcatalogs))
+        self.assertTrue(all(c["record_level_clearance"] == "eligible_per_record" for c in subcatalogs))
+        self.assertTrue(all(c["metadata_only"] is False for c in subcatalogs))
+        self.assertTrue(all(c["public_search_allowed"] is True for c in subcatalogs))
+        index_manifest, _ = build_public_catalog_indexes(result)
+        self.assertEqual(index_manifest["catalogs_with_public_records"], 3)
+        self.assertEqual(index_manifest["unique_public_records"], 3)
+        self.assertEqual(index_manifest["public_record_memberships"], 8)
         by_title = {r["title"]: r for r in result["records"]}
         transport = next(c for c in subcatalogs if c["subcategory_kind"] == "organization")
         roads = next(c for c in subcatalogs if c["subcategory_kind"] == "tag")
@@ -461,8 +466,8 @@ class UniversalCatalogIngestTests(unittest.TestCase):
                     "dataset_id": "roads-3",
                     "title": "Road Network Three",
                     "landing_url": "https://open.canada.ca/data/en/dataset/roads-3",
-                    "organization": "Transport Canada",
-                    "tags": ["roads", "transport"],
+                    "organization": "Restricted Agency",
+                    "tags": ["restricted-only"],
                     "license": {
                         "id": "ogl-canada",
                         "url": "https://open.canada.ca/en/open-government-licence-canada/",
@@ -476,8 +481,8 @@ class UniversalCatalogIngestTests(unittest.TestCase):
                     "dataset_id": "roads-4",
                     "title": "Road Network Four",
                     "landing_url": "https://open.canada.ca/data/en/dataset/roads-4",
-                    "organization": "Transport Canada",
-                    "tags": ["roads", "transport"],
+                    "organization": "Restricted Agency",
+                    "tags": ["restricted-only"],
                     "license": {
                         "id": "proprietary-license",
                         "title": "Proprietary License",
@@ -492,8 +497,8 @@ class UniversalCatalogIngestTests(unittest.TestCase):
                     "dataset_id": "roads-5",
                     "title": "Road Network Five",
                     "landing_url": "https://open.canada.ca/data/en/dataset/roads-5",
-                    "organization": "Transport Canada",
-                    "tags": ["roads", "transport"],
+                    "organization": "Restricted Agency",
+                    "tags": ["restricted-only"],
                     "license": {
                         "id": "unknown-license",
                         "title": "Unverified License",
@@ -514,17 +519,19 @@ class UniversalCatalogIngestTests(unittest.TestCase):
 
         self.assertEqual(manifest["catalog_count"], len(result["catalogs"]))
         self.assertEqual(len(manifest["catalog_indexes"]), len(result["catalogs"]))
-        self.assertEqual(manifest["catalogs_with_public_records"], 1)
-        self.assertEqual(manifest["catalogs_without_public_records"], len(subcatalogs))
+        self.assertEqual(len(subcatalogs), 1)
+        self.assertEqual(manifest["catalogs_with_public_records"], 2)
+        self.assertEqual(manifest["catalogs_without_public_records"], 0)
         self.assertEqual(manifest["unique_public_records"], 2)
-        self.assertEqual(manifest["public_record_memberships"], 2)
+        self.assertEqual(manifest["public_record_memberships"], 4)
+        self.assertEqual(manifest["staged_record_catalog_memberships"], 7)
         self.assertEqual(manifest["restricted_records_not_indexed"], 3)
         self.assertEqual(manifest["eligible_records_without_public_index"], 0)
         self.assertEqual(manifest["records_published"], 0)
         self.assertFalse(manifest["production_indexed"])
         self.assertEqual(result["metrics"]["catalog_indexes_built"], len(result["catalogs"]))
         self.assertEqual(result["metrics"]["unique_public_records_indexed"], 2)
-        self.assertEqual(result["metrics"]["public_record_catalog_memberships"], 2)
+        self.assertEqual(result["metrics"]["public_record_catalog_memberships"], 4)
         self.assertEqual(result["metrics"]["restricted_records_excluded_from_public_indexes"], 3)
         self.assertEqual(result["metrics"]["production_eligible_records"], 2)
         self.assertEqual(result["metrics"]["restricted_records"], 3)
@@ -545,18 +552,26 @@ class UniversalCatalogIngestTests(unittest.TestCase):
                 rows[row["catalog_id"]] = row
 
         self.assertEqual(set(rows), {c["catalog_id"] for c in result["catalogs"]})
-        self.assertEqual(rows[root["catalog_id"]]["record_ids"], sorted([
-            public_record["record_id"], second_public_record["record_id"]
-        ]))
+        public_ids = sorted([public_record["record_id"], second_public_record["record_id"]])
+        self.assertEqual(rows[root["catalog_id"]]["record_ids"], public_ids)
+        subcatalog = subcatalogs[0]
+        self.assertEqual(rows[subcatalog["catalog_id"]]["record_ids"], public_ids)
+        self.assertEqual(subcatalog["record_count"], 2)
+        self.assertEqual(subcatalog["record_level_clearance"], "eligible_per_record")
+        self.assertFalse(subcatalog["metadata_only"])
+        self.assertTrue(subcatalog["public_search_allowed"])
+        self.assertNotIn("Restricted Agency", [c.get("subcategory_value") for c in subcatalogs])
+        self.assertNotIn("restricted-only", [c.get("subcategory_value") for c in subcatalogs])
         indexed_record_ids = {record_id for row in rows.values() for record_id in row["record_ids"]}
+        self.assertEqual(indexed_record_ids, set(public_ids))
         self.assertNotIn(private_record["record_id"], indexed_record_ids)
         self.assertNotIn(closed_record["record_id"], indexed_record_ids)
         self.assertNotIn(unknown_record["record_id"], indexed_record_ids)
+        self.assertFalse(private_record["attributes"]["public_search_allowed"])
         self.assertFalse(closed_record["attributes"]["public_search_allowed"])
         self.assertEqual(closed_record["attributes"]["rights_status"], "closed_license")
         self.assertFalse(unknown_record["attributes"]["public_search_allowed"])
         self.assertEqual(unknown_record["attributes"]["rights_status"], "license_metadata_present")
-        self.assertTrue(all(not rows[c["catalog_id"]]["record_ids"] for c in subcatalogs))
 
         catalog_by_id = {c["catalog_id"]: c for c in result["catalogs"]}
         for entry in manifest["catalog_indexes"]:
