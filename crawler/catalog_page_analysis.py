@@ -992,7 +992,7 @@ def _attach_record_catalogs(page_rows: list[dict], records) -> dict[str, int]:
         })
     return {
         "record_catalogs": len(rows),
-        "record_pages_with_catalogs": len(rows),
+        "record_pages_with_catalogs": sum(bool(page.get("record_catalog_ids")) for page in page_rows if isinstance(page, dict)),
         "record_catalog_membership_edges": sum(len(row["shared_catalog_ids"]) for row in rows),
         "record_catalogs_with_shared_sources": sum(bool(row["shared_catalog_ids"]) for row in rows),
         "record_catalogs_awaiting_related_items": sum(not row["shared_catalog_ids"] for row in rows),
@@ -3019,6 +3019,14 @@ def validate_outputs(output_dir: Path) -> dict:
     catalogs_by_id = {x["catalog_id"]: x for x in catalogs}
     if len(catalog_ids) != len(set(catalog_ids)):
         raise ValueError("duplicate catalog IDs remain after deduplication")
+    for record_id, record_catalog in record_catalogs_by_owner.items():
+        if (
+            not set(record_catalog.get("shared_catalog_ids", [])).issubset(catalogs_by_id)
+            or not set(record_catalog.get("source_page_ids", [])).issubset(records_by_id[record_id].get("source_page_ids", []))
+            or any(record_id not in catalogs_by_id[catalog_id].get("record_ids", [])
+                   for catalog_id in record_catalog.get("shared_catalog_ids", []))
+        ):
+            raise ValueError("record-related catalog points to an invalid shared catalog or provenance")
     for catalog in catalogs:
         if stable_id("catalog", catalog.get("source_key", "")) != catalog.get("catalog_id"):
             raise ValueError("catalog ID does not match its canonical source key")
