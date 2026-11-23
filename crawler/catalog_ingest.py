@@ -138,6 +138,9 @@ def _build_subcatalogs(
 def adapt(manifest: dict[str, Any]) -> dict[str, Any]:
     catalogs, source_pages = [], []
     records_by_id: dict[str, dict[str, Any]] = {}
+    excluded_sources = [dict(row) for row in (manifest.get("restricted_source_exclusions") or []) if isinstance(row, dict)]
+    excluded_source_records = sum(max(0, int(row.get("records_excluded") or 0)) for row in excluded_sources)
+    excluded_source_catalogs = sum(max(0, int(row.get("catalogs_excluded") or 0)) for row in excluded_sources)
     for source in manifest.get("catalogs", []):
         source_id = source.get("id")
         if not source_id:
@@ -155,12 +158,24 @@ def adapt(manifest: dict[str, Any]) -> dict[str, Any]:
         source_terms_status = source_policy.get("terms_status", "unreviewed")
         source_terms_url = source_policy.get("terms_url") or ""
         source_terms_reviewed_at = source_policy.get("reviewed_at") or ""
-        catalog_policy_approved = (
+        source_terms_approved = (
             source_policy.get("discovery_allowed") is True
             and source_terms_status in ("reviewed", "reviewed_per_dataset")
             and bool(source_terms_reviewed_at)
-            and catalog_type != "library_archive"
         )
+        if not source_terms_approved:
+            excluded_sources.append({
+                "catalog_id": source_id,
+                "source_url": source.get("source_url") or base,
+                "source_terms_status": source_terms_status,
+                "records_excluded": len(datasets),
+                "catalogs_excluded": 1,
+                "reason": "source policy does not authorize discovery or source terms are not reviewed",
+            })
+            excluded_source_records += len(datasets)
+            excluded_source_catalogs += 1
+            continue
+        catalog_policy_approved = source_terms_approved and catalog_type != "library_archive"
         catalog = normalize_catalog({
             "source_id": source_id,
             "title": source.get("name") or source_id,
@@ -365,6 +380,8 @@ def adapt(manifest: dict[str, Any]) -> dict[str, Any]:
     for catalog in catalogs:
         catalog["record_count"] = membership_counts.get(catalog["catalog_id"], 0)
     metrics = catalog_metrics(catalogs, records, source_pages)
+    metrics["restricted_source_catalogs_excluded"] = excluded_source_catalogs
+    metrics["restricted_source_records_excluded"] = excluded_source_records
     metrics["production_eligible_records"] = sum(
         1 for record in records if (record.get("attributes") or {}).get("public_search_allowed") is True
     )
@@ -386,6 +403,7 @@ def adapt(manifest: dict[str, Any]) -> dict[str, Any]:
         "metrics": metrics,
         "catalogs": catalogs,
         "records": records,
+        "excluded_sources": excluded_sources,
         "source_pages": source_pages,
     }
 
@@ -567,10 +585,21 @@ def main() -> None:
     if OPENLIBRARY_INPUT.exists():
         extra_raw = gzip.decompress(OPENLIBRARY_INPUT.read_bytes())
         extra = json.loads(extra_raw.decode("utf-8"))
+        restricted_exclusions = list(manifest.get("restricted_source_exclusions") or [])
+        if extra.get("source_policy_status") == "restricted":
+            restricted_exclusions.append({
+                "catalog_id": "openlibrary",
+                "source_url": "https://openlibrary.org",
+                "source_terms_status": extra.get("source_policy_status"),
+                "records_excluded": max(0, int(extra.get("previous_snapshot_records_excluded") or 0)),
+                "catalogs_excluded": max(0, int(extra.get("previous_snapshot_catalogs_excluded") or 0)),
+                "reason": extra.get("reason") or "source policy restricts bulk discovery",
+            })
         manifest = {
             **manifest,
             "catalogs": manifest.get("catalogs", []) + extra.get("catalogs", []),
             "datasets": manifest.get("datasets", []) + extra.get("datasets", []),
+            "restricted_source_exclusions": restricted_exclusions,
         }
     result = adapt(manifest)
     index_manifest, index_shards = build_public_catalog_indexes(result)
