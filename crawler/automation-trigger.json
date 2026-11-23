@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "updated_at": "2026-11-23T16:11:32.906Z",
-  "reason": "Explicit workflow_dispatch fallback after scheduled crawl delivery was 1191s old (>10 minutes); no queued or running crawler; public manifest was 689s old (>10 minutes). One bounded recovery crawl; normal schedule unchanged.",
-  "manifest_before_pages": 207617,
-  "manifest_before_updated_at": "2026-11-23T16:00:03Z"
+  "updated_at": "2026-11-23T17:16:31.719Z",
+  "reason": "One bounded crawler refresh and full-corpus catalog inventory after PR #331 raised the inventory analysis cap to 165 minutes. The last full inventory attempt (#45179902755) failed during analysis; no newer inventory run is visible after 2026-11-23T16:20Z. Publish only after canonical deduplication and registry/index integrity validation.",
+  "manifest_before_pages": 207898,
+  "manifest_before_updated_at": "2026-11-23T16:20:10Z"
 }

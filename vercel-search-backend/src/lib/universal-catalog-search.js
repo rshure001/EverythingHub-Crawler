@@ -6,7 +6,6 @@ const crypto = require('node:crypto');
 const { tokenize } = require('./search-core');
 
 const RAW = 'https://raw.githubusercontent.com/rshure001/EverythingHub-Crawler/';
-const REF = 'https://api.github.com/repos/rshure001/EverythingHub-Crawler/git/ref/heads/main';
 const CACHE_MS = 300000;
 const STALE_MS = 3600000;
 const MAX_MANIFEST_BYTES = 2000000;
@@ -24,7 +23,7 @@ let cache = null;
 let failureCache = null;
 let inFlight = null;
 
-function getBuffer(url, maxBytes, timeoutMs = 9000) {
+function getBuffer(url, maxBytes, timeoutMs = 20000) {
   return new Promise((resolve, reject) => {
     let settled = false;
     let request;
@@ -238,7 +237,7 @@ function validateSearchDocument(document, rootCatalogId, catalogById) {
 }
 
 async function loadUniversalCatalogFromManifest(manifest, commitSha, manifestRaw, fetchBuffer = getBuffer) {
-  if (typeof commitSha !== 'string' || !/^[a-f0-9]{40}$/i.test(commitSha)) {
+  if (typeof commitSha !== 'string' || (commitSha !== 'main' && !/^[a-f0-9]{40}$/i.test(commitSha))) {
     throw new Error('universal_catalog_git_ref_invalid');
   }
   if (!Buffer.isBuffer(manifestRaw)) manifestRaw = Buffer.from(manifestRaw || '');
@@ -249,7 +248,7 @@ async function loadUniversalCatalogFromManifest(manifest, commitSha, manifestRaw
   const base = RAW + commitSha + '/data/universal-catalog-indexes/';
   const rootShardResults = await Promise.all(checked.rootFiles.map(async file => {
     const entry = checked.shardByFile.get(file);
-    const compressed = await fetchBuffer(base + file.split('/').map(encodeURIComponent).join('/'), entry.bytes, 9000);
+    const compressed = await fetchBuffer(base + file.split('/').map(encodeURIComponent).join('/'), entry.bytes, 20000);
     const decoded = decodeRootShard(entry, compressed, file.slice('shards/'.length, -'.json.gz'.length));
     if (decoded.decodedBytes > MAX_ROOT_SHARD_JSON_BYTES) {
       throw new Error('universal_catalog_root_shard_uncompressed_limit');
@@ -371,17 +370,11 @@ async function loadUniversalCatalogNetwork(fetchBuffer = getBuffer) {
 
   inFlight = (async () => {
     try {
-      const refRaw = await fetchBuffer(REF + '?v=' + Date.now(), 4096, 7000);
-      let ref;
-      try { ref = JSON.parse(refRaw.toString('utf8')); } catch {
-        throw new Error('universal_catalog_git_ref_json_invalid');
-      }
-      const commitSha = ref && ref.object && ref.object.sha;
-      if (typeof commitSha !== 'string' || !/^[a-f0-9]{40}$/i.test(commitSha)) {
-        throw new Error('universal_catalog_git_ref_invalid');
-      }
+      // Avoid the unauthenticated GitHub REST ref endpoint (60 requests/hour).
+      // Fetch the branch manifest from raw.githubusercontent.com; every shard is
+      // still SHA-256 checked against it, so a moving branch fails closed.
       const manifestRaw = await fetchBuffer(
-        RAW + commitSha + '/data/universal-catalog-indexes/manifest.json',
+        RAW + 'main/data/universal-catalog-indexes/manifest.json?v=' + Date.now(),
         MAX_MANIFEST_BYTES,
         8000
       );
@@ -389,7 +382,7 @@ async function loadUniversalCatalogNetwork(fetchBuffer = getBuffer) {
       try { manifest = JSON.parse(manifestRaw.toString('utf8')); } catch {
         throw new Error('universal_catalog_manifest_json_invalid');
       }
-      const loaded = await loadUniversalCatalogFromManifest(manifest, commitSha, manifestRaw, fetchBuffer);
+      const loaded = await loadUniversalCatalogFromManifest(manifest, 'main', manifestRaw, fetchBuffer);
       cache = loaded;
       failureCache = null;
       return { ...cache, stale: false };
