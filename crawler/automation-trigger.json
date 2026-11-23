@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "updated_at": "2026-11-23T10:21:21.256Z",
-  "reason": "Explicit workflow_dispatch fallback after scheduled crawl delivery was 19294s old (>10 minutes); no queued or running crawler; public manifest was 2516s old (>10 minutes). One bounded recovery crawl; normal schedule unchanged.",
-  "manifest_before_pages": 205446,
-  "manifest_before_updated_at": "2026-11-23T09:39:25Z"
+  "updated_at": "2026-11-23T11:05:10Z",
+  "reason": "Bounded recovery crawl: scheduled crawler delivery is more than six hours old, no crawler run is queued or running, and the public manifest is more than 30 minutes old. One bounded recovery crawl; normal schedule unchanged.",
+  "manifest_before_pages": 205787,
+  "manifest_before_updated_at": "2026-11-23T10:29:45Z"
 }
