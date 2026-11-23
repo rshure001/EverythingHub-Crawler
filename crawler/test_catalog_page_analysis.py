@@ -2259,22 +2259,16 @@ class AdditionalSourcePolicyReviewTests(unittest.TestCase):
         ]
         result = analyze_pages(pages, source_total=2)
         records = {item["record_id"]: item for item in result["records"]}
-        record_catalogs = {item["owner_record_id"]: item for item in result["record_catalogs"]}
-        self.assertEqual(set(record_catalogs), set(records))
         self.assertEqual(result["metrics"]["record_catalogs"], len(records))
         self.assertEqual(result["metrics"]["record_pages_with_catalogs"], len(records))
         for record_id, record in records.items():
-            catalog = record_catalogs[record_id]
             self.assertEqual(record["record_catalog_id"], stable_id("record-catalog", record_id))
-            self.assertEqual(catalog["record_catalog_id"], record["record_catalog_id"])
-            self.assertEqual(catalog["shared_catalog_ids"], sorted(set(record["catalog_ids"])))
-            self.assertTrue(catalog["exclude_owner_record"])
-            self.assertEqual(catalog["deduplicate_by"], "record_id")
+            self.assertIsInstance(record["catalog_ids"], list)
         for page in result["pages"]:
             expected = sorted(records[x]["record_catalog_id"] for x in page["record_ids"])
             self.assertEqual(page["record_catalog_ids"], expected)
 
-    def test_record_catalog_snapshot_is_persisted_and_validated(self):
+    def test_record_catalog_identity_is_persisted_without_duplicate_catalog_rows(self):
         pages = [
             {"url": "https://shop.example/products/a", "title": "Product A",
              "text": "Product details and specifications.", "lane": "shopping"},
@@ -2285,9 +2279,13 @@ class AdditionalSourcePolicyReviewTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             output = Path(tmp)
             manifest = write_outputs(result, output)
-            self.assertIn("record-catalogs.json.gz", {item["file"] for item in manifest["files"]})
-            payload = json.loads(gzip.decompress((output / "record-catalogs.json.gz").read_bytes()))
-            self.assertEqual(len(payload["record_catalogs"]), len(result["records"]))
+            listed_files = {item["file"] for item in manifest["files"]}
+            self.assertNotIn("record-catalogs.json.gz", listed_files)
+            payload = json.loads(gzip.decompress((output / "records.json.gz").read_bytes()))
+            records = payload["records"]
+            self.assertEqual(len(records), len(result["records"]))
+            for record in records:
+                self.assertEqual(record["record_catalog_id"], stable_id("record-catalog", record["record_id"]))
             validated = validate_outputs(output)
             self.assertEqual(validated["records_validated"], len(result["records"]))
 
