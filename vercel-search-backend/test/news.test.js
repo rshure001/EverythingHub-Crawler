@@ -3,7 +3,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const handler = require("../src/api/news");
 const { resetRobotsForTests } = require("../src/lib/robots");
-const { NEWS_FEEDS, parseFeed, mergeFeeds } = handler._test;
+const { NEWS_FEEDS, parseFeed, mergeFeeds, resetNewsCacheForTests } = handler._test;
 
 function mockResponse(status, body, url) {
   return {
@@ -63,9 +63,13 @@ test("NASA Recently Published provides a headline-only fallback in the public ne
   assert.equal(items[0].summary, "");
 });
 
-test.beforeEach(() => resetRobotsForTests());
+test.beforeEach(() => {
+  resetRobotsForTests();
+  resetNewsCacheForTests();
+});
 test.afterEach(() => {
   resetRobotsForTests();
+  resetNewsCacheForTests();
 });
 
 test("news route aggregates only robots-permitted public RSS feeds with attribution", async () => {
@@ -100,6 +104,35 @@ test("news route aggregates only robots-permitted public RSS feeds with attribut
   }
 });
 
+test("news route reuses successful RSS responses across repeated requests", async () => {
+  const originalFetch = global.fetch;
+  const calls = [];
+  global.fetch = async url => {
+    const value = String(url);
+    calls.push(value);
+    if (value.endsWith("/robots.txt")) {
+      return mockResponse(200, "User-agent: *\nAllow: /\n", value);
+    }
+    const host = new URL(value).hostname;
+    return mockResponse(200, feedXml(host, new URL(value).pathname), value);
+  };
+  try {
+    const first = mockRes();
+    const second = mockRes();
+    await handler({ method: "GET", query: { category: "for-you" } }, first);
+    await handler({ method: "GET", query: { category: "for-you" } }, second);
+    assert.equal(first.statusCode, 200);
+    assert.equal(second.statusCode, 200);
+    const feeds = NEWS_FEEDS["for-you"];
+    const uniqueHosts = new Set(feeds.map(feed => new URL(feed.url).hostname)).size;
+    assert.equal(calls.filter(url => !url.endsWith("/robots.txt")).length, feeds.length);
+    assert.equal(calls.filter(url => url.endsWith("/robots.txt")).length, uniqueHosts);
+    assert.equal(second.body.count, first.body.count);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
 test("news route skips a robots-disallowed source and retains permitted feeds", async () => {
   const originalFetch = global.fetch;
   const calls = [];
@@ -122,6 +155,7 @@ test("news route skips a robots-disallowed source and retains permitted feeds", 
     assert.equal(res.statusCode, 200);
     assert.ok(res.body.count >= 1);
     assert.ok(res.body.sourcesUnavailable.includes(blocked.source));
+    assert.equal(res.body.sourceErrors[blocked.source], "robots_disallowed");
     assert.ok(!calls.includes(blocked.url));
     assert.ok(res.body.items.every(item => item.url.startsWith("https://")));
   } finally {
@@ -144,6 +178,7 @@ test("news route fails closed when every configured feed is disallowed", async (
     assert.equal(res.statusCode, 502);
     assert.equal(res.body.status, "unavailable");
     assert.equal(res.body.sourcesUnavailable.length, feeds.length);
+    assert.ok(Object.values(res.body.sourceErrors).every(code => code === "robots_disallowed"));
     assert.equal(calls.length, new Set(feeds.map(feed => new URL(feed.url).hostname)).size);
     assert.ok(calls.every(url => url.endsWith("/robots.txt")));
   } finally {
@@ -160,6 +195,7 @@ test("news route fails closed when robots policy cannot be verified", async () =
     assert.equal(res.statusCode, 502);
     assert.equal(res.body.status, "unavailable");
     assert.equal(res.body.sourcesUnavailable.length, NEWS_FEEDS.science.length);
+    assert.ok(Object.values(res.body.sourceErrors).every(code => code === "robots_unverified"));
   } finally {
     global.fetch = originalFetch;
   }
