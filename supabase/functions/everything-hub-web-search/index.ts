@@ -298,14 +298,15 @@ Deno.serve(async (req: Request) => {
           : (payload.catalogPreview || pageDerivedCatalogMeta),
       };
     };
-    // Prefer the bounded, SHA-verified Vercel catalog. It already s    // Vercel has been removed from the production search path.
+    // Vercel has been removed from the production search path.
     // Use the independent web fallback when the database is unavailable.
     if (reason === "database_unavailable") {
       const independent = await independentFallback(reason, null, attachCatalogPreview);
       if (independent) return independent;
     }
 
-ed = false;
+    let crawlerIndexCount: number | null = null;
+    let catalogLoaded = false;
     let catalogTransport: "gzip" | "shards" | null = null;
 
     try {
