@@ -23,7 +23,7 @@ class LaneClassifierTests(unittest.TestCase):
         self.assertFalse(is_publishable({"url": None}))
         self.assertFalse(is_publishable({"url": "javascript:alert(1)"}))
 
-    def test_all_eight_lanes_have_curated_source_examples(self):
+    def test_all_supported_lanes_have_curated_source_examples(self):
         examples = {
             "general": "https://www.wikipedia.org/",
             "science": "https://www.nasa.gov/",
@@ -60,6 +60,18 @@ class LaneClassifierTests(unittest.TestCase):
     def test_public_shard_compaction_preserves_a_valid_lane(self):
         page = compact({"url": "https://www.nasa.gov/", "lane": "news"})
         self.assertEqual(page["lane"], "news")
+
+    def test_public_shard_compaction_reclassifies_legacy_general_lanes(self):
+        examples = {
+            "https://www.bucherer.com/rolex": "business",
+            "https://www.visitlasvegas.com/listing/badlands-las-vegas/35627/": "culture",
+            "https://www.lasvegasnevada.gov/Business/Business-License": "government",
+            "https://www.fws.gov/": "nature",
+        }
+        for url, expected in examples.items():
+            with self.subTest(url=url):
+                page = compact({"url": url, "lane": "general"})
+                self.assertEqual(page["lane"], expected)
 
     def _validator_errors(self, lane):
         with tempfile.TemporaryDirectory() as directory:

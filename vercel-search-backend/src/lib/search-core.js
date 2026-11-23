@@ -3,6 +3,28 @@ const VALID_LANES = new Set([
   'general', 'science', 'news', 'technology',
   'business', 'government', 'culture', 'nature'
 ]);
+const CATEGORY_LANE_ALIASES = Object.freeze({
+  web: Object.freeze([]),
+  news: Object.freeze(['news']),
+  shopping: Object.freeze(['business']),
+  places: Object.freeze(['culture', 'nature', 'government']),
+  business: Object.freeze(['business', 'culture']),
+  research: Object.freeze(['science', 'technology'])
+});
+function resolveLaneFilters(lane) {
+  const requested = Array.isArray(lane)
+    ? lane.map(value => String(value || '').trim().toLowerCase()).filter(Boolean)
+    : [String(lane || '').trim().toLowerCase()];
+  const filters = new Set();
+  for (const value of requested) {
+    if (Object.prototype.hasOwnProperty.call(CATEGORY_LANE_ALIASES, value)) {
+      for (const mapped of CATEGORY_LANE_ALIASES[value]) filters.add(mapped);
+    } else if (VALID_LANES.has(value)) {
+      filters.add(value);
+    }
+  }
+  return filters;
+}
 function tokenize(value) {
   return String(value || '').toLowerCase().match(/[a-z0-9]{2,}/g) || [];
 }
@@ -17,12 +39,11 @@ function clean(value) {
 function searchCatalog(pages, query, lane) {
   const terms = Array.from(new Set(tokenize(query)));
   if (!terms.length) return [];
-  const requestedLane = String(lane || '').toLowerCase();
-  const laneFilter = VALID_LANES.has(requestedLane) ? requestedLane : '';
+  const laneFilters = resolveLaneFilters(lane);
   const ranked = [];
   for (const page of pages) {
     const pageLane = String(page.lane || page.tentacle || 'general').toLowerCase();
-    if (laneFilter && pageLane !== laneFilter) continue;
+    if (laneFilters.size && !laneFilters.has(pageLane)) continue;
     const title = frequencies(page.title);
     const description = frequencies(page.description);
     const body = frequencies(String(page.text || '').slice(0, 12000));
@@ -73,10 +94,10 @@ function searchCatalog(pages, query, lane) {
     });
   }
   ranked.sort((a, b) => b.score - a.score || a.url.localeCompare(b.url));
-  // A requested vertical is a ranking preference, not a dead end: if the
-  // indexed corpus has no records in that lane for this query, return the
-  // relevant general-index matches rather than an empty results page.
-  if (!ranked.length && laneFilter) return searchCatalog(pages, query, '');
+  // Keep category results scoped. The homepage explicitly retries the
+  // unfiltered web index when a non-news category has no matches, allowing it
+  // to label that fallback instead of silently presenting general results as
+  // category-specific matches.
   return ranked;
 }
 function decodeCodePoint(value, radix) {
@@ -168,5 +189,6 @@ function buildResponse(options) {
   };
 }
 module.exports = {
-  VALID_LANES, tokenize, clean, searchCatalog, parseBingRss, buildResponse
+  VALID_LANES, CATEGORY_LANE_ALIASES, resolveLaneFilters,
+  tokenize, clean, searchCatalog, parseBingRss, buildResponse
 };

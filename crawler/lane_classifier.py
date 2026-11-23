@@ -11,6 +11,12 @@ VALID_LANES = frozenset({
 # Curated source-host routing. Exact domain boundaries prevent lookalike hosts
 # such as nasa.gov.example.com from inheriting a trusted source's lane.
 HOST_LANES = {
+    "bucherer.com": "business",
+    "visitlasvegas.com": "culture",
+    "lasvegasnevada.gov": "government",
+    "clarkcountynv.gov": "government",
+    "rtcsnv.com": "government",
+    "fws.gov": "nature",
     "nasa.gov": "science",
     "noaa.gov": "science",
     "usgs.gov": "science",
@@ -62,7 +68,7 @@ HOST_LANES = {
 
 
 def classify_lane(url: str) -> str:
-    """Return one of the eight supported lanes; unknown hosts remain general."""
+    """Return one of the supported search lanes; unknown hosts remain general."""
     try:
         host = (urlsplit(str(url)).hostname or "").lower().rstrip(".")
     except ValueError:

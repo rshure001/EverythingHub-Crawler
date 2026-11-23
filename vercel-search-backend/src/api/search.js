@@ -3,7 +3,7 @@ const { loadCatalog } = require('../lib/catalog');
 const { robotsFetch } = require('../lib/robots');
 const { loadPageDerivedCatalogs, searchPageDerivedCatalogs, matchesPageIndexSnapshot } = require('../lib/page-derived-catalogs');
 const { searchExternalCatalogs, getExternalCatalogStats } = require('../lib/external-catalogs');
-const { searchCatalog, parseBingRss, buildResponse } = require('../lib/search-core');
+const { searchCatalog, parseBingRss, buildResponse, resolveLaneFilters } = require('../lib/search-core');
 const MAX_QUERY_LENGTH = 160;
 const MAX_LIMIT = 50;
 const MAX_OFFSET = 5000;
@@ -149,11 +149,12 @@ module.exports = async function handler(req, res) {
     return res.status(400).json({ error: 'pagination_out_of_range' });
   }
   const lane = String(params.get('tentacle') || params.get('lane') || '').trim().toLowerCase();
+  const laneScoped = resolveLaneFilters(lane).size > 0;
   const externalCatalogResults = searchExternalCatalogs(query);
   const externalCatalogStats = getExternalCatalogStats();
   const [catalogResult, bingResult, pageDerivedResult] = await Promise.allSettled([
     withTimeout(loadCatalog(query), CATALOG_LOAD_BUDGET_MS, 'catalog_load_budget_exceeded'),
-    loadBing(query),
+    laneScoped ? Promise.resolve([]) : loadBing(query),
     withTimeout(loadPageDerivedCatalogs(query), PAGE_DERIVED_LOAD_BUDGET_MS, 'page_catalog_load_budget_exceeded')
   ]);
   const bingResults = bingResult.status === 'fulfilled' ? bingResult.value : [];
@@ -196,7 +197,7 @@ module.exports = async function handler(req, res) {
     const catalogPreviewRecordResults = offset === 0
       ? buildCatalogPreviewRecordResults(pageDerivedCatalogResults, Math.min(10, limit))
       : [];
-    const combinedResults = offset === 0 ? [...bingResults, ...catalogPreviewRecordResults] : [];
+    const combinedResults = offset === 0 ? [...(laneScoped ? [] : bingResults), ...catalogPreviewRecordResults] : [];
     const seenResultUrls = new Set();
     const results = combinedResults.filter((item) => {
       const key = String(item?.url || item?.title || '').toLowerCase();
@@ -206,7 +207,7 @@ module.exports = async function handler(req, res) {
     }).slice(0, Math.min(10, limit));
     if (catalogPreview) catalogPreview.recordPreviewResults = catalogPreviewRecordResults.length;
     const providers = [];
-    if (bingResults.length) providers.push('Bing Web Search');
+    if (!laneScoped && bingResults.length) providers.push('Bing Web Search');
     if (catalogPreviewRecordResults.length || catalogResults.length) providers.push('Everything Hub Catalog Preview');
     if (externalCatalogResults.length) providers.push('Curated External Catalog Directory');
     const fallbackMode = catalogPreviewRecordResults.length ? 'catalog-preview-fallback' : 'unavailable';
@@ -254,7 +255,7 @@ module.exports = async function handler(req, res) {
   }
   const ranked = searchCatalog(catalog.pages, query, lane);
   const payload = buildResponse({
-    query, limit, offset, ranked, bingResults,
+    query, limit, offset, ranked, bingResults: laneScoped ? [] : bingResults,
     indexedPages: catalog.indexedPages,
     indexUpdatedAt: catalog.updatedAt,
     indexSha256: catalog.sha256,
