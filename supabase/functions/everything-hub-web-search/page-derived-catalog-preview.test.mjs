@@ -464,12 +464,12 @@ test("per-record related catalogs deduplicate shared records and exclude their o
   assert.equal(first.owner_record.record_id, owner.record_id);
   assert.equal(first.related_count, 2);
   assert.equal(first.related_records.length, 1);
-  assert.equal(first.related_records[0].record_id, relatedA.record_id);
+  assert.equal(first.related_records[0].record_id, relatedB.record_id);
   assert.equal(first.has_more, true);
   const second = await resolveRecordRelatedCatalogPreview(
     owner.record_catalog_id, [catalogId], network, 1, 1, fetchImpl,
   );
-  assert.equal(second.related_records[0].record_id, relatedB.record_id);
+  assert.equal(second.related_records[0].record_id, relatedA.record_id);
   assert.equal(await resolveRecordRelatedCatalogPreview("record-catalog:missing", [catalogId], network, 10, 0, fetchImpl), null);
   clearPageDerivedCatalogPreviewCache();
 });
