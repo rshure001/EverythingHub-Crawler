@@ -14,7 +14,7 @@ function fixture(){
   {catalog_id:'catalog-articles',title:'General Articles',catalog_type:'knowledge_base',record_type:'article',subject:'articles',source_host:'example.org',source_url:'https://example.org/articles',source_page_ids:['page-article'],source_page_count:1,record_ids:['record-article'],record_count:1,is_source_declared_catalog:true,catalog_origin:'source_declared_collection',evidence_strength:'high',catalog_status:'candidate_needs_source_validation',source_terms_status:'not_reviewed',rights_status:'publicly_accessible_not_cleared_for_redistribution',commercial_eligible:false,status:'candidate_needs_source_validation'}
  ];
  const records=[
-  {record_id:'record-rolex',entity_id:'entity-rolex',canonical_entity_key:'product:rolex-submariner',record_type:'product',title:'Rolex Submariner Date',description:'Swiss dive watch',source_urls:['https://example.com/rolex/submariner'],source_page_ids:['page-rolex'],catalog_ids:['catalog-rolex'],last_seen_at:'2026-11-20T20:00:00Z',attributes:{brand:'Rolex',model:'Submariner Date'},commercial_eligible:false,source_terms_status:'not_reviewed',rights_status:'publicly_accessible_not_cleared_for_redistribution'},
+  {record_id:'record-rolex',record_catalog_id:'record-catalog-rolex',entity_id:'entity-rolex',canonical_entity_key:'product:rolex-submariner',record_type:'product',title:'Rolex Submariner Date',description:'Swiss dive watch',source_urls:['https://example.com/rolex/submariner'],source_page_ids:['page-rolex'],catalog_ids:['catalog-rolex'],last_seen_at:'2026-11-20T20:00:00Z',attributes:{brand:'Rolex',model:'Submariner Date'},commercial_eligible:false,source_terms_status:'not_reviewed',rights_status:'publicly_accessible_not_cleared_for_redistribution'},
   {record_id:'record-vegas',entity_id:'entity-vegas',canonical_entity_key:'place:las-vegas-strip',record_type:'place',title:'Las Vegas Strip',description:'Las Vegas, Nevada',source_urls:['https://example.net/places/las-vegas-strip'],source_page_ids:['page-vegas'],catalog_ids:['catalog-vegas'],last_seen_at:'2026-11-20T20:00:00Z',attributes:{},commercial_eligible:false,source_terms_status:'not_reviewed',rights_status:'publicly_accessible_not_cleared_for_redistribution'},
   {record_id:'record-article',entity_id:'entity-article',canonical_entity_key:'article:general-reference',record_type:'article',title:'General reference article',description:'Mentions Rolex once in passing',source_urls:['https://example.org/articles/general-reference'],source_page_ids:['page-article'],catalog_ids:['catalog-articles'],last_seen_at:'2026-11-20T20:00:00Z',attributes:{},commercial_eligible:false,source_terms_status:'not_reviewed',rights_status:'publicly_accessible_not_cleared_for_redistribution'}
  ];
@@ -58,6 +58,11 @@ test('Rolex favors the product catalog and excludes weak article-only mentions',
  assert.equal(results[0].matched_records[0].record_type,'product');assert.equal(results[0].preview_only,true);assert.equal(results[0].commercial_eligible,false);
  assert.equal(results[0].source_terms_status,'not_reviewed');assert.equal('description' in results[0].matched_records[0],false);
 });
+test('search results carry the dedicated related-catalog identity for each record',()=>{
+ const f=fixture(),network=validatePageDerivedCatalogs(f.manifest,f.registry,f.recordsFile),results=searchPageDerivedCatalogs('Rolex',network,5);
+ assert.equal(results[0].matched_records[0].record_catalog_id,'record-catalog-rolex');
+});
+
 test('Las Vegas ranks the geographic place catalog',()=>{
  const f=fixture(),network=validatePageDerivedCatalogs(f.manifest,f.registry,f.recordsFile),results=searchPageDerivedCatalogs('Las Vegas',network,5);
  assert.equal(results.length,1);assert.equal(results[0].catalog_id,'catalog-vegas');assert.equal(results[0].matched_records[0].title,'Las Vegas Strip');assert.match(results[0].title,/Place catalog/);
