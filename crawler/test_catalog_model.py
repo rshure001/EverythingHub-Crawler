@@ -22,6 +22,7 @@ class UniversalCatalogModelTests(unittest.TestCase):
         self.assertEqual(self.catalog["coverage_status"], "partial")
         self.assertEqual(self.catalog["record_count"], 2)
         self.assertTrue(self.catalog["catalog_id"].startswith("catalog:"))
+        self.assertEqual(self.catalog["schema_version"], 2)
         self.assertEqual(self.catalog["catalog_level"], "root")
         self.assertEqual(self.catalog["parent_catalog_id"], "")
 
@@ -47,7 +48,8 @@ class UniversalCatalogModelTests(unittest.TestCase):
              {"url": "https://example.org/b"}],
         )
         self.assertEqual(metrics, {
-            "catalogs_discovered": 1, "subcatalogs_discovered": 0,
+            "catalogs_discovered": 1, "root_catalogs_discovered": 1,
+            "subcatalogs_discovered": 0,
             "catalog_records": 2, "record_catalog_memberships": 0,
             "unique_entities": 1, "source_page_references": 2,
             "source_page_associations": 3, "source_pages_fetched": 0,
