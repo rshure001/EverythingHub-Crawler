@@ -34,6 +34,47 @@ class CatalogDiscoveryTests(unittest.TestCase):
         self.assertTrue(item["landing_url"].startswith("https://open.canada.ca/data/en/dataset/"))
 
 
+    def test_localized_ckan_metadata_uses_readable_nonempty_translations(self):
+        item = normalize_dataset({
+            "name": "population-data",
+            "title": {
+                "en": "",
+                "fr": "Population résidante",
+                "de": "Wohnbevölkerung",
+                "it": "",
+            },
+            "notes": {
+                "en": "Population statistics by region.",
+                "fr": "Statistiques de population par région.",
+            },
+            "organization": {
+                "title": {
+                    "en": "Statistics Canada",
+                    "fr": "Statistique Canada",
+                }
+            },
+            "tags": [
+                {"name": {"en": "population", "fr": "population"}},
+            ],
+            "resources": [
+                {
+                    "name": {"en": "CSV download", "fr": "Téléchargement CSV"},
+                    "description": {"en": "Population data", "fr": "Données de population"},
+                    "format": "csv",
+                    "url": "https://downloads.example.org/population.csv",
+                }
+            ],
+        }, SOURCES[1])
+
+        self.assertEqual(item["title"], "Population résidante")
+        self.assertEqual(item["description"], "Population statistics by region.")
+        self.assertEqual(item["organization"], "Statistics Canada")
+        self.assertEqual(item["tags"], ["population"])
+        self.assertEqual(item["resources"][0]["name"], "CSV download")
+        self.assertEqual(item["resources"][0]["description"], "Population data")
+        self.assertNotIn("{", item["title"])
+        self.assertNotIn("}", item["organization"])
+
     def test_private_or_inactive_dataset_is_skipped(self):
         private_item = normalize_dataset({
             "name": "private-data", "title": "Private Data", "private": True, "state": "active"
