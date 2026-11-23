@@ -6,8 +6,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from catalog_page_analysis import (
 import catalog_page_analysis as analysis_module
+from unittest.mock import patch
+
+from catalog_page_analysis import (
     ANALYZER_VERSION, analyze_pages, analyze_pages_incremental, build_search_index,
     search_catalog_network, search_source_page_evidence, write_outputs, validate_outputs, stable_id,
     apply_source_policy_reviews, _reconcile_page_record_provenance,
