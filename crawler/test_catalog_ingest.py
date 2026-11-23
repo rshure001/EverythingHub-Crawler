@@ -16,7 +16,12 @@ class UniversalCatalogIngestTests(unittest.TestCase):
                 "resource_count":1,"metadata_modified":"2026-11-19"
             }]
         })
+        self.assertEqual(result["schema_version"], 2)
         self.assertEqual(result["metrics"]["catalogs_discovered"],1)
+        self.assertEqual(result["metrics"]["root_catalogs_discovered"],1)
+        self.assertEqual(result["metrics"]["subcatalogs_discovered"],0)
+        self.assertEqual(result["metrics"]["record_catalog_memberships"],1)
+        self.assertEqual(result["metrics"]["source_page_associations"],1)
         self.assertEqual(result["metrics"]["catalog_records"],1)
         self.assertEqual(result["metrics"]["source_page_references"],1)
         self.assertEqual(result["metrics"]["source_pages_fetched"],0)
@@ -186,6 +191,7 @@ class UniversalCatalogIngestTests(unittest.TestCase):
         root = next(c for c in result["catalogs"] if c["catalog_level"] == "root")
         subcatalogs = [c for c in result["catalogs"] if c["catalog_level"] == "subcatalog"]
         self.assertEqual(result["metrics"]["catalogs_discovered"], 3)
+        self.assertEqual(result["metrics"]["root_catalogs_discovered"], 1)
         self.assertEqual(result["metrics"]["subcatalogs_discovered"], 2)
         self.assertEqual(result["metrics"]["catalog_records"], 3)
         self.assertEqual(result["metrics"]["record_catalog_memberships"], 8)
@@ -256,6 +262,8 @@ class UniversalCatalogIngestTests(unittest.TestCase):
             ],
         })
         self.assertEqual(result["metrics"]["catalogs_discovered"], 2)
+        self.assertEqual(result["metrics"]["root_catalogs_discovered"], 2)
+        self.assertEqual(result["metrics"]["subcatalogs_discovered"], 0)
         self.assertEqual(result["metrics"]["catalog_records"], 1)
         self.assertEqual(result["metrics"]["unique_entities"], 1)
         self.assertEqual(result["metrics"]["record_catalog_memberships"], 2)
