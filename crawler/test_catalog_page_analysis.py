@@ -1419,7 +1419,8 @@ class CatalogInventoryTriggerTests(unittest.TestCase):
 
         self.assertEqual(merge_count, 1)
         self.assertEqual(len(merged), 1)
-        self.assertIs(merged[0], first)
+        self.assertEqual(set(merged), {"record:shared"})
+        self.assertIs(merged["record:shared"], first)
         self.assertEqual(first["description"], "Newer description")
         self.assertEqual(first["source_urls"], [
             "https://one.example/submariner", "https://two.example/submariner",
