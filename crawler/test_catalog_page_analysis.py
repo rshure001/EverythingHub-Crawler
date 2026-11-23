@@ -10,7 +10,7 @@ from pathlib import Path
 import catalog_page_analysis as analysis_module
 
 from catalog_page_analysis import (
-    ANALYZER_VERSION, analyze_pages, analyze_pages_incremental, build_search_index,
+    ANALYZER_VERSION, HOST_CACHE_VERSION, analyze_pages, analyze_pages_incremental, build_search_index,
     search_catalog_network, search_source_page_evidence, write_outputs, validate_outputs, stable_id,
     apply_source_policy_reviews, _reconcile_page_record_provenance,
     _add_global_subject_catalogs, _global_subject_catalog_source_key,
@@ -529,6 +529,26 @@ class PageDerivedCatalogAnalysisTests(unittest.TestCase):
             self.assertTrue(all(x["source_url"] == "https://example.org/gallery" for x in payload["references"]))
             self.assertTrue(all(x["discovered_at"] == 123 for x in payload["references"]))
             self.assertIn("https://cdn.example.org/watch-image.webp", {x["media_url"] for x in payload["references"]})
+
+    def test_incremental_cache_invalidates_legacy_host_cache_schema(self):
+        pages = [{
+            "url": "https://cache-schema.example/products/a",
+            "title": "Product A",
+            "text": "Product details.",
+            "lane": "shopping",
+        }]
+        with tempfile.TemporaryDirectory() as tmp:
+            cache = Path(tmp) / "cache"
+            first = analyze_pages_incremental(pages, source_total=1, cache_dir=cache)
+            self.assertEqual(first["metrics"]["host_partitions_rebuilt"], 1)
+            cache_file = next(cache.glob("*.json.gz"))
+            cached = json.loads(gzip.decompress(cache_file.read_bytes()).decode("utf-8"))
+            self.assertEqual(cached["host_cache_version"], HOST_CACHE_VERSION)
+            cached.pop("host_cache_version")
+            cache_file.write_bytes(gzip.compress(json.dumps(cached).encode("utf-8"), mtime=0))
+            second = analyze_pages_incremental(pages, source_total=1, cache_dir=cache)
+            self.assertEqual(second["metrics"]["host_partitions_rebuilt"], 1)
+            self.assertEqual(second["metrics"]["host_partitions_reused"], 0)
 
     def test_incremental_cache_invalidates_old_analyzer_version(self):
         pages = [{
