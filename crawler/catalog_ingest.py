@@ -613,7 +613,6 @@ def build_public_catalog_indexes(result):
             "catalog_level": catalog.get("catalog_level") or "root",
             "parent_catalog_id": catalog.get("parent_catalog_id") or "",
             "title": str(catalog.get("title") or catalog_id)[:500],
-            "description": str(catalog.get("description") or "")[:1000],
             "catalog_type": str(catalog.get("catalog_type") or "open_data")[:80],
             "subject": str(catalog.get("subject") or "")[:300],
             "publisher": str(catalog.get("publisher") or "")[:300],
