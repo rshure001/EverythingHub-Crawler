@@ -1,12 +1,12 @@
 'use strict';
 const VALID_LANES = new Set([
   'general', 'science', 'news', 'technology',
-  'business', 'government', 'culture', 'nature', 'commerce'
+  'business', 'government', 'culture', 'nature'
 ]);
 const CATEGORY_LANE_ALIASES = Object.freeze({
   web: Object.freeze([]),
   news: Object.freeze(['news']),
-  shopping: Object.freeze(['commerce']),
+  shopping: Object.freeze(['business']),
   places: Object.freeze(['culture', 'nature', 'government']),
   business: Object.freeze(['business']),
   research: Object.freeze(['science', 'technology'])
