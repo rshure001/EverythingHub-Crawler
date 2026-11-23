@@ -122,6 +122,156 @@ class UniversalCatalogIngestTests(unittest.TestCase):
         self.assertEqual(result["metrics"]["restricted_records"], 1)
         self.assertEqual(result["catalogs"][0]["catalog_type"], "library_archive")
 
+    def test_ckan_metadata_creates_bounded_organization_and_tag_subcatalogs(self):
+        result = adapt({
+            "updated_at": "2026-11-23T00:00:00Z",
+            "catalogs": [{
+                "id": "canada-open-data",
+                "name": "Open Government Canada",
+                "base_url": "https://open.canada.ca",
+                "api_path": "/data/en/api/3/action/package_search",
+                "source_url": "https://open.canada.ca/data/en/api/3/action/package_search",
+                "category": "government",
+                "errors": [],
+            }],
+            "datasets": [
+                {
+                    "catalog_id": "canada-open-data",
+                    "id": "canada-open-data:roads-1",
+                    "dataset_id": "roads-1",
+                    "title": "Road Network One",
+                    "landing_url": "https://open.canada.ca/data/en/dataset/roads-1",
+                    "organization": "Transport Canada",
+                    "tags": ["roads", "transport"],
+                    "license": {
+                        "id": "ogl-canada",
+                        "title": "Open Government Licence - Canada",
+                        "url": "https://open.canada.ca/en/open-government-licence-canada/",
+                        "is_open": True,
+                        "private": False,
+                    },
+                },
+                {
+                    "catalog_id": "canada-open-data",
+                    "id": "canada-open-data:roads-2",
+                    "dataset_id": "roads-2",
+                    "title": "Road Network Two",
+                    "landing_url": "https://open.canada.ca/data/en/dataset/roads-2",
+                    "organization": "Transport Canada",
+                    "tags": ["roads", "transport"],
+                    "license": {
+                        "id": "ogl-canada",
+                        "url": "https://open.canada.ca/en/open-government-licence-canada/",
+                        "is_open": True,
+                        "private": False,
+                    },
+                },
+                {
+                    "catalog_id": "canada-open-data",
+                    "id": "canada-open-data:roads-3",
+                    "dataset_id": "roads-3",
+                    "title": "Road Network Three",
+                    "landing_url": "https://open.canada.ca/data/en/dataset/roads-3",
+                    "organization": "Health Canada",
+                    "tags": ["roads", "health"],
+                    "license": {
+                        "id": "ogl-canada",
+                        "url": "https://open.canada.ca/en/open-government-licence-canada/",
+                        "is_open": True,
+                        "private": False,
+                    },
+                },
+            ],
+        })
+        root = next(c for c in result["catalogs"] if c["catalog_level"] == "root")
+        subcatalogs = [c for c in result["catalogs"] if c["catalog_level"] == "subcatalog"]
+        self.assertEqual(result["metrics"]["catalogs_discovered"], 3)
+        self.assertEqual(result["metrics"]["subcatalogs_discovered"], 2)
+        self.assertEqual(result["metrics"]["catalog_records"], 3)
+        self.assertEqual(result["metrics"]["record_catalog_memberships"], 8)
+        self.assertEqual(len(subcatalogs), 2)
+        self.assertEqual({c["subcategory_kind"] for c in subcatalogs}, {"organization", "tag"})
+        self.assertTrue(all(c["parent_catalog_id"] == root["catalog_id"] for c in subcatalogs))
+        self.assertTrue(all(c["record_level_clearance"] == "not_reviewed" for c in subcatalogs))
+        self.assertTrue(all(c["public_search_allowed"] is False for c in subcatalogs))
+        by_title = {r["title"]: r for r in result["records"]}
+        transport = next(c for c in subcatalogs if c["subcategory_kind"] == "organization")
+        roads = next(c for c in subcatalogs if c["subcategory_kind"] == "tag")
+        self.assertIn(transport["catalog_id"], by_title["Road Network One"]["catalog_ids"])
+        self.assertIn(transport["catalog_id"], by_title["Road Network Two"]["catalog_ids"])
+        self.assertNotIn(transport["catalog_id"], by_title["Road Network Three"]["catalog_ids"])
+        self.assertTrue(all(roads["catalog_id"] in r["catalog_ids"] for r in by_title.values()))
+        self.assertEqual(result["metrics"]["production_eligible_records"], 3)
+        self.assertEqual(result["metrics"]["indexed_records"], 0)
+        self.assertFalse(result["production_indexed"])
+
+    def test_same_canonical_openlibrary_work_is_one_record_across_subject_catalogs(self):
+        result = adapt({
+            "updated_at": "2026-11-23T00:00:00Z",
+            "catalogs": [
+                {
+                    "id": "openlibrary-subject-science",
+                    "name": "Open Library — Science",
+                    "base_url": "https://openlibrary.org",
+                    "api_path": "/subjects/science.json",
+                    "category": "science",
+                    "catalog_type": "library_archive",
+                    "coverage_status": "partial",
+                    "errors": [],
+                },
+                {
+                    "id": "openlibrary-subject-history",
+                    "name": "Open Library — History",
+                    "base_url": "https://openlibrary.org",
+                    "api_path": "/subjects/history.json",
+                    "category": "history",
+                    "catalog_type": "library_archive",
+                    "coverage_status": "partial",
+                    "errors": [],
+                },
+            ],
+            "datasets": [
+                {
+                    "catalog_id": "openlibrary-subject-science",
+                    "id": "openlibrary-subject-science:OL123W",
+                    "dataset_id": "OL123W",
+                    "title": "A Science Book",
+                    "landing_url": "https://openlibrary.org/works/OL123W",
+                    "record_type": "document",
+                    "canonical_entity_key": "openlibrary:work:OL123W",
+                    "subject": "science",
+                    "attributes": {"subjects": ["science"]},
+                },
+                {
+                    "catalog_id": "openlibrary-subject-history",
+                    "id": "openlibrary-subject-history:OL123W",
+                    "dataset_id": "OL123W",
+                    "title": "A Science Book",
+                    "landing_url": "https://openlibrary.org/works/OL123W",
+                    "record_type": "document",
+                    "canonical_entity_key": "openlibrary:work:OL123W",
+                    "subject": "history",
+                    "attributes": {"subjects": ["history"]},
+                },
+            ],
+        })
+        self.assertEqual(result["metrics"]["catalogs_discovered"], 2)
+        self.assertEqual(result["metrics"]["catalog_records"], 1)
+        self.assertEqual(result["metrics"]["unique_entities"], 1)
+        self.assertEqual(result["metrics"]["record_catalog_memberships"], 2)
+        self.assertEqual(result["metrics"]["source_page_references"], 1)
+        self.assertEqual(result["metrics"]["source_page_associations"], 2)
+        self.assertEqual(len(result["records"]), 1)
+        record = result["records"][0]
+        self.assertEqual(set(record["catalog_ids"]), {
+            next(c["catalog_id"] for c in result["catalogs"] if c["source_id"] == "openlibrary-subject-science"),
+            next(c["catalog_id"] for c in result["catalogs"] if c["source_id"] == "openlibrary-subject-history"),
+        })
+        self.assertEqual(record["source_urls"], ["https://openlibrary.org/works/OL123W"])
+        self.assertEqual(len(record["source_provenance"]), 2)
+        self.assertFalse(record["attributes"]["public_search_allowed"])
+        self.assertEqual(result["metrics"]["indexed_records"], 0)
+
     def test_rejects_untrusted_http_landing_url(self):
         with self.assertRaises(ValueError):
             adapt({
