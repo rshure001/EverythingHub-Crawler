@@ -1060,8 +1060,10 @@ def _add_page_catalogs(page_rows: list[dict], records, stream_record_catalogs: b
     def iter_record_catalogs():
         # Stream one compact identity row at a time. At corpus scale, retaining
         # a second million-entry list of dictionaries needlessly spikes RAM.
-        # Dict insertion order follows the deterministic host/page analysis order.
-        for record_id, record in record_map.items():
+        # Keep the serialized registry order stable without retaining a second
+        # million-row list of catalog dictionaries.
+        for record_id in sorted(record_map):
+            record = record_map[record_id]
             record_page_ids = sorted({
                 page_id for page_id in record.get("source_page_ids", [])
                 if page_id in page_rows_by_id
