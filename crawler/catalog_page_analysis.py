@@ -485,38 +485,90 @@ def _global_subject_catalog_source_key(token: str) -> str:
 
 
 def _add_global_subject_catalogs(pages: list[dict], page_rows: list[dict], records, catalogs) -> int:
-    """Create cross-host topic catalogs only from recurring page-title evidence."""
-    page_rows_by_id = {row.get("page_id"): row for row in page_rows if row.get("page_id")}
-    topic_pages: dict[str, dict[str, dict]] = defaultdict(dict)
-    topic_hosts: dict[str, set[str]] = defaultdict(set)
+    """Create cross-host topic catalogs from recurring titles with bounded member storage.
+
+    First count token occurrences and host diversity. Only qualifying tokens retain
+    page references in a second pass, and each participating page's metadata is
+    stored once rather than copied into every token's member dictionary.
+    """
+    eligible_page_ids = {
+        row.get("page_id")
+        for row in page_rows
+        if row.get("page_id") and row.get("eligible") is True
+    }
     excluded = {
         "about", "best", "complete", "facts", "free", "guide", "guides", "history", "product", "products", "item", "items", "model", "models", "watch", "watches",
         "home", "information", "latest", "learn", "news", "official", "online",
         "page", "pages", "photos", "picture", "pictures", "search", "site",
         "website", "welcome", "what", "when", "where", "with", "your",
     }
-    for page in pages:
+
+    def member_for_page(page: dict) -> dict | None:
         if not isinstance(page, dict) or page.get("robots_allowed") is False:
-            continue
+            return None
         url = canonical_url(page.get("url"))
         if not url:
-            continue
+            return None
         page_id = stable_id("page", url)
-        row = page_rows_by_id.get(page_id)
-        if not row or row.get("eligible") is not True:
-            continue
+        if page_id not in eligible_page_ids:
+            return None
         title = _title(page.get("title"))
-        host = urlsplit(url).hostname or ""
+        tokens = set()
         for raw_token in _search_tokens(title):
             token = _singular_search_token(raw_token) or raw_token
-            if len(token) < 4 or token in excluded:
-                continue
-            topic_pages[token][page_id] = {
-                "page_id": page_id, "url": url, "host": host, "title": title,
-                "description": re.sub(r"\s+", " ", str(page.get("description") or page.get("text") or "")).strip()[:500],
-                "fetched_at": page.get("fetched_at"),
-            }
-            topic_hosts[token].add(host)
+            if len(token) >= 4 and token not in excluded:
+                tokens.add(token)
+        if not tokens:
+            return None
+        host = urlsplit(url).hostname or ""
+        return {
+            "page_id": page_id,
+            "url": url,
+            "host": host,
+            "title": title,
+            "description": re.sub(r"\\s+", " ", str(page.get("description") or page.get("text") or "")).strip()[:500],
+            "fetched_at": page.get("fetched_at"),
+            "tokens": tokens,
+        }
+
+    topic_counts: Counter = Counter()
+    topic_hosts: dict[str, set[str]] = defaultdict(set)
+    for page in pages:
+        member = member_for_page(page)
+        if member is None:
+            continue
+        for token in member["tokens"]:
+            topic_counts[token] += 1
+            topic_hosts[token].add(member["host"])
+
+    qualified_tokens = {
+        token for token, count in topic_counts.items()
+        if count >= 3 and len(topic_hosts[token]) >= 2
+    }
+    if not qualified_tokens:
+        return 0
+
+    topic_pages: dict[str, list[str]] = defaultdict(list)
+    page_info: dict[str, dict] = {}
+    for page in pages:
+        member = member_for_page(page)
+        if member is None:
+            continue
+        matched_tokens = member["tokens"].intersection(qualified_tokens)
+        if not matched_tokens:
+            continue
+        page_id = member["page_id"]
+        member.pop("tokens", None)
+        page_info[page_id] = member
+        for token in matched_tokens:
+            topic_pages[token].append(page_id)
+
+    relevant_page_ids = set(page_info)
+    page_rows_by_id = {
+        row["page_id"]: row
+        for row in page_rows
+        if row.get("page_id") in relevant_page_ids
+    }
 
     records_are_list = isinstance(records, list)
     catalogs_are_list = isinstance(catalogs, list)
@@ -533,15 +585,18 @@ def _add_global_subject_catalogs(pages: list[dict], page_rows: list[dict], recor
 
     created = 0
     for token in sorted(topic_pages):
-        members = topic_pages[token]
+        member_ids = sorted(
+            set(topic_pages[token]),
+            key=lambda page_id: page_info[page_id]["url"],
+        )
         hosts = topic_hosts[token]
-        if len(members) < 3 or len(hosts) < 2:
+        if len(member_ids) < 3 or len(hosts) < 2:
             continue
-        slug = re.sub(r"[^a-z0-9]+", "-", token).strip("-")
         source_key = _global_subject_catalog_source_key(token)
         catalog_id = stable_id("catalog", source_key)
         record_ids = []
-        for member in sorted(members.values(), key=lambda item: item["url"]):
+        for page_id in member_ids:
+            member = page_info[page_id]
             # A subject entity is shared across source pages; each page-topic
             # occurrence retains its own stable record ID and provenance.
             entity_key = "subject|" + token
@@ -581,6 +636,8 @@ def _add_global_subject_catalogs(pages: list[dict], page_rows: list[dict], recor
                 record["source_urls"] = [current_urls] if isinstance(current_urls, str) and current_urls else []
             if not isinstance(record.get("source_page_ids"), list):
                 record["source_page_ids"] = []
+            if not isinstance(record.get("catalog_ids"), list):
+                record["catalog_ids"] = []
             if member["url"] not in record["source_urls"]:
                 record["source_urls"].append(member["url"])
             if member["page_id"] not in record["source_page_ids"]:
@@ -592,15 +649,20 @@ def _add_global_subject_catalogs(pages: list[dict], page_rows: list[dict], recor
             if catalog_id not in record["catalog_ids"]:
                 record["catalog_ids"].append(catalog_id)
             record_ids.append(record_id)
-            row = page_rows_by_id[member["page_id"]]
+            row = page_rows_by_id.get(page_id)
+            if row is None:
+                raise ValueError(f"global subject page {page_id} has no eligible page row")
             row["record_ids"] = sorted(set(row.get("record_ids", [])) | {record_id})
-            group_key = source_key
-            row["catalog_group_keys"] = sorted(set(row.get("catalog_group_keys", [])) | {group_key})
+            row["catalog_group_keys"] = sorted(set(row.get("catalog_group_keys", [])) | {source_key})
+
         record_ids = sorted(set(record_ids))
-        source_page_ids = sorted(members)
-        source_urls = sorted(item["url"] for item in members.values())
+        source_page_ids = sorted(member_ids)
+        source_urls = sorted(page_info[page_id]["url"] for page_id in member_ids)
         timestamps = sorted(
-            stamp for stamp in (_timestamp_iso(item["fetched_at"]) for item in members.values()) if stamp
+            stamp for stamp in (
+                _timestamp_iso(page_info[page_id]["fetched_at"])
+                for page_id in member_ids
+            ) if stamp
         )
         if catalog_id in catalog_map:
             existing_catalog = catalog_map[catalog_id]
@@ -1717,90 +1779,101 @@ def analyze_pages(
     }
 
 
-def _merge_cross_host_records(records: list[dict]) -> tuple[dict[str, dict], int]:
-    """Merge globally identified records in place to bound peak memory.
+def _record_timestamp(value: object) -> float:
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str) and value.strip():
+        try:
+            return datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp()
+        except (ValueError, OverflowError):
+            return 0.0
+    return 0.0
 
-    The host-partition list already owns each record dictionary. Copying every
-    dictionary and its provenance/attribute collections into a second full
-    object graph temporarily doubles memory during the global aggregation pass.
-    Keep the first canonical record object and merge later duplicates into it.
-    """
-    merged: dict[str, dict] = {}
-    merge_count = 0
 
-    def stamp(value: object) -> float:
-        if isinstance(value, (int, float)):
-            return float(value)
-        if isinstance(value, str) and value.strip():
-            try:
-                return datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp()
-            except (ValueError, OverflowError):
-                return 0.0
-        return 0.0
-
-    def ensure_list(item: dict, key: str) -> list:
-        value = item.get(key)
-        if isinstance(value, list):
-            return value
-        if isinstance(value, (tuple, set)):
-            value = list(value)
-        else:
-            value = []
-        item[key] = value
+def _ensure_record_list(item: dict, key: str) -> list:
+    value = item.get(key)
+    if isinstance(value, list):
         return value
+    if isinstance(value, (tuple, set)):
+        value = list(value)
+    else:
+        value = []
+    item[key] = value
+    return value
 
-    for item in records:
-        if not isinstance(item, dict):
-            raise ValueError("host analysis produced a malformed record")
-        record_id = item.get("record_id")
-        if not isinstance(record_id, str) or not record_id:
-            raise ValueError("host analysis produced a record without a stable record ID")
-        for key in ("source_urls", "source_page_ids", "catalog_ids"):
-            ensure_list(item, key)
-        if not isinstance(item.get("attributes"), dict):
-            item["attributes"] = {}
 
-        current = merged.get(record_id)
-        if current is None:
-            merged[record_id] = item
-            continue
-        if current is item:
-            continue
-        if current.get("canonical_entity_key") != item.get("canonical_entity_key"):
-            raise ValueError("the same record ID maps to different canonical entity keys")
+def _prepare_cross_host_record(item: dict) -> str:
+    if not isinstance(item, dict):
+        raise ValueError("host analysis produced a malformed record")
+    record_id = item.get("record_id")
+    if not isinstance(record_id, str) or not record_id:
+        raise ValueError("host analysis produced a record without a stable record ID")
+    for key in ("source_urls", "source_page_ids", "catalog_ids"):
+        _ensure_record_list(item, key)
+    if not isinstance(item.get("attributes"), dict):
+        item["attributes"] = {}
+    return record_id
 
-        merge_count += 1
-        incoming_is_newer = stamp(item.get("last_seen_at")) > stamp(current.get("last_seen_at"))
-        if incoming_is_newer:
-            current["last_seen_at"] = item.get("last_seen_at")
-            if item.get("description"):
-                current["description"] = item["description"]
-            current.setdefault("attributes", {}).update(item["attributes"])
-        else:
-            for key, value in item["attributes"].items():
-                current.setdefault("attributes", {}).setdefault(key, value)
 
-        for key in ("source_urls", "source_page_ids", "catalog_ids"):
-            target = ensure_list(current, key)
-            seen = set(target)
-            for value in item[key]:
-                if value not in seen:
-                    target.append(value)
-                    seen.add(value)
-            target.sort()
-        for key in ("structured_product", "structured_brand", "content_extracted", "structured_catalog_item", "structured_entity"):
-            if item.get(key):
-                current[key] = True
-        current["commercial_eligible"] = False
-        current["source_terms_status"] = "not_reviewed"
+def _merge_cross_host_record_into(current: dict, item: dict) -> int:
+    current_id = _prepare_cross_host_record(current)
+    incoming_id = _prepare_cross_host_record(item)
+    if current_id != incoming_id:
+        raise ValueError("cross-host record merge attempted with different record IDs")
+    if current is item:
+        return 0
+    if current.get("canonical_entity_key") != item.get("canonical_entity_key"):
+        raise ValueError("the same record ID maps to different canonical entity keys")
 
+    incoming_is_newer = _record_timestamp(item.get("last_seen_at")) > _record_timestamp(current.get("last_seen_at"))
+    if incoming_is_newer:
+        current["last_seen_at"] = item.get("last_seen_at")
+        if item.get("description"):
+            current["description"] = item["description"]
+        current["attributes"].update(item["attributes"])
+    else:
+        for key, value in item["attributes"].items():
+            current["attributes"].setdefault(key, value)
+
+    for key in ("source_urls", "source_page_ids", "catalog_ids"):
+        target = _ensure_record_list(current, key)
+        seen = set(target)
+        for value in item[key]:
+            if value not in seen:
+                target.append(value)
+                seen.add(value)
+        target.sort()
+
+    for key in ("structured_product", "structured_brand", "content_extracted", "structured_catalog_item", "structured_entity"):
+        if item.get(key):
+            current[key] = True
+    current["commercial_eligible"] = False
+    current["source_terms_status"] = "not_reviewed"
+    return 1
+
+
+def _finalize_cross_host_record_map(merged: dict[str, dict]) -> dict[str, dict]:
     for item in merged.values():
         for key in ("source_urls", "source_page_ids", "catalog_ids"):
-            values = ensure_list(item, key)
+            values = _ensure_record_list(item, key)
             values[:] = sorted(set(values))
         item["source_url"] = item["source_urls"][0] if item["source_urls"] else ""
         item["source_page_count"] = len(item["source_page_ids"])
-    return merged, merge_count
+    return merged
+
+
+def _merge_cross_host_records(records: list[dict]) -> tuple[dict[str, dict], int]:
+    """Merge duplicate canonical records while retaining the first record object."""
+    merged: dict[str, dict] = {}
+    merge_count = 0
+    for item in records:
+        record_id = _prepare_cross_host_record(item)
+        current = merged.get(record_id)
+        if current is None:
+            merged[record_id] = item
+        else:
+            merge_count += _merge_cross_host_record_into(current, item)
+    return _finalize_cross_host_record_map(merged), merge_count
 
 def analyze_pages_incremental(
     pages: list[dict],
@@ -1826,7 +1899,9 @@ def analyze_pages_incremental(
         url = canonical_url(page.get("url")) if isinstance(page, dict) else None
         host = urlsplit(url).hostname if url else None
         grouped[host or "_invalid_public_url"].append(page)
-    all_catalogs, all_records, all_page_rows = [], [], []
+    all_catalogs, all_page_rows = [], []
+    all_records: dict[str, dict] = {}
+    cross_host_record_merges = 0
     all_media: set[str] = set()
     all_media_references = []
     content_entity_mentions = 0
@@ -1897,16 +1972,25 @@ def analyze_pages_incremental(
                 "cache_reused_hosts": reused,
                 "cache_rebuilt_hosts": rebuilt,
             }, sort_keys=True), flush=True)
-        all_catalogs.extend(shard["catalogs"])
-        all_records.extend(shard["records"])
-        all_page_rows.extend(shard["pages"])
-        all_media.update(shard["media_urls"])
-        all_media_references.extend(shard.get("media_references", []))
-        content_entity_mentions += shard["metrics"].get("content_entity_mentions", 0)
-        structured_catalog_lists += shard["metrics"].get("structured_catalog_lists", 0)
-        structured_catalog_items += shard["metrics"].get("structured_catalog_items", 0)
-        eligible += shard["metrics"]["eligible_pages"]
-        signals += shard["metrics"]["pages_with_catalog_signals"]
+        # Cache-only passes only materialize resumable host shards. Avoid building
+        # the global record/page object graph when the caller will return immediately.
+        if not cache_only:
+            all_catalogs.extend(shard["catalogs"])
+            for item in shard["records"]:
+                record_id = _prepare_cross_host_record(item)
+                current = all_records.get(record_id)
+                if current is None:
+                    all_records[record_id] = item
+                else:
+                    cross_host_record_merges += _merge_cross_host_record_into(current, item)
+            all_page_rows.extend(shard["pages"])
+            all_media.update(shard["media_urls"])
+            all_media_references.extend(shard.get("media_references", []))
+            content_entity_mentions += shard["metrics"].get("content_entity_mentions", 0)
+            structured_catalog_lists += shard["metrics"].get("structured_catalog_lists", 0)
+            structured_catalog_items += shard["metrics"].get("structured_catalog_items", 0)
+            eligible += shard["metrics"]["eligible_pages"]
+            signals += shard["metrics"]["pages_with_catalog_signals"]
     if cache_only:
         return {
             "cache_only": True,
@@ -1916,10 +2000,32 @@ def analyze_pages_incremental(
             "unique_pages": len(pages),
             "cache_files": len(list(cache_dir.glob("*.json.gz"))),
         }
-    all_records, cross_host_record_merges = _merge_cross_host_records(all_records)
+    _finalize_cross_host_record_map(all_records)
+    if progress:
+        print(json.dumps({
+            "stage": "catalog_global_reconciliation_start",
+            "pages": len(pages),
+            "records": len(all_records),
+            "catalogs": len(all_catalogs),
+        }, sort_keys=True), flush=True)
+    global_started = time.monotonic()
     global_subject_catalogs = _add_global_subject_catalogs(pages, all_page_rows, all_records, all_catalogs)
+    if progress:
+        print(json.dumps({
+            "stage": "catalog_global_subjects_complete",
+            "new_catalogs": global_subject_catalogs,
+            "records": len(all_records),
+            "elapsed_seconds": round(time.monotonic() - global_started, 3),
+        }, sort_keys=True), flush=True)
     _reconcile_page_record_provenance(all_page_rows, all_records)
     global_typed_catalogs_by_type = _add_global_typed_entity_catalogs(all_page_rows, all_records, all_catalogs)
+    if progress:
+        print(json.dumps({
+            "stage": "catalog_global_typed_catalogs_complete",
+            "catalogs_by_type": global_typed_catalogs_by_type,
+            "records": len(all_records),
+            "elapsed_seconds": round(time.monotonic() - global_started, 3),
+        }, sort_keys=True), flush=True)
     # Keep the canonical record map through all global reconciliation passes.
     # These helpers accept a dict keyed by record_id; rebuilding a second
     # million-entry map in each pass needlessly raises peak memory.
