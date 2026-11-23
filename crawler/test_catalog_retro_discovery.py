@@ -100,7 +100,8 @@ class RetroCatalogDiscoveryTests(unittest.TestCase):
         self.assertIn("group: catalog-first-discovery-", catalog_first)
         self.assertIn("group: catalog-data-publish-v2-", page_derived)
         self.assertIn('      - "crawler/automation-trigger.json"', page_derived)
-        self.assertIn("timeout-minutes: 120", page_derived)
+        self.assertIn("timeout-minutes: 180", page_derived)
+        self.assertIn("timeout-minutes: 165", page_derived)
         self.assertIn("timeout-minutes: 90", catalog_first)
 
     def test_full_catalog_inventory_runs_hourly_not_after_every_crawler_cycle(self):
