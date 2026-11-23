@@ -195,6 +195,10 @@ class UniversalCatalogIngestTests(unittest.TestCase):
         self.assertEqual(result["metrics"]["subcatalogs_discovered"], 2)
         self.assertEqual(result["metrics"]["catalog_records"], 3)
         self.assertEqual(result["metrics"]["record_catalog_memberships"], 8)
+        self.assertEqual(result["metrics"]["catalogs_with_records"], 3)
+        self.assertEqual(result["metrics"]["catalogs_without_records"], 0)
+        self.assertEqual(root["record_count"], 3)
+        self.assertEqual(sorted(c["record_count"] for c in subcatalogs), [2, 3])
         self.assertEqual(len(subcatalogs), 2)
         self.assertEqual({c["subcategory_kind"] for c in subcatalogs}, {"organization", "tag"})
         self.assertTrue(all(c["parent_catalog_id"] == root["catalog_id"] for c in subcatalogs))
@@ -209,6 +213,7 @@ class UniversalCatalogIngestTests(unittest.TestCase):
         self.assertTrue(all(roads["catalog_id"] in r["catalog_ids"] for r in by_title.values()))
         self.assertEqual(result["metrics"]["production_eligible_records"], 3)
         self.assertEqual(result["metrics"]["indexed_records"], 0)
+        self.assertEqual(result["metrics"]["records_published"], 0)
         self.assertFalse(result["production_indexed"])
 
     def test_same_canonical_openlibrary_work_is_one_record_across_subject_catalogs(self):
@@ -269,6 +274,8 @@ class UniversalCatalogIngestTests(unittest.TestCase):
         self.assertEqual(result["metrics"]["record_catalog_memberships"], 2)
         self.assertEqual(result["metrics"]["source_page_references"], 1)
         self.assertEqual(result["metrics"]["source_page_associations"], 2)
+        self.assertEqual(result["metrics"]["catalogs_with_records"], 2)
+        self.assertEqual(result["metrics"]["catalogs_without_records"], 0)
         self.assertEqual(len(result["records"]), 1)
         record = result["records"][0]
         self.assertEqual(set(record["catalog_ids"]), {
