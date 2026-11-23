@@ -419,7 +419,7 @@ function searchUniversalCatalogs(query, network, limit = 5) {
         (catalog.catalog_level === 'subcatalog' ? 20 : 0);
       return { catalog, score };
     }).sort((a, b) => b.score - a.score ||
-      (a.catalog.catalog_level === 'subcatalog' ? -1 : 1) ||
+      (Number(b.catalog.catalog_level === 'subcatalog') - Number(a.catalog.catalog_level === 'subcatalog')) ||
       String(a.catalog.title).localeCompare(String(b.catalog.title)));
 
     const selected = scored[0];
@@ -488,16 +488,17 @@ function searchUniversalCatalogs(query, network, limit = 5) {
       subject: catalog.subject || '',
       geography: catalog.geography || '',
       subcategory_kind: catalog.subcategory_kind || '',
-      subcategory_value: catalog.subcategory_value || ''
+      subcategory_value: catalog.subcategory_value || '',
+      _score: group.score
     });
   }
-  results.sort((a, b) => {
-    const aCount = a.matched_record_count || 0;
-    const bCount = b.matched_record_count || 0;
-    return bCount - aCount || String(a.catalog_title).localeCompare(String(b.catalog_title));
-  });
+  results.sort((a, b) =>
+    (b._score - a._score) ||
+    ((b.matched_record_count || 0) - (a.matched_record_count || 0)) ||
+    String(a.catalog_title).localeCompare(String(b.catalog_title))
+  );
   const max = Number.isSafeInteger(limit) ? Math.max(1, Math.min(5, limit)) : 5;
-  return results.slice(0, max);
+  return results.slice(0, max).map(({ _score, ...result }) => result);
 }
 
 function clearUniversalCatalogCacheForTests() {
