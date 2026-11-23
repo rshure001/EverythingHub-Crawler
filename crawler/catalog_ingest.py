@@ -315,6 +315,19 @@ def adapt(manifest: dict[str, Any]) -> dict[str, Any]:
                 "catalog_ids": record["catalog_ids"],
             })
     records = [records_by_id[key] for key in sorted(records_by_id)]
+    catalog_ids = {catalog["catalog_id"] for catalog in catalogs}
+    for catalog in catalogs:
+        parent_catalog_id = catalog.get("parent_catalog_id") or ""
+        if parent_catalog_id and parent_catalog_id not in catalog_ids:
+            raise ValueError("subcatalog parent is missing from the catalog registry")
+    membership_counts = Counter(
+        catalog_id
+        for record in records
+        for catalog_id in (record.get("catalog_ids") or [record.get("catalog_id")])
+        if catalog_id
+    )
+    for catalog in catalogs:
+        catalog["record_count"] = membership_counts.get(catalog["catalog_id"], 0)
     metrics = catalog_metrics(catalogs, records, source_pages)
     metrics["production_eligible_records"] = sum(
         1 for record in records if (record.get("attributes") or {}).get("public_search_allowed") is True
