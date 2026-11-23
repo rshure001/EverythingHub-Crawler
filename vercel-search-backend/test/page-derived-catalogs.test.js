@@ -3,7 +3,7 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const crypto=require('node:crypto');
 const zlib=require('node:zlib');
-const {validatePageDerivedCatalogs,loadPageDerivedCatalogsFromManifest,loadQueryScopedPageDerivedCatalogs,searchPageDerivedCatalogs}=require('../src/lib/page-derived-catalogs');
+const {validatePageDerivedCatalogs,loadPageDerivedCatalogsFromManifest,loadQueryScopedPageDerivedCatalogs,searchPageDerivedCatalogs,resolveRecordRelatedCatalog}=require('../src/lib/page-derived-catalogs');
 const gzip=value=>zlib.gzipSync(Buffer.from(JSON.stringify(value)));
 const hash=buffer=>crypto.createHash('sha256').update(buffer).digest('hex');
 
@@ -23,6 +23,31 @@ function fixture(){
  const manifest={version:1,integrity:'sha256',analysis_version:9,generated_at:'2026-11-20T22:21:02Z',source_index_pages:131899,source_index_updated_at:'2026-11-20T22:00:00Z',source_index_sha256:'a'.repeat(64),catalog_count:catalogs.length,record_count:records.length,metrics:{records_published:0,source_terms_reviewed_records:0},files:[{file:'registry.json.gz',bytes:registry.length,sha256:hash(registry),items:catalogs.length},{file:'records.json.gz',bytes:recordsFile.length,sha256:hash(recordsFile),items:records.length}]};
  return {manifest,registry,recordsFile,manifestRaw:Buffer.from(JSON.stringify(manifest))};
 }
+
+test('per-record related catalogs deduplicate shared memberships and exclude the owner',()=>{
+ const network={
+  records:[
+   {record_id:'owner',record_catalog_id:'rc-owner',title:'Owner record',record_type:'model',catalog_ids:['shared-a','shared-b'],source_urls:['https://example.com/owner']},
+   {record_id:'related-a',record_catalog_id:'rc-a',title:'Related A',record_type:'model',catalog_ids:['shared-a'],source_urls:['https://example.com/a']},
+   {record_id:'related-b',record_catalog_id:'rc-b',title:'Related B',record_type:'model',catalog_ids:['shared-a','shared-b'],source_urls:['https://example.com/b']},
+   {record_id:'unrelated',record_catalog_id:'rc-unrelated',title:'Unrelated',record_type:'place',catalog_ids:['other'],source_urls:['https://example.com/other']}
+  ],
+  catalogs:[
+   {catalog_id:'shared-a',record_ids:['owner','related-a','related-b']},
+   {catalog_id:'shared-b',record_ids:['owner','related-b']},
+   {catalog_id:'other',record_ids:['unrelated']}
+  ]
+ };
+ const result=resolveRecordRelatedCatalog('rc-owner',network,1,0);
+ assert.equal(result.owner_record.record_id,'owner');
+ assert.equal(result.related_count,2);
+ assert.equal(result.related_records.length,1);
+ assert.equal(result.related_records[0].record_id,'related-a');
+ assert.equal(result.has_more,true);
+ const next=resolveRecordRelatedCatalog('rc-owner',network,1,1);
+ assert.equal(next.related_records[0].record_id,'related-b');
+ assert.equal(resolveRecordRelatedCatalog('missing',network),null);
+});
 
 test('validates the compressed registry and global records against the manifest',()=>{
  const f=fixture(),network=validatePageDerivedCatalogs(f.manifest,f.registry,f.recordsFile);
