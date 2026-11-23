@@ -183,6 +183,17 @@ class CatalogSeedExpansionTests(unittest.TestCase):
         self.assertEqual(len(first["source_provenance"]), 2)
         self.assertEqual(first["last_seen_at"], "2026-11-23T00:01:00Z")
 
+    def test_workflow_uses_validated_catalog_review_queue_not_page_profiles(self):
+        workflow = (
+            Path(__file__).resolve().parents[1]
+            / ".github"
+            / "workflows"
+            / "catalog-seed-expansion.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn("source-host-review-queue.json", workflow)
+        self.assertIn("public-search/manifest.json", workflow)
+        self.assertNotIn("page-catalog-seeds.json.gz", workflow)
+
     def test_batch_limit_cannot_exceed_ten(self):
         with self.assertRaisesRegex(ValueError, "between 1 and 10"):
             expansion.run_batch(Path("missing.json"), Path("state.json.gz"), 11)
