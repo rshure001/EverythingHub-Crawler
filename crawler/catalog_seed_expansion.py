@@ -346,7 +346,9 @@ def run_batch(
                 "media_fetched": 0,
             },
         }
-        _write_payload(state_path, result)
+        # A stale review queue is not a progress event. Preserve the previous
+        # resumable ledger (or leave it absent) so the scheduled workflow does
+        # not create a timestamp-only commit while waiting for a fresh queue.
         return result
 
     candidate_urls = queue.get("candidate_urls", [])
