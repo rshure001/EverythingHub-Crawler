@@ -77,6 +77,23 @@ for (const item of expectations) {
     );
   }
 
+  if (item.query === 'NASA') {
+    assert.ok(
+      universal.some(result =>
+        /nasa/i.test(result.catalog_title) ||
+        result.matched_records.some(record => /nasa/i.test(record.title))
+      ),
+      'NASA universal catalog results must expose an explicitly NASA-relevant catalog or matched record'
+    );
+  }
+
+  if (item.query === 'Las Vegas') {
+    assert.ok(
+      data.catalogResults.length > data.externalCatalogResults.length,
+      'Las Vegas must return catalog matches beyond the external directory'
+    );
+  }
+
   if (item.query === 'Rolex') {
     assert.ok(
       data.externalCatalogResults.some(result => /rolex/i.test(result.catalog_title || result.title || '')),
