@@ -833,7 +833,7 @@ function searchCatalogRecords(query, network, limit = 5) {
     const matchedRecords = matched.slice(0, 5).map(({ record }) => ({
       record_id: record.record_id,
       record_catalog_id: String(record.record_catalog_id || ""),
-      shared_catalog_ids: Array.isArray(record.catalog_ids) ? record.catalog_ids : [],
+      shared_catalog_ids: Array.isArray(record.catalog_ids) ? record.catalog_ids.slice(0, MAX_CATALOG_INDEX_FETCHES) : [],
       title: String(record.title || "Untitled record").slice(0, 240),
       record_type: String(record.record_type || "record"),
       source_url: (record.source_urls || []).map(safeUrl).find(Boolean) || "",
