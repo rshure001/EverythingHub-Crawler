@@ -102,6 +102,15 @@ class UniversalCatalogModelTests(unittest.TestCase):
                 "catalog_level": "subcatalog",
                 "parent_catalog_id": self_id,
             })
+        with self.assertRaisesRegex(ValueError, "require subcategory_kind and subcategory_value"):
+            normalize_catalog({
+                "source_id": "missing-subcategory-label",
+                "title": "Missing label",
+                "catalog_type": "open_data",
+                "source_url": "https://example.org/catalog",
+                "catalog_level": "subcatalog",
+                "parent_catalog_id": self.catalog["catalog_id"],
+            })
 
     def test_rejects_non_https_source(self):
         with self.assertRaises(ValueError):
