@@ -8,7 +8,7 @@ const CATEGORY_LANE_ALIASES = Object.freeze({
   news: Object.freeze(['news']),
   shopping: Object.freeze(['business']),
   places: Object.freeze(['culture', 'nature', 'government']),
-  business: Object.freeze(['business']),
+  business: Object.freeze(['business', 'culture']),
   research: Object.freeze(['science', 'technology'])
 });
 function resolveLaneFilters(lane) {
