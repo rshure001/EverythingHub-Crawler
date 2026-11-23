@@ -1,6 +1,15 @@
+import gzip
+import json
+import tempfile
 import unittest
+from pathlib import Path
 
-from catalog_page_analysis import _add_page_catalogs, analyze_pages, stable_id
+from catalog_page_analysis import (
+    _add_page_catalogs,
+    _write_gzip_catalog_stream,
+    analyze_pages,
+    stable_id,
+)
 
 
 class PageAndRecordCatalogIdentityTests(unittest.TestCase):
@@ -51,6 +60,44 @@ class PageAndRecordCatalogIdentityTests(unittest.TestCase):
         self.assertEqual(record_catalogs[0]["record_ids"], [record_id])
         self.assertNotEqual(record_catalog_id, pages[0]["page_catalog_id"])
         self.assertFalse(page_catalogs[0]["public_search_allowed"])
+
+    def test_streamed_record_catalogs_write_valid_json_without_materializing_a_list(self):
+        page_id = stable_id("page", "https://example.com/stream")
+        record_id = stable_id("record", "article|example.com|streamed")
+        pages = [{
+            "page_id": page_id,
+            "url": "https://example.com/stream",
+            "title": "Streamed page",
+            "record_ids": [record_id],
+        }]
+        records = {
+            record_id: {
+                "record_id": record_id,
+                "record_type": "article",
+                "title": "Streamed record",
+                "record_catalog_id": stable_id("record-catalog", record_id),
+                "source_page_ids": [page_id],
+                "catalog_ids": [],
+            }
+        }
+        metrics, _, catalog_stream = _add_page_catalogs(
+            pages, records, stream_record_catalogs=True
+        )
+        self.assertFalse(isinstance(catalog_stream, list))
+        self.assertEqual(metrics["record_owned_catalogs"], 1)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "record-catalogs.json.gz"
+            size, digest, count = _write_gzip_catalog_stream(path, catalog_stream)
+            payload = json.loads(gzip.decompress(path.read_bytes()).decode("utf-8"))
+        self.assertGreater(size, 0)
+        self.assertEqual(len(digest), 64)
+        self.assertEqual(count, 1)
+        self.assertEqual(payload["version"], 1)
+        self.assertEqual(payload["catalogs"][0]["record_id"], record_id)
+        self.assertEqual(
+            payload["catalogs"][0]["page_catalog_ids"],
+            [pages[0]["page_catalog_id"]],
+        )
 
     def test_empty_page_gets_catalog_and_shared_record_links_all_source_pages(self):
         page_a = stable_id("page", "https://example.com/a")
