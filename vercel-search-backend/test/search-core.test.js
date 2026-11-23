@@ -3,7 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const zlib = require('node:zlib');
-const { searchCatalog, parseBingRss, buildResponse } = require('../src/lib/search-core');
+const { searchCatalog, parseBingRss, buildResponse, resolveLaneFilters } = require('../src/lib/search-core');
 const { MAX_CATALOG_GZIP_BYTES, MAX_INDEXED_PAGES, MAX_SHARD_COUNT, validateManifestAndCatalog } = require('../src/lib/catalog');
 
 function makePage(index, lane) {
@@ -79,7 +79,7 @@ test('search ranks title matches and filters the requested lane', () => {
   assert.equal(results[0].provider, 'everythinghub-catalog');
 });
 
-test('falls back to relevant general results when a requested lane has no matches', () => {
+test('keeps an empty category lane empty so the homepage can label its explicit web fallback', () => {
   const pages = [
     {
       url: 'https://example.com/rolex-collection',
@@ -89,10 +89,59 @@ test('falls back to relevant general results when a requested lane has no matche
       lane: 'general'
     }
   ];
-  const results = searchCatalog(pages, 'Rolex', 'business');
-  assert.equal(results.length, 1);
-  assert.equal(results[0].url, 'https://example.com/rolex-collection');
-  assert.equal(results[0].lane, 'general');
+  const results = searchCatalog(pages, 'Rolex', 'shopping');
+  assert.deepEqual(results, []);
+});
+
+test('maps all homepage search categories to supported corpus lanes', () => {
+  assert.deepEqual([...resolveLaneFilters('web')], []);
+  assert.deepEqual([...resolveLaneFilters('news')], ['news']);
+  assert.deepEqual([...resolveLaneFilters('shopping')], ['commerce']);
+  assert.deepEqual([...resolveLaneFilters('places')], ['culture', 'nature', 'government']);
+  assert.deepEqual([...resolveLaneFilters('business')], ['business']);
+  assert.deepEqual([...resolveLaneFilters('research')], ['science', 'technology']);
+  assert.deepEqual([...resolveLaneFilters('images')], []);
+  assert.deepEqual([...resolveLaneFilters('videos')], []);
+});
+
+test('shopping searches commerce pages and excludes unrelated general pages', () => {
+  const pages = [
+    {
+      url: 'https://www.bucherer.com/rolex',
+      title: 'Rolex watches',
+      description: 'Official retailer Rolex collection',
+      text: 'Rolex watches and watchmaking',
+      lane: 'commerce'
+    },
+    {
+      url: 'https://example.com/rolex-mention',
+      title: 'General Rolex reference',
+      description: 'A passing mention of Rolex',
+      text: 'Background article',
+      lane: 'general'
+    }
+  ];
+  const results = searchCatalog(pages, 'Rolex', 'shopping');
+  assert.deepEqual(results.map(item => item.url), ['https://www.bucherer.com/rolex']);
+});
+
+test('places and research aliases search multiple relevant lanes', () => {
+  const pages = [
+    { url: 'https://example.com/visitor-guide', title: 'Las Vegas visitor guide', description: 'Las Vegas places', text: 'Visitor guide', lane: 'culture' },
+    { url: 'https://example.com/refuge', title: 'Las Vegas wildlife refuge', description: 'Las Vegas nature', text: 'Wildlife refuge', lane: 'nature' },
+    { url: 'https://example.com/city', title: 'Las Vegas city services', description: 'Las Vegas government', text: 'City information', lane: 'government' },
+    { url: 'https://example.com/nasa-science', title: 'NASA research mission', description: 'NASA science', text: 'Research', lane: 'science' },
+    { url: 'https://example.com/mit-tech', title: 'NASA technology research', description: 'NASA technology', text: 'Research', lane: 'technology' },
+    { url: 'https://example.com/general', title: 'NASA general mention', description: 'General', text: 'NASA', lane: 'general' }
+  ];
+  assert.deepEqual(
+    searchCatalog(pages, 'Las Vegas', 'places').map(item => item.url),
+    ['https://example.com/visitor-guide', 'https://example.com/city', 'https://example.com/refuge']
+  );
+  assert.deepEqual(
+    searchCatalog(pages, 'NASA research', 'research').map(item => item.url),
+    ['https://example.com/nasa-science', 'https://example.com/mit-tech']
+  );
 });
 
 test('first and later pages do not repeat crawler results', () => {
