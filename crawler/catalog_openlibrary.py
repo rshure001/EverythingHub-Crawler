@@ -180,7 +180,7 @@ def _previous_snapshot_counts(path: Path) -> tuple[int | None, int | None]:
 def _write_snapshot(path: Path, result: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temp = path.with_suffix(path.suffix + ".tmp")
-    payload = json.dumps(result, ensure_ascii=False, separators=(",", ":")).encode("utf-8") + b"\\n"
+    payload = json.dumps(result, ensure_ascii=False, separators=(",", ":")).encode("utf-8") + b"\n"
     if path.suffix == ".gz":
         temp.write_bytes(gzip.compress(payload, mtime=0))
     else:
