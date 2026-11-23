@@ -5,6 +5,9 @@ on:
     paths:
       - "crawler/catalog_seed_expansion.py"
       - "crawler/test_catalog_seed_expansion.py"
+      - "data/page-derived-catalogs/report.json"
+      - "data/page-derived-catalogs/source-host-review-queue.json"
+      - "data/catalog-landing-page-robots.json"
       - ".github/workflows/catalog-seed-expansion.yml"
   pull_request:
     paths:

@@ -267,6 +267,9 @@ class CatalogSeedExpansionTests(unittest.TestCase):
             / "catalog-seed-expansion.yml"
         ).read_text(encoding="utf-8")
         self.assertIn("source-host-review-queue.json", workflow)
+        self.assertIn('"data/page-derived-catalogs/report.json"', workflow)
+        self.assertIn('"data/page-derived-catalogs/source-host-review-queue.json"', workflow)
+        self.assertIn('"data/catalog-landing-page-robots.json"', workflow)
         self.assertIn("public-search/manifest.json", workflow)
         self.assertIn("_queue_snapshot_compatible_with_current_index", workflow)
         self.assertNotIn("page-catalog-seeds.json.gz", workflow)
