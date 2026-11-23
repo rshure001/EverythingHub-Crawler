@@ -356,6 +356,174 @@ def adapt(manifest: dict[str, Any]) -> dict[str, Any]:
         "source_pages": source_pages,
     }
 
+
+def _canonical_json_bytes(value):
+    return json.dumps(
+        value, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8") + b"\n"
+
+
+def build_public_catalog_indexes(result):
+    """Build deterministic per-catalog index shards from rights-cleared records only."""
+    catalogs = result.get("catalogs") or []
+    records = result.get("records") or []
+    catalog_by_id = {}
+    for catalog in catalogs:
+        if not isinstance(catalog, dict):
+            raise ValueError("catalog index input contains a non-object catalog")
+        catalog_id = catalog.get("catalog_id")
+        if not isinstance(catalog_id, str) or not catalog_id:
+            raise ValueError("catalog index input contains a catalog without catalog_id")
+        if catalog_id in catalog_by_id:
+            raise ValueError(f"duplicate catalog_id in registry: {catalog_id}")
+        catalog_by_id[catalog_id] = catalog
+
+    staged_record_ids = set()
+    eligible_record_ids = set()
+    memberships_by_catalog = defaultdict(set)
+    staged_membership_count = 0
+    for record in records:
+        if not isinstance(record, dict):
+            raise ValueError("catalog index input contains a non-object record")
+        record_id = record.get("record_id")
+        if not isinstance(record_id, str) or not record_id:
+            raise ValueError("catalog index input contains a record without record_id")
+        if record_id in staged_record_ids:
+            raise ValueError(f"duplicate canonical record_id: {record_id}")
+        staged_record_ids.add(record_id)
+
+        raw_memberships = record.get("catalog_ids")
+        if not isinstance(raw_memberships, list) or not raw_memberships:
+            raw_memberships = [record.get("catalog_id")]
+        catalog_ids = sorted({
+            value for value in raw_memberships if isinstance(value, str) and value
+        })
+        if not catalog_ids:
+            raise ValueError(f"record has no catalog membership: {record_id}")
+        missing_catalogs = [value for value in catalog_ids if value not in catalog_by_id]
+        if missing_catalogs:
+            raise ValueError(
+                f"record {record_id} references missing catalogs: {missing_catalogs}"
+            )
+        staged_membership_count += len(catalog_ids)
+
+        attributes = record.get("attributes")
+        if not isinstance(attributes, dict):
+            attributes = {}
+        if attributes.get("public_search_allowed") is not True:
+            continue
+        eligible_record_ids.add(record_id)
+        for catalog_id in catalog_ids:
+            if catalog_by_id[catalog_id].get("public_search_allowed") is True:
+                memberships_by_catalog[catalog_id].add(record_id)
+
+    shard_rows = defaultdict(list)
+    catalog_index_manifest = []
+    indexed_record_ids = set()
+    public_memberships = 0
+    catalogs_with_public_records = 0
+    for catalog_id, catalog in sorted(catalog_by_id.items()):
+        record_ids = sorted(memberships_by_catalog.get(catalog_id, set()))
+        if record_ids:
+            catalogs_with_public_records += 1
+        indexed_record_ids.update(record_ids)
+        public_memberships += len(record_ids)
+
+        shard_id = hashlib.sha256(catalog_id.encode("utf-8")).hexdigest()[:2]
+        index_file = f"shards/{shard_id}.json.gz"
+        index_sha256 = hashlib.sha256(_canonical_json_bytes(record_ids)).hexdigest()
+        staged_record_count = int(catalog.get("record_count") or 0)
+        catalog["staged_record_count"] = staged_record_count
+        catalog["public_record_count"] = len(record_ids)
+        catalog["public_index_shard"] = index_file
+        catalog["public_index_sha256"] = index_sha256
+        catalog["public_index_schema_version"] = 1
+
+        shard_rows[shard_id].append({
+            "catalog_id": catalog_id,
+            "catalog_level": catalog.get("catalog_level") or "root",
+            "parent_catalog_id": catalog.get("parent_catalog_id") or "",
+            "public_search_allowed": catalog.get("public_search_allowed") is True,
+            "record_count": len(record_ids),
+            "record_ids": record_ids,
+            "index_sha256": index_sha256,
+        })
+        catalog_index_manifest.append({
+            "catalog_id": catalog_id,
+            "catalog_level": catalog.get("catalog_level") or "root",
+            "parent_catalog_id": catalog.get("parent_catalog_id") or "",
+            "public_search_allowed": catalog.get("public_search_allowed") is True,
+            "file": index_file,
+            "record_count": len(record_ids),
+            "staged_record_count": staged_record_count,
+            "index_sha256": index_sha256,
+        })
+
+    eligible_without_index = eligible_record_ids - indexed_record_ids
+    if eligible_without_index:
+        raise ValueError(
+            f"{len(eligible_without_index)} rights-cleared records have no public catalog membership"
+        )
+
+    shard_payloads = {}
+    shard_manifest = []
+    for shard_id, rows in sorted(shard_rows.items()):
+        rows = sorted(rows, key=lambda row: row["catalog_id"])
+        payload = {
+            "schema_version": 1,
+            "shard_id": shard_id,
+            "catalog_indexes": rows,
+        }
+        compressed = gzip.compress(_canonical_json_bytes(payload), mtime=0)
+        index_file = f"shards/{shard_id}.json.gz"
+        shard_payloads[index_file] = compressed
+        shard_manifest.append({
+            "shard_id": shard_id,
+            "file": index_file,
+            "catalog_count": len(rows),
+            "public_record_memberships": sum(row["record_count"] for row in rows),
+            "bytes": len(compressed),
+            "sha256": hashlib.sha256(compressed).hexdigest(),
+        })
+
+    metrics = result.setdefault("metrics", {})
+    source_page_associations = int(metrics.get("source_page_associations") or 0)
+    duplicate_record_occurrences = max(0, source_page_associations - len(staged_record_ids))
+    metrics.update({
+        "duplicate_record_occurrences": duplicate_record_occurrences,
+        "catalog_indexes_built": len(catalog_by_id),
+        "catalogs_with_public_records": catalogs_with_public_records,
+        "catalogs_without_public_records": len(catalog_by_id) - catalogs_with_public_records,
+        "unique_public_records_indexed": len(indexed_record_ids),
+        "public_record_catalog_memberships": public_memberships,
+        "restricted_records_excluded_from_public_indexes": len(staged_record_ids - eligible_record_ids),
+        "eligible_records_without_public_index": len(eligible_without_index),
+        "catalog_index_shards": len(shard_payloads),
+    })
+
+    manifest = {
+        "schema_version": 1,
+        "strategy": "rights-filtered-per-catalog-indexes",
+        "generated_at": result.get("generated_at") or "",
+        "production_indexed": False,
+        "records_published": 0,
+        "catalog_count": len(catalog_by_id),
+        "catalogs_with_public_records": catalogs_with_public_records,
+        "catalogs_without_public_records": len(catalog_by_id) - catalogs_with_public_records,
+        "unique_public_records": len(indexed_record_ids),
+        "public_record_memberships": public_memberships,
+        "staged_unique_records": len(staged_record_ids),
+        "staged_record_catalog_memberships": staged_membership_count,
+        "restricted_records_not_indexed": len(staged_record_ids - eligible_record_ids),
+        "eligible_records_without_public_index": len(eligible_without_index),
+        "source_page_associations": source_page_associations,
+        "index_shard_count": len(shard_payloads),
+        "catalog_indexes": catalog_index_manifest,
+        "shards": shard_manifest,
+    }
+    return manifest, shard_payloads
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", type=Path, default=INPUT)
@@ -372,6 +540,7 @@ def main() -> None:
             "datasets": manifest.get("datasets", []) + extra.get("datasets", []),
         }
     result = adapt(manifest)
+    index_manifest, index_shards = build_public_catalog_indexes(result)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     temp = args.output.with_suffix(args.output.suffix + ".tmp")
     payload = json.dumps(result, ensure_ascii=False, separators=(",", ":")).encode("utf-8") + b"\n"
@@ -380,6 +549,22 @@ def main() -> None:
     else:
         temp.write_bytes(payload)
     temp.replace(args.output)
+
+    index_dir = args.output.parent / "universal-catalog-indexes"
+    shard_dir = index_dir / "shards"
+    shard_dir.mkdir(parents=True, exist_ok=True)
+    for stale_shard in shard_dir.glob("*.json.gz"):
+        stale_shard.unlink()
+    for relative_path, shard_bytes in sorted(index_shards.items()):
+        shard_path = index_dir / relative_path
+        shard_path.parent.mkdir(parents=True, exist_ok=True)
+        shard_temp = shard_path.with_suffix(shard_path.suffix + ".tmp")
+        shard_temp.write_bytes(shard_bytes)
+        shard_temp.replace(shard_path)
+    manifest_path = index_dir / "manifest.json"
+    manifest_temp = manifest_path.with_suffix(".json.tmp")
+    manifest_temp.write_bytes(_canonical_json_bytes(index_manifest))
+    manifest_temp.replace(manifest_path)
     print(json.dumps(result["metrics"], indent=2))
 
 if __name__ == "__main__":
