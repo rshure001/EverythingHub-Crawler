@@ -1717,7 +1717,7 @@ def analyze_pages(
     }
 
 
-def _merge_cross_host_records(records: list[dict]) -> tuple[list[dict], int]:
+def _merge_cross_host_records(records: list[dict]) -> tuple[dict[str, dict], int]:
     """Merge globally identified records in place to bound peak memory.
 
     The host-partition list already owns each record dictionary. Copying every
@@ -1800,7 +1800,7 @@ def _merge_cross_host_records(records: list[dict]) -> tuple[list[dict], int]:
             values[:] = sorted(set(values))
         item["source_url"] = item["source_urls"][0] if item["source_urls"] else ""
         item["source_page_count"] = len(item["source_page_ids"])
-    return list(merged.values()), merge_count
+    return merged, merge_count
 
 def analyze_pages_incremental(
     pages: list[dict],
@@ -1920,6 +1920,10 @@ def analyze_pages_incremental(
     global_subject_catalogs = _add_global_subject_catalogs(pages, all_page_rows, all_records, all_catalogs)
     _reconcile_page_record_provenance(all_page_rows, all_records)
     global_typed_catalogs_by_type = _add_global_typed_entity_catalogs(all_page_rows, all_records, all_catalogs)
+    # Keep the canonical record map through all global reconciliation passes.
+    # These helpers accept a dict keyed by record_id; rebuilding a second
+    # million-entry map in each pass needlessly raises peak memory.
+    all_records = list(all_records.values())
     all_catalogs.sort(key=lambda x: (x["catalog_type"], x["title"].casefold(), x["catalog_id"]))
     all_records.sort(key=lambda x: (x["record_type"], x["title"].casefold(), x["record_id"]))
     all_page_rows.sort(key=lambda x: (x.get("url") or "", x.get("page_id") or ""))
