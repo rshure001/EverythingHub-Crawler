@@ -13,7 +13,7 @@ import argparse
 import gzip
 import hashlib
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import urljoin, urlsplit, urlunsplit
@@ -133,9 +133,7 @@ def _queue_snapshot_compatible_with_current_index(queue: object, index_path: Pat
 
 
 def _queue_matches_current_index(queue: object, index_path: Path = INDEX) -> bool:
-    # Backward-compatible alias: a recent append-only snapshot remains usable
-    # when the crawler has only added pages since the review queue was built.
-    return _queue_snapshot_compatible_with_current_index(queue, index_path)
+    return _queue_snapshot_status(queue, _current_index_snapshot(index_path))["exact_match"]
 
 
 def _eligible_seed(seed: object) -> bool:
