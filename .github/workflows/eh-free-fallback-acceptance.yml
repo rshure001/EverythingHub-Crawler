@@ -1,33 +1,7 @@
 name: Everything Hub free fallback acceptance
 on:
-  pull_request:
-    branches:
-      - main
-    paths:
-      - ".github/workflows/eh-free-fallback-acceptance.yml"
-      - ".github/workflows/validate-vercel-search.yml"
-      - ".github/workflows/catalog-first-discovery.yml"
-      - "vercel-search-backend/**"
-      - "vercel-homepage/**"
-      - "crawler/catalog_*.py"
-      - "crawler/test_catalog_*.py"
-      - "data/universal-catalog-indexes/**"
-      - "data/page-derived-catalogs/**"
-      - "public-search/manifest.json"
-  push:
-    branches:
-      - main
-    paths:
-      - ".github/workflows/eh-free-fallback-acceptance.yml"
-      - ".github/workflows/validate-vercel-search.yml"
-      - ".github/workflows/catalog-first-discovery.yml"
-      - "vercel-search-backend/**"
-      - "vercel-homepage/**"
-      - "crawler/catalog_*.py"
-      - "crawler/test_catalog_*.py"
-      - "data/universal-catalog-indexes/**"
-      - "data/page-derived-catalogs/**"
-      - "public-search/manifest.json"
+  # The Vercel projects are not Git-linked. Dispatch the live browser gate only
+  # after the stable aliases have been deployed, or after data-only catalog runs.
   workflow_dispatch:
   workflow_run:
     workflows:
@@ -44,8 +18,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   browser-acceptance:
-    # Pull requests run unit/contract checks; this job tests only the stable live alias after main changes.
-    if: ${{ github.event_name != 'pull_request' && (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success') }}
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 12
     env:
