@@ -22,6 +22,7 @@ const MAX_DOCUMENT_TEXT = 1200;
 const agent = new https.Agent({ keepAlive: true, maxSockets: 4 });
 let cache = null;
 let failureCache = null;
+let inFlight = null;
 
 function getBuffer(url, maxBytes, timeoutMs = 9000) {
   return new Promise((resolve, reject) => {
@@ -358,46 +359,59 @@ async function loadUniversalCatalogFromManifest(manifest, commitSha, manifestRaw
 }
 
 async function loadUniversalCatalogNetwork(fetchBuffer = getBuffer) {
-  if (cache && Date.now() - cache.loadedAt < CACHE_MS) return { ...cache, stale: false };
-  if (failureCache && Date.now() - failureCache.failedAt < 30000) {
+  const now = Date.now();
+  if (cache && now - cache.loadedAt < CACHE_MS) return { ...cache, stale: false };
+  if (failureCache && now - failureCache.failedAt < 30000) {
+    if (cache && now - cache.loadedAt < STALE_MS) {
+      return { ...cache, stale: true, refreshError: failureCache.message };
+    }
     throw new Error(failureCache.message);
   }
+  if (inFlight) return inFlight;
+
+  inFlight = (async () => {
+    try {
+      const refRaw = await fetchBuffer(REF + '?v=' + Date.now(), 4096, 7000);
+      let ref;
+      try { ref = JSON.parse(refRaw.toString('utf8')); } catch {
+        throw new Error('universal_catalog_git_ref_json_invalid');
+      }
+      const commitSha = ref && ref.object && ref.object.sha;
+      if (typeof commitSha !== 'string' || !/^[a-f0-9]{40}$/i.test(commitSha)) {
+        throw new Error('universal_catalog_git_ref_invalid');
+      }
+      const manifestRaw = await fetchBuffer(
+        RAW + commitSha + '/data/universal-catalog-indexes/manifest.json',
+        MAX_MANIFEST_BYTES,
+        8000
+      );
+      let manifest;
+      try { manifest = JSON.parse(manifestRaw.toString('utf8')); } catch {
+        throw new Error('universal_catalog_manifest_json_invalid');
+      }
+      const loaded = await loadUniversalCatalogFromManifest(manifest, commitSha, manifestRaw, fetchBuffer);
+      cache = loaded;
+      failureCache = null;
+      return { ...cache, stale: false };
+    } catch (error) {
+      failureCache = { failedAt: Date.now(), message: String(error && error.message || error).slice(0, 160) };
+      if (cache && Date.now() - cache.loadedAt < STALE_MS) {
+        return {
+          ...cache,
+          stale: true,
+          refreshError: failureCache.message
+        };
+      }
+      throw error;
+    }
+  })();
+
   try {
-    const refRaw = await fetchBuffer(REF + '?v=' + Date.now(), 4096, 7000);
-    let ref;
-    try { ref = JSON.parse(refRaw.toString('utf8')); } catch {
-      throw new Error('universal_catalog_git_ref_json_invalid');
-    }
-    const commitSha = ref && ref.object && ref.object.sha;
-    if (typeof commitSha !== 'string' || !/^[a-f0-9]{40}$/i.test(commitSha)) {
-      throw new Error('universal_catalog_git_ref_invalid');
-    }
-    const manifestRaw = await fetchBuffer(
-      RAW + commitSha + '/data/universal-catalog-indexes/manifest.json',
-      MAX_MANIFEST_BYTES,
-      8000
-    );
-    let manifest;
-    try { manifest = JSON.parse(manifestRaw.toString('utf8')); } catch {
-      throw new Error('universal_catalog_manifest_json_invalid');
-    }
-    const loaded = await loadUniversalCatalogFromManifest(manifest, commitSha, manifestRaw, fetchBuffer);
-    cache = loaded;
-    failureCache = null;
-    return { ...cache, stale: false };
-  } catch (error) {
-    failureCache = { failedAt: Date.now(), message: String(error && error.message || error).slice(0, 160) };
-    if (cache && Date.now() - cache.loadedAt < STALE_MS) {
-      return {
-        ...cache,
-        stale: true,
-        refreshError: String(error && error.message || error).slice(0, 160)
-      };
-    }
-    throw error;
+    return await inFlight;
+  } finally {
+    inFlight = null;
   }
 }
-
 function searchUniversalCatalogs(query, network, limit = 5) {
   const text = String(query || '').trim();
   if (!text || text.length > 160 || !network ||
@@ -511,6 +525,7 @@ function searchUniversalCatalogs(query, network, limit = 5) {
 function clearUniversalCatalogCacheForTests() {
   cache = null;
   failureCache = null;
+  inFlight = null;
 }
 
 module.exports = {
