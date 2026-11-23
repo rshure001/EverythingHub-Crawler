@@ -1,5 +1,8 @@
+import gzip
+import hashlib
+import json
 import unittest
-from catalog_ingest import adapt
+from catalog_ingest import adapt, build_public_catalog_indexes
 
 class UniversalCatalogIngestTests(unittest.TestCase):
     def test_ckan_datasets_become_catalog_records_not_pages(self):
@@ -293,6 +296,127 @@ class UniversalCatalogIngestTests(unittest.TestCase):
                 "catalogs":[{"id":"test","name":"Test","base_url":"https://data.example.org"}],
                 "datasets":[{"catalog_id":"test","dataset_id":"x","title":"X","landing_url":"http://bad.example/x"}]
             })
+
+    def test_rights_filtered_per_catalog_indexes_are_deterministic(self):
+        result = adapt({
+            "updated_at": "2026-11-23T00:00:00Z",
+            "catalogs": [{
+                "id": "canada-open-data",
+                "name": "Open Government Canada",
+                "base_url": "https://open.canada.ca",
+                "api_path": "/data/en/api/3/action/package_search",
+                "source_url": "https://open.canada.ca/data/en/api/3/action/package_search",
+                "category": "government",
+                "errors": [],
+            }],
+            "datasets": [
+                {
+                    "catalog_id": "canada-open-data",
+                    "id": "canada-open-data:roads-1",
+                    "dataset_id": "roads-1",
+                    "title": "Road Network One",
+                    "landing_url": "https://open.canada.ca/data/en/dataset/roads-1",
+                    "organization": "Transport Canada",
+                    "tags": ["roads", "transport"],
+                    "license": {
+                        "id": "ogl-canada",
+                        "title": "Open Government Licence - Canada",
+                        "url": "https://open.canada.ca/en/open-government-licence-canada/",
+                        "is_open": True,
+                        "private": False,
+                    },
+                },
+                {
+                    "catalog_id": "canada-open-data",
+                    "id": "canada-open-data:roads-2",
+                    "dataset_id": "roads-2",
+                    "title": "Road Network Two",
+                    "landing_url": "https://open.canada.ca/data/en/dataset/roads-2",
+                    "organization": "Transport Canada",
+                    "tags": ["roads", "transport"],
+                    "license": {
+                        "id": "ogl-canada",
+                        "url": "https://open.canada.ca/en/open-government-licence-canada/",
+                        "is_open": True,
+                        "private": False,
+                    },
+                },
+                {
+                    "catalog_id": "canada-open-data",
+                    "id": "canada-open-data:roads-3",
+                    "dataset_id": "roads-3",
+                    "title": "Road Network Three",
+                    "landing_url": "https://open.canada.ca/data/en/dataset/roads-3",
+                    "organization": "Transport Canada",
+                    "tags": ["roads", "transport"],
+                    "license": {
+                        "id": "ogl-canada",
+                        "url": "https://open.canada.ca/en/open-government-licence-canada/",
+                        "is_open": True,
+                        "private": True,
+                    },
+                },
+            ],
+        })
+        manifest, shards = build_public_catalog_indexes(result)
+        root = next(c for c in result["catalogs"] if c["catalog_level"] == "root")
+        subcatalogs = [c for c in result["catalogs"] if c["catalog_level"] == "subcatalog"]
+        public_record = next(r for r in result["records"] if r["title"] == "Road Network One")
+        second_public_record = next(r for r in result["records"] if r["title"] == "Road Network Two")
+        private_record = next(r for r in result["records"] if r["title"] == "Road Network Three")
+
+        self.assertEqual(manifest["catalog_count"], len(result["catalogs"]))
+        self.assertEqual(len(manifest["catalog_indexes"]), len(result["catalogs"]))
+        self.assertEqual(manifest["catalogs_with_public_records"], 1)
+        self.assertEqual(manifest["catalogs_without_public_records"], len(subcatalogs))
+        self.assertEqual(manifest["unique_public_records"], 2)
+        self.assertEqual(manifest["public_record_memberships"], 2)
+        self.assertEqual(manifest["restricted_records_not_indexed"], 1)
+        self.assertEqual(manifest["eligible_records_without_public_index"], 0)
+        self.assertEqual(manifest["records_published"], 0)
+        self.assertFalse(manifest["production_indexed"])
+        self.assertEqual(result["metrics"]["catalog_indexes_built"], len(result["catalogs"]))
+        self.assertEqual(result["metrics"]["unique_public_records_indexed"], 2)
+        self.assertEqual(result["metrics"]["public_record_catalog_memberships"], 2)
+        self.assertEqual(result["metrics"]["restricted_records_excluded_from_public_indexes"], 1)
+        self.assertEqual(result["metrics"]["records_published"], 0)
+        self.assertEqual(result["metrics"]["indexed_records"], 0)
+
+        rows = {}
+        shard_entries = {row["file"]: row for row in manifest["shards"]}
+        for file_name, compressed in shards.items():
+            shard_entry = shard_entries[file_name]
+            self.assertEqual(hashlib.sha256(compressed).hexdigest(), shard_entry["sha256"])
+            self.assertEqual(len(compressed), shard_entry["bytes"])
+            payload = json.loads(gzip.decompress(compressed))
+            self.assertEqual(payload["schema_version"], 1)
+            self.assertEqual(payload["shard_id"], shard_entry["shard_id"])
+            for row in payload["catalog_indexes"]:
+                self.assertNotIn(row["catalog_id"], rows)
+                rows[row["catalog_id"]] = row
+
+        self.assertEqual(set(rows), {c["catalog_id"] for c in result["catalogs"]})
+        self.assertEqual(rows[root["catalog_id"]]["record_ids"], sorted([
+            public_record["record_id"], second_public_record["record_id"]
+        ]))
+        self.assertNotIn(private_record["record_id"], {
+            record_id for row in rows.values() for record_id in row["record_ids"]
+        })
+        self.assertTrue(all(not rows[c["catalog_id"]]["record_ids"] for c in subcatalogs))
+
+        catalog_by_id = {c["catalog_id"]: c for c in result["catalogs"]}
+        for entry in manifest["catalog_indexes"]:
+            row = rows[entry["catalog_id"]]
+            catalog = catalog_by_id[entry["catalog_id"]]
+            self.assertEqual(row["index_sha256"], entry["index_sha256"])
+            self.assertEqual(row["record_count"], entry["record_count"])
+            self.assertEqual(catalog["public_index_shard"], entry["file"])
+            self.assertEqual(catalog["public_index_sha256"], entry["index_sha256"])
+            self.assertEqual(catalog["public_record_count"], entry["record_count"])
+
+        second_manifest, second_shards = build_public_catalog_indexes(result)
+        self.assertEqual(manifest, second_manifest)
+        self.assertEqual(shards, second_shards)
 
 if __name__ == "__main__":
     unittest.main()
