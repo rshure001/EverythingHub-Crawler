@@ -987,8 +987,8 @@ def _attach_record_catalogs(page_rows: list[dict], records) -> dict[str, int]:
     }
 
 
-def _add_page_catalogs(page_rows: list[dict], records) -> tuple[dict[str, int], list[dict]]:
-    """Create one compact identity catalog per valid indexed page.
+def _add_page_catalogs(page_rows: list[dict], records) -> tuple[dict[str, int], list[dict], list[dict]]:
+    """Create compact identity catalogs for every valid indexed page and record.
 
     Record-owned catalog IDs are already stored on records; page catalogs are
     persisted separately so they do not create millions of tiny index shards
@@ -1044,13 +1044,33 @@ def _add_page_catalogs(page_rows: list[dict], records) -> tuple[dict[str, int], 
                 page_catalog_ids.sort()
 
     page_catalogs.sort(key=lambda item: item["catalog_id"])
+    record_catalogs = []
+    for record_id, record in sorted(record_map.items()):
+        record_catalogs.append({
+            "catalog_id": record.get("record_catalog_id") or stable_id("record-catalog", record_id),
+            "record_id": record_id,
+            "title": _title(record.get("title")) or record_id,
+            "record_type": record.get("record_type", "other"),
+            "page_catalog_ids": sorted(set(record.get("page_catalog_ids", []))),
+            "source_catalog_ids": sorted(set(record.get("catalog_ids", []))),
+            "source_page_ids": sorted(set(record.get("source_page_ids", []))),
+            "source_urls": sorted(set(record.get("source_urls", []))),
+            "record_ids": [record_id],
+            "catalog_origin": "record_owned_identity_catalog",
+            "status": "identity_container_pending_validation",
+            "source_terms_status": "not_reviewed",
+            "rights_status": "publicly_accessible_not_cleared_for_redistribution",
+            "public_search_allowed": False,
+            "verified": False,
+        })
     metrics = {
         "page_catalogs": len(page_catalogs),
         "page_catalogs_with_records": sum(bool(item["record_ids"]) for item in page_catalogs),
         "page_catalogs_without_records": sum(not bool(item["record_ids"]) for item in page_catalogs),
         "pages_with_page_catalogs": len(page_catalogs),
+        "record_owned_catalogs": len(record_catalogs),
     }
-    return metrics, page_catalogs
+    return metrics, page_catalogs, record_catalogs
 
 
 def analyze_pages(
@@ -1763,7 +1783,7 @@ def analyze_pages(
     _reconcile_page_record_provenance(page_rows, records)
     global_typed_catalogs_by_type = _add_global_typed_entity_catalogs(page_rows, records, catalogs)
     record_catalog_metrics = _attach_record_catalogs(page_rows, records)
-    page_catalog_metrics, page_catalog_list = _add_page_catalogs(page_rows, records)
+    page_catalog_metrics, page_catalog_list, record_catalog_list = _add_page_catalogs(page_rows, records)
 
     for item in records.values():
         item["source_urls"] = sorted(item["source_urls"])
@@ -1814,9 +1834,9 @@ def analyze_pages(
         "page_catalogs": page_catalog_metrics["page_catalogs"],
         "page_catalogs_with_records": page_catalog_metrics["page_catalogs_with_records"],
         "page_catalogs_without_records": page_catalog_metrics["page_catalogs_without_records"],
-        "record_owned_catalogs": record_catalog_metrics["record_catalogs"],
+        "record_owned_catalogs": page_catalog_metrics["record_owned_catalogs"],
         "pages_with_page_catalogs": page_catalog_metrics["pages_with_page_catalogs"],
-        "records_with_owned_catalogs": record_catalog_metrics["record_catalogs"],
+        "records_with_owned_catalogs": page_catalog_metrics["record_owned_catalogs"],
         "record_pages_with_catalogs": record_catalog_metrics["record_pages_with_catalogs"],
         "record_catalog_membership_edges": record_catalog_metrics["record_catalog_membership_edges"],
         "record_catalogs_with_shared_sources": record_catalog_metrics["record_catalogs_with_shared_sources"],
@@ -1884,6 +1904,7 @@ def analyze_pages(
         "metrics": metrics,
         "catalogs": catalog_list,
         "page_catalogs": page_catalog_list,
+        "record_catalogs": record_catalog_list,
         "records": record_list,
         "pages": page_rows,
         "media_urls": sorted(media_urls),
@@ -2132,7 +2153,7 @@ def analyze_pages_incremental(
     _reconcile_page_record_provenance(all_page_rows, all_records)
     global_typed_catalogs_by_type = _add_global_typed_entity_catalogs(all_page_rows, all_records, all_catalogs)
     record_catalog_metrics = _attach_record_catalogs(all_page_rows, all_records)
-    page_catalog_metrics, page_catalog_list = _add_page_catalogs(all_page_rows, all_records)
+    page_catalog_metrics, page_catalog_list, record_catalog_list = _add_page_catalogs(all_page_rows, all_records)
     if progress:
         print(json.dumps({
             "stage": "catalog_global_typed_catalogs_complete",
@@ -2239,6 +2260,7 @@ def analyze_pages_incremental(
         "source_index_pages": source_total, "source_index_updated_at": source_updated_at,
         "source_index_sha256": source_index_sha256, "metrics": metrics,
         "catalogs": all_catalogs, "page_catalogs": page_catalog_list,
+        "record_catalogs": record_catalog_list,
         "records": all_records, "pages": all_page_rows,
         "media_urls": sorted(all_media),
         "media_references": sorted(
@@ -2851,6 +2873,10 @@ def write_outputs(analysis: dict, output_dir: Path) -> dict:
         "version": 1, "catalogs": analysis.get("page_catalogs", []),
     })
     files.append({"file": "page-catalogs.json.gz", "bytes": size, "sha256": digest, "items": len(analysis.get("page_catalogs", []))})
+    size, digest = _write_gzip(output_dir / "record-catalogs.json.gz", {
+        "version": 1, "catalogs": analysis.get("record_catalogs", []),
+    })
+    files.append({"file": "record-catalogs.json.gz", "bytes": size, "sha256": digest, "items": len(analysis.get("record_catalogs", []))})
     search_shards = build_search_index(analysis)
     if not search_shards:
         search_shards = {"00": {"version": 1, "prefix": "00", "tokens": {}}}
