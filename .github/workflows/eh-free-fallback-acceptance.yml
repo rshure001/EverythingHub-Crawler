@@ -235,6 +235,43 @@ jobs:
                 categoryChecks[category] = { query, visibleResults: result.count, catalogCards: result.catalogs.length };
               }
               report.checks.additionalCategories = categoryChecks;
+
+              // Verify that the live backend actually applies the UI category
+              // lanes; visible-result counts alone can hide an unfiltered fallback.
+              const categoryLaneApi = {};
+              for (const [category, query, allowedLanes, expectedHost] of [
+                ["shopping", "Rolex", ["business"], "bucherer.com"],
+                ["places", "Las Vegas", ["culture", "nature", "government"], "visitlasvegas.com"],
+                ["business", "Las Vegas", ["business", "culture"], "visitlasvegas.com"],
+                ["research", "NASA", ["science", "technology"], "nasa.gov"]
+              ]) {
+                const apiUrl = new URL("/api/search", "https://everythinghub-search-backend.vercel.app");
+                apiUrl.searchParams.set("q", query);
+                apiUrl.searchParams.set("limit", "20");
+                apiUrl.searchParams.set("lane", category);
+                const apiResponse = await page.request.get(apiUrl.toString());
+                const apiPayload = await apiResponse.json().catch(() => ({}));
+                const apiResults = Array.isArray(apiPayload.results) ? apiPayload.results : [];
+                const lanes = [...new Set(apiResults.map(item => String(item.lane || "general")))];
+                const expectedHostMatch = apiResults.some(item => {
+                  try { return new URL(item.url).hostname.toLowerCase().endsWith(expectedHost); }
+                  catch { return false; }
+                });
+                if (
+                  apiResponse.status() !== 200 ||
+                  !apiResults.length ||
+                  lanes.some(lane => !allowedLanes.includes(lane)) ||
+                  !expectedHostMatch
+                ) {
+                  throw new Error("Live " + category + " lane routing failed: " + JSON.stringify({
+                    status: apiResponse.status(), count: apiResults.length, lanes, expectedHost, expectedHostMatch
+                  }));
+                }
+                categoryLaneApi[category] = {
+                  http: apiResponse.status(), count: apiResults.length, lanes, expectedHost, expectedHostMatch
+                };
+              }
+              report.checks.categoryLaneApi = categoryLaneApi;
               await goHome();
               await page.locator("#news-items .news-item").first().waitFor({ state: "visible", timeout: 45000 });
               report.checks.news = { count: await page.locator("#news-items .news-item").count(), status: await page.locator("#news-status").innerText() };
