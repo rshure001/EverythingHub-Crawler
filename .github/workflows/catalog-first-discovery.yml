@@ -102,6 +102,11 @@ jobs:
           index_root = Path("data/universal-catalog-indexes")
           index_manifest = json.loads((index_root / "manifest.json").read_text(encoding="utf-8"))
           assert records["production_indexed"] is False
+          if openlibrary.get("source_policy_status") == "restricted":
+              assert openlibrary["catalog_count"] == 0
+              assert openlibrary["datasets_discovered"] == 0
+              assert records["metrics"]["restricted_source_records_excluded"] >= int(openlibrary.get("previous_snapshot_records_excluded") or 0)
+              assert records["metrics"]["restricted_source_catalogs_excluded"] >= int(openlibrary.get("previous_snapshot_catalogs_excluded") or 0)
           assert records["metrics"]["production_eligible_records"] + records["metrics"]["restricted_records"] == len(records["records"])
           assert all(not row.get("policy_allowed") or row.get("source_terms_status") in ("reviewed", "reviewed_per_dataset") for row in records["source_pages"])
           assert len(records["catalogs"]) == records["metrics"]["catalogs_discovered"]
@@ -183,6 +188,9 @@ jobs:
               "unique_public_records_indexed": len(indexed_record_ids),
               "public_record_memberships": public_memberships,
               "restricted_records_excluded_from_public_indexes": index_manifest["restricted_records_not_indexed"],
+              "restricted_source_catalogs_excluded": records["metrics"]["restricted_source_catalogs_excluded"],
+              "restricted_source_records_excluded": records["metrics"]["restricted_source_records_excluded"],
+              "openlibrary_snapshot_records_excluded": openlibrary.get("previous_snapshot_records_excluded"),
               "indexed_records": records["metrics"]["indexed_records"],
               "records_published": records["metrics"]["records_published"],
           })
