@@ -2567,13 +2567,28 @@ def apply_source_policy_reviews(
 
 
 def _write_gzip(path: Path, payload: dict) -> tuple[int, str]:
+    """Write deterministic gzip JSON incrementally without duplicating the full payload in RAM."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    raw = (json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n").encode("utf-8")
-    compressed = gzip.compress(raw, compresslevel=9, mtime=0)
     temp = path.with_suffix(path.suffix + ".tmp")
-    temp.write_bytes(compressed)
+    encoder = json.JSONEncoder(ensure_ascii=False, separators=(",", ":"))
+    with temp.open("wb") as raw_file:
+        with gzip.GzipFile(
+            fileobj=raw_file,
+            mode="wb",
+            filename="",
+            compresslevel=9,
+            mtime=0,
+        ) as compressed_file:
+            for chunk in encoder.iterencode(payload):
+                compressed_file.write(chunk.encode("utf-8"))
+            compressed_file.write(b"\n")
     temp.replace(path)
-    return len(compressed), hashlib.sha256(compressed).hexdigest()
+
+    digest = hashlib.sha256()
+    with path.open("rb") as compressed_file:
+        for chunk in iter(lambda: compressed_file.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return path.stat().st_size, digest.hexdigest()
 
 
 def _singular_search_token(token: str) -> str | None:
