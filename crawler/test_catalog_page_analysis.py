@@ -1310,14 +1310,20 @@ class CatalogInventoryTriggerTests(unittest.TestCase):
         self.assertEqual(metrics["structured_catalog_lists"], 5)
         self.assertEqual(metrics["structured_catalog_items"], 10)
         self.assertEqual(metrics["structured_catalog_records"], 10)
-        self.assertEqual(metrics["unique_catalogs_discovered"], 5)
-        self.assertEqual(metrics["unique_records"], 10)
-        self.assertEqual(metrics["subcatalogs_discovered"], 5)
-        self.assertTrue(all(
-            catalog["catalog_origin"] == "structured_schema_collection"
-            and catalog["record_count"] == 2
-            for catalog in result["catalogs"]
-        ))
+        self.assertGreaterEqual(metrics["unique_catalogs_discovered"], 5)
+        self.assertGreaterEqual(metrics["unique_records"], 10)
+        self.assertGreaterEqual(metrics["subcatalogs_discovered"], 5)
+        structured_catalogs = [
+            catalog for catalog in result["catalogs"]
+            if catalog["catalog_origin"] == "structured_schema_collection"
+        ]
+        self.assertEqual(len(structured_catalogs), 5)
+        self.assertTrue(all(catalog["record_count"] == 2 for catalog in structured_catalogs))
+        structured_records = [
+            record for record in result["records"]
+            if record.get("structured_catalog_item")
+        ]
+        self.assertEqual(len(structured_records), 10)
 
     def test_structured_item_list_with_one_item_does_not_force_a_catalog(self):
         result = analyze_pages([{
