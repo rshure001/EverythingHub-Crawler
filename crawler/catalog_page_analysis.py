@@ -985,7 +985,7 @@ def analyze_pages(
         structured_lists = []
         structured_catalog = page.get("structured_catalog") if is_eligible else None
         if isinstance(structured_catalog, dict) and structured_catalog.get("version") == 1:
-            for raw_list in (structured_catalog.get("lists") or [])[:2]:
+            for raw_list in (structured_catalog.get("lists") or [])[:8]:
                 if not isinstance(raw_list, dict):
                     continue
                 list_name = _title(raw_list.get("name"))
