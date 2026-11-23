@@ -279,10 +279,11 @@ jobs:
                   throw new Error("Top Stories category is empty or stale: " + category + " " + JSON.stringify(report.checks.newsFreshness[category]));
                 }
                 const nasaFeedRequired = ["for-you", "technology", "science"].includes(category);
-                const nasaFeedActive = Array.isArray(newsPayload.sources) && newsPayload.sources.includes("NASA News Releases");
-                report.checks.newsFreshness[category].nasaNewsReleasesActive = nasaFeedActive;
+                const nasaFeedActive = Array.isArray(newsPayload.sources) && newsPayload.sources.some(source => ["NASA News Releases", "NASA Recently Published"].includes(source));
+                report.checks.newsFreshness[category].nasaCurrentContentFeedActive = nasaFeedActive;
+                report.checks.newsFreshness[category].nasaCurrentContentSources = Array.isArray(newsPayload.sources) ? newsPayload.sources.filter(source => ["NASA News Releases", "NASA Recently Published"].includes(source)) : [];
                 if (nasaFeedRequired && !nasaFeedActive) {
-                  throw new Error("NASA News Releases feed is not active in " + category + ": " + JSON.stringify(report.checks.newsFreshness[category]));
+                  throw new Error("No current NASA public-content feed is active in " + category + ": " + JSON.stringify(report.checks.newsFreshness[category]));
                 }
               }
               await shot("everythinghub-news.png");
