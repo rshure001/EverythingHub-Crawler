@@ -288,7 +288,7 @@ jobs:
                     /Record rights not cleared/.test(text) && /Commercial use not cleared/.test(text);
                   const reviewedRecordCandidate = /Candidate preview only/.test(text) &&
                     /Source terms reviewed per dataset/.test(text) &&
-                    /Record rights:\\s*eligible per record/.test(text) &&
+                    /Record rights:\s*eligible per record/.test(text) &&
                     /Commercial use not cleared/.test(text);
                   return unreviewedCandidate || reviewedRecordCandidate;
                 });
