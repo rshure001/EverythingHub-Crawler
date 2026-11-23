@@ -141,23 +141,23 @@ class UniversalCatalogIngestTests(unittest.TestCase):
         manifest = {
             "updated_at": "2026-11-23T00:00:00Z",
             "catalogs": [{
-                "id": "openlibrary-subject-science",
-                "name": "Open Library — Science",
-                "base_url": "https://openlibrary.org",
-                "api_path": "/subjects/science.json",
+                "id": "swiss-library-archive-subject-science",
+                "name": "Swiss Library Archive — Science",
+                "base_url": "https://opendata.swiss",
+                "api_path": "/api/archive/science",
                 "category": "science",
                 "catalog_type": "library_archive",
                 "coverage_status": "partial",
                 "errors": [],
             }],
             "datasets": [{
-                "catalog_id": "openlibrary-subject-science",
-                "id": "openlibrary-subject-science:OL123W",
+                "catalog_id": "swiss-library-archive-subject-science",
+                "id": "swiss-library-archive-subject-science:OL123W",
                 "dataset_id": "OL123W",
                 "title": "A Science Book",
-                "landing_url": "https://openlibrary.org/works/OL123W",
+                "landing_url": "https://opendata.swiss/works/OL123W",
                 "record_type": "document",
-                "canonical_entity_key": "openlibrary:work:OL123W",
+                "canonical_entity_key": "swiss-library:work:OL123W",
                 "subject": "science",
             }],
         }
@@ -285,7 +285,7 @@ class UniversalCatalogIngestTests(unittest.TestCase):
         self.assertEqual(result["metrics"]["records_published"], 0)
         self.assertFalse(result["production_indexed"])
 
-    def test_same_canonical_openlibrary_work_is_one_record_across_subject_catalogs(self):
+    def test_same_canonical_reviewed_library_work_is_one_record_across_subject_catalogs(self):
         result = adapt({
             "updated_at": "2026-11-23T00:00:00Z",
             "catalogs": [
@@ -300,10 +300,10 @@ class UniversalCatalogIngestTests(unittest.TestCase):
                     "errors": [],
                 },
                 {
-                    "id": "openlibrary-subject-history",
-                    "name": "Open Library — History",
+                    "id": "swiss-library-archive-subject-history",
+                    "name": "Swiss Library Archive — History",
                     "base_url": "https://openlibrary.org",
-                    "api_path": "/subjects/history.json",
+                    "api_path": "/api/archive/history",
                     "category": "history",
                     "catalog_type": "library_archive",
                     "coverage_status": "partial",
@@ -323,8 +323,8 @@ class UniversalCatalogIngestTests(unittest.TestCase):
                     "attributes": {"subjects": ["science"]},
                 },
                 {
-                    "catalog_id": "openlibrary-subject-history",
-                    "id": "openlibrary-subject-history:OL123W",
+                    "catalog_id": "swiss-library-archive-subject-history",
+                    "id": "swiss-library-archive-subject-history:OL123W",
                     "dataset_id": "OL123W",
                     "title": "A Science Book",
                     "landing_url": "https://openlibrary.org/works/OL123W",
@@ -348,10 +348,10 @@ class UniversalCatalogIngestTests(unittest.TestCase):
         self.assertEqual(len(result["records"]), 1)
         record = result["records"][0]
         self.assertEqual(set(record["catalog_ids"]), {
-            next(c["catalog_id"] for c in result["catalogs"] if c["source_id"] == "openlibrary-subject-science"),
-            next(c["catalog_id"] for c in result["catalogs"] if c["source_id"] == "openlibrary-subject-history"),
+            next(c["catalog_id"] for c in result["catalogs"] if c["source_id"] == "swiss-library-archive-subject-science"),
+            next(c["catalog_id"] for c in result["catalogs"] if c["source_id"] == "swiss-library-archive-subject-history"),
         })
-        self.assertEqual(record["source_urls"], ["https://openlibrary.org/works/OL123W"])
+        self.assertEqual(record["source_urls"], ["https://opendata.swiss/works/OL123W"])
         self.assertEqual(len(record["source_provenance"]), 2)
         self.assertFalse(record["attributes"]["public_search_allowed"])
         self.assertEqual(result["metrics"]["indexed_records"], 0)
@@ -359,8 +359,8 @@ class UniversalCatalogIngestTests(unittest.TestCase):
     def test_rejects_untrusted_http_landing_url(self):
         with self.assertRaises(ValueError):
             adapt({
-                "catalogs":[{"id":"test","name":"Test","base_url":"https://data.example.org"}],
-                "datasets":[{"catalog_id":"test","dataset_id":"x","title":"X","landing_url":"http://bad.example/x"}]
+                "catalogs":[{"id":"canada-open-data","name":"Open Government Canada","base_url":"https://open.canada.ca"}],
+                "datasets":[{"catalog_id":"canada-open-data","dataset_id":"x","title":"X","landing_url":"http://bad.example/x"}]
             })
 
     def test_rights_filtered_per_catalog_indexes_are_deterministic(self):
