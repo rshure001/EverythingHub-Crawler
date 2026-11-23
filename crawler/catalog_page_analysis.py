@@ -2759,6 +2759,41 @@ def _write_gzip(path: Path, payload: dict) -> tuple[int, str]:
     return path.stat().st_size, digest.hexdigest()
 
 
+def _write_gzip_jsonl_catalogs(path: Path, kind: str, catalogs, expected_count: int) -> tuple[int, str, int]:
+    """Write large identity registries as deterministic, line-streamed gzip JSONL."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp = path.with_suffix(path.suffix + ".tmp")
+    encoder = json.JSONEncoder(ensure_ascii=False, separators=(",", ":"))
+    count = 0
+    with temp.open("wb") as raw_file:
+        with gzip.GzipFile(
+            fileobj=raw_file,
+            mode="wb",
+            filename="",
+            compresslevel=9,
+            mtime=0,
+        ) as compressed_file:
+            header = {
+                "schema_version": 1,
+                "kind": kind,
+                "items": expected_count,
+            }
+            compressed_file.write(encoder.encode(header).encode("utf-8") + b"\n")
+            for item in catalogs:
+                compressed_file.write(encoder.encode(item).encode("utf-8") + b"\n")
+                count += 1
+            if count != expected_count:
+                raise ValueError(
+                    f"{kind} stream count mismatch: expected {expected_count}, wrote {count}"
+                )
+    temp.replace(path)
+    digest = hashlib.sha256()
+    with path.open("rb") as compressed_file:
+        for chunk in iter(lambda: compressed_file.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return path.stat().st_size, digest.hexdigest(), count
+
+
 def _singular_search_token(token: str) -> str | None:
     if token in {"news", "series", "species", "politics", "physics", "mathematics", "economics", "ethics"}:
         return None
@@ -2880,10 +2915,6 @@ def build_search_index(analysis: dict) -> dict[str, dict]:
 def write_outputs(analysis: dict, output_dir: Path) -> dict:
     apply_source_policy_reviews(analysis)
     output_dir.mkdir(parents=True, exist_ok=True)
-    for obsolete_name in ("page-catalogs.json.gz", "record-catalogs.json.gz"):
-        obsolete_path = output_dir / obsolete_name
-        if obsolete_path.is_file():
-            obsolete_path.unlink()
     files = []
     for catalog in analysis["catalogs"]:
         index_digest = hashlib.sha256(catalog["catalog_id"].encode("utf-8")).hexdigest()
@@ -2896,6 +2927,28 @@ def write_outputs(analysis: dict, output_dir: Path) -> dict:
         "pages": analysis["pages"],
     })
     files.append({"file": "pages.json.gz", "bytes": size, "sha256": digest, "items": len(analysis["pages"])})
+    page_identity_count = analysis["metrics"].get("page_owned_identity_catalogs", 0)
+    size, digest, written_page_identity_count = _write_gzip_jsonl_catalogs(
+        output_dir / "page-catalogs.jsonl.gz",
+        "page_identity_catalogs",
+        analysis.get("page_catalogs", []),
+        page_identity_count,
+    )
+    files.append({
+        "file": "page-catalogs.jsonl.gz", "bytes": size, "sha256": digest,
+        "items": written_page_identity_count, "format": "jsonl",
+    })
+    record_identity_count = analysis["metrics"].get("record_owned_identity_catalogs", 0)
+    size, digest, written_record_identity_count = _write_gzip_jsonl_catalogs(
+        output_dir / "record-catalogs.jsonl.gz",
+        "record_identity_catalogs",
+        analysis.get("record_catalogs", []),
+        record_identity_count,
+    )
+    files.append({
+        "file": "record-catalogs.jsonl.gz", "bytes": size, "sha256": digest,
+        "items": written_record_identity_count, "format": "jsonl",
+    })
     search_shards = build_search_index(analysis)
     if not search_shards:
         search_shards = {"00": {"version": 1, "prefix": "00", "tokens": {}}}
@@ -2975,6 +3028,8 @@ def write_outputs(analysis: dict, output_dir: Path) -> dict:
         "source_index_updated_at": analysis["source_index_updated_at"],
         "source_index_sha256": analysis.get("source_index_sha256"),
         "catalog_count": len(analysis["catalogs"]), "record_count": len(analysis["records"]),
+        "page_identity_catalog_count": analysis["metrics"].get("page_owned_identity_catalogs", 0),
+        "record_identity_catalog_count": analysis["metrics"].get("record_owned_identity_catalogs", 0),
         "generated_at": analysis["generated_at"],
         "metrics": analysis["metrics"],
         "source_policy_review": analysis.get("source_policy_review"),
