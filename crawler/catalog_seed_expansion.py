@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""Bounded, policy-gated expansion of page-backed catalog seeds.
+"""Bounded expansion of evidence-backed catalog landing pages.
 
-One run examines at most ten approved catalog landing pages. It extracts only
-same-origin article links and their visible titles from metadata-only listing
-pages; it never fetches child pages, full text, media, or bulk assets.
+Consumes the source-review queue built from the validated page-derived catalog
+registry. It never treats every source page as a catalog. Each run may inspect
+at most ten policy-preapproved catalog landing pages, rechecks robots.txt and
+source terms at request time, and extracts only same-origin article-link
+metadata. It never fetches child pages, full text, media, or bulk assets.
 """
 from __future__ import annotations
 
@@ -24,11 +26,13 @@ from catalog_source_policy import (
 )
 
 ROOT = Path(__file__).resolve().parents[1]
-SEEDS = ROOT / "data" / "page-catalog-seeds.json.gz"
+QUEUE = ROOT / "data" / "page-derived-catalogs" / "source-host-review-queue.json"
+INDEX = ROOT / "public-search" / "manifest.json"
 STATE = ROOT / "data" / "page-catalog-expansion.json.gz"
 MAX_BATCH = 10
 MAX_CHILDREN_PER_PAGE = 200
 MAX_HTML_BYTES = 1_500_000
+REVIEWED_STATUSES = {"reviewed", "reviewed_per_dataset"}
 
 
 def _read_payload(path: Path) -> dict:
@@ -52,29 +56,90 @@ def _write_payload(path: Path, value: dict) -> None:
     temp.replace(path)
 
 
+def _current_index_snapshot(index_path: Path = INDEX) -> dict | None:
+    try:
+        raw = index_path.read_bytes()
+        manifest = json.loads(raw.decode("utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    pages = manifest.get("total_pages")
+    if isinstance(pages, bool) or not isinstance(pages, int) or pages < 0:
+        return None
+    return {"pages": pages, "sha256": hashlib.sha256(raw).hexdigest()}
+
+
+def _queue_matches_current_index(queue: object, index_path: Path = INDEX) -> bool:
+    if not isinstance(queue, dict):
+        return False
+    if queue.get("status") != "source_review_backlog_not_a_fetch_queue":
+        return False
+    current = _current_index_snapshot(index_path)
+    if current is None:
+        return False
+    return (
+        queue.get("source_index_pages") == current["pages"]
+        and queue.get("source_index_sha256") == current["sha256"]
+    )
+
+
 def _eligible_seed(seed: object) -> bool:
+    """Accept only actual catalog-definition URLs from a current review queue."""
     if not isinstance(seed, dict):
         return False
-    url = seed.get("source_url") or seed.get("url")
+    if seed.get("review_status") != "policy_preapproved_robots_recheck_required":
+        return False
+    if seed.get("policy_preapproved") is not True:
+        return False
+    if seed.get("source_access_mode") != "catalog_landing_page":
+        return False
+    if seed.get("metadata_only") is not True or seed.get("robots_recheck_required") is not True:
+        return False
+    if seed.get("fetch_authorized") is not False:
+        return False
+    catalog_ids = seed.get("catalog_ids")
+    if (
+        not isinstance(catalog_ids, list)
+        or not catalog_ids
+        or any(not isinstance(value, str) or not value for value in catalog_ids)
+        or len(catalog_ids) != len(set(catalog_ids))
+    ):
+        return False
+    if seed.get("terms_status") not in REVIEWED_STATUSES or not seed.get("terms_url"):
+        return False
+
+    url = seed.get("source_url")
     if not isinstance(url, str) or not url.startswith("https://"):
         return False
     parsed = urlsplit(url)
     if not parsed.hostname or parsed.username or parsed.password:
         return False
-    policy = policy_for_host(parsed.hostname)
-    if not policy or policy.get("discovery_allowed") is not True:
-        return False
-    if policy.get("terms_status") not in {"reviewed", "reviewed_per_dataset"}:
-        return False
-    if policy.get("metadata_only") is not True:
-        return False
-    fields = policy.get("allowed_metadata_fields")
-    prohibited = policy.get("prohibited_content")
+
+    fields = seed.get("allowed_metadata_fields")
+    prohibited = seed.get("prohibited_content")
     if not isinstance(fields, list) or "article_url" not in fields or "title" not in fields:
         return False
     if not isinstance(prohibited, list) or not prohibited:
         return False
+
+    policy = policy_for_host(parsed.hostname)
+    if not policy or policy.get("discovery_allowed") is not True:
+        return False
+    if policy.get("terms_status") not in REVIEWED_STATUSES or not policy.get("terms_url"):
+        return False
+    if policy.get("metadata_only") is not True:
+        return False
+    policy_fields = policy.get("allowed_metadata_fields")
+    policy_prohibited = policy.get("prohibited_content")
+    if not isinstance(policy_fields, list) or "article_url" not in policy_fields or "title" not in policy_fields:
+        return False
+    if not isinstance(policy_prohibited, list) or not policy_prohibited:
+        return False
     return _purpose_path_allowed(parsed.path, policy, "landing_page")
+
+
+def _source_key(seed: dict) -> str:
+    url = str(seed.get("source_url") or "")
+    return "catalog-source:" + hashlib.sha256(url.encode("utf-8")).hexdigest()[:24]
 
 
 class _ListingParser(HTMLParser):
@@ -116,13 +181,12 @@ def _canonical_child(parent_url: str, href: str) -> str | None:
         candidate = urljoin(parent_url, href)
         parsed = urlsplit(candidate)
         parent = urlsplit(parent_url)
-        _ = parsed.port
+        parsed_port = parsed.port or 443
+        parent_port = parent.port or 443
     except ValueError:
         return None
     # Require the exact HTTPS origin, not merely the same hostname.
     # Non-default ports are intentionally excluded from metadata discovery.
-    parsed_port = parsed.port or 443
-    parent_port = parent.port or 443
     if (
         parsed.scheme != "https"
         or parent.scheme != "https"
@@ -141,62 +205,164 @@ def _canonical_child(parent_url: str, href: str) -> str | None:
     return urlunsplit(("https", parsed.netloc, parsed.path, parsed.query, ""))
 
 
-def extract_child_records(html: str, source_url: str, seed_id: str) -> list[dict]:
+def extract_child_records(
+    html: str,
+    source_url: str,
+    catalog_ids: list[str],
+    source_metadata: dict | None = None,
+    observed_at: str | None = None,
+) -> list[dict]:
+    normalized_catalog_ids = sorted({value for value in catalog_ids if isinstance(value, str) and value})
+    if not normalized_catalog_ids:
+        return []
+    source_metadata = source_metadata if isinstance(source_metadata, dict) else {}
+    observed_at = observed_at or datetime.now(timezone.utc).isoformat()
     parser = _ListingParser()
     parser.feed(html)
     records = []
     seen = set()
+    source_host = urlsplit(source_url).hostname
+    provenance = {
+        "source_url": source_url,
+        "catalog_ids": normalized_catalog_ids,
+        "terms_url": source_metadata.get("terms_url"),
+        "terms_status": source_metadata.get("terms_status"),
+        "attribution_required": source_metadata.get("attribution_required"),
+        "rights_scope": source_metadata.get("rights_scope"),
+        "discovered_at": observed_at,
+    }
     for href, label in parser.links:
         url = _canonical_child(source_url, href)
         if not url or not label or url in seen:
             continue
         seen.add(url)
         digest = hashlib.sha256(url.encode("utf-8")).hexdigest()
-        records.append({
-            "record_id": "page-child:" + digest,
-            "catalog_seed_id": seed_id,
-            "title": label,
-            "article_url": url,
-            "source_url": source_url,
-            "source_host": urlsplit(source_url).hostname,
-            "record_type": "article_link_metadata",
-            "rights_status": "per_record_review_required",
-            "verified": False,
-            "content_fetched": False,
-        })
+        records.append(
+            {
+                "record_id": "page-child:" + digest,
+                "catalog_ids": normalized_catalog_ids,
+                "title": label,
+                "article_url": url,
+                "source_url": source_url,
+                "source_urls": [source_url],
+                "source_host": source_host,
+                "source_hosts": [source_host] if source_host else [],
+                "source_provenance": [provenance],
+                "record_type": "article_link_metadata",
+                "rights_status": "per_record_review_required",
+                "source_terms_url": source_metadata.get("terms_url"),
+                "source_terms_status": source_metadata.get("terms_status"),
+                "attribution_required": source_metadata.get("attribution_required"),
+                "verified": False,
+                "content_fetched": False,
+                "discovered_at": observed_at,
+                "last_seen_at": observed_at,
+            }
+        )
         if len(records) >= MAX_CHILDREN_PER_PAGE:
             break
     return records
 
 
-def run_batch(seed_path: Path = SEEDS, state_path: Path = STATE, limit: int = MAX_BATCH) -> dict:
+def _merge_record(existing: dict, incoming: dict) -> None:
+    for field in ("catalog_ids", "source_urls", "source_hosts"):
+        existing_values = existing.get(field) if isinstance(existing.get(field), list) else []
+        incoming_values = incoming.get(field) if isinstance(incoming.get(field), list) else []
+        existing[field] = sorted({value for value in existing_values + incoming_values if isinstance(value, str) and value})
+    provenance = existing.get("source_provenance")
+    if not isinstance(provenance, list):
+        provenance = []
+    seen = {
+        (row.get("source_url"), tuple(row.get("catalog_ids", [])))
+        for row in provenance
+        if isinstance(row, dict)
+    }
+    for row in incoming.get("source_provenance", []):
+        if not isinstance(row, dict):
+            continue
+        key = (row.get("source_url"), tuple(row.get("catalog_ids", [])))
+        if key not in seen:
+            provenance.append(row)
+            seen.add(key)
+    existing["source_provenance"] = provenance
+    existing["last_seen_at"] = incoming.get("last_seen_at") or existing.get("last_seen_at")
+
+
+def run_batch(
+    queue_path: Path = QUEUE,
+    state_path: Path = STATE,
+    limit: int = MAX_BATCH,
+    index_path: Path = INDEX,
+) -> dict:
     if not 1 <= limit <= MAX_BATCH:
         raise ValueError(f"batch limit must be between 1 and {MAX_BATCH}")
-    source = _read_payload(seed_path)
-    seeds = source.get("pages", [])
-    if not isinstance(seeds, list):
-        seeds = []
-    eligible = [seed for seed in seeds if _eligible_seed(seed)]
+
+    queue = _read_payload(queue_path)
     state = _read_payload(state_path)
     prior_records = state.get("records", [])
     if not isinstance(prior_records, list):
         prior_records = []
     records_by_id = {
-        row["record_id"]: row for row in prior_records
+        row["record_id"]: row
+        for row in prior_records
         if isinstance(row, dict) and isinstance(row.get("record_id"), str)
     }
-    outcomes = state.get("seed_outcomes", {})
+    outcomes = state.get("source_outcomes", {})
     if not isinstance(outcomes, dict):
         outcomes = {}
-    cursor = int(state.get("next_seed_offset", 0) or 0)
+
+    current_index = _current_index_snapshot(index_path)
+    queue_is_current = _queue_matches_current_index(queue, index_path)
+    queue_pages = queue.get("source_index_pages") if isinstance(queue, dict) else None
+    queue_sha = queue.get("source_index_sha256") if isinstance(queue, dict) else None
+    if not queue_is_current:
+        result = {
+            "schema_version": 2,
+            "status": "waiting_for_fresh_source_review_queue",
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "queue_matches_current_index": False,
+            "queue_source_index_pages": queue_pages,
+            "queue_source_index_sha256": queue_sha,
+            "source_index_pages": current_index["pages"] if current_index else None,
+            "source_index_sha256": current_index["sha256"] if current_index else None,
+            "eligible_catalog_landing_pages": 0,
+            "last_batch_size": 0,
+            "last_batch_processed": 0,
+            "last_batch_new_unique_child_records": 0,
+            "next_source_offset": 0,
+            "source_outcomes": outcomes,
+            "records": list(records_by_id.values()),
+            "metrics": {
+                "unique_child_records_staged": len(records_by_id),
+                "catalog_memberships": sum(len(row.get("catalog_ids", [])) for row in records_by_id.values()),
+                "catalog_landing_pages_processed": sum(
+                    1 for value in outcomes.values()
+                    if isinstance(value, dict) and value.get("status") == "metadata_listing_processed"
+                ),
+                "verified_catalogs": 0,
+                "records_published": 0,
+                "child_pages_fetched": 0,
+                "full_text_fetched": 0,
+                "media_fetched": 0,
+            },
+        }
+        _write_payload(state_path, result)
+        return result
+
+    candidate_urls = queue.get("candidate_urls", [])
+    if not isinstance(candidate_urls, list):
+        candidate_urls = []
+    eligible = [seed for seed in candidate_urls if _eligible_seed(seed)]
+
+    cursor = int(state.get("next_source_offset", 0) or 0)
     if eligible:
         cursor %= len(eligible)
         batch = []
         scanned = 0
         while scanned < len(eligible) and len(batch) < limit:
             seed = eligible[(cursor + scanned) % len(eligible)]
-            seed_id = seed.get("catalog_seed_id") if isinstance(seed, dict) else None
-            prior = outcomes.get(seed_id) if isinstance(seed_id, str) else None
+            source_id = _source_key(seed)
+            prior = outcomes.get(source_id)
             # Successful listing pages are immutable inputs to this staging run;
             # don't re-request them on every scheduled cycle. Failed attempts remain retryable.
             if not isinstance(prior, dict) or prior.get("status") != "metadata_listing_processed":
@@ -209,58 +375,87 @@ def run_batch(seed_path: Path = SEEDS, state_path: Path = STATE, limit: int = MA
     processed = 0
     discovered = 0
     for seed in batch:
-        seed_id = seed.get("catalog_seed_id")
-        url = seed.get("source_url") or seed.get("url")
-        if not isinstance(seed_id, str) or not seed_id or not isinstance(url, str):
-            continue
+        source_id = _source_key(seed)
+        url = seed["source_url"]
+        catalog_ids = seed["catalog_ids"]
         try:
             raw, status, headers, policy = request_source_bytes(
-                url, purpose="landing_page", max_bytes=MAX_HTML_BYTES,
-                timeout=10, accept="text/html",
+                url,
+                purpose="landing_page",
+                max_bytes=MAX_HTML_BYTES,
+                timeout=10,
+                accept="text/html",
             )
             if status != 200:
-                outcomes[seed_id] = {"status": "http_error", "http_status": status, "checked_at": datetime.now(timezone.utc).isoformat()}
+                outcomes[source_id] = {
+                    "status": "http_error",
+                    "http_status": status,
+                    "checked_at": datetime.now(timezone.utc).isoformat(),
+                    "catalog_ids": catalog_ids,
+                }
                 continue
             charset = "utf-8"
             content_type = headers.get("Content-Type", "")
             if "charset=" in content_type.lower():
                 charset = content_type.lower().split("charset=", 1)[1].split(";", 1)[0].strip() or "utf-8"
             html = raw.decode(charset, errors="replace")
-            children = extract_child_records(html, url, seed_id)
+            checked_at = datetime.now(timezone.utc).isoformat()
+            children = extract_child_records(html, url, catalog_ids, seed, checked_at)
             before = len(records_by_id)
             for record in children:
-                records_by_id.setdefault(record["record_id"], record)
+                record_id = record["record_id"]
+                if record_id in records_by_id:
+                    _merge_record(records_by_id[record_id], record)
+                else:
+                    records_by_id[record_id] = record
             added = len(records_by_id) - before
             discovered += added
             processed += 1
-            outcomes[seed_id] = {
+            outcomes[source_id] = {
                 "status": "metadata_listing_processed",
-                "checked_at": datetime.now(timezone.utc).isoformat(),
+                "checked_at": checked_at,
+                "catalog_ids": catalog_ids,
                 "child_link_candidates": len(children),
                 "new_unique_child_records": added,
                 "terms_url": policy.get("terms_url"),
                 "terms_status": policy.get("terms_status"),
             }
         except SourcePolicyError as exc:
-            outcomes[seed_id] = {"status": "policy_or_robots_blocked", "reason": str(exc)[:240]}
+            outcomes[source_id] = {
+                "status": "policy_or_robots_blocked",
+                "reason": str(exc)[:240],
+                "catalog_ids": catalog_ids,
+            }
         except (OSError, UnicodeError, ValueError, TimeoutError) as exc:
-            outcomes[seed_id] = {"status": "retryable_error", "reason": type(exc).__name__}
+            outcomes[source_id] = {
+                "status": "retryable_error",
+                "reason": type(exc).__name__,
+                "catalog_ids": catalog_ids,
+            }
 
     result = {
-        "schema_version": 1,
+        "schema_version": 2,
         "status": "metadata_only_staging_not_production",
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "batch_limit": limit,
-        "eligible_page_seeds": len(eligible),
+        "queue_matches_current_index": True,
+        "queue_source_index_pages": queue_pages,
+        "queue_source_index_sha256": queue_sha,
+        "source_index_pages": current_index["pages"] if current_index else None,
+        "source_index_sha256": current_index["sha256"] if current_index else None,
+        "eligible_catalog_landing_pages": len(eligible),
         "last_batch_size": len(batch),
         "last_batch_processed": processed,
         "last_batch_new_unique_child_records": discovered,
-        "next_seed_offset": next_cursor,
-        "seed_outcomes": outcomes,
+        "next_source_offset": next_cursor,
+        "source_outcomes": outcomes,
         "records": list(records_by_id.values()),
         "metrics": {
             "unique_child_records_staged": len(records_by_id),
-            "seeds_processed": sum(1 for x in outcomes.values() if isinstance(x, dict) and x.get("status") == "metadata_listing_processed"),
+            "catalog_memberships": sum(len(row.get("catalog_ids", [])) for row in records_by_id.values()),
+            "catalog_landing_pages_processed": sum(
+                1 for value in outcomes.values()
+                if isinstance(value, dict) and value.get("status") == "metadata_listing_processed"
+            ),
             "verified_catalogs": 0,
             "records_published": 0,
             "child_pages_fetched": 0,
@@ -268,18 +463,37 @@ def run_batch(seed_path: Path = SEEDS, state_path: Path = STATE, limit: int = MA
             "media_fetched": 0,
         },
     }
+    if not eligible:
+        result["status"] = "no_policy_preapproved_catalog_landing_pages"
     _write_payload(state_path, result)
     return result
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--seeds", type=Path, default=SEEDS)
+    parser.add_argument("--queue", type=Path, default=QUEUE)
     parser.add_argument("--state", type=Path, default=STATE)
+    parser.add_argument("--index", type=Path, default=INDEX)
     parser.add_argument("--limit", type=int, default=MAX_BATCH)
     args = parser.parse_args()
-    result = run_batch(args.seeds, args.state, args.limit)
-    print(json.dumps({key: result[key] for key in ("eligible_page_seeds", "last_batch_size", "last_batch_processed", "last_batch_new_unique_child_records", "metrics")}, indent=2))
+    result = run_batch(args.queue, args.state, args.limit, args.index)
+    print(
+        json.dumps(
+            {
+                key: result.get(key)
+                for key in (
+                    "status",
+                    "queue_matches_current_index",
+                    "eligible_catalog_landing_pages",
+                    "last_batch_size",
+                    "last_batch_processed",
+                    "last_batch_new_unique_child_records",
+                    "metrics",
+                )
+            },
+            indent=2,
+        )
+    )
 
 
 if __name__ == "__main__":
