@@ -110,6 +110,38 @@ class ProductMetadataTests(unittest.TestCase):
         self.assertEqual(len(result["lists"][0]["items"]), 29)
         self.assertLessEqual(len(json.dumps(result, separators=(",", ":")).encode("utf-8")), 8192)
 
+    def test_extracts_multiple_structured_catalogs_from_one_page_with_bounded_output(self):
+        import json
+        lists = []
+        for index in range(1, 10):
+            lists.append({
+                "@type": "ItemList",
+                "name": f"Collection {index}",
+                "itemListElement": [
+                    {"@type": "ListItem", "position": 1, "item": {
+                        "@type": "Product", "name": f"Product {index} A",
+                        "url": f"/products/{index}-a"
+                    }},
+                    {"@type": "ListItem", "position": 2, "item": {
+                        "@type": "Product", "name": f"Product {index} B",
+                        "url": f"/products/{index}-b"
+                    }},
+                ],
+            })
+        html = '<script type="application/ld+json">' + json.dumps({
+            "@context": "https://schema.org", "@graph": lists
+        }) + "</script>"
+        result = extract_structured_catalog_metadata(html, "https://shop.example/catalog")
+
+        self.assertEqual([item["name"] for item in result["lists"]], [
+            f"Collection {index}" for index in range(1, 9)
+        ])
+        self.assertTrue(all(len(item["items"]) == 2 for item in result["lists"]))
+        self.assertLessEqual(
+            len(json.dumps(result, separators=(",", ":")).encode("utf-8")),
+            16384,
+        )
+
     def test_extracts_only_stable_same_as_identifiers(self):
         html = """<script type="application/ld+json">{
           "@context":"https://schema.org","@type":"Product",
