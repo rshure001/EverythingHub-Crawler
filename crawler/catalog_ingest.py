@@ -472,6 +472,7 @@ def build_public_catalog_indexes(result):
             raise ValueError("public subcatalog must have per-record eligibility clearance")
 
     staged_record_ids = set()
+    record_by_id = {}
     eligible_record_ids = set()
     memberships_by_catalog = defaultdict(set)
     staged_membership_count = 0
@@ -484,6 +485,7 @@ def build_public_catalog_indexes(result):
         if record_id in staged_record_ids:
             raise ValueError(f"duplicate canonical record_id: {record_id}")
         staged_record_ids.add(record_id)
+        record_by_id[record_id] = record
 
         raw_memberships = record.get("catalog_ids")
         if not isinstance(raw_memberships, list) or not raw_memberships:
@@ -513,6 +515,8 @@ def build_public_catalog_indexes(result):
     shard_rows = defaultdict(list)
     catalog_index_manifest = []
     indexed_record_ids = set()
+    root_record_search_document_ids = set()
+    root_record_search_document_occurrences = 0
     public_memberships = 0
     catalogs_with_public_records = 0
     for catalog_id, catalog in sorted(catalog_by_id.items()):
@@ -521,6 +525,67 @@ def build_public_catalog_indexes(result):
             catalogs_with_public_records += 1
         indexed_record_ids.update(record_ids)
         public_memberships += len(record_ids)
+
+        record_search_documents = []
+        if catalog.get("catalog_level") == "root" and catalog.get("public_search_allowed") is True:
+            for record_id in record_ids:
+                record = record_by_id[record_id]
+                attributes = record.get("attributes") or {}
+                if attributes.get("public_search_allowed") is not True:
+                    raise ValueError("root record search document is not rights-eligible")
+                source_url = record.get("source_url") or ""
+                if not isinstance(source_url, str) or not source_url.startswith("https://"):
+                    raise ValueError("root record search document source URL must use HTTPS")
+                source_urls = sorted(set(record.get("source_urls") or [source_url]))
+                if source_url not in source_urls:
+                    source_urls.append(source_url)
+                    source_urls.sort()
+                if not source_urls or any(not isinstance(value, str) or not value.startswith("https://") for value in source_urls):
+                    raise ValueError("root record search document provenance must use HTTPS")
+                raw_tags = attributes.get("tags") or []
+                if isinstance(raw_tags, str):
+                    raw_tags = [raw_tags]
+                if not isinstance(raw_tags, list):
+                    raw_tags = []
+                tags = [str(value).strip()[:120] for value in raw_tags[:20] if str(value).strip()]
+                title = str(record.get("title") or "").strip()[:500]
+                record_type = str(record.get("record_type") or "dataset").strip()[:80]
+                subject = str(record.get("subject") or "").strip()[:500]
+                geography = str(record.get("geography") or attributes.get("geography") or "").strip()[:300]
+                memberships = sorted({
+                    value for value in (record.get("catalog_ids") or [record.get("catalog_id")])
+                    if isinstance(value, str) and value
+                })
+                if not title or not record_type or catalog_id not in memberships:
+                    raise ValueError("root record search document identity or catalog membership is invalid")
+                search_parts = [
+                    title,
+                    record_type,
+                    subject,
+                    geography,
+                    str(attributes.get("organization") or ""),
+                    str(attributes.get("category") or ""),
+                    *tags,
+                ]
+                search_text = " ".join(str(value).strip() for value in search_parts if str(value).strip())[:1200]
+                record_search_documents.append({
+                    "record_id": record_id,
+                    "title": title,
+                    "record_type": record_type,
+                    "source_url": source_url,
+                    "source_urls": source_urls[:5],
+                    "subject": subject,
+                    "geography": geography,
+                    "search_text": search_text,
+                    "catalog_ids": memberships,
+                    "last_seen_at": str(record.get("last_seen_at") or "")[:64],
+                    "public_search_allowed": True,
+                    "rights_status": str(attributes.get("rights_status") or "review_required")[:100],
+                    "source_terms_status": str(attributes.get("source_terms_status") or "not_reviewed")[:100],
+                    "attribution_required": str(attributes.get("attribution_required") or "")[:100],
+                })
+                root_record_search_document_ids.add(record_id)
+                root_record_search_document_occurrences += 1
 
         shard_id = hashlib.sha256(catalog_id.encode("utf-8")).hexdigest()[:2]
         index_file = f"shards/{shard_id}.json.gz"
@@ -539,16 +604,35 @@ def build_public_catalog_indexes(result):
             "public_search_allowed": catalog.get("public_search_allowed") is True,
             "record_count": len(record_ids),
             "record_ids": record_ids,
+            "record_search_document_count": len(record_search_documents),
+            "record_search_documents": record_search_documents,
             "index_sha256": index_sha256,
         })
         catalog_index_manifest.append({
             "catalog_id": catalog_id,
             "catalog_level": catalog.get("catalog_level") or "root",
             "parent_catalog_id": catalog.get("parent_catalog_id") or "",
+            "title": str(catalog.get("title") or catalog_id)[:500],
+            "description": str(catalog.get("description") or "")[:1000],
+            "catalog_type": str(catalog.get("catalog_type") or "open_data")[:80],
+            "subject": str(catalog.get("subject") or "")[:300],
+            "publisher": str(catalog.get("publisher") or "")[:300],
+            "geography": str(catalog.get("geography") or "")[:300],
+            "source_url": str(catalog.get("source_url") or ""),
+            "source_terms_url": str(catalog.get("source_terms_url") or ""),
+            "source_terms_status": str(catalog.get("source_terms_status") or "not_reviewed"),
+            "source_terms_reviewed_at": str(catalog.get("source_terms_reviewed_at") or ""),
+            "attribution_required": str(catalog.get("attribution_required") or ""),
+            "subcategory_kind": str(catalog.get("subcategory_kind") or ""),
+            "subcategory_value": str(catalog.get("subcategory_value") or ""),
+            "record_level_clearance": str(catalog.get("record_level_clearance") or (
+                "eligible_per_record" if catalog.get("public_search_allowed") is True else "not_reviewed"
+            )),
             "public_search_allowed": catalog.get("public_search_allowed") is True,
             "file": index_file,
             "record_count": len(record_ids),
             "staged_record_count": staged_record_count,
+            "record_search_document_count": len(record_search_documents),
             "index_sha256": index_sha256,
         })
 
@@ -556,6 +640,12 @@ def build_public_catalog_indexes(result):
     if eligible_without_index:
         raise ValueError(
             f"{len(eligible_without_index)} rights-cleared records have no public catalog membership"
+        )
+    if root_record_search_document_ids != eligible_record_ids:
+        missing = len(eligible_record_ids - root_record_search_document_ids)
+        extra = len(root_record_search_document_ids - eligible_record_ids)
+        raise ValueError(
+            f"root record search documents do not cover the rights-cleared record set: missing={missing}, extra={extra}"
         )
 
     shard_payloads = {}
@@ -575,6 +665,7 @@ def build_public_catalog_indexes(result):
             "file": index_file,
             "catalog_count": len(rows),
             "public_record_memberships": sum(row["record_count"] for row in rows),
+            "record_search_document_occurrences": sum(row["record_search_document_count"] for row in rows),
             "bytes": len(compressed),
             "sha256": hashlib.sha256(compressed).hexdigest(),
         })
@@ -611,6 +702,9 @@ def build_public_catalog_indexes(result):
         "eligible_records_without_public_index": len(eligible_without_index),
         "source_page_associations": source_page_associations,
         "index_shard_count": len(shard_payloads),
+        "record_search_schema_version": 1,
+        "root_record_search_document_occurrences": root_record_search_document_occurrences,
+        "unique_root_record_search_documents": len(root_record_search_document_ids),
         "catalog_indexes": catalog_index_manifest,
         "shards": shard_manifest,
     }
