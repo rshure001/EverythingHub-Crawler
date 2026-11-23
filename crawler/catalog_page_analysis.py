@@ -987,7 +987,7 @@ def _attach_record_catalogs(page_rows: list[dict], records) -> dict[str, int]:
     }
 
 
-def _add_page_catalogs(page_rows: list[dict], records) -> tuple[dict[str, int], list[dict], list[dict]]:
+def _add_page_catalogs(page_rows: list[dict], records, stream_record_catalogs: bool = False) -> tuple[dict[str, int], list[dict], object]:
     """Create compact identity catalogs for every valid indexed page and record.
 
     Record-owned catalog IDs are already stored on records; page catalogs are
@@ -1056,40 +1056,48 @@ def _add_page_catalogs(page_rows: list[dict], records) -> tuple[dict[str, int], 
                 page_catalog_ids.sort()
 
     page_catalogs.sort(key=lambda item: item["catalog_id"])
-    record_catalogs = []
-    for record_id, record in sorted(record_map.items()):
-        record_page_ids = sorted({
-            page_id for page_id in record.get("source_page_ids", [])
-            if page_id in page_rows_by_id
-        })
-        record_page_catalog_ids = sorted({
-            stable_id("catalog", "__page__|" + page_id)
-            for page_id in record_page_ids
-        })
-        record["page_catalog_ids"] = record_page_catalog_ids
-        record_catalogs.append({
-            "catalog_id": record.get("record_catalog_id") or stable_id("record-catalog", record_id),
-            "record_id": record_id,
-            "title": _title(record.get("title")) or record_id,
-            "record_type": record.get("record_type", "other"),
-            "page_catalog_ids": record_page_catalog_ids,
-            "source_catalog_ids": sorted(set(record.get("catalog_ids", []))),
-            "source_page_ids": sorted(set(record.get("source_page_ids", []))),
-            "source_urls": sorted(set(record.get("source_urls", []))),
-            "record_ids": [record_id],
-            "catalog_origin": "record_owned_identity_catalog",
-            "status": "identity_container_pending_validation",
-            "source_terms_status": "not_reviewed",
-            "rights_status": "publicly_accessible_not_cleared_for_redistribution",
-            "public_search_allowed": False,
-            "verified": False,
-        })
+
+    def iter_record_catalogs():
+        # Stream one compact identity row at a time. At corpus scale, retaining
+        # a second million-entry list of dictionaries needlessly spikes RAM.
+        # Dict insertion order follows the deterministic host/page analysis order.
+        for record_id, record in record_map.items():
+            record_page_ids = sorted({
+                page_id for page_id in record.get("source_page_ids", [])
+                if page_id in page_rows_by_id
+            })
+            record_page_catalog_ids = sorted({
+                stable_id("catalog", "__page__|" + page_id)
+                for page_id in record_page_ids
+            })
+            record["page_catalog_ids"] = record_page_catalog_ids
+            yield {
+                "catalog_id": record.get("record_catalog_id") or stable_id("record-catalog", record_id),
+                "record_id": record_id,
+                "title": _title(record.get("title")) or record_id,
+                "record_type": record.get("record_type", "other"),
+                "page_catalog_ids": record_page_catalog_ids,
+                "source_catalog_ids": sorted(set(record.get("catalog_ids", []))),
+                "source_page_ids": sorted(set(record.get("source_page_ids", []))),
+                "source_urls": sorted(set(record.get("source_urls", []))),
+                "record_ids": [record_id],
+                "catalog_origin": "record_owned_identity_catalog",
+                "status": "identity_container_pending_validation",
+                "source_terms_status": "not_reviewed",
+                "rights_status": "publicly_accessible_not_cleared_for_redistribution",
+                "public_search_allowed": False,
+                "verified": False,
+            }
+
+    record_catalogs = iter_record_catalogs()
+    if not stream_record_catalogs:
+        record_catalogs = list(record_catalogs)
     metrics = {
         "page_catalogs": len(page_catalogs),
         "page_catalogs_with_records": sum(bool(item["record_ids"]) for item in page_catalogs),
         "page_catalogs_without_records": sum(not bool(item["record_ids"]) for item in page_catalogs),
         "pages_with_page_catalogs": len(page_catalogs),
-        "record_owned_catalogs": len(record_catalogs),
+        "record_owned_catalogs": len(record_map),
     }
     return metrics, page_catalogs, record_catalogs
 
@@ -2174,7 +2182,7 @@ def analyze_pages_incremental(
     _reconcile_page_record_provenance(all_page_rows, all_records)
     global_typed_catalogs_by_type = _add_global_typed_entity_catalogs(all_page_rows, all_records, all_catalogs)
     record_catalog_metrics = _attach_record_catalogs(all_page_rows, all_records)
-    page_catalog_metrics, page_catalog_list, record_catalog_list = _add_page_catalogs(all_page_rows, all_records)
+    page_catalog_metrics, page_catalog_list, record_catalog_list = _add_page_catalogs(all_page_rows, all_records, stream_record_catalogs=True)
     if progress:
         print(json.dumps({
             "stage": "catalog_global_typed_catalogs_complete",
@@ -2732,6 +2740,36 @@ def apply_source_policy_reviews(
     return analysis
 
 
+def _write_gzip_catalog_stream(path: Path, catalogs) -> tuple[int, str, int]:
+    """Write a large catalog array incrementally without materializing it in RAM."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp = path.with_suffix(path.suffix + ".tmp")
+    encoder = json.JSONEncoder(ensure_ascii=False, separators=(",", ":"))
+    count = 0
+    with temp.open("wb") as raw_file:
+        with gzip.GzipFile(
+            fileobj=raw_file,
+            mode="wb",
+            filename="",
+            compresslevel=9,
+            mtime=0,
+        ) as compressed_file:
+            compressed_file.write(b'{"version":1,"catalogs":[')
+            for item in catalogs:
+                if count:
+                    compressed_file.write(b",")
+                for chunk in encoder.iterencode(item):
+                    compressed_file.write(chunk.encode("utf-8"))
+                count += 1
+            compressed_file.write(b']}\n')
+    temp.replace(path)
+    digest = hashlib.sha256()
+    with path.open("rb") as compressed_file:
+        for chunk in iter(lambda: compressed_file.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return path.stat().st_size, digest.hexdigest(), count
+
+
 def _write_gzip(path: Path, payload: dict) -> tuple[int, str]:
     """Write deterministic gzip JSON incrementally without duplicating the full payload in RAM."""
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -2894,10 +2932,10 @@ def write_outputs(analysis: dict, output_dir: Path) -> dict:
         "version": 1, "catalogs": analysis.get("page_catalogs", []),
     })
     files.append({"file": "page-catalogs.json.gz", "bytes": size, "sha256": digest, "items": len(analysis.get("page_catalogs", []))})
-    size, digest = _write_gzip(output_dir / "record-catalogs.json.gz", {
-        "version": 1, "catalogs": analysis.get("record_catalogs", []),
-    })
-    files.append({"file": "record-catalogs.json.gz", "bytes": size, "sha256": digest, "items": len(analysis.get("record_catalogs", []))})
+    size, digest, record_catalog_count = _write_gzip_catalog_stream(
+        output_dir / "record-catalogs.json.gz", analysis.get("record_catalogs", [])
+    )
+    files.append({"file": "record-catalogs.json.gz", "bytes": size, "sha256": digest, "items": record_catalog_count})
     search_shards = build_search_index(analysis)
     if not search_shards:
         search_shards = {"00": {"version": 1, "prefix": "00", "tokens": {}}}
