@@ -112,12 +112,14 @@ function fixture() {
     ['shards/aa.json.gz', rootABytes],
     ['shards/bb.json.gz', rootBBytes]
   ]);
-  const fetchBuffer = async url => {
+  const fetchCalls = [];
+  const fetchBuffer = async (url, maxBytes, timeoutMs) => {
+    fetchCalls.push({ url, maxBytes, timeoutMs });
     const file = Array.from(buffers.keys()).find(key => url.endsWith('/' + key));
     if (!file) throw new Error('unexpected_fetch_url');
     return buffers.get(file);
   };
-  return { manifest, buffers, fetchBuffer, document, rootA, rootB, sub };
+  return { manifest, buffers, fetchBuffer, fetchCalls, document, rootA, rootB, sub };
 }
 
 test('validates and loads only the bounded root shards containing public search documents', async () => {
@@ -131,6 +133,8 @@ test('validates and loads only the bounded root shards containing public search 
     Buffer.from(JSON.stringify(f.manifest)),
     f.fetchBuffer
   );
+  assert.ok(f.fetchCalls.length > 0);
+  assert.ok(f.fetchCalls.every(call => call.timeoutMs === 20000), 'root shard fetches must use a bounded 20-second timeout');
   assert.equal(network.catalogCount, 3);
   assert.equal(network.uniquePublicRecords, 1);
   assert.equal(network.rootSearchDocumentCount, 1);
