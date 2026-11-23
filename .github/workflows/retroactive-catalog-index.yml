@@ -28,7 +28,7 @@ concurrency:
 jobs:
   inventory:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
         with:
@@ -96,7 +96,8 @@ jobs:
           path: data/.page-derived-catalog-cache
           key: ${{ runner.os }}-catalog-cache-${{ github.ref_name }}-hosts-${{ github.run_id }}
       - name: Analyze every eligible existing indexed page
-        timeout-minutes: 110
+        # The prior 110-minute cap expired during full-corpus aggregation; host caches are persisted before this step and on failure.
+        timeout-minutes: 165
         env:
           PYTHONUNBUFFERED: "1"
         run: python crawler/catalog_page_analysis.py --index public-search/manifest.json --query Rolex --query "Las Vegas" --query NASA --cache-dir data/.page-derived-catalog-cache
