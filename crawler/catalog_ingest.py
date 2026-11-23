@@ -210,27 +210,36 @@ def adapt(manifest: dict[str, Any]) -> dict[str, Any]:
                 or resource_rights_present
             )
             private_dataset = license_info.get("private") is True
-            rights_values = [license_info.get("rights"), license_info.get("title"), license_info.get("id")]
+            rights_values = [
+                license_info.get("rights"), license_info.get("title"),
+                license_info.get("id"), license_info.get("url"),
+            ]
             rights_values.extend(
                 resource.get("rights")
                 for resource in (dataset.get("resources") or [])
                 if isinstance(resource, dict)
             )
             rights_text = " ".join(str(value or "").casefold() for value in rights_values)
+            normalized_rights_text = rights_text.replace("-", " ").replace("_", " ")
             explicit_open_rights = (
                 any(marker in rights_text for marker in (
                     "open use", "public domain", "cc0", "cc-by",
-                    "creative commons attribution", "open government licence",
-                    "open government license",
+                    "creative commons attribution",
                 ))
-                and not any(marker in rights_text for marker in (
-                    "noncommercial", "non-commercial", "no derivatives", "cc-by-nc", "cc-by-nd",
+                or any(marker in normalized_rights_text for marker in (
+                    "open government licence", "open government license", "cc by",
+                    "creative commons attribution",
                 ))
-            )
+            ) and not any(marker in normalized_rights_text for marker in (
+                "noncommercial", "non commercial", "no derivatives",
+                "cc by nc", "cc by nd", "cc by sa nc",
+            ))
+            open_rights_verified = license_info.get("is_open") is True or explicit_open_rights
             closed_license = license_info.get("is_open") is False and not explicit_open_rights
             public_search_allowed = (
                 catalog_policy_approved
                 and rights_metadata_present
+                and open_rights_verified
                 and not private_dataset
                 and not closed_license
             )
