@@ -1718,7 +1718,13 @@ def analyze_pages(
 
 
 def _merge_cross_host_records(records: list[dict]) -> tuple[list[dict], int]:
-    """Merge globally identified records shared by otherwise independent host partitions."""
+    """Merge globally identified records in place to bound peak memory.
+
+    The host-partition list already owns each record dictionary. Copying every
+    dictionary and its provenance/attribute collections into a second full
+    object graph temporarily doubles memory during the global aggregation pass.
+    Keep the first canonical record object and merge later duplicates into it.
+    """
     merged: dict[str, dict] = {}
     merge_count = 0
 
@@ -1732,18 +1738,33 @@ def _merge_cross_host_records(records: list[dict]) -> tuple[list[dict], int]:
                 return 0.0
         return 0.0
 
-    for source in records:
-        item = dict(source)
-        item["source_urls"] = list(source.get("source_urls", []))
-        item["source_page_ids"] = list(source.get("source_page_ids", []))
-        item["catalog_ids"] = list(source.get("catalog_ids", []))
-        item["attributes"] = dict(source.get("attributes", {})) if isinstance(source.get("attributes"), dict) else {}
+    def ensure_list(item: dict, key: str) -> list:
+        value = item.get(key)
+        if isinstance(value, list):
+            return value
+        if isinstance(value, (tuple, set)):
+            value = list(value)
+        else:
+            value = []
+        item[key] = value
+        return value
+
+    for item in records:
+        if not isinstance(item, dict):
+            raise ValueError("host analysis produced a malformed record")
         record_id = item.get("record_id")
         if not isinstance(record_id, str) or not record_id:
             raise ValueError("host analysis produced a record without a stable record ID")
+        for key in ("source_urls", "source_page_ids", "catalog_ids"):
+            ensure_list(item, key)
+        if not isinstance(item.get("attributes"), dict):
+            item["attributes"] = {}
+
         current = merged.get(record_id)
         if current is None:
             merged[record_id] = item
+            continue
+        if current is item:
             continue
         if current.get("canonical_entity_key") != item.get("canonical_entity_key"):
             raise ValueError("the same record ID maps to different canonical entity keys")
@@ -1760,23 +1781,26 @@ def _merge_cross_host_records(records: list[dict]) -> tuple[list[dict], int]:
                 current.setdefault("attributes", {}).setdefault(key, value)
 
         for key in ("source_urls", "source_page_ids", "catalog_ids"):
-            current[key] = sorted(set(current.get(key, [])) | set(item.get(key, [])))
+            target = ensure_list(current, key)
+            seen = set(target)
+            for value in item[key]:
+                if value not in seen:
+                    target.append(value)
+                    seen.add(value)
+            target.sort()
         for key in ("structured_product", "structured_brand", "content_extracted", "structured_catalog_item", "structured_entity"):
             if item.get(key):
                 current[key] = True
         current["commercial_eligible"] = False
         current["source_terms_status"] = "not_reviewed"
-        current["source_url"] = current["source_urls"][0] if current["source_urls"] else ""
-        current["source_page_count"] = len(current["source_page_ids"])
 
     for item in merged.values():
-        item["source_urls"] = sorted(set(item.get("source_urls", [])))
-        item["source_page_ids"] = sorted(set(item.get("source_page_ids", [])))
-        item["catalog_ids"] = sorted(set(item.get("catalog_ids", [])))
+        for key in ("source_urls", "source_page_ids", "catalog_ids"):
+            values = ensure_list(item, key)
+            values[:] = sorted(set(values))
         item["source_url"] = item["source_urls"][0] if item["source_urls"] else ""
         item["source_page_count"] = len(item["source_page_ids"])
     return list(merged.values()), merge_count
-
 
 def analyze_pages_incremental(
     pages: list[dict],

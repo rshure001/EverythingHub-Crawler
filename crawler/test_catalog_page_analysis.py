@@ -11,7 +11,7 @@ from catalog_page_analysis import (
     search_catalog_network, search_source_page_evidence, write_outputs, validate_outputs, stable_id,
     apply_source_policy_reviews, _reconcile_page_record_provenance,
     _add_global_subject_catalogs, _global_subject_catalog_source_key,
-    measure_persisted_count_deltas,
+    _merge_cross_host_records, measure_persisted_count_deltas,
 )
 
 
@@ -1388,6 +1388,48 @@ class CatalogInventoryTriggerTests(unittest.TestCase):
         self.assertEqual(len(submariner["source_urls"]), 2)
         self.assertEqual(len(submariner["source_page_ids"]), 2)
         self.assertEqual(len(submariner["catalog_ids"]), 2)
+
+    def test_cross_host_merge_reuses_record_objects_to_bound_peak_memory(self):
+        first = {
+            "record_id": "record:shared",
+            "canonical_entity_key": "model|external|wikidata:Q12345",
+            "record_type": "model",
+            "title": "Submariner",
+            "description": "Earlier description",
+            "last_seen_at": 100,
+            "source_urls": ["https://one.example/submariner"],
+            "source_page_ids": ["page:one"],
+            "catalog_ids": ["catalog:one"],
+            "attributes": {"brand": "Rolex"},
+        }
+        second = {
+            "record_id": "record:shared",
+            "canonical_entity_key": "model|external|wikidata:Q12345",
+            "record_type": "model",
+            "title": "Submariner",
+            "description": "Newer description",
+            "last_seen_at": 200,
+            "source_urls": ["https://two.example/submariner"],
+            "source_page_ids": ["page:two"],
+            "catalog_ids": ["catalog:two"],
+            "attributes": {"model": "Submariner"},
+        }
+
+        merged, merge_count = _merge_cross_host_records([first, second])
+
+        self.assertEqual(merge_count, 1)
+        self.assertEqual(len(merged), 1)
+        self.assertIs(merged[0], first)
+        self.assertEqual(first["description"], "Newer description")
+        self.assertEqual(first["source_urls"], [
+            "https://one.example/submariner", "https://two.example/submariner",
+        ])
+        self.assertEqual(first["source_page_ids"], ["page:one", "page:two"])
+        self.assertEqual(first["catalog_ids"], ["catalog:one", "catalog:two"])
+        self.assertEqual(first["attributes"], {"brand": "Rolex", "model": "Submariner"})
+        self.assertEqual(first["source_page_count"], 2)
+        self.assertFalse(first["commercial_eligible"])
+        self.assertEqual(first["source_terms_status"], "not_reviewed")
 
     def test_unknown_same_as_values_do_not_merge_records_across_hosts(self):
         pages = [
