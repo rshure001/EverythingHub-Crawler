@@ -2280,12 +2280,25 @@ class AdditionalSourcePolicyReviewTests(unittest.TestCase):
             output = Path(tmp)
             manifest = write_outputs(result, output)
             listed_files = {item["file"] for item in manifest["files"]}
-            self.assertNotIn("record-catalogs.json.gz", listed_files)
+            self.assertIn("page-catalogs.json.gz", listed_files)
+            self.assertIn("record-catalogs.json.gz", listed_files)
             payload = json.loads(gzip.decompress((output / "records.json.gz").read_bytes()))
             records = payload["records"]
             self.assertEqual(len(records), len(result["records"]))
             for record in records:
                 self.assertEqual(record["record_catalog_id"], stable_id("record-catalog", record["record_id"]))
+            record_catalog_payload = json.loads(
+                gzip.decompress((output / "record-catalogs.json.gz").read_bytes())
+            )
+            self.assertEqual(len(record_catalog_payload["catalogs"]), len(records))
+            self.assertEqual(
+                {item["record_id"] for item in record_catalog_payload["catalogs"]},
+                {item["record_id"] for item in records},
+            )
+            page_catalog_payload = json.loads(
+                gzip.decompress((output / "page-catalogs.json.gz").read_bytes())
+            )
+            self.assertEqual(len(page_catalog_payload["catalogs"]), result["metrics"]["page_catalogs"])
             validated = validate_outputs(output)
             self.assertEqual(validated["records_validated"], len(result["records"]))
 
