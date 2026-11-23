@@ -530,21 +530,16 @@ export async function resolveRecordRelatedCatalogPreview(
   const indexGroups = await Promise.all(batches.map((batch) =>
     Promise.all(batch.map((catalog) => loadCatalogIndex(network, catalog, fetchImpl)))
   ));
-  let owner = null;
-  const related = new Map();
-  for (const records of indexGroups.flat()) {
-    for (const record of records) {
-      if (record.record_catalog_id === key) {
-        if (owner && owner.record_id !== record.record_id) {
-          throw new Error("record_catalog_identity_collision");
-        }
-        owner = record;
-      }
-      if (owner && record.record_id === owner.record_id) continue;
-      related.set(record.record_id, record);
-    }
-  }
+  const indexedRecords = indexGroups.flat().flat();
+  const owners = indexedRecords.filter((record) => record.record_catalog_id === key);
+  const ownerIds = new Set(owners.map((record) => record.record_id));
+  if (ownerIds.size > 1) throw new Error("record_catalog_identity_collision");
+  const owner = owners[0] || null;
   if (!owner) return null;
+  const related = new Map();
+  for (const record of indexedRecords) {
+    if (record.record_id !== owner.record_id) related.set(record.record_id, record);
+  }
   if (ids.some((id) => !owner.catalog_ids.includes(id))) {
     throw new Error("record_catalog_membership_mismatch");
   }
