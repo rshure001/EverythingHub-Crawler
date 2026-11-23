@@ -70,13 +70,17 @@ def normalize_catalog(raw: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("root catalogs cannot have parent_catalog_id")
     if parent_catalog_id and parent_catalog_id == catalog_id:
         raise ValueError("catalog cannot be its own parent")
+    subcategory_kind = _text(raw.get("subcategory_kind"), 40).casefold()
+    subcategory_value = _text(raw.get("subcategory_value"), 200)
+    if catalog_level == "subcatalog" and (not subcategory_kind or not subcategory_value):
+        raise ValueError("subcatalogs require subcategory_kind and subcategory_value")
     return {
         "schema_version": SCHEMA_VERSION,
         "catalog_id": catalog_id,
         "catalog_level": catalog_level,
         "parent_catalog_id": parent_catalog_id,
-        "subcategory_kind": _text(raw.get("subcategory_kind"), 40).casefold(),
-        "subcategory_value": _text(raw.get("subcategory_value"), 200),
+        "subcategory_kind": subcategory_kind,
+        "subcategory_value": subcategory_value,
         "source_id": source_id,
         "title": title,
         "description": _text(raw.get("description"), 4000),
