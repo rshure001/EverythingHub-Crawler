@@ -2581,7 +2581,7 @@ def _write_gzip(path: Path, payload: dict) -> tuple[int, str]:
         ) as compressed_file:
             for chunk in encoder.iterencode(payload):
                 compressed_file.write(chunk.encode("utf-8"))
-            compressed_file.write(b"\\n")
+            compressed_file.write(b"\n")
     temp.replace(path)
 
     digest = hashlib.sha256()
