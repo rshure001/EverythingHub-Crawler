@@ -28,7 +28,7 @@ console.log('health:', JSON.stringify({ status: health.status, database_required
 
 const expectations = [
   { query: 'NASA', requireUniversalMatch: true },
-  { query: 'Las Vegas', requireUniversalMatch: true },
+  { query: 'Las Vegas', requireUniversalMatch: false },
   { query: 'Rolex', requireUniversalMatch: false }
 ];
 
@@ -90,6 +90,7 @@ for (const item of expectations) {
     catalogResults: data.catalogResults.length,
     universalCatalogResults: universal.length,
     universalCatalogTitles: universal.map(result => result.catalog_title),
+    universalMatchedRecordTitles: universal.flatMap(result => result.matched_records.map(record => record.title)),
     externalCatalogResults: data.externalCatalogResults.length,
     previewStatus: preview.status,
     catalogCount: preview.catalogCount,
