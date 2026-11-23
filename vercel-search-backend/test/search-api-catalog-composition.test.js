@@ -8,7 +8,8 @@ test('curated external catalogs do not bypass the indexed catalog loader', async
     '../src/lib/catalog',
     '../src/lib/page-derived-catalogs',
     '../src/lib/external-catalogs',
-    '../src/lib/search-core'
+    '../src/lib/search-core',
+    '../src/lib/universal-catalog-search'
   ].map((path) => require.resolve(path));
   const originals = modulePaths.map((path) => require.cache[path]);
   const httpsGet = https.get;
@@ -34,6 +35,15 @@ test('curated external catalogs do not bypass the indexed catalog loader', async
     resolveLaneFilters: lane => lane === 'shopping' ? new Set(['business']) : new Set(),
     parseBingRss: () => [],
     buildResponse: options => { capturedBingResults = options.bingResults; return { status: 'ok', providers: [], results: [], count: 0, totalMatches: 0 }; }
+  }};
+  require.cache[modulePaths[4]] = { id: modulePaths[4], filename: modulePaths[4], loaded: true, exports: {
+    loadUniversalCatalogNetwork: async () => ({
+      catalogById: new Map(), documents: [], generatedAt: '2026-11-23T00:00:00Z',
+      catalogCount: 0, uniquePublicRecords: 0, rootSearchDocumentCount: 0,
+      rootSearchDocumentOccurrences: 0, publicRecordMemberships: 0,
+      recordsPublished: 0, productionIndexed: false, stale: false
+    }),
+    searchUniversalCatalogs: () => []
   }};
   https.get = () => { throw new Error('bing_disabled_for_test'); };
 
@@ -71,7 +81,8 @@ test('fallback responses keep curated external catalogs visible when either inde
     '../src/lib/catalog',
     '../src/lib/page-derived-catalogs',
     '../src/lib/external-catalogs',
-    '../src/lib/search-core'
+    '../src/lib/search-core',
+    '../src/lib/universal-catalog-search'
   ].map((path) => require.resolve(path));
   const originals = modulePaths.map((path) => require.cache[path]);
   const httpsGet = https.get;
@@ -94,6 +105,15 @@ test('fallback responses keep curated external catalogs visible when either inde
     resolveLaneFilters: () => new Set(),
     parseBingRss: () => [],
     buildResponse: () => ({ status: 'ok', providers: [], results: [], count: 0, totalMatches: 0 })
+  }};
+  require.cache[modulePaths[4]] = { id: modulePaths[4], filename: modulePaths[4], loaded: true, exports: {
+    loadUniversalCatalogNetwork: async () => ({
+      catalogById: new Map(), documents: [], generatedAt: '2026-11-23T00:00:00Z',
+      catalogCount: 0, uniquePublicRecords: 0, rootSearchDocumentCount: 0,
+      rootSearchDocumentOccurrences: 0, publicRecordMemberships: 0,
+      recordsPublished: 0, productionIndexed: false, stale: false
+    }),
+    searchUniversalCatalogs: () => []
   }};
   https.get = () => { throw new Error('bing_disabled_for_test'); };
   console.warn = () => {};
@@ -129,7 +149,8 @@ test('broad-query fallback surfaces provenance-backed page-derived catalog recor
     '../src/lib/catalog',
     '../src/lib/page-derived-catalogs',
     '../src/lib/external-catalogs',
-    '../src/lib/search-core'
+    '../src/lib/search-core',
+    '../src/lib/universal-catalog-search'
   ].map((path) => require.resolve(path));
   const originals = modulePaths.map((path) => require.cache[path]);
   const httpsGet = https.get;
@@ -180,6 +201,15 @@ test('broad-query fallback surfaces provenance-backed page-derived catalog recor
     resolveLaneFilters: () => new Set(),
     parseBingRss: () => [],
     buildResponse: () => ({ status: 'ok', providers: [], results: [], count: 0, totalMatches: 0 })
+  }};
+  require.cache[modulePaths[4]] = { id: modulePaths[4], filename: modulePaths[4], loaded: true, exports: {
+    loadUniversalCatalogNetwork: async () => ({
+      catalogById: new Map(), documents: [], generatedAt: '2026-11-23T00:00:00Z',
+      catalogCount: 0, uniquePublicRecords: 0, rootSearchDocumentCount: 0,
+      rootSearchDocumentOccurrences: 0, publicRecordMemberships: 0,
+      recordsPublished: 0, productionIndexed: false, stale: false
+    }),
+    searchUniversalCatalogs: () => []
   }};
   https.get = () => { throw new Error('bing_disabled_for_test'); };
   console.warn = () => {};

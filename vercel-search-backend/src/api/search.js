@@ -4,6 +4,7 @@ const { robotsFetch } = require('../lib/robots');
 const { loadPageDerivedCatalogs, searchPageDerivedCatalogs, matchesPageIndexSnapshot } = require('../lib/page-derived-catalogs');
 const { searchExternalCatalogs, getExternalCatalogStats } = require('../lib/external-catalogs');
 const { searchCatalog, parseBingRss, buildResponse, resolveLaneFilters } = require('../lib/search-core');
+const { loadUniversalCatalogNetwork, searchUniversalCatalogs } = require('../lib/universal-catalog-search');
 const MAX_QUERY_LENGTH = 160;
 const MAX_LIMIT = 50;
 const MAX_OFFSET = 5000;
@@ -12,6 +13,7 @@ const MAX_BING_BYTES = 1000000;
 const bingCache = new Map();
 const CATALOG_LOAD_BUDGET_MS = 8500;
 const PAGE_DERIVED_LOAD_BUDGET_MS = 7000;
+const UNIVERSAL_CATALOG_LOAD_BUDGET_MS = 7000;
 
 function withTimeout(promise, milliseconds, code) {
   let timer;
@@ -48,16 +50,20 @@ function safeCatalogError(error) {
   return code || 'catalog_unavailable';
 }
 
-function mergeCatalogResults(externalCatalogResults, pageDerivedCatalogResults, limit = 5) {
+function mergeCatalogResults(...groups) {
+  let limit = 5;
+  if (Number.isInteger(groups[groups.length - 1])) limit = groups.pop();
   const max = Number.isInteger(limit) ? Math.max(1, Math.min(5, limit)) : 5;
   const seen = new Set();
   const merged = [];
-  for (const item of [...(externalCatalogResults || []), ...(pageDerivedCatalogResults || [])]) {
-    const id = String(item && item.catalog_id || '').trim();
-    if (!id || seen.has(id)) continue;
-    seen.add(id);
-    merged.push(item);
-    if (merged.length >= max) break;
+  for (const group of groups) {
+    for (const item of Array.isArray(group) ? group : []) {
+      const id = String(item && item.catalog_id || '').trim();
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      merged.push(item);
+      if (merged.length >= max) return merged;
+    }
   }
   return merged;
 }
@@ -152,15 +158,43 @@ module.exports = async function handler(req, res) {
   const laneScoped = resolveLaneFilters(lane).size > 0;
   const externalCatalogResults = searchExternalCatalogs(query);
   const externalCatalogStats = getExternalCatalogStats();
-  const [catalogResult, bingResult, pageDerivedResult] = await Promise.allSettled([
+  const [catalogResult, bingResult, pageDerivedResult, universalCatalogResult] = await Promise.allSettled([
     withTimeout(loadCatalog(query), CATALOG_LOAD_BUDGET_MS, 'catalog_load_budget_exceeded'),
     laneScoped ? Promise.resolve([]) : loadBing(query),
-    withTimeout(loadPageDerivedCatalogs(query), PAGE_DERIVED_LOAD_BUDGET_MS, 'page_catalog_load_budget_exceeded')
+    withTimeout(loadPageDerivedCatalogs(query), PAGE_DERIVED_LOAD_BUDGET_MS, 'page_catalog_load_budget_exceeded'),
+    withTimeout(loadUniversalCatalogNetwork(), UNIVERSAL_CATALOG_LOAD_BUDGET_MS, 'universal_catalog_load_budget_exceeded')
   ]);
   const bingResults = bingResult.status === 'fulfilled' ? bingResult.value : [];
   const pageDerivedNetwork = pageDerivedResult.status === 'fulfilled' ? pageDerivedResult.value : null;
+  const universalCatalogNetwork = universalCatalogResult.status === 'fulfilled' ? universalCatalogResult.value : null;
   let pageDerivedCatalogResults = pageDerivedNetwork ? searchPageDerivedCatalogs(query, pageDerivedNetwork, 5) : [];
-  let catalogResults = mergeCatalogResults(externalCatalogResults, pageDerivedCatalogResults);
+  const universalCatalogResults = universalCatalogNetwork ? searchUniversalCatalogs(query, universalCatalogNetwork, 5) : [];
+  let catalogResults = mergeCatalogResults(externalCatalogResults, universalCatalogResults, pageDerivedCatalogResults);
+  const universalCatalogPreview = universalCatalogNetwork ? {
+    status: universalCatalogNetwork.stale ? 'stale-candidate-preview' : 'candidate-preview',
+    previewOnly: true,
+    generatedAt: universalCatalogNetwork.generatedAt,
+    catalogCount: universalCatalogNetwork.catalogCount,
+    recordCount: universalCatalogNetwork.uniquePublicRecords,
+    rootSearchDocumentCount: universalCatalogNetwork.rootSearchDocumentCount,
+    rootSearchDocumentOccurrences: universalCatalogNetwork.rootSearchDocumentOccurrences,
+    publicRecordMemberships: universalCatalogNetwork.publicRecordMemberships,
+    recordsPublished: universalCatalogNetwork.recordsPublished,
+    productionIndexed: universalCatalogNetwork.productionIndexed,
+    indexShardCount: universalCatalogNetwork.indexShardCount,
+    resultCount: universalCatalogResults.length,
+    manifestSha256: universalCatalogNetwork.manifestSha256,
+    error: universalCatalogNetwork.refreshError || null
+  } : {
+    status: 'unavailable',
+    previewOnly: true,
+    catalogCount: 0,
+    recordCount: 0,
+    resultCount: 0,
+    recordsPublished: 0,
+    productionIndexed: false,
+    error: safeCatalogError(universalCatalogResult.reason || 'universal_catalog_unavailable')
+  };
   const catalogPreview = pageDerivedNetwork ? {
     status: 'freshness-unverified',
     previewOnly: true,
@@ -190,7 +224,7 @@ module.exports = async function handler(req, res) {
     if (pageDerivedNetwork) {
       markCatalogPreviewStale(catalogPreview, false);
       pageDerivedCatalogResults = pageDerivedCatalogResults.map(item => ({ ...item, snippet: item.snippet + ' Current page-index freshness could not be verified.', description: item.snippet + ' Current page-index freshness could not be verified.' }));
-      catalogResults = mergeCatalogResults(externalCatalogResults, pageDerivedCatalogResults);
+      catalogResults = mergeCatalogResults(externalCatalogResults, universalCatalogResults, pageDerivedCatalogResults);
     }
     const catalogError = safeCatalogError(catalogResult.reason);
     console.warn('[catalog-load-failed]', catalogError);
@@ -208,9 +242,11 @@ module.exports = async function handler(req, res) {
     if (catalogPreview) catalogPreview.recordPreviewResults = catalogPreviewRecordResults.length;
     const providers = [];
     if (!laneScoped && bingResults.length) providers.push('Bing Web Search');
-    if (catalogPreviewRecordResults.length || catalogResults.length) providers.push('Everything Hub Catalog Preview');
+    if (pageDerivedCatalogResults.length || catalogPreviewRecordResults.length) providers.push('Everything Hub Catalog Preview');
+    if (universalCatalogResults.length) providers.push('Everything Hub Universal Catalog Preview');
     if (externalCatalogResults.length) providers.push('Curated External Catalog Directory');
-    const fallbackMode = catalogPreviewRecordResults.length ? 'catalog-preview-fallback' : 'unavailable';
+    const hasCatalogPreviewFallback = catalogPreviewRecordResults.length > 0 || universalCatalogResults.length > 0;
+    const fallbackMode = hasCatalogPreviewFallback ? 'catalog-preview-fallback' : 'unavailable';
     if (!results.length && !catalogResults.length) {
       return res.status(503).json({
         error: 'search_temporarily_unavailable',
@@ -221,6 +257,7 @@ module.exports = async function handler(req, res) {
         catalogResults,
         externalCatalogResults,
         catalogPreview,
+        universalCatalogPreview,
         providers
       });
     }
@@ -229,18 +266,20 @@ module.exports = async function handler(req, res) {
       page: Math.floor(offset / limit) + 1,
       pageSize: limit, offset, hasMore: false,
       indexedPages: 0,
-      indexStatus: catalogPreviewRecordResults.length ? 'catalog-preview-fallback' : 'catalog-unavailable',
-      searchScope: catalogPreviewRecordResults.length ? 'page-derived-catalog-preview' : 'external-fallback',
+      indexStatus: hasCatalogPreviewFallback ? 'catalog-preview-fallback' : 'catalog-unavailable',
+      searchScope: catalogPreviewRecordResults.length ? 'page-derived-catalog-preview' :
+        (universalCatalogResults.length ? 'universal-catalog-preview' : 'external-fallback'),
       indexScan: {
         mode: fallbackMode,
         indexedPages: 0,
         scannedPages: 0,
         candidateShardCount: 0,
         previewRecords: catalogPreviewRecordResults.length,
+        universalCatalogPreviewResults: universalCatalogResults.length,
         error: catalogError
       },
       catalogError, database_required: false,
-      results, catalogResults, externalCatalogResults, catalogPreview, providers, fallback: true
+      results, catalogResults, externalCatalogResults, catalogPreview, universalCatalogPreview, providers, fallback: true
     });
   }
 
@@ -250,7 +289,7 @@ module.exports = async function handler(req, res) {
     if (stale) {
       const warning = !sourceIndexMatches ? ' Catalog analysis is behind the current page index.' : ' Catalog preview is using a cached snapshot.';
       pageDerivedCatalogResults = pageDerivedCatalogResults.map(item => ({ ...item, snippet: item.snippet + warning, description: item.snippet + warning }));
-      catalogResults = [...externalCatalogResults, ...pageDerivedCatalogResults].slice(0, 5);
+      catalogResults = mergeCatalogResults(externalCatalogResults, universalCatalogResults, pageDerivedCatalogResults);
     }
   }
   const ranked = searchCatalog(catalog.pages, query, lane);
@@ -280,7 +319,10 @@ module.exports = async function handler(req, res) {
   payload.catalogResults = catalogResults;
   payload.externalCatalogResults = externalCatalogResults;
   payload.catalogPreview = catalogPreview;
-  if (catalogResults.length) payload.providers.push('Everything Hub Catalog Preview');
+  payload.universalCatalogPreview = universalCatalogPreview;
+  if (pageDerivedCatalogResults.length) payload.providers.push('Everything Hub Catalog Preview');
+  if (universalCatalogResults.length) payload.providers.push('Everything Hub Universal Catalog Preview');
+  if (externalCatalogResults.length) payload.providers.push('Curated External Catalog Directory');
   if (bingResult.status !== 'fulfilled') payload.providers = payload.providers.filter(x => x !== 'Bing Web Search');
   if (catalog.refreshError) payload.catalogRefreshError = safeCatalogError({ message: catalog.refreshError });
   res.setHeader('X-Index-Updated-At', String(catalog.updatedAt));

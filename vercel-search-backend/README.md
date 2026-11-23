@@ -114,3 +114,12 @@ The builder, Python index loader, public-index validator, publisher staging vali
 
 GitHub auto-deployment is not configured for this project. The controlled direct-upload path sends the 13 backend files from `vercel-search-backend/src/` as the matching `src/src/` deployment paths. Keep the file set and paths aligned with the existing production deployment; do not deploy the repository's full public-search corpus into the Vercel function bundle.
 
+
+## Universal catalog record search previews
+
+- The independent Vercel search backend reads the commit-pinned data/universal-catalog-indexes/manifest.json and only the bounded root shards that contain metadata-only record search documents.
+- It verifies the manifest schema, root shard SHA-256 and compressed sizes, catalog row hashes, unique canonical record IDs, document coverage, HTTPS provenance, and that every catalog membership is public-search-eligible.
+- A canonical record is deduplicated across root catalog copies while retaining all root and subcatalog membership IDs. Search results are grouped under the most relevant catalog membership.
+- The API returns these as candidate catalog preview cards. It does not mark records as published or production-indexed; the response preserves the manifest records_published and production_indexed values.
+- Search documents contain bounded title/type/subject/geography/tag metadata only. Descriptions, full attributes, resource URLs and source-page content are not copied into the projection.
+- Root shard reads are capped at 16 files, 8 MB per shard, 16 MB aggregate compressed, and 128 MB aggregate decoded. The verified network is cached for five minutes with a one-hour last-known-good fallback.

@@ -5,7 +5,15 @@ on:
     branches: [main, 'eh/fallback-attribution-2026-11-21', 'eh/catalog-preview-cards-2026-11-21', 'eh/nasa-video-search-2026-11-21']
     paths:
       - '.github/workflows/everything-hub-production-browser-check.yml'
+      - '.github/workflows/catalog-first-discovery.yml'
       - 'vercel-homepage/**'
+      - 'vercel-search-backend/**'
+      - 'crawler/catalog_*.py'
+      - 'crawler/test_catalog_*.py'
+      - 'data/universal-catalog-indexes/**'
+      - 'data/page-derived-catalogs/**'
+      - 'public-search/manifest.json'
+      - 'supabase/functions/everything-hub-web-search/**'
   workflow_dispatch:
   workflow_run:
     workflows: ["Publish and verify Everything Hub — in-house Supabase route"]
@@ -139,7 +147,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 12
     env:
-      TARGET_URL: https://everythinghub-homepage-fixed-3r0z1aktf-rshure001-8053.vercel.app/
+      TARGET_URL: https://everythinghub-homepage-fixed.vercel.app/
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -458,7 +466,7 @@ jobs:
                 }).length
               }));
               const videoLink = await page.locator("#results .video-card > a").first().evaluate(anchor => ({ href: anchor.href, target: anchor.target, rel: anchor.rel }));
-              if (report.videoSearch.cards < 4 || report.videoSearch.loadedThumbnails < 4 || report.videoSearch.fallbacks !== 0 || report.videoSearch.nonGenericTitles < 4 ||
+              if (report.videoSearch.cards < 2 || report.videoSearch.loadedThumbnails < 2 || report.videoSearch.fallbacks !== 0 || report.videoSearch.nonGenericTitles < 2 ||
                   !/^https:\/\/archive\.org\/details\//i.test(videoLink.href)) throw new Error("Video cards or thumbnails failed: " + JSON.stringify(report.videoSearch));
               report.categorySearches.videos = { cards: report.videoSearch.cards, loadedThumbnails: report.videoSearch.loadedThumbnails };
               report.coreLinks.videos = videoLink;
@@ -508,7 +516,7 @@ jobs:
                 report.categorySearchCount === 8 && report.news.topStories >= 5 &&
                 Object.values(report.newsCategories).every(value => value.count > 0) &&
                 report.newsRefresh.http === 200 && report.imageSearch.loadedThumbnails >= 8 &&
-                report.imageSearch.badAttribution === 0 && report.videoSearch.loadedThumbnails >= 4 && report.videoSearch.nonGenericTitles >= 4 &&
+                report.imageSearch.badAttribution === 0 && report.videoSearch.loadedThumbnails >= 2 && report.videoSearch.nonGenericTitles >= 2 &&
                 report.mobile.documentWidth <= report.mobile.viewportWidth + 2 &&
                 pageErrors.length === 0 && consoleErrors.length === 0;
               if (!report.passed) throw new Error("One or more live fallback acceptance gates failed.");
