@@ -5,6 +5,7 @@ on:
     paths:
       - ".github/workflows/everything-hub-free-supabase-route.yml"
       - "site/index.html"
+      - "data/page-derived-catalogs/**"
       - "supabase/functions/everything-hub-web-search/**"
       - "supabase/functions/everything-hub-independent-search/**"
       - "supabase/functions/everything-hub-site/**"
@@ -37,6 +38,7 @@ jobs:
             "everythinghub-approved.png",
             'id="searchForm"',
             'id="q"',
+            "View related items",
             'SEARCH_API=BASE+"/everything-hub-web-search"',
             'data-mode="web"',
             'data-mode="news"',
@@ -91,3 +93,66 @@ jobs:
             firstResult: results[0]?.title || catalogs[0]?.title || null
           }, null, 2));
           NODE
+
+      - name: Verify per-record related catalog lookup when indexed identities are available
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require("node:fs");
+          const data = JSON.parse(fs.readFileSync("/tmp/search.json", "utf8"));
+          const catalogs = Array.isArray(data.catalogResults) ? data.catalogResults : [];
+          const records = catalogs.flatMap(item => Array.isArray(item.matched_records) ? item.matched_records : []);
+          const record = records.find(item =>
+            typeof item.record_catalog_id === "string" &&
+            item.record_catalog_id.length > 0 &&
+            Array.isArray(item.shared_catalog_ids) &&
+            item.shared_catalog_ids.length > 0
+          );
+          if (!record) {
+            console.log(JSON.stringify({
+              status: "awaiting_next_catalog_snapshot",
+              note: "The free search route is live; the current published catalog has not yet exposed per-record catalog identities."
+            }, null, 2));
+            process.exit(0);
+          }
+          fs.writeFileSync("/tmp/record-catalog-request.json", JSON.stringify({
+            record_catalog_id: record.record_catalog_id,
+            catalog_ids: record.shared_catalog_ids.slice(0, 12)
+          }));
+          NODE
+          if test -f /tmp/record-catalog-request.json; then
+            record_id="$(node -e 'process.stdout.write(JSON.parse(require("fs").readFileSync("/tmp/record-catalog-request.json","utf8")).record_catalog_id)')"
+            catalog_ids="$(node -e 'process.stdout.write(JSON.parse(require("fs").readFileSync("/tmp/record-catalog-request.json","utf8")).catalog_ids.join(","))')"
+            code="$(curl --silent --show-error --location --max-time 35 -G "$SEARCH_URL" \
+              -H "apikey: $API_KEY" \
+              -H "accept: application/json" \
+              --data-urlencode "record_catalog_id=$record_id" \
+              --data-urlencode "catalog_ids=$catalog_ids" \
+              --data-urlencode "limit=5" \
+              --data-urlencode "offset=0" \
+              -o /tmp/record-catalog.json -w '%{http_code}')"
+            test "$code" = "200"
+            node <<'NODE'
+            const fs = require("node:fs");
+            const data = JSON.parse(fs.readFileSync("/tmp/record-catalog.json", "utf8"));
+            const requested = JSON.parse(fs.readFileSync("/tmp/record-catalog-request.json", "utf8"));
+            if (
+              data.status !== "candidate-preview" ||
+              data.preview_only !== true ||
+              data.record_catalog_id !== requested.record_catalog_id ||
+              data.owner_record?.record_catalog_id !== requested.record_catalog_id ||
+              !Array.isArray(data.related_records) ||
+              data.related_records.some(record => record.commercial_eligible !== false)
+            ) {
+              throw new Error("Per-record related catalog response failed validation: " + JSON.stringify(data));
+            }
+            console.log(JSON.stringify({
+              status: "record_catalog_http_200",
+              recordCatalogId: data.record_catalog_id,
+              relatedRecords: data.related_count,
+              pageSize: data.related_records.length,
+              hasMore: data.has_more,
+              rightsRestricted: true
+            }, null, 2));
+            NODE
+          fi
