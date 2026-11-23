@@ -224,7 +224,7 @@ module.exports = async function handler(req, res) {
     if (pageDerivedNetwork) {
       markCatalogPreviewStale(catalogPreview, false);
       pageDerivedCatalogResults = pageDerivedCatalogResults.map(item => ({ ...item, snippet: item.snippet + ' Current page-index freshness could not be verified.', description: item.snippet + ' Current page-index freshness could not be verified.' }));
-      catalogResults = mergeCatalogResults(externalCatalogResults, pageDerivedCatalogResults);
+      catalogResults = mergeCatalogResults(externalCatalogResults, universalCatalogResults, pageDerivedCatalogResults);
     }
     const catalogError = safeCatalogError(catalogResult.reason);
     console.warn('[catalog-load-failed]', catalogError);
