@@ -34,6 +34,80 @@ def _dataset_key(dataset: dict[str, Any]) -> str:
     return _group_text(dataset.get("dataset_id") or dataset.get("id"), 300)
 
 
+def _dataset_rights(dataset: dict[str, Any], catalog_policy_approved: bool) -> dict[str, Any]:
+    """Evaluate dataset-level reuse eligibility without trusting upstream open flags alone."""
+    license_info = dataset.get("license") or {}
+    if not isinstance(license_info, dict):
+        license_info = {}
+    license_present = bool(license_info.get("url") or license_info.get("id"))
+    resource_rights_present = any(
+        isinstance(resource, dict) and bool(str(resource.get("rights") or "").strip())
+        for resource in (dataset.get("resources") or [])
+    )
+    rights_metadata_present = bool(
+        license_present
+        or license_info.get("rights")
+        or license_info.get("is_open") is not None
+        or resource_rights_present
+    )
+    private_dataset = license_info.get("private") is True
+    rights_values = [
+        license_info.get("rights"), license_info.get("title"),
+        license_info.get("id"), license_info.get("url"),
+    ]
+    rights_values.extend(
+        resource.get("rights")
+        for resource in (dataset.get("resources") or [])
+        if isinstance(resource, dict)
+    )
+    rights_text = " ".join(str(value or "").casefold() for value in rights_values)
+    normalized_rights_text = rights_text.replace("-", " ").replace("_", " ")
+    explicit_restriction = any(marker in normalized_rights_text for marker in (
+        "noncommercial", "non commercial", "no derivatives",
+        "cc by nc", "cc by nd", "cc by sa nc",
+        "all rights reserved", "no redistribution", "not for redistribution",
+    ))
+    explicit_open_rights = (
+        any(marker in rights_text for marker in (
+            "open use", "public domain", "cc0", "cc-by",
+            "creative commons attribution",
+        ))
+        or any(marker in normalized_rights_text for marker in (
+            "open government licence", "open government license", "cc by",
+            "creative commons attribution",
+        ))
+    ) and not explicit_restriction
+    # Explicit restrictive terms override an inconsistent upstream is_open flag.
+    open_rights_verified = (
+        license_info.get("is_open") is True or explicit_open_rights
+    ) and not explicit_restriction
+    closed_license = explicit_restriction or (
+        license_info.get("is_open") is False and not explicit_open_rights
+    )
+    public_search_allowed = (
+        catalog_policy_approved
+        and rights_metadata_present
+        and open_rights_verified
+        and not private_dataset
+        and not closed_license
+    )
+    rights_status = (
+        "private_dataset" if private_dataset
+        else "closed_license" if closed_license
+        else "license_metadata_present" if license_present
+        else "dataset_rights_metadata_present" if rights_metadata_present
+        else "review_required"
+    )
+    return {
+        "license": license_info,
+        "rights_metadata_present": rights_metadata_present,
+        "private_dataset": private_dataset,
+        "closed_license": closed_license,
+        "public_search_allowed": public_search_allowed,
+        "rights_status": rights_status,
+    }
+
+
 def _build_subcatalogs(
     source_id: str,
     parent_catalog: dict[str, Any],
@@ -125,9 +199,11 @@ def _build_subcatalogs(
             "source_terms_status": source_policy.get("terms_status", "unreviewed"),
             "source_terms_reviewed_at": source_policy.get("reviewed_at", ""),
             "attribution_required": source_policy.get("attribution_required", "per_dataset"),
-            "metadata_only": True,
-            "record_level_clearance": "not_reviewed",
-            "public_search_allowed": False,
+            # Subcatalogs are derived only from dataset rows that passed the
+            # same per-record rights check used by the public index builder.
+            "metadata_only": False,
+            "record_level_clearance": "eligible_per_record",
+            "public_search_allowed": True,
         })
         subcatalogs.append(subcatalog)
         for dataset_key in member_keys:
@@ -197,9 +273,17 @@ def adapt(manifest: dict[str, Any]) -> dict[str, Any]:
         )
         catalog["public_search_allowed"] = catalog_policy_approved
         catalogs.append(catalog)
+        dataset_rights = {
+            id(dataset): _dataset_rights(dataset, catalog_policy_approved)
+            for dataset in datasets
+        }
+        public_datasets = [
+            dataset for dataset in datasets
+            if dataset_rights[id(dataset)]["public_search_allowed"]
+        ]
         subcatalogs, subcatalog_memberships = (
             _build_subcatalogs(
-                source_id, catalog, datasets, source_policy, manifest.get("updated_at") or ""
+                source_id, catalog, public_datasets, source_policy, manifest.get("updated_at") or ""
             )
             if catalog_policy_approved else ([], {})
         )
@@ -210,63 +294,9 @@ def adapt(manifest: dict[str, Any]) -> dict[str, Any]:
                 continue
             if not landing.startswith("https://"):
                 raise ValueError("dataset landing URLs must use HTTPS")
-            license_info = dataset.get("license") or {}
-            if not isinstance(license_info, dict):
-                license_info = {}
-            license_present = bool(license_info.get("url") or license_info.get("id"))
-            resource_rights_present = any(
-                isinstance(resource, dict) and bool(str(resource.get("rights") or "").strip())
-                for resource in (dataset.get("resources") or [])
-            )
-            rights_metadata_present = bool(
-                license_present
-                or license_info.get("rights")
-                or license_info.get("is_open") is not None
-                or resource_rights_present
-            )
-            private_dataset = license_info.get("private") is True
-            rights_values = [
-                license_info.get("rights"), license_info.get("title"),
-                license_info.get("id"), license_info.get("url"),
-            ]
-            rights_values.extend(
-                resource.get("rights")
-                for resource in (dataset.get("resources") or [])
-                if isinstance(resource, dict)
-            )
-            rights_text = " ".join(str(value or "").casefold() for value in rights_values)
-            normalized_rights_text = rights_text.replace("-", " ").replace("_", " ")
-            explicit_restriction = any(marker in normalized_rights_text for marker in (
-                "noncommercial", "non commercial", "no derivatives",
-                "cc by nc", "cc by nd", "cc by sa nc",
-                "all rights reserved", "no redistribution", "not for redistribution",
-            ))
-            explicit_open_rights = (
-                any(marker in rights_text for marker in (
-                    "open use", "public domain", "cc0", "cc-by",
-                    "creative commons attribution",
-                ))
-                or any(marker in normalized_rights_text for marker in (
-                    "open government licence", "open government license", "cc by",
-                    "creative commons attribution",
-                ))
-            ) and not explicit_restriction
-            # An explicit restrictive term must override an inconsistent upstream
-            # is_open flag. Fail closed rather than treating a bad source flag as
-            # permission to index noncommercial, no-derivatives, or reserved-rights data.
-            open_rights_verified = (
-                license_info.get("is_open") is True or explicit_open_rights
-            ) and not explicit_restriction
-            closed_license = explicit_restriction or (
-                license_info.get("is_open") is False and not explicit_open_rights
-            )
-            public_search_allowed = (
-                catalog_policy_approved
-                and rights_metadata_present
-                and open_rights_verified
-                and not private_dataset
-                and not closed_license
-            )
+            rights = dataset_rights[id(dataset)]
+            license_info = rights["license"]
+            public_search_allowed = rights["public_search_allowed"]
             attributes = dataset.get("attributes") or {
                 "organization": dataset.get("organization") or "",
                 "tags": dataset.get("tags") or [],
@@ -283,13 +313,7 @@ def adapt(manifest: dict[str, Any]) -> dict[str, Any]:
                 "source_terms_status": source_terms_status,
                 "source_terms_reviewed_at": source_terms_reviewed_at,
                 "attribution_required": dataset.get("attribution_required", catalog.get("attribution_required")),
-                "rights_status": (
-                    "private_dataset" if private_dataset
-                    else "closed_license" if closed_license
-                    else "license_metadata_present" if license_present
-                    else "dataset_rights_metadata_present" if rights_metadata_present
-                    else "review_required"
-                ),
+                "rights_status": rights["rights_status"],
                 "public_search_allowed": public_search_allowed,
             })
             raw = {
@@ -437,6 +461,15 @@ def build_public_catalog_indexes(result):
         if catalog_id in catalog_by_id:
             raise ValueError(f"duplicate catalog_id in registry: {catalog_id}")
         catalog_by_id[catalog_id] = catalog
+
+    for catalog in catalog_by_id.values():
+        if catalog.get("catalog_level") != "subcatalog" or catalog.get("public_search_allowed") is not True:
+            continue
+        parent = catalog_by_id.get(catalog.get("parent_catalog_id") or "")
+        if not parent or parent.get("public_search_allowed") is not True:
+            raise ValueError("public subcatalog must inherit an approved parent catalog")
+        if catalog.get("metadata_only") is not False or catalog.get("record_level_clearance") != "eligible_per_record":
+            raise ValueError("public subcatalog must have per-record eligibility clearance")
 
     staged_record_ids = set()
     eligible_record_ids = set()
