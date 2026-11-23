@@ -7,6 +7,7 @@ import unittest
 from pathlib import Path
 
 from catalog_page_analysis import (
+import catalog_page_analysis as analysis_module
     ANALYZER_VERSION, analyze_pages, analyze_pages_incremental, build_search_index,
     search_catalog_network, search_source_page_evidence, write_outputs, validate_outputs, stable_id,
     apply_source_policy_reviews, _reconcile_page_record_provenance,
@@ -1739,6 +1740,55 @@ class CatalogInventoryTriggerTests(unittest.TestCase):
             for item in vegas_hits
         ))
 
+
+    def test_incremental_global_subjects_preserve_shared_entities_and_page_records(self):
+        pages = [
+            {"url": "https://one.example/nasa/one", "title": "NASA NASA Apollo Alpha", "description": "Spaceflight history", "fetched_at": 100, "robots_allowed": True},
+            {"url": "https://two.example/nasa/two", "title": "NASA Hubble Beta", "description": "Space telescope", "fetched_at": 200, "robots_allowed": True},
+            {"url": "https://three.example/nasa/three", "title": "NASA Mars Gamma", "description": "Planetary exploration", "fetched_at": 300, "robots_allowed": True},
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            result = analyze_pages_incremental(
+                pages,
+                source_total=len(pages),
+                cache_dir=Path(tmp) / "cache",
+            )
+
+        metrics = result["metrics"]
+        self.assertEqual(metrics["global_subject_catalogs"], 1)
+        self.assertEqual(metrics["subject_page_records"], 3)
+        self.assertEqual(metrics["unique_subject_entities"], 1)
+        nasa_records = [
+            item for item in result["records"]
+            if item.get("canonical_subject_key") == "subject|nasa"
+        ]
+        self.assertEqual(len(nasa_records), 3)
+        self.assertEqual(len({item["record_id"] for item in nasa_records}), 3)
+        self.assertEqual(len({item["entity_id"] for item in nasa_records}), 1)
+        nasa_catalog = next(item for item in result["catalogs"] if item.get("subject") == "nasa")
+        self.assertEqual(nasa_catalog["record_count"], 3)
+        self.assertEqual(nasa_catalog["source_page_count"], 3)
+
+    def test_cache_only_builds_host_checkpoints_without_global_record_merges(self):
+        pages = [
+            {"url": "https://one.example/nasa/one", "title": "NASA Apollo Alpha", "description": "Spaceflight history", "fetched_at": 100, "robots_allowed": True},
+            {"url": "https://two.example/nasa/two", "title": "NASA Hubble Beta", "description": "Space telescope", "fetched_at": 200, "robots_allowed": True},
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.object(
+                analysis_module,
+                "_merge_cross_host_record_into",
+                side_effect=AssertionError("cache-only mode must not build the global record map"),
+            ):
+                result = analyze_pages_incremental(
+                    pages,
+                    source_total=len(pages),
+                    cache_dir=Path(tmp) / "cache",
+                    cache_only=True,
+                )
+        self.assertTrue(result["cache_only"])
+        self.assertEqual(result["cache_rebuilt_hosts"], 2)
+        self.assertEqual(result["unique_pages"], 2)
 
     def test_global_subject_metrics_separate_page_records_from_entities(self):
         pages = [
