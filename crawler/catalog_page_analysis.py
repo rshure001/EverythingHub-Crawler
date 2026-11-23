@@ -2915,6 +2915,10 @@ def build_search_index(analysis: dict) -> dict[str, dict]:
 def write_outputs(analysis: dict, output_dir: Path) -> dict:
     apply_source_policy_reviews(analysis)
     output_dir.mkdir(parents=True, exist_ok=True)
+    for obsolete_name in ("page-catalogs.json.gz", "record-catalogs.json.gz"):
+        obsolete_path = output_dir / obsolete_name
+        if obsolete_path.is_file():
+            obsolete_path.unlink()
     files = []
     for catalog in analysis["catalogs"]:
         index_digest = hashlib.sha256(catalog["catalog_id"].encode("utf-8")).hexdigest()
