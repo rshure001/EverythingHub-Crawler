@@ -2240,5 +2240,56 @@ class AdditionalSourcePolicyReviewTests(unittest.TestCase):
             self.assertEqual(record["source_terms_status"], "not_reviewed")
             self.assertFalse(record["commercial_eligible"])
 
+    def test_every_record_gets_its_own_virtual_related_catalog(self):
+        pages = [
+            {
+                "url": "https://www.rolex.com/watches/submariner",
+                "title": "Submariner",
+                "description": "Rolex watch model",
+                "text": "Discover the Rolex Submariner watch collection and its features.",
+                "lane": "shopping", "robots_allowed": True,
+            },
+            {
+                "url": "https://www.rolex.com/watches/day-date",
+                "title": "Day-Date",
+                "description": "Rolex watch model",
+                "text": "Explore the Rolex Day-Date watch and its details.",
+                "lane": "shopping", "robots_allowed": True,
+            },
+        ]
+        result = analyze_pages(pages, source_total=2)
+        records = {item["record_id"]: item for item in result["records"]}
+        record_catalogs = {item["owner_record_id"]: item for item in result["record_catalogs"]}
+        self.assertEqual(set(record_catalogs), set(records))
+        self.assertEqual(result["metrics"]["record_catalogs"], len(records))
+        self.assertEqual(result["metrics"]["record_pages_with_catalogs"], len(records))
+        for record_id, record in records.items():
+            catalog = record_catalogs[record_id]
+            self.assertEqual(record["record_catalog_id"], stable_id("record-catalog", record_id))
+            self.assertEqual(catalog["record_catalog_id"], record["record_catalog_id"])
+            self.assertEqual(catalog["shared_catalog_ids"], sorted(set(record["catalog_ids"])))
+            self.assertTrue(catalog["exclude_owner_record"])
+            self.assertEqual(catalog["deduplicate_by"], "record_id")
+        for page in result["pages"]:
+            expected = sorted(records[x]["record_catalog_id"] for x in page["record_ids"])
+            self.assertEqual(page["record_catalog_ids"], expected)
+
+    def test_record_catalog_snapshot_is_persisted_and_validated(self):
+        pages = [
+            {"url": "https://shop.example/products/a", "title": "Product A",
+             "text": "Product details and specifications.", "lane": "shopping"},
+            {"url": "https://shop.example/products/b", "title": "Product B",
+             "text": "Product details and specifications.", "lane": "shopping"},
+        ]
+        result = analyze_pages(pages, source_total=2)
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp)
+            manifest = write_outputs(result, output)
+            self.assertIn("record-catalogs.json.gz", {item["file"] for item in manifest["files"]})
+            payload = json.loads(gzip.decompress((output / "record-catalogs.json.gz").read_bytes()))
+            self.assertEqual(len(payload["record_catalogs"]), len(result["records"]))
+            validated = validate_outputs(output)
+            self.assertEqual(validated["records_validated"], len(result["records"]))
+
 if __name__ == "__main__":
     unittest.main()
