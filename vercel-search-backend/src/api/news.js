@@ -26,6 +26,7 @@ const NEWS_FEEDS = {
   "for-you": [
     { source: "The White House", url: "https://www.whitehouse.gov/releases/feed/" },
     { source: "NASA News Releases", url: "https://www.nasa.gov/news-release/feed/", headlinesOnly: true },
+    { source: "NASA Recently Published", url: "https://www.nasa.gov/feed/", headlinesOnly: true },
     { source: "NOAA", url: "https://www.noaa.gov/rss.xml" },
     { source: "Federal Reserve", url: "https://www.federalreserve.gov/feeds/press_all.xml" }
   ],
@@ -36,7 +37,8 @@ const NEWS_FEEDS = {
   ],
   technology: [
     { source: "NIST", url: "https://www.nist.gov/news-events/news/rss.xml" },
-    { source: "NASA News Releases", url: "https://www.nasa.gov/news-release/feed/", headlinesOnly: true }
+    { source: "NASA News Releases", url: "https://www.nasa.gov/news-release/feed/", headlinesOnly: true },
+    { source: "NASA Recently Published", url: "https://www.nasa.gov/feed/", headlinesOnly: true }
   ],
   business: [
     { source: "Federal Reserve", url: "https://www.federalreserve.gov/feeds/press_all.xml" },
@@ -44,6 +46,7 @@ const NEWS_FEEDS = {
   ],
   science: [
     { source: "NASA News Releases", url: "https://www.nasa.gov/news-release/feed/", headlinesOnly: true },
+    { source: "NASA Recently Published", url: "https://www.nasa.gov/feed/", headlinesOnly: true },
     { source: "NOAA", url: "https://www.noaa.gov/rss.xml" },
     { source: "National Science Foundation", url: "https://www.nsf.gov/rss/rss_www_news.xml" }
   ]
