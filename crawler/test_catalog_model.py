@@ -49,11 +49,12 @@ class UniversalCatalogModelTests(unittest.TestCase):
         )
         self.assertEqual(metrics, {
             "catalogs_discovered": 1, "root_catalogs_discovered": 1,
-            "subcatalogs_discovered": 0,
-            "catalog_records": 2, "record_catalog_memberships": 0,
-            "unique_entities": 1, "source_page_references": 2,
-            "source_page_associations": 3, "source_pages_fetched": 0,
-            "indexed_records": 1,
+            "subcatalogs_discovered": 0, "catalogs_with_records": 0,
+            "catalogs_without_records": 1, "catalog_records": 2,
+            "record_catalog_memberships": 0, "unique_entities": 1,
+            "source_page_references": 2, "source_page_associations": 3,
+            "source_pages_fetched": 0, "indexed_records": 1,
+            "records_published": 0,
         })
 
     def test_query_finds_brand_and_geographic_catalogs(self):
