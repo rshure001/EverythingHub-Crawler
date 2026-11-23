@@ -236,6 +236,11 @@ def adapt(manifest: dict[str, Any]) -> dict[str, Any]:
             )
             rights_text = " ".join(str(value or "").casefold() for value in rights_values)
             normalized_rights_text = rights_text.replace("-", " ").replace("_", " ")
+            explicit_restriction = any(marker in normalized_rights_text for marker in (
+                "noncommercial", "non commercial", "no derivatives",
+                "cc by nc", "cc by nd", "cc by sa nc",
+                "all rights reserved", "no redistribution", "not for redistribution",
+            ))
             explicit_open_rights = (
                 any(marker in rights_text for marker in (
                     "open use", "public domain", "cc0", "cc-by",
@@ -245,12 +250,16 @@ def adapt(manifest: dict[str, Any]) -> dict[str, Any]:
                     "open government licence", "open government license", "cc by",
                     "creative commons attribution",
                 ))
-            ) and not any(marker in normalized_rights_text for marker in (
-                "noncommercial", "non commercial", "no derivatives",
-                "cc by nc", "cc by nd", "cc by sa nc",
-            ))
-            open_rights_verified = license_info.get("is_open") is True or explicit_open_rights
-            closed_license = license_info.get("is_open") is False and not explicit_open_rights
+            ) and not explicit_restriction
+            # An explicit restrictive term must override an inconsistent upstream
+            # is_open flag. Fail closed rather than treating a bad source flag as
+            # permission to index noncommercial, no-derivatives, or reserved-rights data.
+            open_rights_verified = (
+                license_info.get("is_open") is True or explicit_open_rights
+            ) and not explicit_restriction
+            closed_license = explicit_restriction or (
+                license_info.get("is_open") is False and not explicit_open_rights
+            )
             public_search_allowed = (
                 catalog_policy_approved
                 and rights_metadata_present
