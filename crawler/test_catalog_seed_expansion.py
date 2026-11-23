@@ -139,6 +139,29 @@ class CatalogSeedExpansionTests(unittest.TestCase):
             self.assertEqual(state_path.read_bytes(), previous_state)
             request.assert_not_called()
 
+    def test_same_page_count_with_changed_index_hash_is_not_append_only(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            queue_path = root / "queue.json"
+            state_path = root / "state.json.gz"
+            index_path = root / "manifest.json"
+            self._write_payload(index_path, {"total_pages": 5, "updated_at": 1795429785})
+            queue = {
+                "status": "source_review_backlog_not_a_fetch_queue",
+                "source_index_pages": 5,
+                "source_index_updated_at": "2026-11-23T10:20:00Z",
+                "source_index_sha256": "0" * 64,
+                "candidate_urls": [self._queue_row(0)],
+            }
+            self._write_payload(queue_path, queue)
+            with patch.object(expansion, "request_source_bytes") as request:
+                result = expansion.run_batch(queue_path, state_path, 10, index_path)
+            self.assertEqual(result["status"], "waiting_for_fresh_source_review_queue")
+            self.assertFalse(result["queue_snapshot_compatible_with_current_index"])
+            self.assertEqual(result["eligible_catalog_landing_pages"], 0)
+            self.assertFalse(state_path.exists())
+            request.assert_not_called()
+
     def test_recent_append_only_queue_remains_compatible_after_crawler_adds_pages(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
