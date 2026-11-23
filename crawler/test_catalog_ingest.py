@@ -601,6 +601,9 @@ class UniversalCatalogIngestTests(unittest.TestCase):
         self.assertEqual(manifest["eligible_records_without_public_index"], 0)
         self.assertEqual(manifest["records_published"], 0)
         self.assertFalse(manifest["production_indexed"])
+        self.assertEqual(manifest["record_search_schema_version"], 1)
+        self.assertEqual(manifest["unique_root_record_search_documents"], 2)
+        self.assertEqual(manifest["root_record_search_document_occurrences"], 2)
         self.assertEqual(result["metrics"]["catalog_indexes_built"], len(result["catalogs"]))
         self.assertEqual(result["metrics"]["unique_public_records_indexed"], 2)
         self.assertEqual(result["metrics"]["public_record_catalog_memberships"], 4)
@@ -628,6 +631,24 @@ class UniversalCatalogIngestTests(unittest.TestCase):
         self.assertEqual(rows[root["catalog_id"]]["record_ids"], public_ids)
         subcatalog = subcatalogs[0]
         self.assertEqual(rows[subcatalog["catalog_id"]]["record_ids"], public_ids)
+        root_documents = rows[root["catalog_id"]]["record_search_documents"]
+        self.assertEqual({document["record_id"] for document in root_documents}, set(public_ids))
+        self.assertEqual(len(root_documents), 2)
+        self.assertEqual(rows[root["catalog_id"]]["record_search_document_count"], 2)
+        self.assertEqual(rows[subcatalog["catalog_id"]]["record_search_documents"], [])
+        self.assertEqual(rows[subcatalog["catalog_id"]]["record_search_document_count"], 0)
+        for document in root_documents:
+            self.assertTrue(document["public_search_allowed"])
+            self.assertTrue(document["source_url"].startswith("https://"))
+            self.assertIn(document["source_url"], document["source_urls"])
+            self.assertIn(root["catalog_id"], document["catalog_ids"])
+            self.assertTrue(document["search_text"])
+            self.assertNotIn("description", document)
+            self.assertNotIn("attributes", document)
+            self.assertNotIn("resources", document)
+            self.assertNotIn(document["record_id"], {
+                private_record["record_id"], closed_record["record_id"], unknown_record["record_id"]
+            })
         self.assertEqual(subcatalog["record_count"], 2)
         self.assertEqual(subcatalog["record_level_clearance"], "eligible_per_record")
         self.assertFalse(subcatalog["metadata_only"])
@@ -654,6 +675,10 @@ class UniversalCatalogIngestTests(unittest.TestCase):
             self.assertEqual(catalog["public_index_shard"], entry["file"])
             self.assertEqual(catalog["public_index_sha256"], entry["index_sha256"])
             self.assertEqual(catalog["public_record_count"], entry["record_count"])
+            self.assertEqual(entry["title"], catalog["title"])
+            self.assertEqual(entry["source_url"], catalog["source_url"])
+            self.assertEqual(entry["public_search_allowed"], catalog["public_search_allowed"])
+            self.assertEqual(entry["record_search_document_count"], len(row["record_search_documents"]))
 
         second_manifest, second_shards = build_public_catalog_indexes(result)
         self.assertEqual(manifest, second_manifest)

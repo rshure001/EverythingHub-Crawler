@@ -128,6 +128,8 @@ jobs:
           index_rows = {}
           indexed_record_ids = set()
           public_memberships = 0
+          root_record_search_documents = {}
+          root_record_search_document_occurrences = 0
           for shard in index_manifest["shards"]:
               shard_path = index_root / shard["file"]
               compressed = shard_path.read_bytes()
@@ -138,6 +140,7 @@ jobs:
               assert payload["shard_id"] == shard["shard_id"]
               assert len(payload["catalog_indexes"]) == shard["catalog_count"]
               shard_memberships = 0
+              shard_search_document_occurrences = 0
               for row in payload["catalog_indexes"]:
                   catalog_id = row["catalog_id"]
                   assert catalog_id in catalog_by_id and catalog_id not in index_rows
@@ -152,6 +155,35 @@ jobs:
                   assert entry["index_sha256"] == catalog["public_index_sha256"]
                   assert entry["record_count"] == catalog["public_record_count"]
                   assert row["public_search_allowed"] == (catalog.get("public_search_allowed") is True)
+                  documents = row.get("record_search_documents")
+                  assert isinstance(documents, list)
+                  assert row.get("record_search_document_count") == len(documents)
+                  is_public_root = catalog.get("catalog_level") == "root" and catalog.get("public_search_allowed") is True
+                  if is_public_root:
+                      assert len(documents) == len(record_ids)
+                  else:
+                      assert documents == []
+                  for document in documents:
+                      assert isinstance(document, dict)
+                      record_id = document.get("record_id")
+                      assert record_id in record_ids and record_id in record_by_id
+                      assert document.get("public_search_allowed") is True
+                      assert isinstance(document.get("title"), str) and document["title"].strip()
+                      assert isinstance(document.get("record_type"), str) and document["record_type"].strip()
+                      assert isinstance(document.get("source_url"), str) and document["source_url"].startswith("https://")
+                      assert isinstance(document.get("source_urls"), list) and document["source_urls"]
+                      assert all(isinstance(url, str) and url.startswith("https://") for url in document["source_urls"])
+                      document_catalog_ids = document.get("catalog_ids")
+                      assert isinstance(document_catalog_ids, list) and catalog_id in document_catalog_ids
+                      assert all(value in catalog_by_id and catalog_by_id[value].get("public_search_allowed") is True for value in document_catalog_ids)
+                      assert document.get("search_text")
+                      prior_document = root_record_search_documents.get(record_id)
+                      if prior_document is not None:
+                          assert prior_document == document
+                      else:
+                          root_record_search_documents[record_id] = document
+                      root_record_search_document_occurrences += 1
+                      shard_search_document_occurrences += 1
                   for record_id in record_ids:
                       record = record_by_id[record_id]
                       assert (record.get("attributes") or {}).get("public_search_allowed") is True
@@ -161,6 +193,7 @@ jobs:
                   indexed_record_ids.update(record_ids)
                   shard_memberships += len(record_ids)
               assert shard_memberships == shard["public_record_memberships"]
+              assert shard_search_document_occurrences == shard.get("record_search_document_occurrences")
               public_memberships += shard_memberships
           assert set(index_rows) == set(catalog_by_id)
           public_record_ids = {
@@ -168,6 +201,16 @@ jobs:
               if (record.get("attributes") or {}).get("public_search_allowed") is True
           }
           assert indexed_record_ids == public_record_ids
+          assert set(root_record_search_documents) == public_record_ids
+          assert index_manifest["record_search_schema_version"] == 1
+          assert index_manifest["unique_root_record_search_documents"] == len(root_record_search_documents)
+          assert index_manifest["root_record_search_document_occurrences"] == root_record_search_document_occurrences
+          for catalog_id, entry in manifest_rows.items():
+              catalog = catalog_by_id[catalog_id]
+              assert entry["title"] == catalog.get("title")
+              assert entry["source_url"] == catalog.get("source_url")
+              assert entry["public_search_allowed"] == (catalog.get("public_search_allowed") is True)
+              assert entry["record_search_document_count"] == index_rows[catalog_id]["record_search_document_count"]
           assert index_manifest["catalog_count"] == len(catalog_by_id)
           assert index_manifest["index_shard_count"] == len(index_manifest["shards"])
           assert index_manifest["unique_public_records"] == len(indexed_record_ids)
@@ -186,6 +229,8 @@ jobs:
               "subcatalogs": records["metrics"]["subcatalogs_discovered"],
               "catalog_index_shards": len(index_manifest["shards"]),
               "unique_public_records_indexed": len(indexed_record_ids),
+              "unique_root_record_search_documents": len(root_record_search_documents),
+              "root_record_search_document_occurrences": root_record_search_document_occurrences,
               "public_record_memberships": public_memberships,
               "restricted_records_excluded_from_public_indexes": index_manifest["restricted_records_not_indexed"],
               "restricted_source_catalogs_excluded": records["metrics"]["restricted_source_catalogs_excluded"],
