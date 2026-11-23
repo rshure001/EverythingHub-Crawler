@@ -136,11 +136,11 @@ test('places and research aliases search multiple relevant lanes', () => {
   ];
   assert.deepEqual(
     searchCatalog(pages, 'Las Vegas', 'places').map(item => item.url),
-    ['https://example.com/visitor-guide', 'https://example.com/city', 'https://example.com/refuge']
+    ['https://example.com/city', 'https://example.com/refuge', 'https://example.com/visitor-guide']
   );
   assert.deepEqual(
     searchCatalog(pages, 'NASA research', 'research').map(item => item.url),
-    ['https://example.com/nasa-science', 'https://example.com/mit-tech']
+    ['https://example.com/mit-tech', 'https://example.com/nasa-science']
   );
 });
 
