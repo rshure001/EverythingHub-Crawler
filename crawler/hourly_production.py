@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Measure unique catalog growth from canonical manifest deltas."""
+"""Measure unique page growth from canonical manifest deltas."""
 from __future__ import annotations
 
 import json
@@ -15,7 +15,7 @@ MANIFEST_PATH = ROOT / "public-search" / "manifest.json"
 HISTORY_PATH = ROOT / "data" / "hourly-production.json"
 RETENTION = timedelta(hours=24)
 WINDOW = timedelta(hours=1)
-TARGET_RECORDS_PER_HOUR = 60000
+TARGET_PAGES_PER_HOUR = 60000
 
 
 def parse_time(value: str) -> datetime:
@@ -51,6 +51,7 @@ def measure_manifest_delta(before: dict | None, after: dict | None,
     """
     result = {
         "valid": False,
+        "metric_kind": "pages",
         "reason": "manifest_baseline_unavailable",
         "before_pages": None,
         "after_pages": None,
@@ -58,11 +59,11 @@ def measure_manifest_delta(before: dict | None, after: dict | None,
         "after_updated_at": None,
         "elapsed_seconds": None,
         "run_duration_seconds": None,
-        "new_unique_records": None,
-        "records_per_minute": None,
-        "records_per_hour": None,
-        "wall_clock_records_per_minute": None,
-        "wall_clock_records_per_hour": None,
+        "new_unique_pages": None,
+        "pages_per_minute": None,
+        "pages_per_hour": None,
+        "wall_clock_pages_per_minute": None,
+        "wall_clock_pages_per_hour": None,
     }
     if before is None or after is None:
         return result
@@ -89,10 +90,11 @@ def measure_manifest_delta(before: dict | None, after: dict | None,
 
     result.update({
         "valid": True,
+        "metric_kind": "pages",
         "reason": None,
-        "new_unique_records": delta,
-        "wall_clock_records_per_minute": round(delta * 60 / elapsed, 2),
-        "wall_clock_records_per_hour": round(delta * 3600 / elapsed, 1),
+        "new_unique_pages": delta,
+        "wall_clock_pages_per_minute": round(delta * 60 / elapsed, 2),
+        "wall_clock_pages_per_hour": round(delta * 3600 / elapsed, 1),
     })
     try:
         duration = float(run_duration_seconds)
@@ -101,12 +103,44 @@ def measure_manifest_delta(before: dict | None, after: dict | None,
     if duration > 0:
         result.update({
             "run_duration_seconds": round(duration, 2),
-            "records_per_minute": round(delta * 60 / duration, 2),
-            "records_per_hour": round(delta * 3600 / duration, 1),
+            "pages_per_minute": round(delta * 60 / duration, 2),
+            "pages_per_hour": round(delta * 3600 / duration, 1),
         })
     else:
         result["rate_reason"] = "crawler_run_duration_unavailable"
     return result
+
+
+
+def normalize_history_row(row: dict) -> dict:
+    """Relabel legacy manifest-delta fields as pages; they never counted records."""
+    normalized = dict(row)
+    if "indexed_pages_processed" not in normalized:
+        normalized["indexed_pages_processed"] = normalized.get(
+            "indexed_records_processed",
+            normalized.get("indexed_records", 0),
+        )
+    normalized.pop("indexed_records_processed", None)
+    normalized.pop("indexed_records", None)
+    normalized["metric_kind"] = "pages"
+
+    interval = normalized.get("manifest_interval")
+    if isinstance(interval, dict):
+        interval = dict(interval)
+        legacy_fields = {
+            "new_unique_pages": "new_unique_records",
+            "pages_per_minute": "records_per_minute",
+            "pages_per_hour": "records_per_hour",
+            "wall_clock_pages_per_minute": "wall_clock_records_per_minute",
+            "wall_clock_pages_per_hour": "wall_clock_records_per_hour",
+        }
+        for current, legacy in legacy_fields.items():
+            if current not in interval and legacy in interval:
+                interval[current] = interval[legacy]
+            interval.pop(legacy, None)
+        interval["metric_kind"] = "pages"
+        normalized["manifest_interval"] = interval
+    return normalized
 
 
 def build_snapshot(index: dict, history: dict | None = None, *, now=None,
@@ -116,11 +150,12 @@ def build_snapshot(index: dict, history: dict | None = None, *, now=None,
     history = history if isinstance(history, dict) else {}
     runs = history.get("runs", [])
     runs = [
-        row for row in runs
+        normalize_history_row(row)
+        for row in runs
         if isinstance(row, dict) and row.get("run_id") != str(run_id)
     ]
 
-    records_processed = max(0, int(index.get("pages_indexed_this_run", 0) or 0))
+    pages_processed = max(0, int(index.get("pages_indexed_this_run", 0) or 0))
     duration = max(0.0, float(index.get("run_duration_seconds", 0) or 0))
     attempts = max(
         0,
@@ -138,7 +173,8 @@ def build_snapshot(index: dict, history: dict | None = None, *, now=None,
         "run_id": str(run_id),
         "run_number": str(run_number),
         "timestamp": timestamp,
-        "indexed_records_processed": records_processed,
+        "indexed_pages_processed": pages_processed,
+        "metric_kind": "pages",
         "fetch_attempts": attempts,
         "duration_seconds": duration,
         "commit_sha": str(commit_sha)[:12],
@@ -163,8 +199,8 @@ def build_snapshot(index: dict, history: dict | None = None, *, now=None,
         if parse_time(row["timestamp"]) >= window_start
     ]
     recent_activity = {
-        "records_processed": sum(
-            max(0, int(row.get("indexed_records_processed", row.get("indexed_records", 0)) or 0))
+        "pages_processed": sum(
+            max(0, int(row.get("indexed_pages_processed", 0) or 0))
             for row in recent
         ),
         "fetch_attempts": sum(
@@ -176,7 +212,8 @@ def build_snapshot(index: dict, history: dict | None = None, *, now=None,
 
     return {
         "updated_at": now.isoformat(),
-        "target_new_records_per_hour": TARGET_RECORDS_PER_HOUR,
+        "metric_kind": "pages",
+        "target_new_pages_per_hour": TARGET_PAGES_PER_HOUR,
         "runs": retained,
         "latest_manifest_interval": interval,
         "recent_run_activity": recent_activity,
@@ -222,23 +259,23 @@ def main():
     activity = snapshot["recent_run_activity"]
     report = ["## Everything Hub — canonical manifest growth"]
     if interval["valid"]:
-        delta = interval["new_unique_records"]
+        delta = interval["new_unique_pages"]
         report.extend([
             "",
             f"- Manifest before: **{interval['before_pages']:,} pages** at {interval['before_updated_at']}",
             f"- Manifest after: **{interval['after_pages']:,} pages** at {interval['after_updated_at']}",
-            f"- Net new unique pages by manifest count: **{delta:+,}**",
+            f"- Net new unique indexed pages by manifest count: **{delta:+,}**",
             f"- Manifest timestamp gap (includes idle time): **{interval['elapsed_seconds']:.0f} seconds**",
             (
                 f"- Active crawler duration: **{interval['run_duration_seconds']:.1f} seconds**; "
-                f"unique-page rate: **{interval['records_per_minute']:.2f}/minute** "
-                f"(**{interval['records_per_hour']:.1f}/hour**)"
-                if interval.get("records_per_minute") is not None
+                f"unique-page rate: **{interval['pages_per_minute']:.2f} pages/minute** "
+                f"(**{interval['pages_per_hour']:.1f}/hour**)"
+                if interval.get("pages_per_minute") is not None
                 else "- Unique-page rate: **not measured** (crawler duration unavailable)"
             ),
             (
-                f"- Gap-inclusive rate: **{interval['wall_clock_records_per_minute']:.2f}/minute**; "
-                f"**{interval['wall_clock_records_per_hour']:.1f}/hour**"
+                f"- Gap-inclusive rate: **{interval['wall_clock_pages_per_minute']:.2f}/minute**; "
+                f"**{interval['wall_clock_pages_per_hour']:.1f}/hour**"
             ),
             f"- Total indexed pages: **{interval['after_pages']:,}**",
         ])
@@ -250,7 +287,7 @@ def main():
         ])
 
     report.extend([
-        f"- Records processed/upserted this run (not unique additions): **{index.get('pages_indexed_this_run', 0):,}**",
+        f"- Pages processed/upserted this run (not unique additions): **{index.get('pages_indexed_this_run', 0):,}**",
         f"- Fetch attempts this run: **{index.get('fetch_attempts_this_run', index.get('pages_crawled_this_run', 0)):,}**",
         f"- Fetch/parse failures: **{index.get('fetch_or_parse_errors_this_run', 0):,}**",
         f"- Robots-blocked URLs: **{index.get('robots_blocked_this_run', 0):,}**",
@@ -260,7 +297,7 @@ def main():
         f"- Frontier backlog: **{index.get('queue_remaining', 0):,}**",
         (
             f"- Recent crawl activity (last hour by run timestamp): "
-            f"{activity['records_processed']:,} processed/upserted records across "
+            f"{activity['pages_processed']:,} processed/upserted pages across "
             f"{activity['run_count']} runs; {activity['fetch_attempts']:,} fetch attempts. "
             "This is not a unique-record count."
         ),
