@@ -42,11 +42,13 @@ class PageAndRecordCatalogIdentityTests(unittest.TestCase):
                 "catalog_ids": [],
             }
         }
-        metrics, page_catalogs = _add_page_catalogs(pages, records)
+        metrics, page_catalogs, record_catalogs = _add_page_catalogs(pages, records)
         self.assertEqual(metrics["page_catalogs"], 1)
         self.assertEqual(records[record_id]["record_catalog_id"], record_catalog_id)
         self.assertEqual(records[record_id]["page_catalog_ids"], [pages[0]["page_catalog_id"]])
         self.assertEqual(page_catalogs[0]["record_ids"], [record_id])
+        self.assertEqual(record_catalogs[0]["catalog_id"], record_catalog_id)
+        self.assertEqual(record_catalogs[0]["record_ids"], [record_id])
         self.assertNotEqual(record_catalog_id, pages[0]["page_catalog_id"])
         self.assertFalse(page_catalogs[0]["public_search_allowed"])
 
@@ -68,7 +70,7 @@ class PageAndRecordCatalogIdentityTests(unittest.TestCase):
                 "catalog_ids": [],
             }
         }
-        metrics, page_catalogs = _add_page_catalogs(pages, records)
+        metrics, page_catalogs, record_catalogs = _add_page_catalogs(pages, records)
         by_id = {item["catalog_id"]: item for item in page_catalogs}
         self.assertEqual(metrics["page_catalogs"], 2)
         self.assertEqual(metrics["page_catalogs_without_records"], 1)
@@ -77,6 +79,8 @@ class PageAndRecordCatalogIdentityTests(unittest.TestCase):
             set(records[record_id]["page_catalog_ids"]),
             {pages[0]["page_catalog_id"], pages[1]["page_catalog_id"]},
         )
+        self.assertEqual(len(record_catalogs), 1)
+        self.assertEqual(record_catalogs[0]["page_catalog_ids"], sorted(records[record_id]["page_catalog_ids"]))
 
 
 if __name__ == "__main__":
