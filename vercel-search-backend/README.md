@@ -125,13 +125,12 @@ GitHub auto-deployment is not configured for this project. The controlled direct
 - Root shard reads are capped at 16 files, 8 MB per shard, 16 MB aggregate compressed, and 128 MB aggregate decoded. The verified network is cached for five minutes with a one-hour last-known-good fallback.
 
 
-## Per-record related catalogs
+## Per-record related records
 
-Every canonical record now receives one stable `record_catalog_id`. The
-`GET /api/record?record_catalog_id=<id>&limit=20&offset=0` endpoint resolves
-its related records from shared catalog indexes, excludes the owner record,
-deduplicates by canonical record ID, and paginates the result. The stored
-record-catalog artifact contains only shared catalog references, not copied
-related-record lists. This keeps the relationship graph compact and avoids
-quadratic snapshot growth. Results remain candidate previews; source rights
-and commercial eligibility are not changed.
+Each individual record has one canonical `record_id`. The
+`GET /api/record?record_id=<id>&limit=20&offset=0` endpoint resolves related
+records only through shared, content-backed catalog memberships. It excludes
+the owner record, deduplicates by canonical record ID, and paginates the
+result. It does not create a one-to-one catalog for a page or an individual
+record. Results remain candidate previews; source rights and commercial
+eligibility are not changed.
