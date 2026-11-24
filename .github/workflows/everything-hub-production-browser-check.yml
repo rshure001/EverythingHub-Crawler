@@ -300,7 +300,7 @@ jobs:
               const tabs = page.locator("section.top-news .discover-filters button");
               const tabLabels = await tabs.allTextContents();
               const checkedTabs = [];
-              for (const label of ["For you", "World", "Technology", "Business", "Science"]) {
+              for (const label of ["For you", "World", "Technology", "Business", "Science", "Videos"]) {
                 const tab = tabs.filter({ hasText: label }).first();
                 if (!(await tab.count())) fail("Top Stories tab " + label + " is missing.");
                 await tab.click();
@@ -345,7 +345,7 @@ jobs:
                 refreshCompleted, refreshedCount
               };
               await shot("top-stories");
-              if (headlineCount < 2 || checkedTabs.length !== 5 ||
+              if (headlineCount < 2 || checkedTabs.length !== 6 ||
                   checkedTabs.some(item => !item.ok) || !report.topStories.refreshRequestObserved ||
                   !report.topStories.refreshCompleted) {
                 fail("Top Stories headlines, category tabs or Refresh did not pass.");
@@ -395,25 +395,56 @@ jobs:
               const mobileLayout = await page.evaluate(() => {
                 const viewportWidth = window.innerWidth;
                 const documentWidth = document.documentElement.scrollWidth;
-                const search = document.querySelector("form.homepage-live-search input#hub-search");
-                const artwork = document.querySelector(".everythinghub-approved-home-art img.approved-master-image");
-                const buttons = Array.from(document.querySelectorAll("nav.hub-hero-divisions button"));
                 const rect = element => {
                   const value = element.getBoundingClientRect();
                   return { left: value.left, right: value.right, top: value.top, bottom: value.bottom, width: value.width, height: value.height };
                 };
+                const visible = element => {
+                  if (!element) return false;
+                  const style = getComputedStyle(element);
+                  const bounds = element.getBoundingClientRect();
+                  return style.display !== "none" && style.visibility !== "hidden" &&
+                    Number(style.opacity || 1) > 0 && bounds.width > 0 && bounds.height > 0;
+                };
+                const searchCandidates = Array.from(document.querySelectorAll("form.homepage-live-search input#hub-search"));
+                const visibleSearches = searchCandidates.filter(visible);
+                const search = visibleSearches[0] || null;
+                const artwork = document.querySelector(".everythinghub-approved-home-art img.approved-master-image");
+                const artContainer = document.querySelector(".everythinghub-approved-home-art");
+                const discovery = document.querySelector(".visual-discovery-home");
+                const buttons = Array.from(document.querySelectorAll("nav.hub-hero-divisions button"));
+                const visibleButtons = buttons.filter(visible);
                 const searchBounds = search ? rect(search) : null;
+                const artBounds = artContainer ? rect(artContainer) : null;
+                const discoveryBounds = discovery ? rect(discovery) : null;
                 const categoryBounds = buttons.map(rect);
-                const controlsOverlap = searchBounds ? categoryBounds.some(value =>
-                  value.left < searchBounds.right && value.right > searchBounds.left &&
-                  value.top < searchBounds.bottom && value.bottom > searchBounds.top &&
-                  value.width > 0 && value.height > 0
-                ) : true;
+                const searchCategoryOverlapPairs = searchBounds ? categoryBounds
+                  .map((bounds, index) => ({ index, bounds }))
+                  .filter(item => item.bounds.width > 0 && item.bounds.height > 0 &&
+                    item.bounds.left < searchBounds.right && item.bounds.right > searchBounds.left &&
+                    item.bounds.top < searchBounds.bottom && item.bounds.bottom > searchBounds.top)
+                  .map(item => item.index) : ["missing-visible-search"];
+                const categoryDiscoveryOverlapIndexes = discoveryBounds ? categoryBounds
+                  .map((bounds, index) => ({ index, bounds }))
+                  .filter(item => item.bounds.width > 0 && item.bounds.height > 0 &&
+                    item.bounds.left < discoveryBounds.right && item.bounds.right > discoveryBounds.left &&
+                    item.bounds.top < discoveryBounds.bottom && item.bounds.bottom > discoveryBounds.top)
+                  .map(item => item.index) : [];
+                const categoryOutsideArtworkIndexes = artBounds ? categoryBounds
+                  .map((bounds, index) => ({ index, bounds }))
+                  .filter(item => item.bounds.width > 0 && item.bounds.height > 0 &&
+                    (item.bounds.top < artBounds.top - 2 || item.bounds.bottom > artBounds.bottom + 2))
+                  .map(item => item.index) : buttons.map((_, index) => index);
+                const controlsOverlap = searchCategoryOverlapPairs.length > 0 ||
+                  categoryDiscoveryOverlapIndexes.length > 0 || categoryOutsideArtworkIndexes.length > 0;
                 return {
                   viewportWidth, documentWidth, horizontalOverflow: documentWidth > viewportWidth + 2,
-                  searchVisible: !!search && search.getBoundingClientRect().width > 0,
+                  searchCandidateCount: searchCandidates.length, visibleSearchCount: visibleSearches.length,
+                  searchVisible: !!search, searchBounds, artBounds, discoveryBounds,
                   artworkLoaded: !!artwork && artwork.complete && artwork.naturalWidth > 0,
-                  categoryCount: buttons.length, categoryBounds, controlsOverlap
+                  categoryCount: buttons.length, visibleCategoryCount: visibleButtons.length,
+                  categoryBounds, searchCategoryOverlapPairs, categoryDiscoveryOverlapIndexes,
+                  categoryOutsideArtworkIndexes, controlsOverlap
                 };
               });
               await page.locator("section.top-news").scrollIntoViewIfNeeded();
@@ -423,13 +454,17 @@ jobs:
                 return bounds.width > 0 && bounds.height > 0 && bounds.top < window.innerHeight && bounds.bottom > 0 &&
                   image.complete && image.naturalWidth === 0;
               }).map(image => image.currentSrc || image.src));
-              report.mobile = { ...mobileLayout, brokenVisibleImages };
+              const mobileFailures = [];
+              if (mobileLayout.horizontalOverflow) mobileFailures.push("horizontal overflow");
+              if (!mobileLayout.searchVisible || mobileLayout.visibleSearchCount !== 1) mobileFailures.push("search input visibility/count");
+              if (!mobileLayout.artworkLoaded) mobileFailures.push("approved artwork not loaded");
+              if (mobileLayout.categoryCount !== 8 || mobileLayout.visibleCategoryCount !== 8) mobileFailures.push("all eight categories are not visible");
+              if (mobileLayout.controlsOverlap) mobileFailures.push("search/category/discovery controls overlap or extend outside the artwork");
+              if (brokenVisibleImages.length) mobileFailures.push("broken visible images");
+              if (mobileLayout.categoryBounds.some(bounds => bounds.width <= 0 || bounds.height <= 0 ||
+                  bounds.left < 0 || bounds.right > mobileLayout.viewportWidth + 2)) mobileFailures.push("category clipping");
+              report.mobile = { ...mobileLayout, brokenVisibleImages, ok: mobileFailures.length === 0, failures: mobileFailures };
               await shot("mobile");
-              if (mobileLayout.horizontalOverflow || !mobileLayout.searchVisible || !mobileLayout.artworkLoaded ||
-                  mobileLayout.categoryCount !== 8 || mobileLayout.controlsOverlap || brokenVisibleImages.length ||
-                  mobileLayout.categoryBounds.some(bounds => bounds.width <= 0 || bounds.left < 0 || bounds.right > mobileLayout.viewportWidth + 2)) {
-                fail("Mobile layout has clipping, horizontal overflow, broken visible images or overlapping controls.");
-              }
 
               await page.setViewportSize({ width: 1440, height: 1000 });
               await goHome();
@@ -465,11 +500,15 @@ jobs:
                 publicPublisherLinks: visibleVideoCards.filter(item => /archive\.org/i.test(item.href)).length,
                 titles: visibleVideoCards.map(item => item.title)
               };
+              report.videos.ok = report.videos.apiStatus === 200 && report.videos.apiCount >= 2 &&
+                report.videos.apiWithThumbnails >= 2 && report.videos.visibleCards >= 2 &&
+                report.videos.visibleThumbnails >= 2 && report.videos.publicPublisherLinks > 0;
               await shot("videos");
-              if (report.videos.apiStatus !== 200 || report.videos.apiCount < 2 ||
-                  report.videos.apiWithThumbnails < 2 || report.videos.visibleCards < 2 ||
-                  report.videos.visibleThumbnails < 2 || !report.videos.publicPublisherLinks) {
+              if (!report.videos.ok) {
                 fail("Videos API may have records, but the live UI did not show at least two loaded public-source video cards with thumbnails.");
+              }
+              if (!report.mobile.ok) {
+                fail("Mobile layout failed: " + report.mobile.failures.join(", "));
               }
 
               const apiResponse = (path, predicate) => report.apiResponses.filter(item => {
@@ -501,7 +540,7 @@ jobs:
                 /uncaught|typeerror|referenceerror|syntaxerror/i.test(message) && !/tradingview/i.test(message)
               );
               report.coreConsoleErrors = coreConsoleErrors;
-              report.passed = report.pageErrors.length === 0 && coreConsoleErrors.length === 0;
+              report.passed = report.pageErrors.length === 0 && coreConsoleErrors.length === 0 && report.mobile?.ok === true && report.videos?.ok === true && report.topStories?.checkedTabs?.length === 6;
               if (!report.passed) fail("Browser errors were found that may break core functions.");
             } catch (error) {
               report.error = error instanceof Error ? error.message : String(error);
