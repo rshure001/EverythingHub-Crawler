@@ -36,12 +36,18 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Serve the checked-in public homepage
         run: |
-          nohup python3 -m http.server 8765 --directory site >/tmp/everything-hub-site.log 2>&1 &
+          python3 -m http.server 8765 --directory site >/tmp/everything-hub-site.log 2>&1 &
+          echo $! >/tmp/everything-hub-site.pid
+          sleep 3
           for attempt in $(seq 1 30); do
-            if curl -fsS http://127.0.0.1:8765/ >/dev/null; then exit 0; fi
+            if curl --connect-timeout 2 --max-time 10 -fsS http://127.0.0.1:8765/ >/dev/null; then
+              echo "Local homepage server ready (PID $(cat /tmp/everything-hub-site.pid))"
+              exit 0
+            fi
             sleep 2
           done
           cat /tmp/everything-hub-site.log
+          ps -ef | grep '[h]ttp.server' || true
           exit 1
       - name: Test desktop, searches, media attribution, news tabs and mobile layout
         env:
