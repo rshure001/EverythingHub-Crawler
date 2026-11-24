@@ -48,7 +48,6 @@ jobs:
             const { chromium } = require("playwright");
             const fs = require("fs");
             const url = process.env.TARGET_URL;
-            const apiBaseUrl = "https://api-v2.appdeploy.ai/app/everythinghub-search-engine-4x25f8";
             const expectedDivisions = ['Web', 'News', 'Images', 'Videos', 'Shopping', 'Places', 'Business', 'Research'];
             const report = {
               url, startedAt: new Date().toISOString(), status: null, branding: null, artwork: null,
@@ -296,28 +295,6 @@ jobs:
                 fail("Top Stories headlines, category tabs or Refresh did not pass.");
               }
 
-              const searchApi = await page.request.get(apiBaseUrl + "/api/search?q=NASA&limit=10&vertical=web", { timeout: 45000 });
-              const imageApi = await page.request.get(apiBaseUrl + "/api/images?q=solar%20panels", { timeout: 45000 });
-              const videoApi = await page.request.get(apiBaseUrl + "/api/videos?q=NASA", { timeout: 45000 });
-              const newsApi = await page.request.get(apiBaseUrl + "/api/search?q=latest%20world%20headlines&limit=10&vertical=news", { timeout: 45000 });
-              const [searchJson, imageJson, videoJson, newsJson] = await Promise.all([
-                searchApi.json(), imageApi.json(), videoApi.json(), newsApi.json()
-              ]);
-              report.publicFeeds = {
-                search: { status: searchApi.status(), count: searchJson.results?.length || 0 },
-                images: { status: imageApi.status(), count: imageJson.results?.length || 0,
-                  attributed: (imageJson.results || []).filter(item => item.attribution || item.creator || item.license).length },
-                videos: { status: videoApi.status(), count: videoJson.results?.length || 0,
-                  withThumbnails: (videoJson.results || []).filter(item => item.thumbnailUrl && item.url).length },
-                news: { status: newsApi.status(), count: newsJson.results?.length || 0 }
-              };
-              if (searchApi.status() !== 200 || !report.publicFeeds.search.count ||
-                  imageApi.status() !== 200 || !report.publicFeeds.images.attributed ||
-                  videoApi.status() !== 200 || !report.publicFeeds.videos.withThumbnails ||
-                  newsApi.status() !== 200 || !report.publicFeeds.news.count) {
-                fail("One or more public search/media/news API checks failed.");
-              }
-
               await goHome();
               await page.locator("button.nav-library").first().click();
               await page.locator(".library-page").waitFor({ state: "visible", timeout: 12000 });
@@ -422,6 +399,31 @@ jobs:
                   !report.videos.visibleThumbnails || !report.videos.publicPublisherLinks) {
                 fail("Videos API may have records, but the live UI did not show loaded public-source video cards with thumbnails.");
               }
+
+              const apiResponse = (path, predicate) => report.apiResponses.filter(item => {
+                const parsed = new URL(item.url);
+                return parsed.pathname.endsWith(path) && item.status === 200 && predicate(parsed);
+              }).slice(-1)[0] || null;
+              const searchResponse = apiResponse("/api/search", parsed =>
+                (parsed.searchParams.get("q") || "").toLowerCase() === "nasa" &&
+                (parsed.searchParams.get("vertical") || "web") === "web");
+              const imageResponse = apiResponse("/api/images", parsed =>
+                (parsed.searchParams.get("q") || "").toLowerCase() === "solar panels");
+              const newsResponse = apiResponse("/api/search", parsed =>
+                parsed.searchParams.get("vertical") === "news");
+              report.publicFeeds = {
+                search: { status: searchResponse?.status || null, count: report.searches.find(item => item.query === "NASA")?.count || 0 },
+                images: { status: imageResponse?.status || null, count: report.images.count, attributed: report.images.attributed },
+                videos: { status: report.videos.apiStatus, count: report.videos.apiCount, withThumbnails: report.videos.apiWithThumbnails },
+                news: { status: newsResponse?.status || null, count: report.topStories.headlineCount }
+              };
+              if (!searchResponse || !report.publicFeeds.search.count ||
+                  !imageResponse || !report.publicFeeds.images.attributed ||
+                  report.publicFeeds.videos.status !== 200 || !report.publicFeeds.videos.withThumbnails ||
+                  !newsResponse || !report.publicFeeds.news.count) {
+                fail("One or more public search/media/news feeds failed their live UI/API checks.");
+              }
+
 
               const coreConsoleErrors = report.consoleErrors.filter(message =>
                 /uncaught|typeerror|referenceerror|syntaxerror/i.test(message) && !/tradingview/i.test(message)
