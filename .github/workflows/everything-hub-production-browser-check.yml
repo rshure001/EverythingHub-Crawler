@@ -128,10 +128,13 @@ jobs:
                 const expression = new RegExp(arg.source, "i");
                 return Array.from(document.querySelectorAll(".eh-result-card")).some(card => expression.test(card.innerText || ""));
               }, { source: pattern }, { timeout: 45000 });
-              const cards = await page.locator(".eh-result-card").evaluateAll(nodes => nodes.slice(0, 8).map(node => node.innerText));
+              const cards = await page.locator(".eh-result-card").evaluateAll(nodes => nodes.slice(0, 8).map(node => ({
+                text: node.innerText,
+                title: node.querySelector(".eh-result-title")?.textContent?.trim() || ""
+              })));
               const count = await page.locator(".eh-result-card").count();
-              const relevant = cards.some(text => new RegExp(pattern, "i").test(text));
-              const result = { query, count, visibleTitles: cards.map(text => text.split("\n")[0]), relevant, ok: count > 0 && relevant };
+              const relevant = cards.some(card => new RegExp(pattern, "i").test(card.text));
+              const result = { query, count, visibleTitles: cards.map(card => card.title), relevant, ok: count > 0 && relevant };
               report.searches.push(result);
               await shot(screenshotName);
               if (!result.ok) fail("Search " + query + " returned no relevant visible results.");
@@ -151,14 +154,20 @@ jobs:
                 return requestUrl.pathname.endsWith(path) && queryMatches &&
                   (!vertical || requestUrl.searchParams.get("vertical") === vertical);
               });
-              const cards = await page.locator(selector).evaluateAll(nodes => nodes.slice(0, 8).map(node => node.innerText));
-              const relevant = cards.some(text => new RegExp(pattern, "i").test(text));
+              const cards = await page.locator(selector).evaluateAll(nodes => nodes.slice(0, 8).map(node => {
+                const titleNode = node.querySelector(".eh-result-title, .place-result-heading h3, h3, h2");
+                return {
+                  text: node.innerText,
+                  title: titleNode?.textContent?.trim() || ""
+                };
+              }));
+              const relevant = cards.some(card => new RegExp(pattern, "i").test(card.text));
               const result = {
                 name, query, expectedEndpoint: path, expectedVertical: vertical,
                 requestUrls: requests.map(item => item.url),
                 matchingRequests: matchingRequests.map(item => item.url),
                 modeMatched: matchingRequests.length > 0,
-                count: cards.length, visibleTitles: cards.map(text => text.split("\n")[0]),
+                count: cards.length, visibleTitles: cards.map(card => card.title),
                 relevant, ok: matchingRequests.length > 0 && cards.length > 0 && relevant
               };
               report.categorySearches.push(result);
