@@ -83,10 +83,10 @@ const EXPECTED_MODES = ["business", "images", "news", "places", "research", "sho
     await artwork.waitFor({ state: "visible", timeout: 20000 });
     await page.waitForFunction(expected => {
       const img = document.querySelector(".approved-master-art");
-      return !!img && img.complete && img.naturalWidth >= 100 && img.currentSrc === expected;
+      return !!img && img.complete && img.naturalWidth >= 100 && img.getAttribute("src") === expected;
     }, APPROVED_ART, { timeout: 30000 });
     report.checks.homepage.approvedArtwork = await artwork.evaluate(img => ({
-      src: img.currentSrc, naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight
+      src: img.getAttribute("src"), currentSrc: img.currentSrc, naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight
     }));
     if (!response?.ok() || !report.checks.homepage.contentType.toLowerCase().startsWith("text/html") ||
         !report.checks.homepage.title.includes("Everything Hub") ||
@@ -117,10 +117,22 @@ const EXPECTED_MODES = ["business", "images", "news", "places", "research", "sho
     const newsTabs = page.locator(".discover-topic");
     const tabCount = await newsTabs.count();
     const tabResults = [];
+    const topicQueries = {
+      world: "latest world news today",
+      technology: "latest technology news artificial intelligence",
+      sports: "latest sports news",
+      entertainment: "latest entertainment news movies music",
+      business: "latest business news economy markets"
+    };
     for (let index = 0; index < tabCount; index++) {
       const tab = newsTabs.nth(index);
       const label = (await tab.textContent() || "").trim();
-      const tabResponse = page.waitForResponse(response => response.url().includes("everything-hub-independent-search"), { timeout: 60000 });
+      const topic = await tab.getAttribute("data-topic");
+      const expectedQuery = topicQueries[topic] || topicQueries.world;
+      const tabResponse = page.waitForResponse(response => {
+        if (!response.url().includes("everything-hub-independent-search")) return false;
+        try { return new URL(response.url()).searchParams.get("q") === expectedQuery; } catch { return false; }
+      }, { timeout: 60000 });
       await tab.click();
       const tabResult = await tabResponse;
       if (!tabResult.ok()) fail("Top Stories tab request failed: " + label + " HTTP " + tabResult.status());
@@ -132,7 +144,12 @@ const EXPECTED_MODES = ["business", "images", "news", "places", "research", "sho
     }
     report.checks.newsTabs = tabResults;
     const refresh = page.locator("#discoverRefresh");
-    const refreshResponse = page.waitForResponse(response => response.url().includes("everything-hub-independent-search"), { timeout: 60000 });
+    const activeTopic = await page.locator(".discover-topic.active").getAttribute("data-topic");
+    const refreshQuery = topicQueries[activeTopic] || topicQueries.world;
+    const refreshResponse = page.waitForResponse(response => {
+      if (!response.url().includes("everything-hub-independent-search")) return false;
+      try { return new URL(response.url()).searchParams.get("q") === refreshQuery; } catch { return false; }
+    }, { timeout: 60000 });
     await refresh.click();
     const refreshResult = await refreshResponse;
     if (!refreshResult.ok()) fail("Top Stories refresh request failed: HTTP " + refreshResult.status());
@@ -187,12 +204,13 @@ const EXPECTED_MODES = ["business", "images", "news", "places", "research", "sho
         artworkVisible: !!art?.getClientRects().length,
         categoryCount: modes.length,
         searchModebarOverlap: !!(searchRect && modesRect && searchRect.bottom > modesRect.top + 2),
-        visibleImages: [...document.querySelectorAll("img")].filter(img => img.getClientRects().length && img.complete && img.naturalWidth > 0).length
+        visibleImages: [...document.querySelectorAll("img")].filter(img => img.getClientRects().length && img.complete && img.naturalWidth > 0).length,
+        brokenVisibleImages: [...document.querySelectorAll("img")].filter(img => img.getClientRects().length && img.complete && img.naturalWidth === 0).length
       };
     });
     if (report.checks.mobile.documentWidth > report.checks.mobile.viewportWidth + 2 ||
         !report.checks.mobile.searchVisible || !report.checks.mobile.artworkVisible ||
-        report.checks.mobile.categoryCount !== 8 || report.checks.mobile.searchModebarOverlap) {
+        report.checks.mobile.categoryCount !== 8 || report.checks.mobile.searchModebarOverlap || report.checks.mobile.brokenVisibleImages > 0) {
       fail("Mobile layout check failed");
     }
     await shot("mobile");
