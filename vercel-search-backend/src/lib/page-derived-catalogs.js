@@ -47,7 +47,14 @@ function validateManifest(m){
   if(files.has(f.file))throw new Error('page_catalog_duplicate_file');
   files.set(f.file,f);
  }
- if(!files.has('registry.json.gz')||!files.has('records.json.gz'))throw new Error('page_catalog_artifacts_missing');
+ if(!files.has('registry.json.gz'))throw new Error('page_catalog_artifacts_missing');
+ const recordShards=Array.from(files.values()).filter(f=>f.file.startsWith('records/')).sort((a,b)=>a.file.localeCompare(b.file));
+ if(files.has('records.json.gz')&&recordShards.length)throw new Error('page_catalog_mixed_record_artifacts');
+ if(!files.has('records.json.gz')&&!recordShards.length)throw new Error('page_catalog_artifacts_missing');
+ if(recordShards.length){
+  if(recordShards.length>512||recordShards.some((f,index)=>!/^records\\/\\d{5}\\.json\\.gz$/.test(f.file)||f.format!=='json'||!Number.isSafeInteger(f.items)||f.items<0))throw new Error('page_catalog_record_shards_invalid');
+  if(recordShards.reduce((sum,f)=>sum+f.items,0)!==m.record_count)throw new Error('page_catalog_record_shard_count_mismatch');
+ }
  return files;
 }
 function decodeArtifact(meta,raw,maxCompressed,maxDecoded,label){
@@ -59,7 +66,22 @@ function decodeArtifact(meta,raw,maxCompressed,maxDecoded,label){
 function validatePageDerivedCatalogs(manifest,registryRaw,recordsRaw){
  const files=validateManifest(manifest);
  const registry=decodeArtifact(files.get('registry.json.gz'),registryRaw,MAX_REGISTRY_GZIP,MAX_REGISTRY_JSON,'page_catalog_registry');
- const payload=decodeArtifact(files.get('records.json.gz'),recordsRaw,MAX_RECORDS_GZIP,MAX_RECORDS_JSON,'page_catalog_records');
+ let payload;
+ if(Buffer.isBuffer(recordsRaw)){
+  payload=decodeArtifact(files.get('records.json.gz'),recordsRaw,MAX_RECORDS_GZIP,MAX_RECORDS_JSON,'page_catalog_records');
+ }else if(Array.isArray(recordsRaw)){
+  const entries=Array.from(files.values()).filter(f=>f.file.startsWith('records/')).sort((a,b)=>a.file.localeCompare(b.file));
+  if(recordsRaw.length!==entries.length)throw new Error('page_catalog_record_shard_set_incomplete');
+  const merged=[];
+  for(let index=0;index<entries.length;index++){
+   const entry=entries[index],part=recordsRaw.find(item=>item&&item.file===entry.file);
+   if(!part||!Buffer.isBuffer(part.raw))throw new Error('page_catalog_record_shard_missing');
+   const shard=decodeArtifact(entry,part.raw,MAX_RECORDS_GZIP,MAX_RECORDS_JSON,'page_catalog_records_shard');
+   if(!shard||shard.version!==1||shard.shard!==index||shard.shard_count!==entries.length||!Array.isArray(shard.records)||shard.records.length!==entry.items)throw new Error('page_catalog_record_shard_schema_invalid');
+   merged.push(...shard.records);
+  }
+  payload={version:1,records:merged};
+ }else throw new Error('page_catalog_records_payload_invalid');
  if(!registry||registry.version!==1||registry.status!=='candidate_staging_not_production'||!Array.isArray(registry.catalogs)||registry.catalogs.length!==manifest.catalog_count)throw new Error('page_catalog_registry_schema_invalid');
  if(!payload||payload.version!==1||!Array.isArray(payload.records)||payload.records.length!==manifest.record_count)throw new Error('page_catalog_records_schema_invalid');
  const policyReview=registry.source_policy_review||manifest.source_policy_review||null;
@@ -105,9 +127,23 @@ async function loadPageDerivedCatalogsFromManifest(manifest,commitSha,manifestRa
  if(!Buffer.isBuffer(manifestRaw))manifestRaw=Buffer.from(manifestRaw||'');
  if(!manifestRaw.length||manifestRaw.length>MAX_MANIFEST)throw new Error('page_catalog_manifest_raw_size_invalid');
  const files=validateManifest(manifest),base=RAW+commitSha+'/data/page-derived-catalogs/';
+ const recordEntries=Array.from(files.values()).filter(f=>f.file.startsWith('records/')).sort((a,b)=>a.file.localeCompare(b.file));
+ const recordsPromise=files.has('records.json.gz')
+  ?fetchBuffer(base+encodeURIComponent('records.json.gz'),MAX_RECORDS_GZIP,9000)
+  :(async()=>{
+    const shards=[];
+    for(let offset=0;offset<recordEntries.length;offset+=8){
+     const batch=await Promise.all(recordEntries.slice(offset,offset+8).map(async entry=>({
+      file:entry.file,
+      raw:await fetchBuffer(base+entry.file.split('/').map(encodeURIComponent).join('/'),MAX_RECORDS_GZIP,9000)
+     })));
+     shards.push(...batch);
+    }
+    return shards;
+   })();
  const [registryRaw,recordsRaw]=await Promise.all([
   fetchBuffer(base+encodeURIComponent('registry.json.gz'),MAX_REGISTRY_GZIP,9000),
-  fetchBuffer(base+encodeURIComponent('records.json.gz'),MAX_RECORDS_GZIP,9000)
+  recordsPromise
  ]);
  return validatePageDerivedCatalogs(manifest,registryRaw,recordsRaw);
 }
