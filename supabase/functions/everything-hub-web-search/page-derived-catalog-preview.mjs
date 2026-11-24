@@ -18,6 +18,8 @@ const MAX_SEARCH_CACHE_ENTRIES = 64;
 const MAX_CATALOG_CACHE_ENTRIES = 64;
 const MAX_SOURCE_PAGES = 250_000;
 const MAX_CATALOGS = 30_000;
+// A catalog snapshot contains one index per catalog, up to 256 search shards, and six shared artifacts.
+const MAX_MANIFEST_FILES = MAX_CATALOGS + 512;
 const MAX_RECORDS = 2_000_000;
 const CACHE_MS = 600_000;
 const STALE_MS = 3_600_000;
@@ -129,7 +131,7 @@ async function decodeGzip(bytes, maxBytes, label) {
   }
 }
 
-function validateManifest(manifest) {
+export function validateManifest(manifest) {
   const analysisVersion = Number(manifest && manifest.analysis_version || 0);
   const legacy = analysisVersion < 10;
   if (!manifest || manifest.version !== 1 || manifest.integrity !== "sha256") {
@@ -150,7 +152,7 @@ function validateManifest(manifest) {
       !Number.isFinite(Date.parse(manifest.source_index_updated_at)) ||
       typeof manifest.source_index_sha256 !== "string" ||
       !/^[a-f0-9]{64}$/i.test(manifest.source_index_sha256) ||
-      !Array.isArray(manifest.files) || manifest.files.length < (legacy ? 2 : 3) || manifest.files.length > 20_000) {
+      !Array.isArray(manifest.files) || manifest.files.length < (legacy ? 2 : 3) || manifest.files.length > MAX_MANIFEST_FILES) {
     throw new Error("page_catalog_manifest_invalid");
   }
   const files = new Map();
