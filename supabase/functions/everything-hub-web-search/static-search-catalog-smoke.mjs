@@ -93,6 +93,8 @@ if (rolex.count < 1 || rolex.results.length < 1) throw new Error("Rolex catalog 
 console.log(JSON.stringify({
   sourcePagesIndexed: pages.length,
   indexShardCount: manifest.shard_count,
+  manifestVersion: manifest.version ?? manifest.schema_version ?? null,
+  manifestUpdatedAt: manifest.updated_at ?? null,
   transport,
   compressedBytes,
   nasaMatches: nasa.count,
