@@ -6,7 +6,8 @@ const QUERY_STOP_TOKENS = new Set([
 
 /** Match the crawler query-index tokenization and stop-word policy. */
 export function tokenizeIndexedQuery(value) {
-  const tokens = String(value ?? "").normalize("NFKC").toLowerCase().match(/[\\p{L}\\p{N}]+/gu) ?? [];
+  const folded = String(value ?? "").normalize("NFKC").toLowerCase().replace(/ß/g, "ss").replace(/ς/g, "σ");
+  const tokens = folded.match(/[\\p{L}\\p{N}]+/gu) ?? [];
   return [...new Set(tokens)].filter((token) => !QUERY_STOP_TOKENS.has(token)).slice(0, 12);
 }
 
