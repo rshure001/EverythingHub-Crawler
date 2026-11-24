@@ -64,6 +64,25 @@ test('loads both artifacts from one commit-pinned GitHub snapshot',async()=>{
  const loaded=await loadPageDerivedCatalogsFromManifest(f.manifest,sha,f.manifestRaw,async url=>{assert.ok(artifacts.has(url));return artifacts.get(url);});
  assert.equal(loaded.catalogCount,3);assert.equal(loaded.records.length,3);
 });
+test('loads bounded global record shards without requiring a monolithic records.json.gz',async()=>{
+ const f=fixture(),sha='f'.repeat(40),all=JSON.parse(zlib.gunzipSync(f.recordsFile).toString('utf8')).records;
+ const shards=[all.slice(0,2),all.slice(2)].map((records,index)=>gzip({version:1,shard:index,shard_count:2,records}));
+ const entries=shards.map((raw,index)=>({file:'records/'+String(index).padStart(5,'0')+'.json.gz',bytes:raw.length,sha256:hash(raw),items:JSON.parse(zlib.gunzipSync(raw).toString('utf8')).records.length,format:'json'}));
+ f.manifest.files=[f.manifest.files.find(x=>x.file==='registry.json.gz'),...entries];
+ f.manifestRaw=Buffer.from(JSON.stringify(f.manifest));
+ const network=validatePageDerivedCatalogs(f.manifest,f.registry,entries.map((entry,index)=>({file:entry.file,raw:shards[index]})));
+ assert.equal(network.recordCount,3);
+ assert.equal(network.records.length,3);
+ assert.equal(network.records[0].record_id,'record-rolex');
+ const base='https://raw.githubusercontent.com/rshure001/EverythingHub-Crawler/'+sha+'/data/page-derived-catalogs/';
+ const artifacts=new Map([[base+'registry.json.gz',f.registry],...entries.map((entry,index)=>[base+entry.file.split('/').map(encodeURIComponent).join('/'),shards[index]])]);
+ const loaded=await loadPageDerivedCatalogsFromManifest(f.manifest,sha,f.manifestRaw,async url=>{
+  assert.ok(artifacts.has(url),'unexpected artifact request '+url);
+  return artifacts.get(url);
+ });
+ assert.equal(loaded.catalogCount,3);
+ assert.equal(loaded.records.length,3);
+});
 test('rejects a tampered registry before search',()=>{
  const f=fixture(),bad=Buffer.from(f.registry);bad[bad.length-1]^=1;
  assert.throws(()=>validatePageDerivedCatalogs(f.manifest,bad,f.recordsFile),/page_catalog_registry_sha256_mismatch|page_catalog_registry_gzip_invalid/);
