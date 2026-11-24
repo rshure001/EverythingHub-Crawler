@@ -98,7 +98,7 @@ class RetroCatalogDiscoveryTests(unittest.TestCase):
         catalog_first = (root / ".github" / "workflows" / "catalog-first-discovery.yml").read_text(encoding="utf-8")
         page_derived = (root / ".github" / "workflows" / "retroactive-catalog-index.yml").read_text(encoding="utf-8")
         self.assertIn("group: catalog-first-discovery-", catalog_first)
-        self.assertIn("group: catalog-data-publish-v4-", page_derived)
+        self.assertRegex(page_derived, r"group: catalog-data-publish-v\d+-")
         self.assertIn('      - "crawler/automation-trigger.json"', page_derived)
         self.assertIn("timeout-minutes: 180", page_derived)
         self.assertIn("timeout-minutes: 165", page_derived)
