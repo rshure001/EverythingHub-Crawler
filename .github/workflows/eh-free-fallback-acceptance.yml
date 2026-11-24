@@ -7,6 +7,7 @@ on:
     workflows:
       - "Retroactive catalog inventory"
       - "Catalog-first discovery"
+      - "Everything Hub browser verification"
     types:
       - completed
     branches:
@@ -18,7 +19,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   browser-acceptance:
-    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' || github.event.workflow_run.name == 'Everything Hub browser verification' }}
     runs-on: ubuntu-latest
     timeout-minutes: 12
     env:
