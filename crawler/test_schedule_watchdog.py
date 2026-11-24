@@ -117,6 +117,23 @@ class ScheduleWatchdogTests(unittest.TestCase):
         self.assertEqual(result["action"], "wait")
         self.assertEqual(result["active_runs"], 1)
 
+    def test_active_seed_expansion_blocks_recovery_marker(self):
+        result = evaluate(
+            [
+                scheduled("2026-11-16T14:00:00Z"),
+                {
+                    "name": "Ten-at-a-time catalog seed expansion",
+                    "status": "in_progress",
+                    "event": "schedule",
+                    "created_at": "2026-11-16T15:59:00Z",
+                },
+            ],
+            now=NOW,
+            manifest_updated_at=manifest_minutes_ago(30),
+        )
+        self.assertEqual(result["action"], "wait")
+        self.assertEqual(result["active_runs"], 1)
+
     def test_catalog_schedule_does_not_mask_stale_crawler_schedule(self):
         result = evaluate(
             [{
@@ -335,6 +352,8 @@ class ScheduleWatchdogTests(unittest.TestCase):
         self.assertIn("crawler/automation-trigger.json", workflow)
         self.assertIn("actions/workflows/retroactive-catalog-index.yml/runs?per_page=100", workflow)
         self.assertIn("actions/workflows/catalog-first-discovery.yml/runs?per_page=100", workflow)
+        self.assertIn("actions/workflows/catalog-seed-expansion.yml/runs?per_page=100", workflow)
+        self.assertIn("Ten-at-a-time catalog seed expansion", workflow)
         self.assertIn("git rebase origin/main", workflow)
         self.assertIn("for attempt in 1 2 3", workflow)
         self.assertIn("git push origin HEAD:refs/heads/main", workflow)

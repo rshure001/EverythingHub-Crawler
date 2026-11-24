@@ -19,6 +19,7 @@ on:
       - "Everything Hub crawler"
       - "Retroactive catalog inventory"
       - "Catalog-first discovery"
+      - "Ten-at-a-time catalog seed expansion"
     types:
       - completed
     branches: [main]
@@ -52,6 +53,7 @@ jobs:
           gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/crawl.yml/runs?event=schedule&per_page=5" > /tmp/crawl-scheduled-runs.json
           gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/retroactive-catalog-index.yml/runs?per_page=100" > /tmp/catalog-runs.json
           gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/catalog-first-discovery.yml/runs?per_page=100" > /tmp/catalog-discovery-runs.json
+          gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/catalog-seed-expansion.yml/runs?per_page=100" > /tmp/catalog-seed-runs.json
           gh api "repos/${GITHUB_REPOSITORY}/contents/public-search/manifest.json" > /tmp/public-manifest-envelope.json
           python - <<'PY'
           import base64
@@ -62,14 +64,16 @@ jobs:
           scheduled_payload = json.loads(Path("/tmp/crawl-scheduled-runs.json").read_text(encoding="utf-8"))
           catalog_payload = json.loads(Path("/tmp/catalog-runs.json").read_text(encoding="utf-8"))
           discovery_payload = json.loads(Path("/tmp/catalog-discovery-runs.json").read_text(encoding="utf-8"))
+          seed_payload = json.loads(Path("/tmp/catalog-seed-runs.json").read_text(encoding="utf-8"))
           runs = payload.get("workflow_runs")
           scheduled = scheduled_payload.get("workflow_runs")
           catalog_runs = catalog_payload.get("workflow_runs")
           discovery_runs = discovery_payload.get("workflow_runs")
-          if not all(isinstance(items, list) for items in (runs, scheduled, catalog_runs, discovery_runs)):
+          seed_runs = seed_payload.get("workflow_runs")
+          if not all(isinstance(items, list) for items in (runs, scheduled, catalog_runs, discovery_runs, seed_runs)):
               raise SystemExit("GitHub did not return crawler and catalog workflow-run arrays")
           known_ids = {row.get("id") for row in runs if isinstance(row, dict)}
-          for extra_runs in (scheduled, catalog_runs, discovery_runs):
+          for extra_runs in (scheduled, catalog_runs, discovery_runs, seed_runs):
               for row in extra_runs:
                   if isinstance(row, dict) and row.get("id") not in known_ids:
                       runs.append(row)
@@ -180,6 +184,7 @@ jobs:
               gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/crawl.yml/runs?per_page=100" > /tmp/crawl-runs-final.json
               gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/retroactive-catalog-index.yml/runs?per_page=100" > /tmp/catalog-runs-final.json
               gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/catalog-first-discovery.yml/runs?per_page=100" > /tmp/catalog-discovery-runs-final.json
+              gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/catalog-seed-expansion.yml/runs?per_page=100" > /tmp/catalog-seed-runs-final.json
               gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/crawl.yml/runs?event=schedule&per_page=5" > /tmp/crawl-scheduled-final.json
               gh api "repos/${GITHUB_REPOSITORY}/contents/public-search/manifest.json" > /tmp/public-manifest-final-envelope.json
               python - <<'PY'
@@ -192,14 +197,17 @@ jobs:
           runs_payload = json.loads(Path("/tmp/crawl-runs-final.json").read_text(encoding="utf-8"))
           catalog_payload = json.loads(Path("/tmp/catalog-runs-final.json").read_text(encoding="utf-8"))
           discovery_payload = json.loads(Path("/tmp/catalog-discovery-runs-final.json").read_text(encoding="utf-8"))
+          seed_payload = json.loads(Path("/tmp/catalog-seed-runs-final.json").read_text(encoding="utf-8"))
           runs = runs_payload.get("workflow_runs")
           catalog_runs = catalog_payload.get("workflow_runs")
           discovery_runs = discovery_payload.get("workflow_runs")
-          if not all(isinstance(items, list) for items in (runs, catalog_runs, discovery_runs)):
+          seed_runs = seed_payload.get("workflow_runs")
+          if not all(isinstance(items, list) for items in (runs, catalog_runs, discovery_runs, seed_runs)):
               raise SystemExit("Final GitHub crawler/catalog run check returned an invalid workflow_runs array")
           runs.extend(catalog_runs)
           runs.extend(discovery_runs)
-          blocking_names = {"Everything Hub crawler", "Retroactive catalog inventory", "Catalog-first discovery"}
+          runs.extend(seed_runs)
+          blocking_names = {"Everything Hub crawler", "Retroactive catalog inventory", "Catalog-first discovery", "Ten-at-a-time catalog seed expansion"}
           active = [
               run for run in runs
               if isinstance(run, dict)
@@ -291,6 +299,7 @@ jobs:
               gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/crawl.yml/runs?per_page=100" > /tmp/crawl-runs-prepush.json
               gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/retroactive-catalog-index.yml/runs?per_page=100" > /tmp/catalog-runs-prepush.json
               gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/catalog-first-discovery.yml/runs?per_page=100" > /tmp/catalog-discovery-runs-prepush.json
+              gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/catalog-seed-expansion.yml/runs?per_page=100" > /tmp/catalog-seed-runs-prepush.json
               gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/crawl.yml/runs?event=schedule&per_page=5" > /tmp/crawl-scheduled-prepush.json
               gh api "repos/${GITHUB_REPOSITORY}/contents/public-search/manifest.json" > /tmp/public-manifest-prepush-envelope.json
               python - <<'PY'
@@ -303,11 +312,13 @@ jobs:
           runs_payload = json.loads(Path("/tmp/crawl-runs-prepush.json").read_text(encoding="utf-8"))
           catalog_payload = json.loads(Path("/tmp/catalog-runs-prepush.json").read_text(encoding="utf-8"))
           discovery_payload = json.loads(Path("/tmp/catalog-discovery-runs-prepush.json").read_text(encoding="utf-8"))
+          seed_payload = json.loads(Path("/tmp/catalog-seed-runs-prepush.json").read_text(encoding="utf-8"))
           runs = runs_payload.get("workflow_runs", [])
           catalog_runs = catalog_payload.get("workflow_runs", [])
           discovery_runs = discovery_payload.get("workflow_runs", [])
-          blocking_names = {"Everything Hub crawler", "Retroactive catalog inventory", "Catalog-first discovery"}
-          all_runs = runs + catalog_runs + discovery_runs
+          seed_runs = seed_payload.get("workflow_runs", [])
+          blocking_names = {"Everything Hub crawler", "Retroactive catalog inventory", "Catalog-first discovery", "Ten-at-a-time catalog seed expansion"}
+          all_runs = runs + catalog_runs + discovery_runs + seed_runs
           if any(
               isinstance(run, dict)
               and run.get("name") in blocking_names
@@ -384,6 +395,7 @@ jobs:
               gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/crawl.yml/runs?per_page=100" > /tmp/crawl-runs-postpush.json
               gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/retroactive-catalog-index.yml/runs?per_page=100" > /tmp/catalog-runs-postpush.json
               gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/catalog-first-discovery.yml/runs?per_page=100" > /tmp/catalog-discovery-runs-postpush.json
+              gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/catalog-seed-expansion.yml/runs?per_page=100" > /tmp/catalog-seed-runs-postpush.json
               recovery_sha="$(git rev-parse HEAD)"
               RECOVERY_SHA="$recovery_sha" python - <<'PY'
           import json
@@ -394,13 +406,16 @@ jobs:
           payload = json.loads(Path("/tmp/crawl-runs-postpush.json").read_text(encoding="utf-8"))
           catalog_payload = json.loads(Path("/tmp/catalog-runs-postpush.json").read_text(encoding="utf-8"))
           discovery_payload = json.loads(Path("/tmp/catalog-discovery-runs-postpush.json").read_text(encoding="utf-8"))
+          seed_payload = json.loads(Path("/tmp/catalog-seed-runs-postpush.json").read_text(encoding="utf-8"))
           runs = payload.get("workflow_runs")
           catalog_runs = catalog_payload.get("workflow_runs")
           discovery_runs = discovery_payload.get("workflow_runs")
-          if not all(isinstance(items, list) for items in (runs, catalog_runs, discovery_runs)):
+          seed_runs = seed_payload.get("workflow_runs")
+          if not all(isinstance(items, list) for items in (runs, catalog_runs, discovery_runs, seed_runs)):
               raise SystemExit("Post-push crawler/catalog run check returned an invalid workflow_runs array")
           runs.extend(catalog_runs)
           runs.extend(discovery_runs)
+          runs.extend(seed_runs)
           decision = recovery_dispatch_decision(runs, os.environ["RECOVERY_SHA"])
           print("Post-push recovery dispatch decision:", json.dumps(decision, sort_keys=True))
           if decision["action"] == "dispatch":

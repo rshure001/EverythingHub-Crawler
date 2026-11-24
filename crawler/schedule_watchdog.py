@@ -17,6 +17,7 @@ BLOCKING_WORKFLOW_NAMES = {
     CRAWLER_WORKFLOW_NAME,
     "Retroactive catalog inventory",
     "Catalog-first discovery",
+    "Ten-at-a-time catalog seed expansion",
 }
 
 
