@@ -40,6 +40,8 @@ class ProductionBrowserWorkflowContractTests(unittest.TestCase):
         self.assertIn("aria-pressed", workflow)
         self.assertIn("Refresh top news", workflow)
         self.assertIn("documentWidth > viewportWidth + 2", workflow)
+        self.assertIn("value.top < searchBounds.bottom", workflow)
+        self.assertIn("value.bottom > searchBounds.top", workflow)
         self.assertIn(
             "github.event_name != 'workflow_run' || "
             "github.event.workflow_run.conclusion == 'success'",
