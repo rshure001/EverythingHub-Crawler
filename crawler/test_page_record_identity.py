@@ -142,9 +142,17 @@ class PageRecordIdentityTests(unittest.TestCase):
             with gzip.open(root / "output" / "page-catalogs.jsonl.gz", "rt", encoding="utf-8") as stream:
                 page_header = json.loads(stream.readline())
                 page_rows = [json.loads(line) for line in stream if line.strip()]
-            with gzip.open(root / "output" / "record-catalogs.jsonl.gz", "rt", encoding="utf-8") as stream:
-                record_header = json.loads(stream.readline())
-                record_rows = [json.loads(line) for line in stream if line.strip()]
+            record_shard_paths = sorted((root / "output" / "record-catalogs").glob("*.jsonl.gz"))
+            record_headers = []
+            record_rows = []
+            for shard_path in record_shard_paths:
+                with gzip.open(shard_path, "rt", encoding="utf-8") as stream:
+                    record_headers.append(json.loads(stream.readline()))
+                    record_rows.extend(json.loads(line) for line in stream if line.strip())
+            self.assertTrue(record_headers)
+            record_header = record_headers[0]
+            self.assertTrue(all(header["kind"] == "record_identity_catalogs" for header in record_headers))
+            self.assertTrue(all(header["items"] == len(analysis["records"]) for header in record_headers))
             registry = json.loads(gzip.decompress((root / "output" / "registry.json.gz").read_bytes()))
         self.assertEqual(page_header["kind"], "page_identity_catalogs")
         self.assertEqual(record_header["kind"], "record_identity_catalogs")
