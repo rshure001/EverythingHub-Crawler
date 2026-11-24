@@ -64,7 +64,7 @@ jobs:
             page.on("request", request => {
               try {
                 const requestUrl = new URL(request.url());
-                if (requestUrl.pathname.startsWith("/api/")) {
+                if (requestUrl.pathname.includes("/api/")) {
                   report.apiRequests.push({ method: request.method(), url: request.url(), postData: request.postData() || null });
                 }
               } catch {}
@@ -72,7 +72,7 @@ jobs:
             page.on("response", response => {
               try {
                 const responseUrl = new URL(response.url());
-                if (responseUrl.pathname.startsWith("/api/")) {
+                if (responseUrl.pathname.includes("/api/")) {
                   report.apiResponses.push({ status: response.status(), url: response.url() });
                 }
               } catch {}
@@ -148,7 +148,7 @@ jobs:
               const matchingRequests = requests.filter(item => {
                 const requestUrl = new URL(item.url);
                 const queryMatches = (requestUrl.searchParams.get("q") || "").toLowerCase().includes(query.toLowerCase());
-                return requestUrl.pathname === path && queryMatches &&
+                return requestUrl.pathname.endsWith(path) && queryMatches &&
                   (!vertical || requestUrl.searchParams.get("vertical") === vertical);
               });
               const cards = await page.locator(selector).evaluateAll(nodes => nodes.slice(0, 8).map(node => node.innerText));
@@ -174,7 +174,7 @@ jobs:
                 intercepted = true;
                 await route.abort();
               });
-              const requestPromise = page.waitForRequest(request => new URL(request.url()).pathname === "/api/ai/answer", { timeout: 20000 });
+              const requestPromise = page.waitForRequest(request => new URL(request.url()).pathname.endsWith("/api/ai/answer"), { timeout: 20000 });
               await input.fill("NASA");
               await input.press("Enter");
               const request = await requestPromise;
@@ -295,28 +295,6 @@ jobs:
                 fail("Top Stories headlines, category tabs or Refresh did not pass.");
               }
 
-              const searchApi = await page.request.get(new URL("/api/search?q=NASA&limit=10&vertical=web", url).toString(), { timeout: 45000 });
-              const imageApi = await page.request.get(new URL("/api/images?q=solar%20panels", url).toString(), { timeout: 45000 });
-              const videoApi = await page.request.get(new URL("/api/videos?q=NASA", url).toString(), { timeout: 45000 });
-              const newsApi = await page.request.get(new URL("/api/search?q=latest%20world%20headlines&limit=10&vertical=news", url).toString(), { timeout: 45000 });
-              const [searchJson, imageJson, videoJson, newsJson] = await Promise.all([
-                searchApi.json(), imageApi.json(), videoApi.json(), newsApi.json()
-              ]);
-              report.publicFeeds = {
-                search: { status: searchApi.status(), count: searchJson.results?.length || 0 },
-                images: { status: imageApi.status(), count: imageJson.results?.length || 0,
-                  attributed: (imageJson.results || []).filter(item => item.attribution || item.creator || item.license).length },
-                videos: { status: videoApi.status(), count: videoJson.results?.length || 0,
-                  withThumbnails: (videoJson.results || []).filter(item => item.thumbnailUrl && item.url).length },
-                news: { status: newsApi.status(), count: newsJson.results?.length || 0 }
-              };
-              if (searchApi.status() !== 200 || !report.publicFeeds.search.count ||
-                  imageApi.status() !== 200 || !report.publicFeeds.images.attributed ||
-                  videoApi.status() !== 200 || !report.publicFeeds.videos.withThumbnails ||
-                  newsApi.status() !== 200 || !report.publicFeeds.news.count) {
-                fail("One or more public search/media/news API checks failed.");
-              }
-
               await goHome();
               await page.locator("button.nav-library").first().click();
               await page.locator(".library-page").waitFor({ state: "visible", timeout: 12000 });
@@ -387,7 +365,7 @@ jobs:
               const videoInput = searchInput();
               const videoResponsePromise = page.waitForResponse(response => {
                 const responseUrl = new URL(response.url());
-                return responseUrl.pathname === "/api/videos" &&
+                return responseUrl.pathname.endsWith("/api/videos") &&
                   (responseUrl.searchParams.get("q") || "").toLowerCase() === "nasa";
               }, { timeout: 45000 });
               await videoInput.fill("NASA");
@@ -421,6 +399,31 @@ jobs:
                   !report.videos.visibleThumbnails || !report.videos.publicPublisherLinks) {
                 fail("Videos API may have records, but the live UI did not show loaded public-source video cards with thumbnails.");
               }
+
+              const apiResponse = (path, predicate) => report.apiResponses.filter(item => {
+                const parsed = new URL(item.url);
+                return parsed.pathname.endsWith(path) && item.status === 200 && predicate(parsed);
+              }).slice(-1)[0] || null;
+              const searchResponse = apiResponse("/api/search", parsed =>
+                (parsed.searchParams.get("q") || "").toLowerCase() === "nasa" &&
+                (parsed.searchParams.get("vertical") || "web") === "web");
+              const imageResponse = apiResponse("/api/images", parsed =>
+                (parsed.searchParams.get("q") || "").toLowerCase() === "solar panels");
+              const newsResponse = apiResponse("/api/search", parsed =>
+                parsed.searchParams.get("vertical") === "news");
+              report.publicFeeds = {
+                search: { status: searchResponse?.status || null, count: report.searches.find(item => item.query === "NASA")?.count || 0 },
+                images: { status: imageResponse?.status || null, count: report.images.count, attributed: report.images.attributed },
+                videos: { status: report.videos.apiStatus, count: report.videos.apiCount, withThumbnails: report.videos.apiWithThumbnails },
+                news: { status: newsResponse?.status || null, count: report.topStories.headlineCount }
+              };
+              if (!searchResponse || !report.publicFeeds.search.count ||
+                  !imageResponse || !report.publicFeeds.images.attributed ||
+                  report.publicFeeds.videos.status !== 200 || !report.publicFeeds.videos.withThumbnails ||
+                  !newsResponse || !report.publicFeeds.news.count) {
+                fail("One or more public search/media/news feeds failed their live UI/API checks.");
+              }
+
 
               const coreConsoleErrors = report.consoleErrors.filter(message =>
                 /uncaught|typeerror|referenceerror|syntaxerror/i.test(message) && !/tradingview/i.test(message)
@@ -667,7 +670,7 @@ jobs:
                 const responsePromise = page.waitForResponse(response => {
                   try {
                     const url = new URL(response.url());
-                    return url.pathname === "/api/news" && url.searchParams.get("category") === category && response.ok();
+                    return url.pathname.endsWith("/api/news") && url.searchParams.get("category") === category && response.ok();
                   } catch { return false; }
                 }, { timeout: 30000 });
                 await page.locator('[data-news="' + category + '"]').click();
@@ -682,7 +685,7 @@ jobs:
               const refreshPromise = page.waitForResponse(response => {
                 try {
                   const url = new URL(response.url());
-                  return url.pathname === "/api/news" && url.searchParams.get("category") === "science" && response.ok();
+                  return url.pathname.endsWith("/api/news") && url.searchParams.get("category") === "science" && response.ok();
                 } catch { return false; }
               }, { timeout: 30000 });
               await page.locator("#news-refresh").click();

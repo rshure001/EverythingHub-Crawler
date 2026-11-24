@@ -95,6 +95,7 @@ class PipelineHealthTests(unittest.TestCase):
             "Everything Hub crawler",
             "Retroactive catalog inventory",
             "Catalog-first discovery",
+            "Ten-at-a-time catalog seed expansion",
         ])
         self.assertNotIn("EverythingHub Publisher", workflow_run)
         self.assertNotIn("EverythingHub search API smoke test", workflow_run)
