@@ -52,7 +52,7 @@ class PostCrawlDispatchTests(unittest.TestCase):
         self.assertIn("  workflow_dispatch:", search_triggers)
         self.assertNotIn("  push:", search_triggers)
         self.assertIn("gh workflow run search-api-smoke.yml --ref main", catalog)
-        publish_block = catalog.split("- name: Publish validated catalog snapshot on latest main", 1)[1]
+        publish_block = catalog.split("- name: Publish candidate catalog snapshot immediately on latest main", 1)[1]
         publish_position = publish_block.index("python crawler/publish_catalog_snapshot.py --attempts 4")
         dispatch_position = publish_block.index("gh workflow run search-api-smoke.yml --ref main")
         self.assertLess(publish_position, dispatch_position)
