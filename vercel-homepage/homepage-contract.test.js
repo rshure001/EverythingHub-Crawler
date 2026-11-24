@@ -20,6 +20,12 @@ test("homepage loads the tested media preview policy before its search code", ()
   assert.ok(fs.existsSync(path.join(root, "media-preview-policy.js")));
 });
 
+test("homepage search and media use only the dedicated Everything Hub Supabase project", () => {
+  assert.match(html, /const EH_SUPABASE_URL=['"]https:\/\/vdceayvfgkwpgwixrhwi\.supabase\.co['"]/);
+  assert.match(html, /const EH_PUBLIC_KEY=['"]sb_publishable_XlIsACWhtVS1jVODWYGTpg_GMs8v3vJ['"]/);
+  assert.doesNotMatch(html, /ynleeweezwkdbisaiovq|sb_publishable_-m5pJUkN9aKUox3NMexhQg_NvWhm520/);
+});
+
 test("homepage keeps one search form and eight category modes", () => {
   assert.equal((html.match(/<form\b[^>]*id=["']search["']/gi) || []).length, 1);
   assert.equal((html.match(/id=["']q["']/gi) || []).length, 1);
