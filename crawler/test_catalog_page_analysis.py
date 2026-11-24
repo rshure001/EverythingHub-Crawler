@@ -2611,7 +2611,7 @@ class AdditionalSourcePolicyReviewTests(unittest.TestCase):
             self.assertEqual(len(page_rows), 2)
             self.assertEqual(len(record_rows), len(records))
             pages_payload = json.loads(gzip.decompress((output / "pages.json.gz").read_bytes()))
-            records_payload = json.loads(gzip.decompress((output / "records.json.gz").read_bytes()))
+            records_payload = json.loads(gzip.decompress((output / "records/00000.json.gz").read_bytes()))
             registry = json.loads(gzip.decompress((output / "registry.json.gz").read_bytes()))
             registry_ids = {item["catalog_id"] for item in registry["catalogs"]}
             self.assertTrue(all(item["catalog_id"] not in registry_ids for item in page_rows))
