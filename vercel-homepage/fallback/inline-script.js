@@ -26,7 +26,7 @@ async function requestSupabaseMediaSearch(q,type){
   const payload=await fetchSupabaseFunction('everything-hub-media-search',{q,type});
   const licensed=(Array.isArray(payload.results)?payload.results:[]).filter(item=>
     item&&item.source==='Wikimedia Commons'&&item.license&&item.licenseUrl&&item.thumbnailUrl&&
-    (item.creator||item.credit)&&(type==='video'?item.videoUrl:item.imageUrl)
+    (type==='video'?item.videoUrl:item.imageUrl)
   );
   return {
     status:'ok',
@@ -172,7 +172,7 @@ function renderVideos(data,q){
   makeHeading(q,"Video results",items.length.toLocaleString()+" videos · "+(data.provider||"Internet Archive"));
   const grid=document.createElement("div");grid.className="video-grid";
   for(const item of items){
-    const card=document.createElement("article");card.className="video-card";
+    const card=document.createElement("article");card.className="video-card";card.dataset.license=String(item.license||"");card.dataset.creator=String(item.creator||item.credit||"");
     const link=document.createElement("a");link.href=safeUrl(item.url);link.target="_blank";link.rel="noopener noreferrer";
     if(item.thumbnail){
       const img=document.createElement("img");img.src=safeUrl(item.thumbnail);img.alt=item.title||q;img.loading="eager";img.referrerPolicy="no-referrer";img.decoding="async";
