@@ -1034,6 +1034,7 @@ form.addEventListener('submit',async e=>{
      if(safe(existing.video)==='#'&&safe(x.video)!=='#')existing.video=x.video;
      if(!existing.snippet&&x.snippet)existing.snippet=x.snippet;
      if(['image','video'].includes(x.mediaType)&&existing.mediaType==='web')existing.mediaType=x.mediaType;
+     if(x.mediaType==='news'&&existing.mediaType==='web'){existing.mediaType='news';existing.source=x.source||existing.source;existing.title=x.title||existing.title;existing.snippet=x.snippet||existing.snippet;}
      if(['image','video'].includes(x.mediaType)&&x.source)existing.source=x.source;
      if(!existing.license&&x.license)existing.license=x.license;
      if(!existing.licenseUrl&&x.licenseUrl)existing.licenseUrl=x.licenseUrl;
@@ -1053,7 +1054,7 @@ form.addEventListener('submit',async e=>{
   if(page===1)searchScan=d.indexScan||null;
   apiHasMore=Boolean(d.hasMore)||(Number(d.totalMatches)>offset+(d.results||[]).length);
   totalIndexed=Number(d.indexedPages)||Number(d.indexed_pages)||totalIndexed;
-  const mediaMode=selectedMode==='images'||selectedMode==='videos';
+  const mediaMode=selectedMode==='images'||selectedMode==='videos'||selectedMode==='news';
   const catalogResults=(page===1?(d.catalogResults||[]):[]).map(x=>{
    const snippet=x.snippet||x.description||'Candidate catalog preview; source terms and reuse rights have not been reviewed.';
    return {...x,title:x.title||x.catalog_title||x.catalog_id||'Catalog candidate',url:x.url||x.source_url||'',snippet,description:snippet,source:x.source||'Everything Hub Catalog Preview',origin:x.origin||'Everything Hub Catalog Preview',mediaType:mediaMode?'web':selectedMode,score:Number(x.score)||0,preview_only:true,commercial_eligible:false};
@@ -1067,7 +1068,7 @@ form.addEventListener('submit',async e=>{
   const matches=items.filter(x=>{
    if(activeType==='images')return x.mediaType==='image'&&mediaAllowed(x)&&safe(x.image)!=='#';
    if(activeType==='videos')return x.mediaType==='video'&&mediaAllowed(x)&&(safe(x.image)!=='#'||safe(x.video)!=='#');
-   if(activeType==='news')return x.mediaType==='news'||/news|reuters|apnews|bbc|cnn|nytimes|theguardian/i.test(String(x.url||'')+' '+String(x.source||''));
+   if(activeType==='news')return x.mediaType==='news';
    if(activeType==='shopping')return x.mediaType==='shopping'||/shop|store|amazon|walmart|ebay|product/i.test(String(x.url||'')+' '+String(x.title||''));
    if(activeType==='places')return x.mediaType==='places'||/maps|place|travel|visit|location/i.test(String(x.url||'')+' '+String(x.title||''));
    if(activeType==='business')return x.mediaType==='business'||/company|business|corporate|linkedin|crunchbase/i.test(String(x.url||'')+' '+String(x.title||''));
