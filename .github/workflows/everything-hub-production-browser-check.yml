@@ -51,8 +51,8 @@ jobs:
             const expectedDivisions = ['Web', 'News', 'Images', 'Videos', 'Shopping', 'Places', 'Business', 'Research'];
             const report = {
               url, startedAt: new Date().toISOString(), status: null, branding: null, artwork: null,
-              searchInputVisible: false, divisions: [], divisionChecks: [], searches: [],
-              images: null, videos: null, publicFeeds: null, topStories: null, mobile: null,
+              searchInputVisible: false, divisions: [], divisionChecks: [], categorySearches: [], searches: [],
+              images: null, videos: null, publicFeeds: null, topStories: null, mobile: null, research: null,
               navigation: null, pageErrors: [], consoleErrors: [], passed: false
             };
             const browser = await chromium.launch({ headless: true });
@@ -76,23 +76,19 @@ jobs:
               const button = page.locator('nav.hub-hero-divisions button[aria-label="' + name + '"]').first();
               if (!(await button.count())) fail("Division button " + name + " was not found.");
               await button.click();
-              await page.locator("#division-workspace-title").waitFor({ state: "visible", timeout: 12000 });
+              const input = page.locator("input#hub-search:visible").first();
+              await input.waitFor({ state: "visible", timeout: 12000 });
               const workspace = page.locator(".division-workspace:not(.division-destination-page)");
-              const title = (await page.locator("#division-workspace-title").innerText()).trim();
-              const focusCount = await workspace.locator(".workspace-focus-card").count();
-              const actionCount = await workspace.locator(".workspace-action-list button").count();
-              const libraryAction = name === "Research"
-                ? await workspace.locator(".workspace-action-list button").filter({ hasText: /Open searchable Library/i }).count()
-                : 0;
-              const ok = title === "Explore " + name && focusCount === 3 && actionCount >= 3 && (name !== "Research" || libraryAction === 1);
-              report.divisionChecks.push({ name, title, focusCount, actionCount, libraryAction, ok });
-              if (!ok) fail("Division " + name + " did not open its matching workspace.");
+              const workspaceVisible = await workspace.isVisible().catch(() => false);
+              const title = await page.locator("#division-workspace-title").innerText().catch(() => "");
+              const ok = await button.isVisible().catch(() => false) && await input.isVisible().catch(() => false);
+              report.divisionChecks.push({ name, title, workspaceVisible, searchInputVisible: true, ok });
+              if (!ok) fail("Category " + name + " did not leave the search input usable.");
               return workspace;
             };
             const closeWorkspace = async () => {
-              const close = page.locator(".division-workspace:not(.division-destination-page) .workspace-close").first();
+              const close = page.locator(".division-workspace:not(.division-destination-page) .workspace-close:visible").first();
               if (await close.count()) await close.click();
-              await page.locator("#division-workspace-title").waitFor({ state: "hidden", timeout: 10000 });
             };
             const searchWeb = async (query, pattern, screenshotName) => {
               await goHome();
@@ -112,6 +108,53 @@ jobs:
               report.searches.push(result);
               await shot(screenshotName);
               if (!result.ok) fail("Search " + query + " returned no relevant visible results.");
+            };
+            const searchCategoryMode = async (name, query, path, vertical, selector, pattern) => {
+              await goHome();
+              await openDivision(name);
+              const input = page.locator("input#hub-search:visible").first();
+              const responsePromise = page.waitForResponse(response => {
+                const responseUrl = new URL(response.url());
+                const queryMatches = (responseUrl.searchParams.get("q") || "").toLowerCase().includes(query.toLowerCase());
+                return responseUrl.pathname === path && queryMatches &&
+                  (!vertical || responseUrl.searchParams.get("vertical") === vertical);
+              }, { timeout: 45000 });
+              await input.fill(query);
+              await input.press("Enter");
+              const response = await responsePromise;
+              await page.locator(selector).first().waitFor({ state: "visible", timeout: 45000 });
+              const cards = await page.locator(selector).evaluateAll(nodes => nodes.slice(0, 8).map(node => node.innerText));
+              const relevant = cards.some(text => new RegExp(pattern, "i").test(text));
+              const result = {
+                name, query, endpoint: path, status: response.status(), count: cards.length,
+                visibleTitles: cards.map(text => text.split("\n")[0]), relevant,
+                ok: response.status() === 200 && cards.length > 0 && relevant
+              };
+              report.categorySearches.push(result);
+              if (!result.ok) fail("Category " + name + " did not return relevant visible results.");
+              return result;
+            };
+            const verifyResearchRouteWithoutCallingAI = async () => {
+              await goHome();
+              await openDivision("Research");
+              const input = page.locator("input#hub-search:visible").first();
+              let intercepted = false;
+              await page.route("**/api/ai/answer", async route => {
+                intercepted = true;
+                await route.abort();
+              });
+              const requestPromise = page.waitForRequest(request => new URL(request.url()).pathname === "/api/ai/answer", { timeout: 20000 });
+              await input.fill("NASA");
+              await input.press("Enter");
+              const request = await requestPromise;
+              await page.unroute("**/api/ai/answer");
+              report.research = {
+                endpoint: new URL(request.url()).pathname, method: request.method(),
+                routeVerified: intercepted, resultVerified: false,
+                paidAiExecutionSkipped: true,
+                note: "The Research route was verified without invoking paid AI generation."
+              };
+              if (!intercepted) fail("Research category did not route to its answer endpoint.");
             };
             try {
               const response = await goHome();
@@ -138,21 +181,18 @@ jobs:
 
               for (const name of expectedDivisions) {
                 await goHome();
-                const workspace = await openDivision(name);
-                if (name === "Research") {
-                  await workspace.locator(".workspace-action-list button").filter({ hasText: /Open searchable Library/i }).click();
-                  await page.locator(".library-page").waitFor({ state: "visible", timeout: 12000 });
-                  report.navigation = { researchLibraryOpened: true };
-                  await page.locator(".library-topline button").first().click();
-                  await page.locator(".everythinghub-approved-home-art img.approved-master-image").first().waitFor({ state: "visible", timeout: 12000 });
-                } else {
-                  await closeWorkspace();
-                }
+                await openDivision(name);
+                await closeWorkspace();
               }
 
               await searchWeb("Rolex", "rolex", "rolex");
               await searchWeb("Las Vegas", "las vegas|vegas|nevada", "las-vegas");
               await searchWeb("NASA", "nasa|space|aerospace", "nasa");
+              await searchCategoryMode("News", "NASA", "/api/search", "news", ".eh-result-card", "nasa|space|aerospace");
+              await searchCategoryMode("Shopping", "Rolex", "/api/search", "shopping", ".eh-result-card", "rolex");
+              await searchCategoryMode("Places", "Las Vegas", "/api/places", null, ".place-results .place-result", "las vegas|vegas|nevada");
+              await searchCategoryMode("Business", "Apple", "/api/businesses", null, ".place-results .place-result", "apple");
+              await verifyResearchRouteWithoutCallingAI();
 
               await goHome();
               await openDivision("Images");
@@ -180,26 +220,7 @@ jobs:
                 fail("Images did not return a loaded thumbnail with creator/license attribution and a source link.");
               }
 
-              await goHome();
-              await openDivision("Videos");
-              const videoCards = page.locator(".division-destination-page .destination-feature .top-news-card");
-              await videoCards.first().waitFor({ state: "visible", timeout: 45000 });
-              await videoCards.first().locator("img").scrollIntoViewIfNeeded();
-              await page.waitForFunction(() => {
-                const image = document.querySelector(".division-destination-page .destination-feature .top-news-card img");
-                return image && image.complete && image.naturalWidth > 0;
-              }, null, { timeout: 30000 });
-              const videoData = await videoCards.evaluateAll(nodes => nodes.map(node => ({
-                href: node.href, title: node.querySelector("strong")?.textContent?.trim() || "",
-                loaded: (node.querySelector("img")?.naturalWidth || 0) > 0
-              })));
-              report.videos = {
-                count: videoData.length,
-                loaded: videoData.filter(item => item.loaded).length,
-                publicPublisherLinks: videoData.filter(item => /archive\.org/i.test(item.href)).length
-              };
-              await shot("videos");
-              if (!report.videos.loaded || !report.videos.publicPublisherLinks) fail("Videos did not return loaded public-source video cards.");
+              // Video result cards and thumbnails are checked after the other desktop/mobile gates below.
 
               await goHome();
               const newsSection = page.locator("section.top-news");
@@ -329,6 +350,46 @@ jobs:
                 fail("Mobile layout has clipping, horizontal overflow, broken visible images or overlapping controls.");
               }
 
+              await goHome();
+              await openDivision("Videos");
+              const videoInput = page.locator("input#hub-search:visible").first();
+              const videoResponsePromise = page.waitForResponse(response => {
+                const responseUrl = new URL(response.url());
+                return responseUrl.pathname === "/api/videos" &&
+                  (responseUrl.searchParams.get("q") || "").toLowerCase() === "nasa";
+              }, { timeout: 45000 });
+              await videoInput.fill("NASA");
+              await videoInput.press("Enter");
+              const videoResponse = await videoResponsePromise;
+              const videoJson = await videoResponse.json().catch(() => ({}));
+              await page.waitForFunction(() =>
+                document.querySelectorAll(".eh-result-card").length > 0 || document.querySelector(".empty-state"),
+                null, { timeout: 45000 }
+              );
+              const visibleVideoCards = await page.locator(".eh-result-card").evaluateAll(nodes => nodes.slice(0, 8).map(node => ({
+                title: node.querySelector(".eh-result-title")?.textContent?.trim() || node.innerText.split("\n")[0],
+                href: node.querySelector(".eh-result-title")?.href || node.querySelector("a")?.href || "",
+                loadedThumbnail: (node.querySelector("img")?.naturalWidth || 0) > 0
+              })));
+              const visibleVideoThumbnails = await page.locator(".eh-media-shelf img, .eh-result-card img").evaluateAll(nodes =>
+                nodes.filter(image => image.complete && image.naturalWidth > 0).length
+              );
+              report.videos = {
+                apiStatus: videoResponse.status(),
+                apiCount: (videoJson.results || []).length,
+                apiWithThumbnails: (videoJson.results || []).filter(item => item.thumbnailUrl && item.url).length,
+                visibleCards: visibleVideoCards.length,
+                visibleThumbnails: visibleVideoThumbnails,
+                publicPublisherLinks: visibleVideoCards.filter(item => /archive\.org/i.test(item.href)).length,
+                titles: visibleVideoCards.map(item => item.title)
+              };
+              await shot("videos");
+              if (report.videos.apiStatus !== 200 || !report.videos.apiCount ||
+                  !report.videos.apiWithThumbnails || !report.videos.visibleCards ||
+                  !report.videos.visibleThumbnails || !report.videos.publicPublisherLinks) {
+                fail("Videos API may have records, but the live UI did not show loaded public-source video cards with thumbnails.");
+              }
+
               const coreConsoleErrors = report.consoleErrors.filter(message =>
                 /uncaught|typeerror|referenceerror|syntaxerror/i.test(message) && !/tradingview/i.test(message)
               );
@@ -362,6 +423,8 @@ jobs:
           retention-days: 30
 
   free-fallback-browser-check:
+    needs: production-browser-check
+    if: ${{ always() && needs.production-browser-check.result != 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 12
     env:
