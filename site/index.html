@@ -21,14 +21,23 @@ main{width:100%;max-width:1180px;margin:0 auto;padding:0 0 28px}.topline{display
 footer{margin:28px 3px 0;padding:17px 0 0;border-top:1px solid #1f5238;color:#7eaa8e;text-align:center;font-size:11px}
 @media(max-width:760px){main{padding:0 0 24px}.art{border-radius:0}.search input{padding:0 8px}.discover-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.discover-card{min-height:68px;padding:9px;gap:8px}.discover-icon{flex-basis:32px;height:32px}.discover-card strong{font-size:12px}.discover-card small{font-size:9px}.result{grid-template-columns:minmax(0,104px) minmax(0,1fr);gap:10px;padding:10px}.result.no-thumb{grid-template-columns:minmax(0,1fr)}.thumb{height:78px}.copy a{font-size:14px}.copy p{font-size:11px}}
 @media(max-width:420px){.brand{font-size:17px}.live{font-size:10px}.status{font-size:11px}.section-head h2{font-size:18px}.discover-card small{display:none}}
+
+/* Master artwork alignment: full-width search plus the exact four-by-two category grid. */
+.search{left:4%;top:56%;width:92%;height:7.2%;border-radius:999px;overflow:hidden;gap:0}
+.search input{width:84%;border-radius:999px 0 0 999px;padding:0 clamp(10px,2.2vw,24px);font-size:clamp(12px,2.5vw,21px)}
+.search button{width:16%;border-radius:0 999px 999px 0;font-size:clamp(11px,2vw,18px)}
+.hotspot{height:8.4%;width:21%;border-radius:14px}
+.cat-web{left:5.5%;top:66.2%}.cat-news{left:27.7%;top:66.2%}.cat-images{left:50%;top:66.2%}.cat-videos{left:72.3%;top:66.2%}
+.cat-shopping{left:5.5%;top:75.1%}.cat-places{left:27.7%;top:75.1%}.cat-business{left:50%;top:75.1%}.cat-research{left:72.3%;top:75.1%}
+@media(max-width:520px){.search{height:7.4%}.hotspot{height:8.7%}}
 </style>
 </head>
 <body><main>
 <section class="art" aria-label="Everything Hub approved octopus homepage artwork and search">
 <img src="https://raw.githubusercontent.com/rshure001/EverythingHub-Crawler/main/assets/everythinghub-approved.png" alt="Approved Everything Hub artwork: emerald octopus, glowing brain, gold accents and eight search categories">
 <form class="search" id="searchForm"><input id="q" type="search" aria-label="Search Everything Hub" placeholder="Search Everything…" autocomplete="off" required><button type="submit">Search</button></form>
-<button class="hotspot left1" data-mode="web" aria-label="Web Search" title="Web Search"></button><button class="hotspot left2" data-mode="videos" aria-label="Videos" title="Videos"></button><button class="hotspot left3" data-mode="images" aria-label="Images" title="Images"></button><button class="hotspot left4" data-mode="news" aria-label="News" title="News"></button>
-<button class="hotspot right1" data-mode="shopping" aria-label="Shopping" title="Shopping"></button><button class="hotspot right2" data-mode="research" aria-label="Research" title="Research"></button><button class="hotspot right3" data-mode="business" aria-label="Business" title="Business"></button><button class="hotspot right4" data-mode="places" aria-label="Places" title="Places"></button>
+<button class="hotspot cat-web" data-mode="web" aria-label="Web" title="Web"></button><button class="hotspot cat-news" data-mode="news" aria-label="News" title="News"></button><button class="hotspot cat-images" data-mode="images" aria-label="Images" title="Images"></button><button class="hotspot cat-videos" data-mode="videos" aria-label="Videos" title="Videos"></button>
+<button class="hotspot cat-shopping" data-mode="shopping" aria-label="Shopping" title="Shopping"></button><button class="hotspot cat-places" data-mode="places" aria-label="Places" title="Places"></button><button class="hotspot cat-business" data-mode="business" aria-label="Business" title="Business"></button><button class="hotspot cat-research" data-mode="research" aria-label="Research" title="Research"></button>
 </section>
 <div id="status" class="status" aria-live="polite"><span>Search the web or choose one of the eight categories.</span><strong id="modeLabel">WEB SEARCH</strong></div>
 <section id="results" class="results" aria-label="Search results"></section><button id="more" class="more" type="button" hidden>More results</button>
