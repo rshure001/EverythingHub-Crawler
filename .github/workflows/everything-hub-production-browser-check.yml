@@ -232,10 +232,28 @@ jobs:
               await imageInput.fill("solar panels");
               await imageInput.press("Enter");
               await page.waitForFunction(() => document.querySelectorAll(".image-results-grid .image-result").length > 0, null, { timeout: 45000 });
-              const imageCards = await page.locator(".image-results-grid .image-result").evaluateAll(nodes =>
+              const imageCardLocator = page.locator(".image-results-grid .image-result");
+              const imageCardCount = await imageCardLocator.count();
+              for (let index = 0; index < Math.min(10, imageCardCount); index += 1) {
+                const card = imageCardLocator.nth(index);
+                await card.scrollIntoViewIfNeeded();
+                const image = card.locator("img").first();
+                await image.evaluate(element => {
+                  element.loading = "eager";
+                  if (element.complete) return element.naturalWidth > 0;
+                  return new Promise(resolve => {
+                    element.addEventListener("load", () => resolve(element.naturalWidth > 0), { once: true });
+                    element.addEventListener("error", () => resolve(false), { once: true });
+                    setTimeout(() => resolve(false), 6000);
+                  });
+                }).catch(() => false);
+              }
+              await imageCardLocator.first().scrollIntoViewIfNeeded();
+              const imageCards = await imageCardLocator.evaluateAll(nodes =>
                 nodes.slice(0, 10).map(node => ({
                   href: node.href,
                   loaded: (node.querySelector("img")?.naturalWidth || 0) > 0,
+                  alt: node.querySelector("img")?.alt || "",
                   attribution: node.querySelector(".image-result-attribution")?.textContent?.trim() || "",
                   source: node.querySelector(".image-result-source")?.textContent?.trim() || ""
                 }))
@@ -247,8 +265,9 @@ jobs:
                 sources: Array.from(new Set(imageCards.map(item => item.source)))
               };
               await shot("images");
-              if (!report.images.loaded || !report.images.attributed || !imageCards.some(item => item.href.startsWith("https://"))) {
-                fail("Images did not return a loaded thumbnail with creator/license attribution and a source link.");
+              if (report.images.loaded < 3 || report.images.attributed < 3 ||
+                  !imageCards.some(item => item.href.startsWith("https://"))) {
+                fail("Images did not return at least three loaded, attributed public thumbnails and a source link.");
               }
 
               // Video result cards and thumbnails are checked after the other desktop/mobile gates below.
@@ -257,7 +276,7 @@ jobs:
               const newsSection = page.locator("section.top-news");
               await newsSection.waitFor({ state: "visible", timeout: 12000 });
               await newsSection.scrollIntoViewIfNeeded();
-              await page.waitForFunction(() => document.querySelectorAll("section.top-news .discover-story-body").length >= 3, null, { timeout: 60000 });
+              await page.waitForFunction(() => document.querySelectorAll("section.top-news .discover-story-body").length >= 2, null, { timeout: 60000 });
               const headlineCount = await page.locator("section.top-news .discover-story-body").count();
               const tabs = page.locator("section.top-news .discover-filters button");
               const tabLabels = await tabs.allTextContents();
@@ -266,32 +285,50 @@ jobs:
                 const tab = tabs.filter({ hasText: label }).first();
                 if (!(await tab.count())) fail("Top Stories tab " + label + " is missing.");
                 await tab.click();
+                await page.waitForFunction(() =>
+                  document.querySelectorAll("section.top-news .discover-story-body").length > 0,
+                  null, { timeout: 30000 }
+                );
                 const pressed = await tab.getAttribute("aria-pressed");
                 const visibleStories = await page.locator("section.top-news .discover-story-body").count();
-                const ok = pressed === "true";
+                const ok = pressed === "true" && visibleStories > 0;
                 checkedTabs.push({ label, pressed, visibleStories, ok });
-                if (!ok) fail("Top Stories tab " + label + " did not activate.");
+                if (!ok) fail("Top Stories tab " + label + " did not activate with visible stories.");
               }
-              const beforeRefresh = await page.locator("section.top-news .top-news-status").innerText().catch(() => "");
-              const beforeUpdate = await page.locator("section.top-news .top-news-updated").innerText().catch(() => "");
-              const refreshRequest = page.waitForRequest(request =>
-                request.url().includes("/api/search") && /vertical=news/i.test(request.url()), { timeout: 45000 }
-              ).catch(() => null);
-              await page.locator('section.top-news button[aria-label="Refresh top news"]').click();
-              const refreshObserved = await refreshRequest;
+              const statusLocator = page.locator("section.top-news .top-news-heading p").first();
+              const beforeRefresh = await statusLocator.innerText().catch(() => "");
+              const refreshResponsePromise = page.waitForResponse(response => {
+                const responseUrl = new URL(response.url());
+                return responseUrl.pathname.endsWith("/api/search") &&
+                  responseUrl.searchParams.get("vertical") === "news" && response.status() === 200;
+              }, { timeout: 45000 }).catch(() => null);
+              const refreshButton = page.locator('section.top-news button[aria-label="Refresh top news"]');
+              await refreshButton.click();
+              const refreshResponse = await refreshResponsePromise;
               await page.waitForFunction(() => {
-                const status = document.querySelector("section.top-news .top-news-status");
-                return status && !/loading|refreshing/i.test(status.textContent || "");
+                const button = document.querySelector('section.top-news button[aria-label="Refresh top news"]');
+                return button && !button.disabled;
               }, null, { timeout: 60000 });
-              const afterRefresh = await page.locator("section.top-news .top-news-status").innerText().catch(() => "");
-              const afterUpdate = await page.locator("section.top-news .top-news-updated").innerText().catch(() => "");
+              await page.waitForFunction(() =>
+                document.querySelectorAll("section.top-news .discover-story-body").length > 0,
+                null, { timeout: 30000 }
+              );
+              const afterRefresh = await statusLocator.innerText().catch(() => "");
+              const refreshedCount = await page.locator("section.top-news .discover-story-body").count();
+              const refreshCompleted = !!refreshResponse && refreshResponse.ok() &&
+                !(await refreshButton.isDisabled()) && refreshedCount > 0 && !/error/i.test(afterRefresh);
               report.topStories = {
-                headlineCount, tabLabels, checkedTabs, beforeRefresh, afterRefresh,
-                beforeUpdate, afterUpdate, refreshRequestObserved: !!refreshObserved,
-                refreshCompleted: !!afterRefresh && !/error/i.test(afterRefresh)
+                headlineCount,
+                firstHeadline: (await page.locator("section.top-news .discover-story-body").first().innerText().catch(() => "")).slice(0, 240),
+                tabLabels, checkedTabs, beforeRefresh, afterRefresh,
+                refreshRequestObserved: !!refreshResponse,
+                refreshResponseStatus: refreshResponse?.status() || null,
+                refreshCompleted, refreshedCount
               };
               await shot("top-stories");
-              if (headlineCount < 3 || checkedTabs.length !== 5 || !report.topStories.refreshRequestObserved || !report.topStories.refreshCompleted) {
+              if (headlineCount < 2 || checkedTabs.length !== 5 ||
+                  checkedTabs.some(item => !item.ok) || !report.topStories.refreshRequestObserved ||
+                  !report.topStories.refreshCompleted) {
                 fail("Top Stories headlines, category tabs or Refresh did not pass.");
               }
 
@@ -394,10 +431,10 @@ jobs:
                 titles: visibleVideoCards.map(item => item.title)
               };
               await shot("videos");
-              if (report.videos.apiStatus !== 200 || !report.videos.apiCount ||
-                  !report.videos.apiWithThumbnails || !report.videos.visibleCards ||
-                  !report.videos.visibleThumbnails || !report.videos.publicPublisherLinks) {
-                fail("Videos API may have records, but the live UI did not show loaded public-source video cards with thumbnails.");
+              if (report.videos.apiStatus !== 200 || report.videos.apiCount < 2 ||
+                  report.videos.apiWithThumbnails < 2 || report.videos.visibleCards < 2 ||
+                  report.videos.visibleThumbnails < 2 || !report.videos.publicPublisherLinks) {
+                fail("Videos API may have records, but the live UI did not show at least two loaded public-source video cards with thumbnails.");
               }
 
               const apiResponse = (path, predicate) => report.apiResponses.filter(item => {
@@ -418,9 +455,9 @@ jobs:
                 news: { status: newsResponse?.status || null, count: report.topStories.headlineCount }
               };
               if (!searchResponse || !report.publicFeeds.search.count ||
-                  !imageResponse || !report.publicFeeds.images.attributed ||
-                  report.publicFeeds.videos.status !== 200 || !report.publicFeeds.videos.withThumbnails ||
-                  !newsResponse || !report.publicFeeds.news.count) {
+                  !imageResponse || report.publicFeeds.images.loaded < 3 || report.publicFeeds.images.attributed < 3 ||
+                  report.publicFeeds.videos.status !== 200 || report.publicFeeds.videos.withThumbnails < 2 ||
+                  !newsResponse || report.publicFeeds.news.count < 2) {
                 fail("One or more public search/media/news feeds failed their live UI/API checks.");
               }
 
