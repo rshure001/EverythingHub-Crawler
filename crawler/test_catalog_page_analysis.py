@@ -1535,7 +1535,7 @@ class CatalogInventoryTriggerTests(unittest.TestCase):
         self.assertIn('    - cron: "23 * * * *"', workflow)
         self.assertIn("  workflow_dispatch:", workflow)
         self.assertIn('".github/workflows/retroactive-catalog-index.yml"', push_paths)
-        self.assertRegex(workflow, r"group: catalog-data-publish-v\\d+-\\$\\{\\{ github\\.ref \\}\\}")
+        self.assertRegex(workflow, r"group: catalog-data-publish-v\d+-\$\{\{ github\.ref \}\}")
         self.assertIn("cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}", workflow)
 
     def test_catalog_publish_reuses_validated_snapshot_after_concurrent_updates(self):
