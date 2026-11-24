@@ -1,0 +1,31 @@
+name: Crawl batch reducer tests
+
+on:
+  pull_request:
+    paths:
+      - "crawler/crawl_batches.py"
+      - "crawler/test_crawl_batches.py"
+      - ".github/workflows/crawl-batches-test.yml"
+  push:
+    branches: [feat/run-scoped-crawl-batches]
+    paths:
+      - "crawler/crawl_batches.py"
+      - "crawler/test_crawl_batches.py"
+      - ".github/workflows/crawl-batches-test.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile batch reducer
+        run: python -m py_compile crawler/crawl_batches.py
+      - name: Run batch reducer tests
+        run: python -m unittest discover -s crawler -p 'test_crawl_batches.py' -v
