@@ -62,40 +62,40 @@ jobs:
             searchEndpoint: "Supabase Edge Function"
           }, null, 2));
           NODE
-      - name: Verify live Rolex search through the free Edge Function
+      - name: Verify representative live searches through the free Edge Function
         run: |
           set -euo pipefail
-          code="$(curl --silent --show-error --location --max-time 35 -G "$SEARCH_URL" \
-            -H "apikey: $API_KEY" \
-            -H "accept: application/json" \
-            --data-urlencode "q=Rolex" \
-            --data-urlencode "limit=10" \
-            -o /tmp/search.json -w '%{http_code}')"
-          test "$code" = "200"
-          node <<'NODE'
+          for query in Rolex "Las Vegas" NASA; do
+            safe="$(printf '%s' "$query" | tr '[:upper:] ' '[:lower:]_')"
+            code="$(curl --silent --show-error --location --max-time 35 -G "$SEARCH_URL" \
+              -H "apikey: $API_KEY" \
+              -H "accept: application/json" \
+              --data-urlencode "q=$query" \
+              --data-urlencode "limit=10" \
+              -o "/tmp/search-$safe.json" -w '%{http_code}')"
+            test "$code" = "200"
+            QUERY="$query" FILE="/tmp/search-$safe.json" node <<'NODE'
           const fs = require("node:fs");
-          const data = JSON.parse(fs.readFileSync("/tmp/search.json", "utf8"));
+          const query = process.env.QUERY;
+          const data = JSON.parse(fs.readFileSync(process.env.FILE, "utf8"));
           const results = Array.isArray(data.results) ? data.results : [];
           const catalogs = Array.isArray(data.catalogResults) ? data.catalogResults : [];
           if (!results.length && !catalogs.length) {
-            throw new Error("Free search returned HTTP 200 but no visible web or catalog results: " + JSON.stringify({
-              error: data.error || null,
-              source: data.source || null,
-              fallbackReason: data.fallbackReason || null
+            throw new Error(query + ": HTTP 200 but no visible web or catalog results: " + JSON.stringify({
+              error: data.error || null, source: data.source || null, fallbackReason: data.fallbackReason || null
             }));
           }
+          const haystack = JSON.stringify([...results, ...catalogs]).toLowerCase();
+          const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
+          if (!terms.some(term => haystack.includes(term))) throw new Error(query + ": results do not visibly match query terms");
           console.log(JSON.stringify({
-            status: "search_http_200",
-            query: data.query || "Rolex",
-            visibleWebResults: results.length,
-            visibleCatalogResults: catalogs.length,
-            source: data.source || null,
-            provider: data.provider || null,
-            independentOfDatabase: data.independentOfDatabase === true,
+            status: "search_http_200", query, visibleWebResults: results.length,
+            visibleCatalogResults: catalogs.length, source: data.source || null,
+            provider: data.provider || null, independentOfDatabase: data.independentOfDatabase === true,
             firstResult: results[0]?.title || catalogs[0]?.title || null
           }, null, 2));
           NODE
-
+          done
       - name: Verify per-record related catalog lookup when indexed identities are available
         run: |
           set -euo pipefail
