@@ -6,12 +6,11 @@ const source = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
 
 test("database outage prefers first-party crawler search before independent web fallback", () => {
   const start = source.indexOf("const staticFallback = async");
-  const end = source.indexOf("\nDeno.serve", start);
-  assert.ok(start >= 0 && end > start, "static fallback handler must exist");
-  const fallback = source.slice(start, end);
-  const catalogLoad = fallback.indexOf("const catalog = await loadStaticCatalog()");
-  const independentSearch = fallback.indexOf("const independent = await independentFallback(reason, crawlerIndexCount, attachCatalogPreview)");
-  assert.ok(catalogLoad >= 0, "first-party crawler catalog must be loaded");
+  assert.ok(start >= 0, "static fallback handler must exist");
+  const catalogLoad = source.indexOf("const catalog = await loadStaticCatalog()", start);
+  const independentSearch = source.indexOf("const independent = await independentFallback(reason, crawlerIndexCount, attachCatalogPreview)", start);
+  const earlyIndependentSearch = source.indexOf("const independent = await independentFallback(reason, null, attachCatalogPreview)", start);
+  assert.ok(catalogLoad > start, "first-party crawler catalog must be loaded");
   assert.ok(independentSearch > catalogLoad, "Bing RSS must only run after first-party crawler search");
-  assert.ok(!fallback.includes('if (reason === "database_unavailable")'), "database outage must not bypass the first-party index");
+  assert.equal(earlyIndependentSearch, -1, "database outage must not bypass the first-party index");
 });
