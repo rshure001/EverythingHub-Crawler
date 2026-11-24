@@ -400,12 +400,13 @@ jobs:
                 const buttons = Array.from(document.querySelectorAll("nav.hub-hero-divisions button"));
                 const rect = element => {
                   const value = element.getBoundingClientRect();
-                  return { left: value.left, right: value.right, width: value.width, height: value.height };
+                  return { left: value.left, right: value.right, top: value.top, bottom: value.bottom, width: value.width, height: value.height };
                 };
                 const searchBounds = search ? rect(search) : null;
                 const categoryBounds = buttons.map(rect);
                 const controlsOverlap = searchBounds ? categoryBounds.some(value =>
                   value.left < searchBounds.right && value.right > searchBounds.left &&
+                  value.top < searchBounds.bottom && value.bottom > searchBounds.top &&
                   value.width > 0 && value.height > 0
                 ) : true;
                 return {
