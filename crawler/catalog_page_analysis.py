@@ -3022,15 +3022,9 @@ def _write_gzip_jsonl_catalog_shards(
     shard_size: int = 5000,
     progress_label: str | None = None,
 ) -> list[dict]:
-    """Write record identity catalogs as bounded, deterministic gzip JSONL shards.
-
-    Accepts any iterable, including the streaming generator used by incremental
-    analysis. Never materializes the full identity catalog list in memory.
-    """
+    """Write record identity catalogs as bounded, deterministic gzip JSONL shards."""
     if isinstance(shard_size, bool) or not isinstance(shard_size, int) or shard_size < 1:
         raise ValueError("shard_size must be a positive integer")
-    if isinstance(expected_count, bool) or not isinstance(expected_count, int) or expected_count < 0:
-        raise ValueError("expected_count must be a non-negative integer")
     directory = output_dir / "record-catalogs"
     if directory.exists():
         shutil.rmtree(directory)
@@ -3054,9 +3048,9 @@ def _write_gzip_jsonl_catalog_shards(
                     "items": expected_count,
                     "shard_items": len(chunk),
                     "shard": shard_number,
-                }).encode("utf-8") + b"\n")
+                }).encode("utf-8") + b"\\n")
                 for item in chunk:
-                    stream.write(encoder.encode(item).encode("utf-8") + b"\n")
+                    stream.write(encoder.encode(item).encode("utf-8") + b"\\n")
                     written += 1
         temp.replace(path)
         digest = hashlib.sha256(path.read_bytes()).hexdigest()
@@ -3075,7 +3069,7 @@ def _write_gzip_jsonl_catalog_shards(
                     "items": expected_count,
                     "shard_items": 0,
                     "shard": 0,
-                }).encode("utf-8") + b"\n")
+                }).encode("utf-8") + b"\\n")
         temp.replace(path)
         files.append({"file": path.relative_to(output_dir).as_posix(), "bytes": path.stat().st_size, "sha256": hashlib.sha256(path.read_bytes()).hexdigest(), "items": 0, "format": "jsonl"})
     if written != expected_count:
@@ -3091,21 +3085,23 @@ def _write_gzip_record_shards(
     """Write global records as bounded deterministic gzip JSON shards."""
     if isinstance(shard_size, bool) or not isinstance(shard_size, int) or shard_size < 1:
         raise ValueError("shard_size must be a positive integer")
+    records = list(records)
     directory = output_dir / "records"
     if directory.exists():
         shutil.rmtree(directory)
     directory.mkdir(parents=True, exist_ok=True)
     files = []
+    shard_count = max(1, (len(records) + shard_size - 1) // shard_size)
     for shard_number, start in enumerate(range(0, len(records), shard_size)):
         chunk = records[start:start + shard_size]
         relative = "records/" + f"{shard_number:05d}.json.gz"
         size, digest = _write_gzip(
             output_dir / relative,
-            {"version": 1, "shard": shard_number, "shard_count": (len(records) + shard_size - 1) // shard_size, "records": chunk},
+            {"version": 1, "shard": shard_number, "shard_count": shard_count, "records": chunk},
             progress_label=(progress_label + "_" + f"{shard_number:05d}") if progress_label else None,
         )
         files.append({"file": relative, "bytes": size, "sha256": digest, "items": len(chunk), "format": "json"})
-        _emit_progress(bool(progress_label), (progress_label + "_progress") if progress_label else "", shards_written=shard_number + 1, shards_total=(len(records) + shard_size - 1) // shard_size)
+        _emit_progress(bool(progress_label), (progress_label + "_progress") if progress_label else "", shards_written=shard_number + 1, shards_total=shard_count)
     if not records:
         relative = "records/00000.json.gz"
         size, digest = _write_gzip(output_dir / relative, {"version": 1, "shard": 0, "shard_count": 1, "records": []}, progress_label=progress_label)
