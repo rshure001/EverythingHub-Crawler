@@ -2096,6 +2096,7 @@ def analyze_pages_incremental(
 
     def consume_host(task: dict, shard: dict, cache_status: str) -> None:
         nonlocal rebuilt, cross_host_record_merges
+        nonlocal content_entity_mentions, structured_catalog_lists, structured_catalog_items, eligible, signals
         host = task["host"]
         host_pages = task["host_pages"]
         host_index = task["host_index"]
