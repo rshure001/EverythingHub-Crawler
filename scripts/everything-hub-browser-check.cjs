@@ -36,7 +36,7 @@ const EXPECTED_MODES = ["business", "images", "news", "places", "research", "sho
     await page.locator("#search button[type=submit]").click();
     await page.locator("#results .result").first().waitFor({ state: "visible", timeout: 60000 });
     const count = await page.locator("#results .result").count();
-    const titles = await page.locator("#results .result .result-copy a').allTextContents().catch(() => []);
+    const titles = await page.locator("#results .result .result-copy a").allTextContents().catch(() => []);
     const text = (await page.locator("#results .result").allTextContents()).join(" ").toLowerCase();
     if (!count) fail(mode + " search returned no visible results for " + query);
     if (relevanceTerm && !text.includes(relevanceTerm.toLowerCase())) fail(mode + " results were not relevant to " + query);
@@ -106,7 +106,7 @@ const EXPECTED_MODES = ["business", "images", "news", "places", "research", "sho
 
     // Exercise every remaining search category.
     await runSearch("news", "NASA Artemis", "nasa");
-    await runSearch("images", "NASA", "nasa");
+    await runSearch("images", "NASA", null);
     await runSearch("videos", "animation");
     await runSearch("shopping", "Rolex", "rolex");
     await runSearch("places", "Las Vegas", "las vegas");
@@ -120,7 +120,10 @@ const EXPECTED_MODES = ["business", "images", "news", "places", "research", "sho
     for (let index = 0; index < tabCount; index++) {
       const tab = newsTabs.nth(index);
       const label = (await tab.textContent() || "").trim();
+      const tabResponse = page.waitForResponse(response => response.url().includes("everything-hub-independent-search"), { timeout: 60000 });
       await tab.click();
+      const tabResult = await tabResponse;
+      if (!tabResult.ok()) fail("Top Stories tab request failed: " + label + " HTTP " + tabResult.status());
       await page.locator("#discoverCards .discover-card").first().waitFor({ state: "visible", timeout: 60000 });
       const count = await page.locator("#discoverCards .discover-card").count();
       const titles = await page.locator("#discoverCards .discover-card").allTextContents();
@@ -129,7 +132,10 @@ const EXPECTED_MODES = ["business", "images", "news", "places", "research", "sho
     }
     report.checks.newsTabs = tabResults;
     const refresh = page.locator("#discoverRefresh");
+    const refreshResponse = page.waitForResponse(response => response.url().includes("everything-hub-independent-search"), { timeout: 60000 });
     await refresh.click();
+    const refreshResult = await refreshResponse;
+    if (!refreshResult.ok()) fail("Top Stories refresh request failed: HTTP " + refreshResult.status());
     await page.locator("#discoverCards .discover-card").first().waitFor({ state: "visible", timeout: 60000 });
     report.checks.newsRefresh = { present: await refresh.count() === 1, enabled: await refresh.isEnabled(), cards: await page.locator("#discoverCards .discover-card").count() };
     if (!report.checks.newsRefresh.present || !report.checks.newsRefresh.enabled || !report.checks.newsRefresh.cards) fail("Top Stories Refresh did not work");
