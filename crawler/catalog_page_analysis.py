@@ -961,18 +961,45 @@ def _reconcile_page_record_provenance(page_rows: list[dict], records) -> int:
     return repaired
 
 
-def _catalog_membership_coverage_by_source_page(page_rows: list[dict], catalogs: list[dict]) -> dict[str, int]:
+def _emit_progress(enabled: bool, stage: str, **details) -> None:
+    if enabled:
+        print(json.dumps({"stage": stage, **details}, sort_keys=True), flush=True)
+
+
+def _catalog_membership_coverage_by_source_page(
+    page_rows: list[dict],
+    catalogs: list[dict],
+    progress: bool = False,
+) -> dict[str, int]:
     """Count eligible source pages with zero, one, or multiple real catalog memberships."""
+    started = time.monotonic()
+    _emit_progress(
+        progress,
+        "catalog_source_page_coverage_start",
+        catalogs=len(catalogs),
+        page_rows=len(page_rows),
+    )
     catalog_counts: Counter[str] = Counter()
-    for catalog in catalogs:
+    page_references = 0
+    for catalog_index, catalog in enumerate(catalogs, start=1):
         if not isinstance(catalog, dict):
             continue
         page_ids = {
             page_id for page_id in catalog.get("source_page_ids", [])
             if isinstance(page_id, str) and page_id
         }
+        page_references += len(page_ids)
         for page_id in page_ids:
             catalog_counts[page_id] += 1
+        if progress and (catalog_index % 5000 == 0 or catalog_index == len(catalogs)):
+            _emit_progress(
+                True,
+                "catalog_source_page_coverage_progress",
+                catalogs_processed=catalog_index,
+                catalogs_total=len(catalogs),
+                page_references=page_references,
+                elapsed_seconds=round(time.monotonic() - started, 3),
+            )
 
     eligible_page_ids = {
         page.get("page_id")
@@ -982,11 +1009,20 @@ def _catalog_membership_coverage_by_source_page(page_rows: list[dict], catalogs:
         and isinstance(page.get("page_id"), str)
         and page.get("page_id")
     }
-    return {
+    result = {
         "eligible_source_pages_with_catalogs": sum(catalog_counts.get(page_id, 0) > 0 for page_id in eligible_page_ids),
         "eligible_source_pages_without_catalogs": sum(catalog_counts.get(page_id, 0) == 0 for page_id in eligible_page_ids),
         "eligible_source_pages_with_multiple_catalogs": sum(catalog_counts.get(page_id, 0) > 1 for page_id in eligible_page_ids),
     }
+    _emit_progress(
+        progress,
+        "catalog_source_page_coverage_complete",
+        eligible_pages=len(eligible_page_ids),
+        page_references=page_references,
+        elapsed_seconds=round(time.monotonic() - started, 3),
+        **result,
+    )
+    return result
 
 
 def _build_identity_catalogs(page_rows: list[dict], records, stream_catalogs: bool = False):
@@ -2262,6 +2298,15 @@ def analyze_pages_incremental(
             "stage": "catalog_snapshot_sort_complete",
             "elapsed_seconds": round(time.monotonic() - sort_started, 3),
         }, sort_keys=True), flush=True)
+    metrics_started = time.monotonic()
+    _emit_progress(
+        progress,
+        "catalog_metrics_start",
+        pages=len(pages),
+        eligible_pages=eligible,
+        catalogs=len(all_catalogs),
+        records=len(all_records),
+    )
     source_total = max(source_total if isinstance(source_total, int) and source_total >= 0 else source_page_rows, source_page_rows)
     unique_source_total = max(len(pages), source_total - duplicate_source_page_rows)
     source_set_complete = len(pages) == unique_source_total
@@ -2274,7 +2319,9 @@ def analyze_pages_incremental(
     eligibility_rate = (eligible / len(pages) * 100.0) if pages else 0.0
     source_row_deduplication = (duplicate_source_page_rows / source_page_rows * 100.0) if source_page_rows else 0.0
     discovered_catalogs = all_catalogs
-    catalog_coverage_by_source_page = _catalog_membership_coverage_by_source_page(all_page_rows, discovered_catalogs)
+    catalog_coverage_by_source_page = _catalog_membership_coverage_by_source_page(
+        all_page_rows, discovered_catalogs, progress=progress
+    )
     page_refs = sum(len(x.get("source_page_ids", [])) for x in discovered_catalogs)
     type_counts = dict(sorted(Counter(x["record_type"] for x in all_records).items()))
     metrics = {
@@ -2345,6 +2392,15 @@ def analyze_pages_incremental(
         "host_partitions_reused": reused, "host_partitions_rebuilt": rebuilt,
     }
     metrics.update(identity_metrics)
+    _emit_progress(
+        progress,
+        "catalog_metrics_complete",
+        pages=len(pages),
+        eligible_pages=eligible,
+        catalogs=len(all_catalogs),
+        records=len(all_records),
+        elapsed_seconds=round(time.monotonic() - metrics_started, 3),
+    )
     return {
         "schema_version": 1, "analysis_version": ANALYZER_VERSION,
         "strategy": "incremental-host-partitioned-page-content-derived-catalog-candidates",
@@ -2804,8 +2860,16 @@ def apply_source_policy_reviews(
     return analysis
 
 
-def _write_gzip(path: Path, payload: dict) -> tuple[int, str]:
+def _write_gzip(
+    path: Path,
+    payload: dict,
+    progress_label: str | None = None,
+    progress_interval_seconds: int = 60,
+) -> tuple[int, str]:
     """Write deterministic gzip JSON incrementally without duplicating the full payload in RAM."""
+    started = time.monotonic()
+    last_progress = started
+    uncompressed_bytes = 0
     path.parent.mkdir(parents=True, exist_ok=True)
     temp = path.with_suffix(path.suffix + ".tmp")
     encoder = json.JSONEncoder(ensure_ascii=False, separators=(",", ":"))
@@ -2818,19 +2882,62 @@ def _write_gzip(path: Path, payload: dict) -> tuple[int, str]:
             mtime=0,
         ) as compressed_file:
             for chunk in encoder.iterencode(payload):
-                compressed_file.write(chunk.encode("utf-8"))
+                encoded = chunk.encode("utf-8")
+                compressed_file.write(encoded)
+                uncompressed_bytes += len(encoded)
+                now = time.monotonic()
+                if progress_label and now - last_progress >= progress_interval_seconds:
+                    _emit_progress(
+                        True,
+                        progress_label + "_progress",
+                        phase="compress",
+                        uncompressed_bytes=uncompressed_bytes,
+                        elapsed_seconds=round(now - started, 3),
+                    )
+                    last_progress = now
             compressed_file.write(b"\n")
     temp.replace(path)
 
     digest = hashlib.sha256()
+    hashed_bytes = 0
     with path.open("rb") as compressed_file:
         for chunk in iter(lambda: compressed_file.read(1024 * 1024), b""):
             digest.update(chunk)
-    return path.stat().st_size, digest.hexdigest()
+            hashed_bytes += len(chunk)
+            now = time.monotonic()
+            if progress_label and now - last_progress >= progress_interval_seconds:
+                _emit_progress(
+                    True,
+                    progress_label + "_progress",
+                    phase="hash",
+                    hashed_bytes=hashed_bytes,
+                    elapsed_seconds=round(now - started, 3),
+                )
+                last_progress = now
+    size = path.stat().st_size
+    result_digest = digest.hexdigest()
+    _emit_progress(
+        bool(progress_label),
+        (progress_label + "_complete") if progress_label else "",
+        uncompressed_bytes=uncompressed_bytes,
+        compressed_bytes=size,
+        sha256=result_digest,
+        elapsed_seconds=round(time.monotonic() - started, 3),
+    )
+    return size, result_digest
 
 
-def _write_gzip_jsonl_catalogs(path: Path, kind: str, catalogs, expected_count: int) -> tuple[int, str, int]:
+def _write_gzip_jsonl_catalogs(
+    path: Path,
+    kind: str,
+    catalogs,
+    expected_count: int,
+    progress_label: str | None = None,
+    progress_interval_seconds: int = 60,
+) -> tuple[int, str, int]:
     """Write large identity registries as deterministic, line-streamed gzip JSONL."""
+    started = time.monotonic()
+    last_progress = started
     path.parent.mkdir(parents=True, exist_ok=True)
     temp = path.with_suffix(path.suffix + ".tmp")
     encoder = json.JSONEncoder(ensure_ascii=False, separators=(",", ":"))
@@ -2852,16 +2959,51 @@ def _write_gzip_jsonl_catalogs(path: Path, kind: str, catalogs, expected_count: 
             for item in catalogs:
                 compressed_file.write(encoder.encode(item).encode("utf-8") + b"\n")
                 count += 1
+                now = time.monotonic()
+                if progress_label and (
+                    count % 10000 == 0 or now - last_progress >= progress_interval_seconds
+                ):
+                    _emit_progress(
+                        True,
+                        progress_label + "_progress",
+                        items_written=count,
+                        items_expected=expected_count,
+                        elapsed_seconds=round(now - started, 3),
+                    )
+                    last_progress = now
             if count != expected_count:
                 raise ValueError(
                     f"{kind} stream count mismatch: expected {expected_count}, wrote {count}"
                 )
     temp.replace(path)
     digest = hashlib.sha256()
+    hashed_bytes = 0
     with path.open("rb") as compressed_file:
         for chunk in iter(lambda: compressed_file.read(1024 * 1024), b""):
             digest.update(chunk)
-    return path.stat().st_size, digest.hexdigest(), count
+            hashed_bytes += len(chunk)
+            now = time.monotonic()
+            if progress_label and now - last_progress >= progress_interval_seconds:
+                _emit_progress(
+                    True,
+                    progress_label + "_progress",
+                    phase="hash",
+                    hashed_bytes=hashed_bytes,
+                    elapsed_seconds=round(now - started, 3),
+                )
+                last_progress = now
+    size = path.stat().st_size
+    result_digest = digest.hexdigest()
+    _emit_progress(
+        bool(progress_label),
+        (progress_label + "_complete") if progress_label else "",
+        items_written=count,
+        items_expected=expected_count,
+        compressed_bytes=size,
+        sha256=result_digest,
+        elapsed_seconds=round(time.monotonic() - started, 3),
+    )
+    return size, result_digest, count
 
 
 def _singular_search_token(token: str) -> str | None:
@@ -2921,17 +3063,26 @@ def _search_catalog_priority(catalog: dict) -> tuple[int, str]:
     return rank, catalog_id
 
 
-def build_search_index(analysis: dict) -> dict[str, dict]:
+def build_search_index(analysis: dict, progress: bool = False) -> dict[str, dict]:
     """Build deterministic, relevance-prioritized token-to-catalog postings."""
+    started = time.monotonic()
+    catalogs = analysis.get("catalogs", [])
+    records = analysis.get("records", [])
+    _emit_progress(
+        progress,
+        "catalog_search_index_start",
+        catalogs=len(catalogs),
+        records=len(records),
+    )
     catalog_by_id = {
         item.get("catalog_id"): item
-        for item in analysis.get("catalogs", [])
+        for item in catalogs
         if isinstance(item, dict) and isinstance(item.get("catalog_id"), str)
     }
     catalog_ids = set(catalog_by_id)
     token_catalogs: dict[str, set[str]] = defaultdict(set)
 
-    for catalog in analysis.get("catalogs", []):
+    for catalog in catalogs:
         if not isinstance(catalog, dict) or catalog.get("public_search_allowed") is False:
             continue
         catalog_id = catalog.get("catalog_id")
@@ -2942,7 +3093,7 @@ def build_search_index(analysis: dict) -> dict[str, dict]:
                 token_catalogs[token].add(catalog_id)
 
     searchable_attributes = {"brand", "model", "sku", "mpn", "gtin", "manufacturer", "category", "address_locality", "address_region", "address_country", "city", "state", "region", "country", "postal_code", "location_name", "area_served", "service_type"}
-    for record in analysis.get("records", []):
+    for record_index, record in enumerate(records, start=1):
         if not isinstance(record, dict):
             continue
         related_catalogs = [
@@ -2950,6 +3101,15 @@ def build_search_index(analysis: dict) -> dict[str, dict]:
             if catalog_id in catalog_ids
         ]
         if not related_catalogs:
+            if progress and (record_index % 100000 == 0 or record_index == len(records)):
+                _emit_progress(
+                    True,
+                    "catalog_search_index_progress",
+                    records_processed=record_index,
+                    records_total=len(records),
+                    tokens_seen=len(token_catalogs),
+                    elapsed_seconds=round(time.monotonic() - started, 3),
+                )
             continue
         tokens = set()
         tokens.update(_search_tokens(record.get("title")))
@@ -2961,13 +3121,22 @@ def build_search_index(analysis: dict) -> dict[str, dict]:
                     tokens.update(_search_tokens(value))
         for token in tokens:
             token_catalogs[token].update(related_catalogs)
+        if progress and (record_index % 100000 == 0 or record_index == len(records)):
+            _emit_progress(
+                True,
+                "catalog_search_index_progress",
+                records_processed=record_index,
+                records_total=len(records),
+                tokens_seen=len(token_catalogs),
+                elapsed_seconds=round(time.monotonic() - started, 3),
+            )
 
     shards: dict[str, dict] = {}
     for token, related_catalogs in sorted(token_catalogs.items()):
         prefix = hashlib.sha256(token.encode("utf-8")).hexdigest()[:2]
         shard = shards.setdefault(prefix, {"version": 1, "prefix": prefix, "tokens": {}})
         shard["tokens"][token] = list(related_catalogs)
-    return {
+    result = {
         prefix: {
             **payload,
             "tokens": {
@@ -2980,6 +3149,15 @@ def build_search_index(analysis: dict) -> dict[str, dict]:
         }
         for prefix, payload in sorted(shards.items())
     }
+    _emit_progress(
+        progress,
+        "catalog_search_index_complete",
+        records=len(records),
+        tokens=sum(len(item["tokens"]) for item in result.values()),
+        shards=len(result),
+        elapsed_seconds=round(time.monotonic() - started, 3),
+    )
+    return result
 
 
 def _file_sha256(path: Path) -> str:
@@ -3013,7 +3191,29 @@ def _write_json_atomic(path: Path, payload: dict) -> None:
     temp.replace(path)
 
 
-def write_outputs(analysis: dict, output_dir: Path, index_batch_size: int = 64) -> dict:
+def write_outputs(
+    analysis: dict,
+    output_dir: Path,
+    index_batch_size: int = 64,
+    progress: bool = False,
+) -> dict:
+    started = time.monotonic()
+
+    def emit(stage: str, **details) -> None:
+        _emit_progress(
+            progress,
+            stage,
+            elapsed_seconds=round(time.monotonic() - started, 3),
+            **details,
+        )
+
+    emit(
+        "catalog_output_write_start",
+        pages=len(analysis.get("pages", [])),
+        catalogs=len(analysis.get("catalogs", [])),
+        records=len(analysis.get("records", [])),
+        index_batch_size=index_batch_size,
+    )
     apply_source_policy_reviews(analysis)
     output_dir.mkdir(parents=True, exist_ok=True)
     for obsolete_name in ("page-catalogs.json.gz", "record-catalogs.json.gz"):
@@ -3027,10 +3227,11 @@ def write_outputs(analysis: dict, output_dir: Path, index_batch_size: int = 64) 
         catalog["index_file"] = "indexes/" + index_digest[:2] + "/" + filename
         catalog["record_count"] = len(catalog.get("record_ids", []))
         catalog["source_page_count"] = len(catalog.get("source_page_ids", []))
+    emit("catalog_output_paths_assigned", catalogs=len(analysis["catalogs"]))
     size, digest = _write_gzip(output_dir / "pages.json.gz", {
         "version": 1, "source_index_pages": analysis["source_index_pages"],
         "pages": analysis["pages"],
-    })
+    }, progress_label="catalog_write_pages")
     files.append({"file": "pages.json.gz", "bytes": size, "sha256": digest, "items": len(analysis["pages"])})
     page_identity_count = analysis["metrics"].get("page_owned_identity_catalogs", 0)
     size, digest, written_page_identity_count = _write_gzip_jsonl_catalogs(
@@ -3038,6 +3239,7 @@ def write_outputs(analysis: dict, output_dir: Path, index_batch_size: int = 64) 
         "page_identity_catalogs",
         analysis.get("page_catalogs", []),
         page_identity_count,
+        progress_label="catalog_write_page_identity",
     )
     files.append({
         "file": "page-catalogs.jsonl.gz", "bytes": size, "sha256": digest,
@@ -3049,12 +3251,13 @@ def write_outputs(analysis: dict, output_dir: Path, index_batch_size: int = 64) 
         "record_identity_catalogs",
         analysis.get("record_catalogs", []),
         record_identity_count,
+        progress_label="catalog_write_record_identity",
     )
     files.append({
         "file": "record-catalogs.jsonl.gz", "bytes": size, "sha256": digest,
         "items": written_record_identity_count, "format": "jsonl",
     })
-    search_shards = build_search_index(analysis)
+    search_shards = build_search_index(analysis, progress=progress)
     if not search_shards:
         search_shards = {"00": {"version": 1, "prefix": "00", "tokens": {}}}
     analysis["metrics"]["search_index_tokens"] = sum(len(item["tokens"]) for item in search_shards.values())
@@ -3068,15 +3271,24 @@ def write_outputs(analysis: dict, output_dir: Path, index_batch_size: int = 64) 
         "version": 1, "analysis_version": analysis.get("analysis_version", ANALYZER_VERSION),
         "status": "candidate_staging_not_production",
         "metrics": analysis["metrics"], "source_policy_review": analysis.get("source_policy_review"), "catalogs": analysis["catalogs"],
-    })
+    }, progress_label="catalog_write_registry")
     files.append({"file": "registry.json.gz", "bytes": size, "sha256": digest, "items": len(analysis["catalogs"])})
     if isinstance(index_batch_size, bool) or not isinstance(index_batch_size, int) or not 1 <= index_batch_size <= 4096:
         raise ValueError("index_batch_size must be an integer from 1 to 4096")
 
     records_by_catalog = defaultdict(list)
-    for record in analysis["records"]:
+    emit("catalog_record_membership_build_start", records=len(analysis["records"]))
+    for record_index, record in enumerate(analysis["records"], start=1):
         for catalog_id in record.get("catalog_ids", []):
             records_by_catalog[catalog_id].append(record)
+        if progress and (record_index % 100000 == 0 or record_index == len(analysis["records"])):
+            emit(
+                "catalog_record_membership_build_progress",
+                records_processed=record_index,
+                records_total=len(analysis["records"]),
+                catalogs_with_records=len(records_by_catalog),
+            )
+    emit("catalog_record_membership_build_complete", catalogs_with_records=len(records_by_catalog))
 
     checkpoint_path = output_dir / ".catalog-index-progress.json"
     checkpoint_identity = {
@@ -3132,7 +3344,8 @@ def write_outputs(analysis: dict, output_dir: Path, index_batch_size: int = 64) 
         return _file_sha256(target) == expected_digest
 
     indexes_reused = indexes_written = processed_indexes = 0
-    for catalog in analysis["catalogs"]:
+    emit("catalog_per_catalog_index_build_start", catalogs=len(analysis["catalogs"]))
+    for catalog_index, catalog in enumerate(analysis["catalogs"], start=1):
         catalog_id = catalog["catalog_id"]
         relative_path = catalog["index_file"]
         target = output_dir / relative_path
@@ -3184,19 +3397,43 @@ def write_outputs(analysis: dict, output_dir: Path, index_batch_size: int = 64) 
                 **checkpoint_identity,
                 "completed": completed_indexes,
             })
+            emit(
+                "catalog_index_batch_progress",
+                indexes_processed=processed_indexes,
+                indexes_total=len(analysis["catalogs"]),
+                reused=indexes_reused,
+                written=indexes_written,
+            )
 
     _write_json_atomic(checkpoint_path, {
         **checkpoint_identity,
         "completed": completed_indexes,
     })
+    emit(
+        "catalog_per_catalog_index_build_complete",
+        indexes_processed=processed_indexes,
+        indexes_total=len(analysis["catalogs"]),
+        reused=indexes_reused,
+        written=indexes_written,
+    )
     search_index_dir = output_dir / "search-index"
     search_index_dir.mkdir(parents=True, exist_ok=True)
     expected_search_files = set()
-    for prefix, payload in search_shards.items():
+    for shard_index, (prefix, payload) in enumerate(sorted(search_shards.items()), start=1):
         relative_path = "search-index/" + prefix + ".json.gz"
         expected_search_files.add(relative_path)
-        size, digest = _write_gzip(output_dir / relative_path, payload)
+        size, digest = _write_gzip(
+            output_dir / relative_path,
+            payload,
+            progress_label="catalog_write_search_shard_" + prefix,
+        )
         files.append({"file": relative_path, "bytes": size, "sha256": digest, "items": len(payload["tokens"])})
+        if progress and (shard_index % 32 == 0 or shard_index == len(search_shards)):
+            emit(
+                "catalog_search_shard_write_progress",
+                shards_processed=shard_index,
+                shards_total=len(search_shards),
+            )
     for stale_path in search_index_dir.glob("*.json.gz"):
         relative_path = stale_path.relative_to(output_dir).as_posix()
         if relative_path not in expected_search_files:
@@ -3204,12 +3441,12 @@ def write_outputs(analysis: dict, output_dir: Path, index_batch_size: int = 64) 
 
     size, digest = _write_gzip(output_dir / "records.json.gz", {
         "version": 1, "records": analysis["records"],
-    })
+    }, progress_label="catalog_write_records")
     files.append({"file": "records.json.gz", "bytes": size, "sha256": digest, "items": len(analysis["records"])})
     size, digest = _write_gzip(output_dir / "media-references.json.gz", {
         "version": 2, "references": analysis["media_references"],
         "unique_media_urls": analysis["media_urls"],
-    })
+    }, progress_label="catalog_write_media_references")
     files.append({"file": "media-references.json.gz", "bytes": size, "sha256": digest, "items": len(analysis["media_references"])})
     snapshot_fields = {
         "analysis_started_at": analysis.get("analysis_started_at"),
@@ -3233,6 +3470,7 @@ def write_outputs(analysis: dict, output_dir: Path, index_batch_size: int = 64) 
         "catalogs_verified": 0, "records_published": 0,
         **snapshot_fields,
     }
+    emit("catalog_snapshot_report_write_start")
     (output_dir / "report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     manifest = {
         "version": 1, "analysis_version": analysis.get("analysis_version", ANALYZER_VERSION),
@@ -3256,19 +3494,38 @@ def write_outputs(analysis: dict, output_dir: Path, index_batch_size: int = 64) 
         "files": sorted(files, key=lambda x: x["file"]),
     }
     (output_dir / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    validate_outputs(output_dir)
+    emit("catalog_snapshot_manifest_written", files=len(files), catalogs=len(analysis["catalogs"]))
+    validation = validate_outputs(output_dir, progress=progress)
+    emit("catalog_output_write_complete", files=len(files), catalogs=len(analysis["catalogs"]), validation=validation)
     checkpoint_path.unlink(missing_ok=True)
     return manifest
 
 
-def validate_outputs(output_dir: Path) -> dict:
+def validate_outputs(output_dir: Path, progress: bool = False) -> dict:
+    started = time.monotonic()
+
+    def emit(stage: str, **details) -> None:
+        _emit_progress(
+            progress,
+            stage,
+            elapsed_seconds=round(time.monotonic() - started, 3),
+            **details,
+        )
+
     manifest = json.loads((output_dir / "manifest.json").read_text(encoding="utf-8"))
+    emit(
+        "catalog_validation_start",
+        files=len(manifest.get("files", [])),
+        catalogs=manifest.get("catalog_count"),
+        records=manifest.get("record_count"),
+    )
     source_index_sha256 = manifest.get("source_index_sha256")
     if source_index_sha256 is not None and not re.fullmatch(r"[0-9a-f]{64}", str(source_index_sha256)):
         raise ValueError("source index SHA-256 is malformed")
     registry_raw = (output_dir / "registry.json.gz").read_bytes()
     registry = json.loads(gzip.decompress(registry_raw).decode("utf-8"))
     report = json.loads((output_dir / "report.json").read_text(encoding="utf-8"))
+    emit("catalog_validation_registry_loaded", catalogs=len(registry.get("catalogs", [])))
     if manifest.get("metrics") != report.get("metrics"):
         raise ValueError("report and manifest metrics do not match")
     policy_review = manifest.get("source_policy_review")
@@ -3288,12 +3545,14 @@ def validate_outputs(output_dir: Path) -> dict:
         item["page_id"]: item for item in pages
         if item.get("page_id") and item.get("url")
     }
+    emit("catalog_validation_pages_loaded", pages=len(pages), unique_pages=len(page_by_id))
     media_payload = json.loads(gzip.decompress((output_dir / "media-references.json.gz").read_bytes()).decode("utf-8"))
     media_references = media_payload.get("references", [])
+    emit("catalog_validation_media_loaded", media_references=len(media_references))
     media_pairs = [(x.get("source_page_id"), x.get("media_url")) for x in media_references]
     if len(media_pairs) != len(set(media_pairs)):
         raise ValueError("media references contain duplicate page/media pairs")
-    for reference in media_references:
+    for reference_index, reference in enumerate(media_references, start=1):
         source_page = page_by_id.get(reference.get("source_page_id"))
         media_url = reference.get("media_url", "")
         if (
@@ -3303,11 +3562,14 @@ def validate_outputs(output_dir: Path) -> dict:
             or stable_id("media", media_url) != reference.get("media_id")
         ):
             raise ValueError("media reference provenance or stable ID is invalid")
+        if progress and (reference_index % 10000 == 0 or reference_index == len(media_references)):
+            emit("catalog_validation_media_progress", references_processed=reference_index, references_total=len(media_references))
     unique_media_urls = sorted({x.get("media_url") for x in media_references})
     if unique_media_urls != media_payload.get("unique_media_urls", []):
         raise ValueError("media URL registry does not match its provenance references")
     records_raw = (output_dir / "records.json.gz").read_bytes()
     records = json.loads(gzip.decompress(records_raw).decode("utf-8"))["records"]
+    emit("catalog_validation_records_loaded", records=len(records))
     page_ids = {
         item["page_id"] for item in pages
         if isinstance(item, dict) and item.get("page_id")
@@ -3315,30 +3577,37 @@ def validate_outputs(output_dir: Path) -> dict:
     source_page_ids = [item.get("page_id") for item in pages if isinstance(item, dict) and item.get("page_id")]
     if len(source_page_ids) != len(set(source_page_ids)):
         raise ValueError("source page registry contains duplicate page IDs")
-    for page in pages:
+    for page_index, page in enumerate(pages, start=1):
         if page.get("eligible") is True and not page.get("page_id"):
             raise ValueError("eligible source page is missing its canonical page ID")
         if page.get("page_id"):
             canonical_page_url = canonical_url(page.get("url"))
             if not canonical_page_url or stable_id("page", canonical_page_url) != page.get("page_id"):
                 raise ValueError("source page ID does not match its canonical URL")
+        if progress and (page_index % 50000 == 0 or page_index == len(pages)):
+            emit("catalog_validation_page_ids_progress", pages_processed=page_index, pages_total=len(pages))
     record_ids = [x["record_id"] for x in records]
     records_by_id = {x["record_id"]: x for x in records}
     if len(record_ids) != len(set(record_ids)) or len(records) != manifest["record_count"]:
         raise ValueError("global record registry contains duplicates or a count mismatch")
+    emit("catalog_validation_record_ids_loaded", records=len(records))
 
     record_ids_by_page: dict[str, set[str]] = defaultdict(set)
-    for page in pages:
+    for page_index, page in enumerate(pages, start=1):
         page_id = page.get("page_id")
         if page_id:
             record_ids_by_page[page_id].update(
                 record_id for record_id in page.get("record_ids", [])
                 if record_id in records_by_id
             )
-    for record in records:
+        if progress and (page_index % 50000 == 0 or page_index == len(pages)):
+            emit("catalog_validation_page_edges_progress", pages_processed=page_index, pages_total=len(pages))
+    for record_index, record in enumerate(records, start=1):
         for page_id in record.get("source_page_ids", []):
             if page_id in page_by_id:
                 record_ids_by_page[page_id].add(record["record_id"])
+        if progress and (record_index % 100000 == 0 or record_index == len(records)):
+            emit("catalog_validation_record_edges_progress", records_processed=record_index, records_total=len(records))
 
     manifest_entries = {item["file"]: item for item in manifest.get("files", [])}
     page_identity_path = output_dir / "page-catalogs.jsonl.gz"
@@ -3409,6 +3678,8 @@ def validate_outputs(output_dir: Path) -> dict:
             validate_private_identity_status(item)
             seen_page_identity_count += 1
             previous_page_identity_id = page_id
+            if progress and seen_page_identity_count % 50000 == 0:
+                emit("catalog_validation_page_identity_progress", items_validated=seen_page_identity_count, items_expected=expected_page_identity_count)
     if seen_page_identity_count != expected_page_identity_count:
         raise ValueError("page identity sidecar does not contain exactly one row per source page")
 
@@ -3454,9 +3725,16 @@ def validate_outputs(output_dir: Path) -> dict:
             validate_private_identity_status(item)
             seen_record_identity_count += 1
             previous_record_identity_id = record_id
+            if progress and seen_record_identity_count % 50000 == 0:
+                emit("catalog_validation_record_identity_progress", items_validated=seen_record_identity_count, items_expected=expected_record_identity_count)
     if seen_record_identity_count != expected_record_identity_count:
         raise ValueError("record identity sidecar does not contain exactly one row per record")
-    for page in pages:
+    emit(
+        "catalog_validation_identity_sidecars_complete",
+        page_identities=seen_page_identity_count,
+        record_identities=seen_record_identity_count,
+    )
+    for page_index, page in enumerate(pages, start=1):
         page_record_ids = page.get("record_ids", [])
         if not isinstance(page_record_ids, list) or len(page_record_ids) != len(set(page_record_ids)):
             raise ValueError("source page record relationships are malformed or duplicated")
@@ -3475,7 +3753,9 @@ def validate_outputs(output_dir: Path) -> dict:
                     f"source page {page.get('page_id')} ({page.get('url')}) references record "
                     f"{related_record_id}, but its provenance lists {related_record.get('source_page_ids', [])[:8]}"
                 )
-    for record in records:
+        if progress and (page_index % 50000 == 0 or page_index == len(pages)):
+            emit("catalog_validation_page_relationships_progress", pages_processed=page_index, pages_total=len(pages))
+    for record_index, record in enumerate(records, start=1):
         if "record_catalog_id" in record or "page_catalog_ids" in record:
             raise ValueError("individual records must remain distinct from catalog definitions")
         if stable_id("record", record.get("canonical_entity_key", "")) != record.get("record_id"):
@@ -3513,6 +3793,8 @@ def validate_outputs(output_dir: Path) -> dict:
         source_urls = record.get("source_urls", [])
         if not source_urls or any(canonical_url(url) != url for url in source_urls):
             raise ValueError("record source URL is missing or not canonical")
+        if progress and (record_index % 100000 == 0 or record_index == len(records)):
+            emit("catalog_validation_records_progress", records_processed=record_index, records_total=len(records))
     catalogs = registry["catalogs"]
     if len(catalogs) != manifest["catalog_count"]:
         raise ValueError("registry catalog count does not match manifest")
@@ -3520,7 +3802,7 @@ def validate_outputs(output_dir: Path) -> dict:
     catalogs_by_id = {x["catalog_id"]: x for x in catalogs}
     if len(catalog_ids) != len(set(catalog_ids)):
         raise ValueError("duplicate catalog IDs remain after deduplication")
-    for catalog in catalogs:
+    for catalog_index, catalog in enumerate(catalogs, start=1):
         if stable_id("catalog", catalog.get("source_key", "")) != catalog.get("catalog_id"):
             raise ValueError("catalog ID does not match its canonical source key")
         if catalog.get("catalog_origin") not in ("source_declared_collection", "content_list_declared_collection", "structured_schema_collection", "derived_from_repeated_records", "derived_from_global_typed_records"):
@@ -3554,6 +3836,8 @@ def validate_outputs(output_dir: Path) -> dict:
         parent_id = catalog.get("parent_catalog_id")
         if parent_id is not None and parent_id not in catalogs_by_id:
             raise ValueError("catalog references an unknown parent catalog")
+        if progress and (catalog_index % 5000 == 0 or catalog_index == len(catalogs)):
+            emit("catalog_validation_catalogs_progress", catalogs_processed=catalog_index, catalogs_total=len(catalogs))
     listed_index_files = [x["file"] for x in manifest["files"]]
     if len(listed_index_files) != len(set(listed_index_files)):
         raise ValueError("catalog manifest contains duplicate file paths")
@@ -3563,7 +3847,7 @@ def validate_outputs(output_dir: Path) -> dict:
     search_index_prefixes = set()
     search_index_tokens = set()
     search_index_postings = 0
-    for entry in manifest["files"]:
+    for entry_index, entry in enumerate(manifest["files"], start=1):
         path = output_dir / entry["file"]
         raw = path.read_bytes()
         if len(raw) != entry["bytes"] or hashlib.sha256(raw).hexdigest() != entry["sha256"]:
@@ -3636,6 +3920,14 @@ def validate_outputs(output_dir: Path) -> dict:
                 search_index_tokens.add(token)
                 search_index_postings += len(related_catalog_ids)
             search_index_prefixes.add(prefix)
+        if progress and (entry_index % 128 == 0 or entry_index == len(manifest["files"])):
+            emit(
+                "catalog_validation_files_progress",
+                files_processed=entry_index,
+                files_total=len(manifest["files"]),
+                per_catalog_indexes=len(index_catalog_ids),
+                search_shards=len(search_index_prefixes),
+            )
     if index_catalog_ids != set(catalog_ids):
         raise ValueError("one or more catalogs are missing a per-catalog index")
     metrics = manifest.get("metrics", {})
@@ -3662,6 +3954,15 @@ def validate_outputs(output_dir: Path) -> dict:
         raise ValueError("search index metrics do not match validated token postings")
     if registry["status"] != "candidate_staging_not_production":
         raise ValueError("candidate registry must not be advertised as production")
+    emit(
+        "catalog_validation_complete",
+        catalogs=len(catalog_ids),
+        pages=len(pages),
+        records=len(records),
+        files=len(manifest["files"]),
+        per_catalog_indexes=len(index_catalog_ids),
+        search_shards=len(search_index_prefixes),
+    )
     return {
         "catalogs": len(catalog_ids),
         "pages_analyzed": len(pages),
@@ -3749,7 +4050,7 @@ def main() -> None:
     parser.add_argument("--index-batch-size", type=int, default=64, help="Catalog indexes written between durable progress checkpoints")
     args = parser.parse_args()
     if args.validate_only:
-        print(json.dumps(validate_outputs(args.output_dir), indent=2))
+        print(json.dumps(validate_outputs(args.output_dir, progress=True), indent=2))
         return
     previous_snapshot = _read_previous_snapshot(args.output_dir)
     started_at = datetime.now(timezone.utc)
@@ -3791,7 +4092,12 @@ def main() -> None:
         analysis["count_deltas"] = None
         analysis["elapsed_wall_clock_seconds"] = None
         analysis["throughput"] = None
-    manifest = write_outputs(analysis, args.output_dir, index_batch_size=args.index_batch_size)
+    manifest = write_outputs(
+        analysis,
+        args.output_dir,
+        index_batch_size=args.index_batch_size,
+        progress=True,
+    )
     print(json.dumps({
         "metrics": analysis["metrics"],
         "previous_counts": analysis["previous_counts"],
