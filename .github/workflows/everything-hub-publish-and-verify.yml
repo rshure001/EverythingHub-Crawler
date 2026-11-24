@@ -1,11 +1,9 @@
 name: Publish and verify Everything Hub — in-house Supabase route
 # In-house static release: publish the approved homepage through the signed-in Supabase publisher and verify the public Storage URL.
 on:
+  # Manual only: this storage publisher requires a signed-in user JWT.
+  # The public, database-independent Edge Function route is validated separately.
   workflow_dispatch:
-  push:
-    paths:
-      - ".github/workflows/everything-hub-publish-and-verify.yml"
-      - "site/index.html"
 permissions:
   contents: read
 jobs:
