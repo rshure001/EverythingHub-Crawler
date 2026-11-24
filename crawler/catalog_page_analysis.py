@@ -1003,23 +1003,21 @@ def _build_identity_catalogs(page_rows: list[dict], records, stream_catalogs: bo
         page["page_id"]: page for page in page_rows
         if isinstance(page, dict) and page.get("page_id") and page.get("url")
     }
-    record_ids_by_page: dict[str, set[str]] = defaultdict(set)
-    for page_id, page in page_rows_by_id.items():
-        record_ids_by_page[page_id].update(
-            record_id for record_id in page.get("record_ids", [])
-            if record_id in record_map
-        )
-    for record_id, record in record_map.items():
-        for page_id in record.get("source_page_ids", []):
-            if page_id in page_rows_by_id:
-                record_ids_by_page[page_id].add(record_id)
+    # Page rows already own their forward record edges. The preceding
+    # provenance reconciliation guarantees each page edge resolves to a
+    # canonical record and repairs the reverse record->page edge. Rebuilding
+    # a second dict of sets here duplicates every page/record edge in memory;
+    # on a million-record corpus that extra index can exhaust the runner.
 
     def iter_page_catalogs():
         for page_id in sorted(page_rows_by_id):
             page = page_rows_by_id[page_id]
             url = page["url"]
             title = _title(page.get("title")) or url
-            record_ids = sorted(record_ids_by_page.get(page_id, set()))
+            record_ids = sorted({
+                record_id for record_id in page.get("record_ids", [])
+                if record_id in record_map
+            })
             yield {
                 "catalog_id": stable_id("catalog", "__page__|" + page_id),
                 "source_key": "__page__|" + page_id,
@@ -1080,7 +1078,7 @@ def _build_identity_catalogs(page_rows: list[dict], records, stream_catalogs: bo
             }
 
     page_catalog_count = len(page_rows_by_id)
-    page_catalogs_with_records = sum(bool(record_ids_by_page.get(page_id)) for page_id in page_rows_by_id)
+    page_catalogs_with_records = sum(bool(page.get("record_ids")) for page in page_rows_by_id.values())
     metrics = {
         "page_owned_identity_catalogs": page_catalog_count,
         "page_owned_identity_catalogs_with_records": page_catalogs_with_records,
@@ -2228,15 +2226,42 @@ def analyze_pages_incremental(
             "records": len(all_records),
             "elapsed_seconds": round(time.monotonic() - global_started, 3),
         }, sort_keys=True), flush=True)
+    identity_started = time.monotonic()
+    if progress:
+        print(json.dumps({
+            "stage": "catalog_identity_sidecars_start",
+            "pages": len(all_page_rows),
+            "records": len(all_records),
+        }, sort_keys=True), flush=True)
     identity_metrics, page_identity_catalogs, record_identity_catalogs = _build_identity_catalogs(
         all_page_rows, all_records, stream_catalogs=True
     )
+    if progress:
+        print(json.dumps({
+            "stage": "catalog_identity_sidecars_complete",
+            "page_identity_catalogs": identity_metrics["page_owned_identity_catalogs"],
+            "record_identity_catalogs": identity_metrics["record_owned_identity_catalogs"],
+            "elapsed_seconds": round(time.monotonic() - identity_started, 3),
+        }, sort_keys=True), flush=True)
     # Keep the canonical record map through all global reconciliation passes.
     # The sidecar generators retain this map and stream one identity row at a time.
+    sort_started = time.monotonic()
+    if progress:
+        print(json.dumps({
+            "stage": "catalog_snapshot_sort_start",
+            "pages": len(all_page_rows),
+            "records": len(all_records),
+            "catalogs": len(all_catalogs),
+        }, sort_keys=True), flush=True)
     all_records = list(all_records.values())
     all_catalogs.sort(key=lambda x: (x["catalog_type"], x["title"].casefold(), x["catalog_id"]))
     all_records.sort(key=lambda x: (x["record_type"], x["title"].casefold(), x["record_id"]))
     all_page_rows.sort(key=lambda x: (x.get("url") or "", x.get("page_id") or ""))
+    if progress:
+        print(json.dumps({
+            "stage": "catalog_snapshot_sort_complete",
+            "elapsed_seconds": round(time.monotonic() - sort_started, 3),
+        }, sort_keys=True), flush=True)
     source_total = max(source_total if isinstance(source_total, int) and source_total >= 0 else source_page_rows, source_page_rows)
     unique_source_total = max(len(pages), source_total - duplicate_source_page_rows)
     source_set_complete = len(pages) == unique_source_total
