@@ -4232,6 +4232,66 @@
         "workflow_run_id": "45451983511",
         "repository": "rshure001/EverythingHub-Crawler"
       }
+    },
+    {
+      "id": "page-derived-catalog-analysis-45501022725",
+      "timestamp": "2026-11-24T22:34:39Z",
+      "type": "page_derived_catalog_analysis",
+      "status": "validated_staging",
+      "summary": "Page-derived catalog registry and per-catalog indexes passed integrity validation; candidate records remain staging-only pending source-terms review and production indexing.",
+      "metrics": {
+        "pages_analyzed": 214676,
+        "eligible_pages": 213894,
+        "unique_catalogs_discovered": 24230,
+        "duplicate_catalog_candidates": 1292380,
+        "subcatalogs_discovered": 1373,
+        "unique_records": 1282713,
+        "media_references": 7910,
+        "unique_media_urls": 3990,
+        "records_staged": 1282713,
+        "source_terms_reviewed_records": 0,
+        "commercially_eligible_records": 0,
+        "records_with_provenance": 1282713,
+        "records_with_timestamps": 1282713,
+        "cross_host_record_merges": 0,
+        "catalogs_with_records": 22114,
+        "catalogs_without_records": 2116,
+        "unassigned_records": 6271,
+        "unique_records_by_type": {
+          "article": 46999,
+          "brand": 145,
+          "business": 480,
+          "dataset": 5030,
+          "event": 2540,
+          "media": 2555,
+          "model": 122,
+          "organization": 1700,
+          "person": 3702,
+          "place": 1680,
+          "product": 2186,
+          "resource": 9366,
+          "service": 740,
+          "software": 882,
+          "subject": 1204586
+        },
+        "coverage_percentage": 100.0,
+        "unique_source_coverage_percentage": 100.0,
+        "eligible_page_coverage_percentage": 100.0,
+        "eligible_unique_source_page_coverage_percentage": 100.0,
+        "source_index_pages": 215183,
+        "records_published": 0,
+        "catalogs_verified": 0,
+        "previous_counts": null,
+        "count_deltas": null,
+        "elapsed_wall_clock_seconds": null,
+        "analysis_elapsed_seconds": 137.548,
+        "throughput": null
+      },
+      "source": {
+        "workflow_run_id": "45501022725",
+        "repository": "rshure001/EverythingHub-Crawler",
+        "source_index_sha256": "46b14463a8a2beefadd8ab7482d160d2868e716214d771619f89bcbe2f3b4230"
+      }
     }
   ]
 }
