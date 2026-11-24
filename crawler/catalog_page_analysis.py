@@ -3202,6 +3202,7 @@ def write_outputs(
     output_dir: Path,
     index_batch_size: int = 64,
     progress: bool = False,
+    validate_output: bool = True,
 ) -> dict:
     started = time.monotonic()
 
@@ -3501,9 +3502,16 @@ def write_outputs(
     }
     (output_dir / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     emit("catalog_snapshot_manifest_written", files=len(files), catalogs=len(analysis["catalogs"]))
-    validation = validate_outputs(output_dir, progress=progress)
-    emit("catalog_output_write_complete", files=len(files), catalogs=len(analysis["catalogs"]), validation=validation)
-    checkpoint_path.unlink(missing_ok=True)
+    validation = validate_outputs(output_dir, progress=progress) if validate_output else None
+    emit(
+        "catalog_output_write_complete",
+        files=len(files),
+        catalogs=len(analysis["catalogs"]),
+        validation=validation,
+        validation_skipped=not validate_output,
+    )
+    if validate_output:
+        checkpoint_path.unlink(missing_ok=True)
     return manifest
 
 
@@ -4049,6 +4057,7 @@ def main() -> None:
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--query", action="append", default=[])
     parser.add_argument("--validate-only", action="store_true")
+    parser.add_argument("--skip-output-validation", action="store_true", help="Persist candidate catalogs and indexes now; run the full validator as a separate step")
     parser.add_argument("--no-incremental", action="store_true")
     parser.add_argument("--cache-only", action="store_true", help="Build and persist per-host cache shards without catalog aggregation")
     parser.add_argument("--cache-dir", type=Path, default=ROOT / "data" / ".page-derived-catalog-cache")
@@ -4103,6 +4112,7 @@ def main() -> None:
         args.output_dir,
         index_batch_size=args.index_batch_size,
         progress=True,
+        validate_output=not args.skip_output_validation,
     )
     print(json.dumps({
         "metrics": analysis["metrics"],
