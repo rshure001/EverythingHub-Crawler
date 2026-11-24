@@ -327,12 +327,9 @@ Deno.serve(async (req: Request) => {
           : (payload.catalogPreview || pageDerivedCatalogMeta),
       };
     };
-    // Vercel has been removed from the production search path.
-    // Use the independent web fallback when the database is unavailable.
-    if (reason === "database_unavailable") {
-      const independent = await independentFallback(reason, null, attachCatalogPreview);
-      if (independent) return independent;
-    }
+    // Prefer the first-party public crawler index during database outages.
+    // The independent Bing RSS source is only a supplement when the owned index
+    // has no matching pages or cannot be loaded.
 
     let crawlerIndexCount: number | null = null;
     let catalogLoaded = false;
@@ -378,10 +375,8 @@ Deno.serve(async (req: Request) => {
       console.error("Static crawler index fallback unavailable:", detail);
     }
 
-    if (reason !== "database_unavailable") {
-      const independent = await independentFallback(reason, crawlerIndexCount, attachCatalogPreview);
-      if (independent) return independent;
-    }
+    const independent = await independentFallback(reason, crawlerIndexCount, attachCatalogPreview);
+    if (independent) return independent;
 
     if (catalogLoaded) {
       return json(attachCatalogPreview({
