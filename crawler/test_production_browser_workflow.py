@@ -46,6 +46,17 @@ class ProductionBrowserWorkflowContractTests(unittest.TestCase):
             workflow,
         )
 
+    def test_library_navigation_is_checked_after_leaving_hero_only_state(self):
+        workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+        search_state = workflow.index('await searchWeb("NASA", "nasa|space|aerospace", "nasa");')
+        library_button = workflow.index('const libraryNavButton = page.locator("button.nav-library").first();')
+        self.assertLess(search_state, library_button)
+        self.assertIn('await libraryNavButton.waitFor({ state: "visible", timeout: 12000 });', workflow)
+        self.assertIn("headerLibraryVisible", workflow)
+        self.assertIn("exploreLinkVisible", workflow)
+        self.assertIn("aboutLinkVisible", workflow)
+        self.assertIn("dogTagDayLinkVisible", workflow)
+
     def test_catalog_updates_use_publisher_completion_trigger(self):
         workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
         self.assertNotIn('"public-search/**"', workflow)
