@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
-"""Publish an already validated catalog snapshot without re-running analysis on a moving main branch.
+"""Publish a candidate catalog snapshot promptly, before exhaustive validation.
 
-The caller must run catalog_page_analysis.py --validate-only and the source-policy
-queue validator before invoking this publisher. The snapshot is tied to the
-immutable source-index SHA recorded in report.json; if main advances while the
-publish is attempted, only the small publish/ledger step is repeated.
+This publisher accepts only a candidate-staging registry with every catalog
+explicitly unverified and commercially ineligible. Full per-index semantic
+validation runs after publication and must pass before search smoke testing.
+The snapshot remains tied to the immutable source-index SHA in report.json.
 """
 from __future__ import annotations
 
 import argparse
+import gzip
 import hashlib
 import json
 import os
@@ -83,6 +84,22 @@ def _read_snapshot(directory: Path) -> dict:
     if not (directory / "indexes").is_dir():
         raise ValueError("validated catalog snapshot is missing per-catalog indexes")
     report = json.loads((directory / "report.json").read_text(encoding="utf-8"))
+    try:
+        registry = json.loads(gzip.decompress((directory / "registry.json.gz").read_bytes()).decode("utf-8"))
+    except (OSError, ValueError, gzip.BadGzipFile, UnicodeDecodeError) as exc:
+        raise ValueError("candidate catalog registry is unreadable") from exc
+    catalogs = registry.get("catalogs") if isinstance(registry, dict) else None
+    if registry.get("status") != "candidate_staging_not_production" or not isinstance(catalogs, list):
+        raise ValueError("only a candidate-staging catalog registry may be published")
+    if any(
+        not isinstance(item, dict)
+        or item.get("verified") is not False
+        or item.get("commercial_eligible") is not False
+        or item.get("source_terms_status") != "not_reviewed"
+        or item.get("record_level_clearance") not in (None, "not_reviewed")
+        for item in catalogs
+    ):
+        raise ValueError("candidate registry contains a catalog that overstates verification or rights clearance")
     metrics = report.get("metrics")
     if not isinstance(metrics, dict):
         raise ValueError("catalog report metrics must be an object")
@@ -173,7 +190,7 @@ def publish_snapshot(
     ledger_command=None,
     env=None,
 ) -> dict:
-    """Publish validated catalog files on the latest main tip, without reanalysis."""
+    """Publish candidate catalog files on the latest main tip, without reanalysis."""
     root = Path(repo_root).resolve()
     if isinstance(attempts, bool) or not isinstance(attempts, int) or not 1 <= attempts <= 8:
         raise ValueError("attempts must be an integer from 1 to 8")
@@ -243,7 +260,7 @@ def publish_snapshot(
             if staged.returncode != 1:
                 raise RuntimeError("unable to inspect staged catalog publication changes")
 
-            _git(root, "commit", "-m", "Publish validated page-derived catalog candidates", env=child_env)
+            _git(root, "commit", "-m", "Publish candidate page-derived catalog snapshot", env=child_env)
             local_head = _git(root, "rev-parse", "HEAD", env=child_env).stdout.strip()
             pushed = _git(root, "push", "origin", "HEAD:main", env=child_env, check=False)
             if pushed.returncode == 0:
