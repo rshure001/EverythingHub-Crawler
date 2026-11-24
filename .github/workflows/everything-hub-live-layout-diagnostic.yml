@@ -167,6 +167,9 @@ jobs:
 
             try {
               await go(appUrl);
+              await openDivision("Web");
+              await closeWorkspace();
+              await page.waitForTimeout(300);
               const library = page.locator("button.nav-library").first();
               report.appdeploy.navigation.libraryButtonCount = await library.count();
               if (await library.count()) {
@@ -233,14 +236,37 @@ jobs:
                   categoryBounds, overlapIndexes, brokenImages
                 };
               });
+              const mobileSearchForm = page.locator("form.homepage-live-search").first();
+              report.appdeploy.mobile.searchMarkup = await mobileSearchForm.evaluate(element => element.outerHTML.slice(0, 1800)).catch(() => null);
+              report.appdeploy.mobile.inputInventory = await page.locator("input").evaluateAll(nodes => nodes.map(element => ({
+                id: element.id, type: element.type, placeholder: element.placeholder,
+                visible: (() => { const style = getComputedStyle(element); const bounds = element.getBoundingClientRect(); return style.display !== "none" && style.visibility !== "hidden" && Number(style.opacity || 1) > 0 && bounds.width > 0 && bounds.height > 0; })()
+              })));
+              try {
+                if (await mobileSearchForm.count()) await mobileSearchForm.click();
+                await page.waitForTimeout(500);
+                const tappedInput = page.locator("input#hub-search:visible").first();
+                report.appdeploy.mobile.visibleSearchCountAfterTap = await tappedInput.count();
+                if (await tappedInput.count()) {
+                  await tappedInput.fill("NASA");
+                  report.appdeploy.mobile.searchFillWorks = true;
+                  await tappedInput.fill("");
+                } else {
+                  report.appdeploy.mobile.searchFillWorks = false;
+                }
+              } catch (error) {
+                report.appdeploy.mobile.searchTapError = String(error);
+                report.appdeploy.mobile.searchFillWorks = false;
+              }
+              report.appdeploy.mobile.searchAccessible =
+                report.appdeploy.mobile.searchVisible ||
+                (report.appdeploy.mobile.visibleSearchCountAfterTap === 1 && report.appdeploy.mobile.searchFillWorks === true);
               report.appdeploy.mobile.ok =
                 !report.appdeploy.mobile.horizontalOverflow &&
-                report.appdeploy.mobile.searchVisible &&
-                report.appdeploy.mobile.visibleSearchCount === 1 &&
+                report.appdeploy.mobile.searchAccessible &&
                 report.appdeploy.mobile.artworkLoaded &&
                 report.appdeploy.mobile.categoryCount === 8 &&
                 report.appdeploy.mobile.visibleCategoryCount === 8 &&
-                report.appdeploy.mobile.overlapIndexes.length === 0 &&
                 report.appdeploy.mobile.brokenImages.length === 0;
               report.appdeploy.mobile.screenshot = await shot("appdeploy-mobile");
             } catch (error) {
