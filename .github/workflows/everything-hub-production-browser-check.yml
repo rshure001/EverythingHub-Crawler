@@ -120,7 +120,7 @@ jobs:
               const modeLabel = await page.locator("#modeLabel").innerText().catch(() => "");
               const categoryStateChanged = buttonState.ariaPressed === "true" ||
                 buttonState.ariaCurrent === "true" ||
-                /\\b(active|selected)\\b/i.test(String(buttonState.className || "")) ||
+                /\b(active|selected)\b/i.test(String(buttonState.className || "")) ||
                 String(placeholder || "").toLowerCase().includes(name.toLowerCase()) ||
                 String(modeLabel || "").toLowerCase().includes(name.toLowerCase()) ||
                 (workspaceVisible && titleVisible && title === "Explore " + name);
