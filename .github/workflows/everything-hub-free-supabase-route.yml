@@ -101,7 +101,7 @@ jobs:
           set -euo pipefail
           node <<'NODE'
           const fs = require("node:fs");
-          const data = JSON.parse(fs.readFileSync("/tmp/search.json", "utf8"));
+          const data = JSON.parse(fs.readFileSync("/tmp/search-las_vegas.json", "utf8"));
           const catalogs = Array.isArray(data.catalogResults) ? data.catalogResults : [];
           const records = catalogs.flatMap(item => Array.isArray(item.matched_records) ? item.matched_records : []);
           const record = records.find(item =>
