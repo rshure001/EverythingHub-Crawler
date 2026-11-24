@@ -234,6 +234,20 @@ class PageDerivedCatalogAnalysisTests(unittest.TestCase):
                 "text": "Organization profile for NASA Johnson Space Center.",
                 "lane": "general", "robots_allowed": True, "fetched_at": 103,
             },
+            {
+                "url": "https://visitlasvegas.com/places/las-vegas/strip",
+                "title": "Las Vegas Strip",
+                "description": "Explore the Las Vegas Strip.",
+                "text": "Places and attractions in Las Vegas.",
+                "lane": "places", "robots_allowed": True, "fetched_at": 104,
+            },
+            {
+                "url": "https://visitlasvegas.com/places/las-vegas/downtown",
+                "title": "Downtown Las Vegas",
+                "description": "Explore downtown Las Vegas.",
+                "text": "Places, attractions and destinations in Las Vegas.",
+                "lane": "places", "robots_allowed": True, "fetched_at": 105,
+            },
         ]
         analysis = analyze_pages(pages, source_total=len(pages))
         with tempfile.TemporaryDirectory() as tmp:
