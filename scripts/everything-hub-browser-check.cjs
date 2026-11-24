@@ -45,6 +45,8 @@ const EXPECTED_MODES = ["business", "images", "news", "places", "research", "sho
     if (mode === "images") {
       const images = page.locator("#results .result .preview img");
       const imageCount = await images.count();
+      for (let index = 0; index < Math.min(imageCount, 3); index++) await images.nth(index).scrollIntoViewIfNeeded();
+      await page.waitForFunction(() => [...document.querySelectorAll("#results .result .preview img")].filter(img => img.complete && img.naturalWidth > 0).length >= 2, { timeout: 30000 }).catch(() => {});
       const loaded = await images.evaluateAll(nodes => nodes.filter(img => img.complete && img.naturalWidth > 0).length);
       const attributions = await page.locator("#results .result .result-copy .source").allTextContents();
       result.thumbnails = imageCount;
@@ -71,6 +73,7 @@ const EXPECTED_MODES = ["business", "images", "news", "places", "research", "sho
     if (mode === "videos") {
       const previews = page.locator("#results .result .preview img, #results .result .preview video");
       const previewCount = await previews.count();
+      for (let index = 0; index < Math.min(previewCount, 2); index++) await previews.nth(index).scrollIntoViewIfNeeded();
       const attributions = await page.locator("#results .result .result-copy .source").allTextContents();
       result.videoPreviews = previewCount;
       result.attributions = attributions.slice(0, 5);
@@ -121,7 +124,7 @@ const EXPECTED_MODES = ["business", "images", "news", "places", "research", "sho
 
     // Exercise every remaining search category.
     await runSearch("news", "NASA Artemis", "nasa");
-    await runSearch("images", "solar eclipse", null);
+    await runSearch("images", "NASA", null);
     await runSearch("videos", "animation");
     await runSearch("shopping", "Rolex", "rolex");
     await runSearch("places", "Las Vegas", "las vegas");
