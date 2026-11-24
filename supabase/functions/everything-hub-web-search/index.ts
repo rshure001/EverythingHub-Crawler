@@ -52,6 +52,16 @@ let staticCatalogPromise: Promise<StaticCatalog | null> | null = null;
 const queryIndexShardCache = new Map<string, CachedPayload<any>>();
 const pageShardCache = new Map<number, CachedPayload<any[]>>();
 
+function setBoundedCache<T>(cache: Map<any, CachedPayload<T>>, key: any, value: T, maxEntries: number): void {
+  if (cache.has(key)) cache.delete(key);
+  while (cache.size >= maxEntries) {
+    const oldest = cache.keys().next().value;
+    if (oldest === undefined) break;
+    cache.delete(oldest);
+  }
+  cache.set(key, { value, expiresAt: Date.now() + STATIC_INDEX_CACHE_MS });
+}
+
 const MAX_QUERY_INDEX_SHARD_COMPRESSED_BYTES = 2_000_000;
 const MAX_QUERY_INDEX_SHARD_UNCOMPRESSED_BYTES = 8_000_000;
 const MAX_PAGE_SHARD_COMPRESSED_BYTES = 350_000;
@@ -230,7 +240,7 @@ async function loadQueryIndexShard(manifest: any, prefix: string, signal: AbortS
   ) {
     throw new Error("Query-index shard schema or decoded size is invalid: " + file);
   }
-  queryIndexShardCache.set(prefix, { value: payload, expiresAt: Date.now() + STATIC_INDEX_CACHE_MS });
+  setBoundedCache(queryIndexShardCache, prefix, payload, 2);
   return payload;
 }
 
@@ -271,7 +281,7 @@ async function loadPageShard(manifest: any, shardIndex: number, signal: AbortSig
   ) {
     throw new Error("Page-shard schema or decoded size is invalid: " + meta.file);
   }
-  pageShardCache.set(shardIndex, { value: payload.pages, expiresAt: Date.now() + STATIC_INDEX_CACHE_MS });
+  setBoundedCache(pageShardCache, shardIndex, payload.pages, 40);
   return payload.pages;
 }
 
