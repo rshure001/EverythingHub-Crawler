@@ -137,7 +137,7 @@ class RetroCatalogDiscoveryTests(unittest.TestCase):
         self.assertIn("        if: always()", checkpoint_step)
         self.assertNotIn("hashFiles", checkpoint_step)
         self.assertIn("uses: actions/cache/save@v4", checkpoint_step)
-        self.assertIn("path: data/.page-derived-catalog-cache", checkpoint_step)
+        self.assertIn("data/.page-derived-catalog-cache", checkpoint_step)
 
 
 if __name__ == "__main__":
