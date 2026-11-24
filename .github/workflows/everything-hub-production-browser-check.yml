@@ -98,7 +98,7 @@ jobs:
               await goHome();
               await openDivision("Web");
               await closeWorkspace();
-              const input = page.locator("form.homepage-live-search input#hub-search");
+              const input = page.locator("input#hub-search:visible").first();
               await input.fill(query);
               await input.press("Enter");
               await page.waitForFunction(arg => {
@@ -124,7 +124,8 @@ jobs:
                 brand: (await page.locator(".brand-word").innerText()).trim(),
                 tagline: (await page.locator(".approved-hero-tagline").innerText()).trim()
               };
-              report.searchInputVisible = await page.locator("form.homepage-live-search input#hub-search").isVisible();
+              const visibleSearchInputs = page.locator("input#hub-search:visible");
+              report.searchInputVisible = (await visibleSearchInputs.count()) === 1;
               report.divisions = await page.locator("nav.hub-hero-divisions button").evaluateAll(nodes =>
                 nodes.map(node => (node.getAttribute("aria-label") || node.innerText || "").trim())
               );
@@ -156,7 +157,7 @@ jobs:
               await goHome();
               await openDivision("Images");
               await closeWorkspace();
-              const imageInput = page.locator("form.homepage-live-search input#hub-search");
+              const imageInput = page.locator("input#hub-search:visible").first();
               await imageInput.fill("solar panels");
               await imageInput.press("Enter");
               await page.waitForFunction(() => document.querySelectorAll(".image-results-grid .image-result").length > 0, null, { timeout: 45000 });
@@ -293,7 +294,7 @@ jobs:
               const mobileLayout = await page.evaluate(() => {
                 const viewportWidth = window.innerWidth;
                 const documentWidth = document.documentElement.scrollWidth;
-                const search = document.querySelector("form.homepage-live-search input#hub-search");
+                const search = Array.from(document.querySelectorAll("input#hub-search")).find(el => el.getClientRects().length > 0);
                 const artwork = document.querySelector(".everythinghub-approved-home-art img.approved-master-image");
                 const buttons = Array.from(document.querySelectorAll("nav.hub-hero-divisions button"));
                 const rect = element => {
