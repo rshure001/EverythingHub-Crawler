@@ -2,6 +2,49 @@ const input=document.getElementById('query'),form=document.getElementById('searc
 let mode=new URLSearchParams(location.search).get('mode')||'web';
 document.querySelectorAll('[data-mode]').forEach(b=>b.addEventListener('click',()=>{mode=b.dataset.mode;input.focus();status.textContent='Selected '+b.getAttribute('aria-label')+' search';}));
 const resultsRoot=document.getElementById('results');
+const EH_SUPABASE_BASE='https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1';
+const EH_PUBLIC_KEY='sb_publishable_XlIsACWhtVS1jVODWYGTpg_GMs8v3vJ';
+const EH_SUPABASE_LANES={web:null,news:'news',images:'general',videos:'general',shopping:'business',places:'culture',business:'business',research:'science'};
+async function fetchSupabaseFunction(slug,params={}){
+  const u=new URL(EH_SUPABASE_BASE+'/'+slug);
+  for(const [key,value] of Object.entries(params))if(value!==null&&value!==undefined&&value!=='')u.searchParams.set(key,String(value));
+  const response=await fetch(u,{headers:{apikey:EH_PUBLIC_KEY,accept:'application/json'},signal:AbortSignal.timeout(15000)});
+  const payload=await response.json().catch(()=>({}));
+  if(!response.ok)throw new Error('Everything Hub free Edge service '+response.status);
+  return payload;
+}
+async function requestSupabaseSearch(q,category){
+  const payload=await fetchSupabaseFunction('everything-hub-web-search',{q,limit:20,offset:0,tentacle:EH_SUPABASE_LANES[category]});
+  if(!hasIndexedResults(payload))return null;
+  return {...payload,providers:Array.isArray(payload.providers)?payload.providers:[payload.provider||'Everything Hub Edge Search']};
+}
+async function requestSupabaseIndependentSearch(q){
+  const payload=await fetchSupabaseFunction('everything-hub-independent-search',{q});
+  return {...payload,results:Array.isArray(payload.results)?payload.results:[],count:Number(payload.count)||((payload.results||[]).length),provider:payload.provider||'Bing RSS',providers:[payload.provider||'Bing RSS']};
+}
+async function requestSupabaseMediaSearch(q,type){
+  const payload=await fetchSupabaseFunction('everything-hub-media-search',{q,type});
+  const licensed=(Array.isArray(payload.results)?payload.results:[]).filter(item=>
+    item&&item.source==='Wikimedia Commons'&&item.license&&item.licenseUrl&&item.thumbnailUrl&&
+    (item.creator||item.credit)&&(type==='video'?item.videoUrl:item.imageUrl)
+  );
+  return {
+    status:'ok',
+    items:licensed.map(item=>({
+      url:item.pageUrl||item.videoUrl||item.imageUrl,
+      thumbnail:item.thumbnailUrl||item.imageUrl,
+      title:item.title||'Licensed public media',
+      source:item.source,
+      license:item.license,
+      licenseUrl:item.licenseUrl,
+      creator:item.creator||item.credit,
+      credit:item.credit||item.creator
+    })),
+    count:licensed.length,
+    provider:'Wikimedia Commons'
+  };
+}
+
 function safeUrl(value){try{const u=new URL(value);return (u.protocol==='https:'||u.protocol==='http:')?u.href:'#';}catch{return '#';}}
 function makeHeading(q,label,countText){
   const heading=document.createElement('div');heading.className='results-heading';
@@ -100,7 +143,7 @@ function renderResults(data,q){
 function renderImages(data,q){
   resultsRoot.replaceChildren();
   const items=Array.isArray(data.items)?data.items:[];
-  makeHeading(q,"Image results",items.length.toLocaleString()+" openly licensed images · Internet Archive");
+  makeHeading(q,"Image results",items.length.toLocaleString()+" licensed images · "+(data.provider||"public sources"));
   const grid=document.createElement("div");grid.className="media-grid";
   for(let index=0;index<items.length;index++){
     const item=items[index],card=document.createElement("article");card.className="media-card";
@@ -120,7 +163,7 @@ function renderImages(data,q){
     const licenseLink=document.createElement("a");licenseLink.href=safeUrl(item.licenseUrl);licenseLink.target="_blank";licenseLink.rel="noopener noreferrer";licenseLink.textContent=item.license||"License";small.append(licenseLink);
     card.append(link,title,small);grid.append(card);
   }
-  if(!items.length){const empty=document.createElement("div");empty.className="results-empty";empty.textContent="No matching Internet Archive images with an approved license and required attribution were found. Try another search.";resultsRoot.append(empty);return;}
+  if(!items.length){const empty=document.createElement("div");empty.className="results-empty";empty.textContent="No images with verified license and attribution metadata were returned. Try another search.";resultsRoot.append(empty);return;}
   resultsRoot.append(grid);
 }
 function renderVideos(data,q){
@@ -145,18 +188,34 @@ function renderVideos(data,q){
   resultsRoot.append(grid);
 }
 async function runImageSearch(q){
-  status.textContent="Searching open-license image collections…";
-  const u=new URL("https://everythinghub-search-backend.vercel.app/api/images");u.searchParams.set("q",q);
-  const response=await fetch(u,{signal:AbortSignal.timeout(25000)});const data=await response.json();
-  if(!response.ok||data.status!=="ok")throw new Error(data.message||"Image search unavailable");
-  renderImages(data,q);status.textContent=data.count.toLocaleString()+" openly licensed images from Internet Archive.";
+  status.textContent="Searching licensed image collections…";
+  let data=null,lastError=null;
+  try{
+    const u=new URL("https://everythinghub-search-backend.vercel.app/api/images");u.searchParams.set("q",q);
+    const response=await fetch(u,{signal:AbortSignal.timeout(25000)}),candidate=await response.json().catch(()=>({}));
+    if(!response.ok||candidate.status!=="ok"||!Array.isArray(candidate.items)||!candidate.items.length)throw new Error(candidate.message||"Image search unavailable");
+    data=candidate;
+  }catch(error){lastError=error;}
+  if(!data){
+    data=await requestSupabaseMediaSearch(q,"image");
+    if(!data.items.length)throw new Error(lastError?.message||"No license-cleared image thumbnails are available for this search.");
+  }
+  renderImages(data,q);status.textContent=data.count.toLocaleString()+" licensed images from "+(data.provider||"public sources")+".";
 }
 async function runVideoSearch(q){
-  status.textContent='Searching public video sources…';
-  const u=new URL('https://everythinghub-search-backend.vercel.app/api/videos');u.searchParams.set('q',q);
-  const response=await fetch(u,{signal:AbortSignal.timeout(25000)});const data=await response.json();
-  if(!response.ok||data.status!=='ok')throw new Error(data.message||'Video search unavailable');
-  renderVideos(data,q);status.textContent=data.count.toLocaleString()+' videos from '+data.provider+'.';
+  status.textContent='Searching licensed public video sources…';
+  let data=null,lastError=null;
+  try{
+    const u=new URL('https://everythinghub-search-backend.vercel.app/api/videos');u.searchParams.set('q',q);
+    const response=await fetch(u,{signal:AbortSignal.timeout(25000)}),candidate=await response.json().catch(()=>({}));
+    if(!response.ok||candidate.status!=='ok'||!Array.isArray(candidate.items)||!candidate.items.length)throw new Error(candidate.message||'Video search unavailable');
+    data=candidate;
+  }catch(error){lastError=error;}
+  if(!data){
+    data=await requestSupabaseMediaSearch(q,'video');
+    if(!data.items.length)throw new Error(lastError?.message||'No license-cleared video thumbnails are available for this search.');
+  }
+  renderVideos(data,q);status.textContent=data.count.toLocaleString()+' licensed videos from '+(data.provider||'public sources')+'.';
 }
 async function requestIndexedSearch(q,lane){
   const u=new URL('https://everythinghub-search-backend.vercel.app/api/search');
@@ -182,25 +241,22 @@ async function runSearch(){
       const candidate=await requestIndexedSearch(q,mode);
       if(hasIndexedResults(candidate))data=candidate;
     }catch(error){lastError=error;}
-    // A category-specific lane can be empty even when the independent crawler
-    // has relevant pages in another lane. Retry the same owned index without a
-    // lane filter before considering any outside provider.
     if(!data&&mode!=='news'){
       try{
         const candidate=await requestIndexedSearch(q,'');
         if(hasIndexedResults(candidate))data={...candidate,laneFallback:true,requestedLane:mode};
       }catch(error){if(!lastError)lastError=error;}
     }
-    // The fast endpoint is an RSS-only news fallback. Its other lanes are
-    // intentionally disabled by robots policy and must never be requested.
     if(!data&&mode==='news'){
-      const fast=new URL('https://everythinghub-search-backend.vercel.app/api/search-fast');
-      fast.searchParams.set('q',q);fast.searchParams.set('lane','news');
-      const response=await fetch(fast,{headers:{accept:'application/json'},signal:AbortSignal.timeout(12000)});
-      if(!response.ok)throw new Error('News fallback returned HTTP '+response.status);
-      const fastData=await response.json();
-      if(fastData.status==='ok'&&Array.isArray(fastData.results)&&fastData.results.length)data=fastData;
-      else throw new Error(fastData.message||'No robots-verified public news results returned');
+      try{
+        const fast=new URL('https://everythinghub-search-backend.vercel.app/api/search-fast');
+        fast.searchParams.set('q',q);fast.searchParams.set('lane','news');
+        const response=await fetch(fast,{headers:{accept:'application/json'},signal:AbortSignal.timeout(12000)});
+        if(!response.ok)throw new Error('News fallback returned HTTP '+response.status);
+        const fastData=await response.json();
+        if(fastData.status==='ok'&&Array.isArray(fastData.results)&&fastData.results.length)data=fastData;
+        else throw new Error(fastData.message||'No robots-verified public news results returned');
+      }catch(error){if(!lastError)lastError=error;}
     }
     if(data&&(!Array.isArray(data.results)||!data.results.length)&&Array.isArray(data.catalogResults)&&data.catalogResults.length&&mode==='news'){
       try{
@@ -215,13 +271,25 @@ async function runSearch(){
         }
       }catch(error){}
     }
+    if(!data||!Array.isArray(data.results)||!data.results.length){
+      try{
+        const fallback=await requestSupabaseSearch(q,mode);
+        if(fallback)data={...fallback,catalogResults:data?.catalogResults||fallback.catalogResults||[]};
+      }catch(error){if(!lastError)lastError=error;}
+    }
+    if((!data||!Array.isArray(data.results)||!data.results.length)&&mode==='news'){
+      try{
+        const fallback=await requestSupabaseIndependentSearch(q);
+        if(fallback.results.length)data={...fallback,catalogResults:data?.catalogResults||[]};
+      }catch(error){if(!lastError)lastError=error;}
+    }
     if(!data){
       throw lastError||new Error('No matching indexed results were found. External fallback is disabled for this category under the current robots policy.');
     }
     renderResults(data,q);
     const pageCount=Array.isArray(data.results)?data.results.length:(Number(data.count)||0);
     const catalogCount=Array.isArray(data.catalogResults)?data.catalogResults.length:0;
-    const laneNote=data.laneFallback?' · related results from all indexed categories':'';
+    const laneNote=data.laneFallback?' · related results from all indexed categories':data.independentOfDatabase?' · independent public-source fallback':'';
     status.textContent=pageCount.toLocaleString()+' web results and '+catalogCount.toLocaleString()+' catalog previews from '+(data.providers||[]).join(' and ')+laneNote+'.';
   }catch(error){
     status.textContent=mode==='images'?'Image search is temporarily unavailable.':mode==='videos'?'Video sources are temporarily unavailable.':'Search is temporarily unavailable. Please try again.';
@@ -233,6 +301,13 @@ let activeNewsCategory='for-you';
 async function loadNews(category){
   activeNewsCategory=category;newsStatus.textContent='Loading the latest stories…';newsItems.replaceChildren();
   document.querySelectorAll('[data-news]').forEach(b=>b.classList.toggle('active',b.dataset.news===category));
+  const queries={
+    'for-you':'latest world news today',
+    world:'latest world news today',
+    technology:'latest technology news artificial intelligence',
+    business:'latest business news economy markets',
+    science:'latest science and space news'
+  };
   try{
     const u=new URL('https://everythinghub-search-backend.vercel.app/api/news');u.searchParams.set('category',category);
     let data=null,lastError=null;
@@ -248,13 +323,18 @@ async function loadNews(category){
         lastError=error;
         const status=Number(error.status)||0;
         const transient=(status>=500&&status<=599)||error.name==='AbortError'||error.name==='TimeoutError'||/Failed to fetch|NetworkError|Load failed|timed out/i.test(error.message||'');
-        if(!transient||attempt===1)throw error;
+        if(!transient||attempt===1)break;
         newsStatus.textContent='News feed reconnecting…';
         await new Promise(resolve=>setTimeout(resolve,750));
       }
     }
-    if(!data)throw lastError||new Error('No news stories returned');
-    newsStatus.textContent='Updated '+new Date(data.updatedAt).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})+' · '+data.count+' stories';
+    if(!data){
+      const fallback=await requestSupabaseIndependentSearch(queries[category]||queries['for-you']);
+      const items=fallback.results.filter(item=>item&&item.title&&safeUrl(item.url)!=='#').slice(0,20);
+      if(!items.length)throw lastError||new Error('No public-source news stories returned');
+      data={items,count:items.length,updatedAt:new Date().toISOString(),provider:fallback.provider||'Bing RSS'};
+    }
+    newsStatus.textContent='Updated '+new Date(data.updatedAt||Date.now()).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})+' · '+data.count+' stories · '+(data.provider||'public sources');
     for(const item of data.items){
       const card=document.createElement('article');card.className='news-item';
       const link=document.createElement('a');link.href=safeUrl(item.url);link.target='_blank';link.rel='noopener noreferrer';link.textContent=item.title;
