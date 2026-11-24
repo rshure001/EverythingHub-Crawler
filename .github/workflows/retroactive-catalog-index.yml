@@ -24,7 +24,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: catalog-data-publish-v8-${{ github.ref }}
+  group: catalog-data-publish-v9-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
