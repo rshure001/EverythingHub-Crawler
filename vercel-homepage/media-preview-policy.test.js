@@ -122,16 +122,20 @@ test("rejects missing and non-object records", () => {
   assert.equal(isMediaPreviewAllowed("not a media record"), false);
 });
 
-test("static Supabase homepage embeds the shared media license policy and keeps unverified media link-only", () => {
+test("static Supabase homepage embeds the shared media policy and gates all image/video previews", () => {
   const siteHtml = fs.readFileSync(path.join(__dirname, "../site/index.html"), "utf8");
   const policySource = fs.readFileSync(path.join(__dirname, "media-preview-policy.js"), "utf8").trim();
   const release = JSON.parse(fs.readFileSync(path.join(__dirname, "../site/release-manifest.json"), "utf8"));
   assert.ok(siteHtml.includes(policySource), "static homepage must embed the tested shared policy");
-  assert.match(siteHtml, /window\.EHMediaPreviewPolicy\?\.isMediaPreviewAllowed/);
-  assert.match(siteHtml, /previewAllowed\?safeUrl/);
-  assert.match(siteHtml, /source:x\.source\|\|data\.provider/);
-  assert.match(siteHtml, /Preview withheld — reuse rights unverified/);
+  assert.ok(siteHtml.includes("window.EHMediaPreviewPolicy?.isMediaPreviewAllowed(x)===true"));
+  assert.ok(siteHtml.includes("const mediaAllowed=x=>window.EHMediaPreviewPolicy?.isMediaPreviewAllowed(x)===true"));
+  assert.ok(siteHtml.includes("const previewAllowed=mediaAllowed(x)"));
+  assert.ok(siteHtml.includes("previewAllowed?safe(x.image):'#'"));
+  assert.ok(siteHtml.includes("const sourceLabel=isMedia?"));
+  assert.ok(siteHtml.includes("x.creator||x.credit"));
+  assert.ok(siteHtml.includes("x.license"));
+  assert.ok(!siteHtml.includes("everythinghub-search-backend.vercel.app"));
+  assert.equal(release.files[0].path, "index.html");
   assert.equal(release.files[0].size, Buffer.byteLength(siteHtml, "utf8"));
   assert.equal(release.files[0].sha256, crypto.createHash("sha256").update(siteHtml).digest("hex"));
 });
-
