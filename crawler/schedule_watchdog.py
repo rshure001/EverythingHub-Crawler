@@ -13,9 +13,11 @@ MAX_MANIFEST_FUTURE_SKEW_SECONDS = 60
 MAX_SCHEDULE_AGE_SECONDS = 10 * 60
 ACTIVE_STATUSES = {"queued", "in_progress", "pending", "waiting", "requested"}
 CRAWLER_WORKFLOW_NAME = "Everything Hub crawler"
+# Page-derived analysis uses a pinned source-index snapshot and a bounded
+# rebase publisher, so it can safely overlap a crawler refresh. Keep only
+# workflows that can conflict with crawler/frontier publication in this set.
 BLOCKING_WORKFLOW_NAMES = {
     CRAWLER_WORKFLOW_NAME,
-    "Retroactive catalog inventory",
     "Catalog-first discovery",
     "Ten-at-a-time catalog seed expansion",
 }
@@ -149,7 +151,7 @@ def evaluate(
     if active:
         return {
             "action": "wait",
-            "reason": "a crawler or catalog-analysis run is already queued or running; do not update the recovery marker",
+            "reason": "a crawler, catalog-first discovery, or seed-expansion run is already queued or running; do not update the recovery marker",
             "active_runs": len(active),
             **common,
         }
@@ -215,7 +217,7 @@ def recovery_dispatch_decision(runs: list[dict[str, Any]], recovery_sha: str) ->
     if active:
         return {
             "action": "wait",
-            "reason": "a crawler or catalog-analysis run is queued or running after the recovery marker commit",
+            "reason": "a crawler, catalog-first discovery, or seed-expansion run is queued or running after the recovery marker commit",
         }
 
     already_started = any(
@@ -233,7 +235,7 @@ def recovery_dispatch_decision(runs: list[dict[str, Any]], recovery_sha: str) ->
 
     return {
         "action": "dispatch",
-        "reason": "no crawler or catalog-analysis run is active and no run has started from the recovery marker commit",
+        "reason": "no crawler, catalog-first discovery, or seed-expansion run is active and no run has started from the recovery marker commit",
     }
 
 

@@ -101,12 +101,29 @@ class ScheduleWatchdogTests(unittest.TestCase):
         self.assertEqual(result["action"], "wait")
         self.assertEqual(result["active_runs"], 2)
 
-    def test_active_catalog_analysis_blocks_recovery_marker(self):
+    def test_active_page_derived_analysis_does_not_block_crawler_recovery_marker(self):
         result = evaluate(
             [
                 scheduled("2026-11-16T14:00:00Z"),
                 {
                     "name": "Retroactive catalog inventory",
+                    "status": "in_progress",
+                    "event": "schedule",
+                    "created_at": "2026-11-16T15:59:00Z",
+                },
+            ],
+            now=NOW,
+            manifest_updated_at=manifest_minutes_ago(30),
+        )
+        self.assertEqual(result["action"], "mark")
+        self.assertEqual(result.get("active_runs", 0), 0)
+
+    def test_active_catalog_first_discovery_blocks_recovery_marker(self):
+        result = evaluate(
+            [
+                scheduled("2026-11-16T14:00:00Z"),
+                {
+                    "name": "Catalog-first discovery",
                     "status": "in_progress",
                     "event": "schedule",
                     "created_at": "2026-11-16T15:59:00Z",
@@ -321,6 +338,16 @@ class ScheduleWatchdogTests(unittest.TestCase):
             recovery_sha,
         )
         self.assertEqual(active_catalog["action"], "wait")
+
+        active_page_analysis = recovery_dispatch_decision(
+            [{
+                "name": "Retroactive catalog inventory",
+                "status": "in_progress",
+                "head_sha": "b" * 40,
+            }],
+            recovery_sha,
+        )
+        self.assertEqual(active_page_analysis["action"], "dispatch")
 
         already_started = recovery_dispatch_decision(
             [{
