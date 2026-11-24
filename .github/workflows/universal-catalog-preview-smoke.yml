@@ -9,6 +9,12 @@ on:
     paths:
       - ".github/workflows/universal-catalog-preview-smoke.yml"
       - "scripts/universal-catalog-preview-smoke.mjs"
+  workflow_run:
+    workflows:
+      - "Retroactive catalog inventory"
+      - "Catalog-first discovery"
+    types: [completed]
+    branches: [main]
 permissions:
   contents: read
 concurrency:
@@ -16,6 +22,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   smoke:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

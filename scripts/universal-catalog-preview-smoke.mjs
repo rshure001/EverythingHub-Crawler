@@ -87,17 +87,41 @@ for (const item of expectations) {
     );
   }
 
+  let typedPlaceCatalogs = [];
+  let typedProductCatalogs = [];
+
   if (item.query === 'Las Vegas') {
+    typedPlaceCatalogs = data.catalogResults.filter(result =>
+      result.provider === 'everythinghub-catalog-preview' &&
+      result.catalog_type === 'geographic' &&
+      result.relevance_class === 'typed_location_match' &&
+      Array.isArray(result.matched_records) &&
+      result.matched_records.some(record =>
+        record.record_type === 'place' && /las vegas/i.test(record.title || '')
+      )
+    );
     assert.ok(
-      data.catalogResults.length > data.externalCatalogResults.length,
-      'Las Vegas must return catalog matches beyond the external directory'
+      typedPlaceCatalogs.length > 0,
+      'Las Vegas must return a typed geographic catalog with a matching place record, not only source-page snippets'
     );
   }
 
   if (item.query === 'Rolex') {
+    typedProductCatalogs = data.catalogResults.filter(result =>
+      result.provider === 'everythinghub-catalog-preview' &&
+      result.catalog_type === 'commerce' &&
+      result.relevance_class === 'typed_product_match' &&
+      Array.isArray(result.matched_records) &&
+      result.matched_records.some(record =>
+        ['product', 'brand', 'model'].includes(record.record_type) && /rolex/i.test(record.title || '')
+      )
+    );
+    const officialDirectory = data.externalCatalogResults.some(result =>
+      /rolex/i.test(result.catalog_title || result.title || '')
+    );
     assert.ok(
-      data.externalCatalogResults.some(result => /rolex/i.test(result.catalog_title || result.title || '')),
-      'Rolex must retain its curated official external directory'
+      typedProductCatalogs.length > 0 || officialDirectory,
+      'Rolex must return a typed product/brand/model catalog or its curated official directory'
     );
   }
 
@@ -109,6 +133,8 @@ for (const item of expectations) {
     universalCatalogTitles: universal.map(result => result.catalog_title),
     universalMatchedRecordTitles: universal.flatMap(result => result.matched_records.map(record => record.title)),
     externalCatalogResults: data.externalCatalogResults.length,
+    typedPlaceCatalogTitles: typedPlaceCatalogs.map(result => result.catalog_title),
+    typedProductCatalogTitles: typedProductCatalogs.map(result => result.catalog_title),
     previewStatus: preview.status,
     catalogCount: preview.catalogCount,
     recordCount: preview.recordCount,
