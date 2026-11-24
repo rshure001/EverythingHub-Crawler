@@ -52,7 +52,7 @@ function validateManifest(m){
  if(files.has('records.json.gz')&&recordShards.length)throw new Error('page_catalog_mixed_record_artifacts');
  if(!files.has('records.json.gz')&&!recordShards.length)throw new Error('page_catalog_artifacts_missing');
  if(recordShards.length){
-  if(recordShards.length>512||recordShards.some((f,index)=>!/^records\\/\\d{5}\\.json\\.gz$/.test(f.file)||f.format!=='json'||!Number.isSafeInteger(f.items)||f.items<0))throw new Error('page_catalog_record_shards_invalid');
+  if(recordShards.length>512||recordShards.some((f,index)=>!/^([0-9]{5})[.]json[.]gz$/.test(f.file.slice(8))||f.format!=='json'||!Number.isSafeInteger(f.items)||f.items<0))throw new Error('page_catalog_record_shards_invalid');
   if(recordShards.reduce((sum,f)=>sum+f.items,0)!==m.record_count)throw new Error('page_catalog_record_shard_count_mismatch');
  }
  return files;
