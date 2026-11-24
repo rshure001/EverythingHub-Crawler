@@ -1,0 +1,38 @@
+{
+  "pilot_id": "las-vegas-veteran-contact-pages-v1",
+  "description": "Five explicitly selected public veteran-organization contact and registry pages. Manual-only, bounded, staging-only.",
+  "max_pages": 5,
+  "allowed_hosts": [
+    "vegasveteranvoices.com",
+    "charliemikefoundation.org",
+    "nevadapva.org",
+    "veterans.nv.gov"
+  ],
+  "targets": [
+    {
+      "organization": "Vegas Veteran Voices",
+      "url": "https://vegasveteranvoices.com/contact/",
+      "source_type": "organization_contact_page"
+    },
+    {
+      "organization": "Charlie-Mike Foundation",
+      "url": "https://charliemikefoundation.org/contact-2/",
+      "source_type": "organization_contact_page"
+    },
+    {
+      "organization": "Paralyzed Veterans of America - Nevada Chapter",
+      "url": "https://nevadapva.org/contact/",
+      "source_type": "organization_contact_page"
+    },
+    {
+      "organization": "Nevada Department of Veterans Services",
+      "url": "https://veterans.nv.gov/contact/",
+      "source_type": "government_contact_page"
+    },
+    {
+      "organization": "Nevada Department of Veterans Services - Veterans Service Organization Registry",
+      "url": "https://veterans.nv.gov/veterans-services-organizations/",
+      "source_type": "official_organization_registry"
+    }
+  ]
+}
