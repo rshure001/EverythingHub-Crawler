@@ -1547,7 +1547,8 @@ class CatalogInventoryTriggerTests(unittest.TestCase):
         self.assertIn("python crawler/catalog_page_analysis.py --validate-only", validate)
         self.assertIn("--skip-output-validation", workflow)
         self.assertIn("python crawler/publish_catalog_snapshot.py --attempts 4", publish)
-        self.assertNotIn("python crawler/catalog_page_analysis.py", publish)
+        publish_step = publish.split("- name: Validate registry and every per-catalog index after candidate publication", 1)[0]
+        self.assertNotIn("python crawler/catalog_page_analysis.py", publish_step)
         self.assertNotIn("python crawler/catalog_retro_discovery.py", publish)
         self.assertNotIn("data/host-catalog-candidates.json", publish)
         self.assertNotIn("data/page-catalog-seeds.json.gz", publish)
