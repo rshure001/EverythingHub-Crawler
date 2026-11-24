@@ -208,6 +208,7 @@ jobs:
           runs.extend(discovery_runs)
           runs.extend(seed_runs)
           # Page-derived analysis rebases its validated snapshot and may overlap a crawl.
+          # Page-derived analysis rebases its validated snapshot and may overlap a crawl.
           blocking_names = {"Everything Hub crawler", "Catalog-first discovery", "Ten-at-a-time catalog seed expansion"}
           active = [
               run for run in runs
@@ -318,7 +319,7 @@ jobs:
           catalog_runs = catalog_payload.get("workflow_runs", [])
           discovery_runs = discovery_payload.get("workflow_runs", [])
           seed_runs = seed_payload.get("workflow_runs", [])
-          blocking_names = {"Everything Hub crawler", "Retroactive catalog inventory", "Catalog-first discovery", "Ten-at-a-time catalog seed expansion"}
+          blocking_names = {"Everything Hub crawler", "Catalog-first discovery", "Ten-at-a-time catalog seed expansion"}
           all_runs = runs + catalog_runs + discovery_runs + seed_runs
           if any(
               isinstance(run, dict)

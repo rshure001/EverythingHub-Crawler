@@ -391,6 +391,15 @@ class ScheduleWatchdogTests(unittest.TestCase):
         self.assertIn("contents: write", workflow)
         self.assertIn("group: eh-crawler-schedule-watchdog", workflow)
         self.assertIn("recovery_dispatch_decision", workflow)
+        blocking_sets = [
+            line.strip()
+            for line in workflow.splitlines()
+            if "blocking_names =" in line
+        ]
+        self.assertEqual(blocking_sets, [
+            'blocking_names = {"Everything Hub crawler", "Catalog-first discovery", "Ten-at-a-time catalog seed expansion"}',
+            'blocking_names = {"Everything Hub crawler", "Catalog-first discovery", "Ten-at-a-time catalog seed expansion"}',
+        ])
         self.assertIn("/tmp/crawl-runs-postpush.json", workflow)
         self.assertIn("gh workflow run crawl.yml --ref main", workflow)
         self.assertNotIn("crawl.yml push path will start", workflow)
