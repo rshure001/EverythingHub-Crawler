@@ -23,13 +23,13 @@ permissions:
   contents: write
 
 concurrency:
-  group: catalog-data-publish-v7-${{ github.ref }}
+  group: catalog-data-publish-v8-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   inventory:
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 240
     steps:
       - uses: actions/checkout@v4
         with:
@@ -99,8 +99,9 @@ jobs:
           path: data/.page-derived-catalog-cache
           key: ${{ runner.os }}-catalog-cache-${{ github.ref_name }}-hosts-${{ github.run_id }}
       - name: Analyze every eligible existing indexed page
-        # The prior 110-minute cap expired during full-corpus aggregation; host caches are persisted before this step and on failure.
-        timeout-minutes: 165
+        # Run 45405300540 reached 23,808/24,154 validation files before the 165-minute step limit shut down the hosted runner.
+        # Keep the run bounded while allowing enough time to finish the full snapshot and its post-analysis gates.
+        timeout-minutes: 225
         env:
           PYTHONUNBUFFERED: "1"
         run: python crawler/catalog_page_analysis.py --index public-search/manifest.json --query Rolex --query "Las Vegas" --query NASA --cache-dir data/.page-derived-catalog-cache --workers 4
