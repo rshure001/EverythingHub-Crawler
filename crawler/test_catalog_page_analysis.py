@@ -2597,13 +2597,13 @@ class AdditionalSourcePolicyReviewTests(unittest.TestCase):
             manifest = write_outputs(result, output)
             listed_files = {item["file"] for item in manifest["files"]}
             self.assertIn("page-catalogs.jsonl.gz", listed_files)
-            self.assertIn("record-catalogs.jsonl.gz", listed_files)
+            self.assertIn("record-catalogs/00000.jsonl.gz", listed_files)
             self.assertNotIn("page-catalogs.json.gz", listed_files)
             self.assertNotIn("record-catalogs.json.gz", listed_files)
             with gzip.open(output / "page-catalogs.jsonl.gz", "rt", encoding="utf-8") as stream:
                 page_header = json.loads(stream.readline())
                 page_rows = [json.loads(line) for line in stream if line.strip()]
-            with gzip.open(output / "record-catalogs.jsonl.gz", "rt", encoding="utf-8") as stream:
+            with gzip.open(output / "record-catalogs/00000.jsonl.gz", "rt", encoding="utf-8") as stream:
                 record_header = json.loads(stream.readline())
                 record_rows = [json.loads(line) for line in stream if line.strip()]
             self.assertEqual(page_header["items"], 2)
