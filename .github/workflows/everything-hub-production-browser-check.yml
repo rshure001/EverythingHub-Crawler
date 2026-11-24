@@ -350,6 +350,7 @@ jobs:
                 fail("Mobile layout has clipping, horizontal overflow, broken visible images or overlapping controls.");
               }
 
+              await page.setViewportSize({ width: 1440, height: 1000 });
               await goHome();
               await openDivision("Videos");
               const videoInput = page.locator("input#hub-search:visible").first();
@@ -361,7 +362,7 @@ jobs:
               await videoInput.fill("NASA");
               await videoInput.press("Enter");
               const videoResponse = await videoResponsePromise;
-              const videoJson = await videoResponse.json().catch(() => ({}));
+              const videoSearchJson = await videoResponse.json().catch(() => ({}));
               await page.waitForFunction(() =>
                 document.querySelectorAll(".eh-result-card").length > 0 || document.querySelector(".empty-state"),
                 null, { timeout: 45000 }
@@ -376,8 +377,8 @@ jobs:
               );
               report.videos = {
                 apiStatus: videoResponse.status(),
-                apiCount: (videoJson.results || []).length,
-                apiWithThumbnails: (videoJson.results || []).filter(item => item.thumbnailUrl && item.url).length,
+                apiCount: (videoSearchJson.results || []).length,
+                apiWithThumbnails: (videoSearchJson.results || []).filter(item => item.thumbnailUrl && item.url).length,
                 visibleCards: visibleVideoCards.length,
                 visibleThumbnails: visibleVideoThumbnails,
                 publicPublisherLinks: visibleVideoCards.filter(item => /archive\.org/i.test(item.href)).length,
