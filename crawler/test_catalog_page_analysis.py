@@ -1541,7 +1541,11 @@ class CatalogInventoryTriggerTests(unittest.TestCase):
     def test_catalog_publish_reuses_validated_snapshot_after_concurrent_updates(self):
         repository_root = Path(__file__).resolve().parents[1]
         workflow = (repository_root / ".github" / "workflows" / "retroactive-catalog-index.yml").read_text(encoding="utf-8")
-        publish = workflow.split("Publish validated catalog snapshot on latest main", 1)[1]
+        publish = workflow.split("Publish candidate catalog snapshot immediately on latest main", 1)[1]
+        validate = workflow.split("Validate registry and every per-catalog index after candidate publication", 1)[1]
+        self.assertLess(workflow.index("Publish candidate catalog snapshot immediately on latest main"), workflow.index("Validate registry and every per-catalog index after candidate publication"))
+        self.assertIn("python crawler/catalog_page_analysis.py --validate-only", validate)
+        self.assertIn("--skip-output-validation", workflow)
         self.assertIn("python crawler/publish_catalog_snapshot.py --attempts 4", publish)
         self.assertNotIn("python crawler/catalog_page_analysis.py", publish)
         self.assertNotIn("python crawler/catalog_retro_discovery.py", publish)
