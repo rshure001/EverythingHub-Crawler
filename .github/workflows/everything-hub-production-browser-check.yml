@@ -116,7 +116,7 @@ jobs:
               const responsePromise = page.waitForResponse(response => {
                 const responseUrl = new URL(response.url());
                 const queryMatches = (responseUrl.searchParams.get("q") || "").toLowerCase().includes(query.toLowerCase());
-                return responseUrl.pathname === path && queryMatches &&
+                return responseUrl.pathname.endsWith(path) && queryMatches &&
                   (!vertical || responseUrl.searchParams.get("vertical") === vertical);
               }, { timeout: 45000 });
               await input.fill(query);
@@ -143,7 +143,7 @@ jobs:
                 intercepted = true;
                 await route.abort();
               });
-              const requestPromise = page.waitForRequest(request => new URL(request.url()).pathname === "/api/ai/answer", { timeout: 20000 });
+              const requestPromise = page.waitForRequest(request => new URL(request.url()).pathname.endsWith("/api/ai/answer"), { timeout: 20000 });
               await input.fill("NASA");
               await input.press("Enter");
               const request = await requestPromise;
@@ -356,7 +356,7 @@ jobs:
               const videoInput = page.locator("input#hub-search:visible").first();
               const videoResponsePromise = page.waitForResponse(response => {
                 const responseUrl = new URL(response.url());
-                return responseUrl.pathname === "/api/videos" &&
+                return responseUrl.pathname.endsWith("/api/videos") &&
                   (responseUrl.searchParams.get("q") || "").toLowerCase() === "nasa";
               }, { timeout: 45000 });
               await videoInput.fill("NASA");
@@ -636,7 +636,7 @@ jobs:
                 const responsePromise = page.waitForResponse(response => {
                   try {
                     const url = new URL(response.url());
-                    return url.pathname === "/api/news" && url.searchParams.get("category") === category && response.ok();
+                    return url.pathname.endsWith("/api/news") && url.searchParams.get("category") === category && response.ok();
                   } catch { return false; }
                 }, { timeout: 30000 });
                 await page.locator('[data-news="' + category + '"]').click();
@@ -651,7 +651,7 @@ jobs:
               const refreshPromise = page.waitForResponse(response => {
                 try {
                   const url = new URL(response.url());
-                  return url.pathname === "/api/news" && url.searchParams.get("category") === "science" && response.ok();
+                  return url.pathname.endsWith("/api/news") && url.searchParams.get("category") === "science" && response.ok();
                 } catch { return false; }
               }, { timeout: 30000 });
               await page.locator("#news-refresh").click();
