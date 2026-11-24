@@ -48,6 +48,7 @@ jobs:
             const { chromium } = require("playwright");
             const fs = require("fs");
             const url = process.env.TARGET_URL;
+            const apiBaseUrl = "https://api-v2.appdeploy.ai/app/everythinghub-search-engine-4x25f8";
             const expectedDivisions = ['Web', 'News', 'Images', 'Videos', 'Shopping', 'Places', 'Business', 'Research'];
             const report = {
               url, startedAt: new Date().toISOString(), status: null, branding: null, artwork: null,
@@ -295,10 +296,10 @@ jobs:
                 fail("Top Stories headlines, category tabs or Refresh did not pass.");
               }
 
-              const searchApi = await page.request.get(new URL("/api/search?q=NASA&limit=10&vertical=web", url).toString(), { timeout: 45000 });
-              const imageApi = await page.request.get(new URL("/api/images?q=solar%20panels", url).toString(), { timeout: 45000 });
-              const videoApi = await page.request.get(new URL("/api/videos?q=NASA", url).toString(), { timeout: 45000 });
-              const newsApi = await page.request.get(new URL("/api/search?q=latest%20world%20headlines&limit=10&vertical=news", url).toString(), { timeout: 45000 });
+              const searchApi = await page.request.get(apiBaseUrl + "/api/search?q=NASA&limit=10&vertical=web", { timeout: 45000 });
+              const imageApi = await page.request.get(apiBaseUrl + "/api/images?q=solar%20panels", { timeout: 45000 });
+              const videoApi = await page.request.get(apiBaseUrl + "/api/videos?q=NASA", { timeout: 45000 });
+              const newsApi = await page.request.get(apiBaseUrl + "/api/search?q=latest%20world%20headlines&limit=10&vertical=news", { timeout: 45000 });
               const [searchJson, imageJson, videoJson, newsJson] = await Promise.all([
                 searchApi.json(), imageApi.json(), videoApi.json(), newsApi.json()
               ]);
