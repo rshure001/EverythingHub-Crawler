@@ -291,7 +291,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: everythinghub-live-layout-diagnostic-\${{ github.run_id }}
+          name: everythinghub-live-layout-diagnostic-one-shot
           path: |
             live-layout-report.json
             screenshots/
