@@ -9,6 +9,8 @@ on:
       - "crawler/catalog_retro_discovery.py"
       - "crawler/catalog_page_analysis.py"
       - "crawler/test_catalog_page_analysis.py"
+      - "crawler/test_post_crawl_dispatch.py"
+      - "crawler/test_publish_catalog_snapshot.py"
       - "crawler/publish_catalog_snapshot.py"
       - "crawler/automation-trigger.json"
       - "crawler/catalog_host_review_queue.py"
