@@ -533,17 +533,17 @@ def _add_global_subject_catalogs(pages: list[dict], page_rows: list[dict], recor
             "tokens": tokens,
         }
 
-    # Parse each eligible page title only once. The previous two-pass
-    # implementation repeated URL canonicalization, stable-ID hashing, title
-    # tokenization, and description normalization across the full corpus.
+    # Keep only aggregate token counts during the first pass. Retaining a
+    # token set and normalized page payload for every source page creates a
+    # large transient memory spike on the full corpus. Recompute the bounded
+    # per-page token set in the second pass instead; host caches still avoid
+    # repeating the more expensive entity/catalog extraction work.
     topic_counts: Counter = Counter()
     topic_hosts: dict[str, set[str]] = defaultdict(set)
-    page_members: list[dict] = []
     for page in pages:
         member = member_for_page(page)
         if member is None:
             continue
-        page_members.append(member)
         for token in member["tokens"]:
             topic_counts[token] += 1
             topic_hosts[token].add(member["host"])
@@ -555,9 +555,15 @@ def _add_global_subject_catalogs(pages: list[dict], page_rows: list[dict], recor
     if not qualified_tokens:
         return 0
 
+    # Second pass retains only pages that actually belong to a qualified
+    # cross-host topic catalog. This bounds transient token storage by one
+    # page rather than the entire corpus while preserving deterministic IDs.
     topic_pages: dict[str, list[str]] = defaultdict(list)
     page_info: dict[str, dict] = {}
-    for member in page_members:
+    for page in pages:
+        member = member_for_page(page)
+        if member is None:
+            continue
         matched_tokens = member["tokens"].intersection(qualified_tokens)
         if not matched_tokens:
             continue

@@ -22,7 +22,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: catalog-data-publish-v5-${{ github.ref }}
+  group: catalog-data-publish-v6-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:

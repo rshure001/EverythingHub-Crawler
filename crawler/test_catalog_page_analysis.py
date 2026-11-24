@@ -778,6 +778,48 @@ class PageDerivedCatalogAnalysisTests(unittest.TestCase):
             self.assertEqual(second["metrics"]["host_partitions_rebuilt"], 1)
             self.assertEqual(second["metrics"]["host_partitions_reused"], 0)
 
+    def test_global_subject_catalog_pass_recomputes_tokens_without_losing_membership(self):
+        pages = [
+            {
+                "url": "https://alpha.example/topics/orion-one",
+                "title": "Orion Mission Overview",
+                "description": "Public mission background.",
+                "text": "A public source page about the Orion mission.",
+                "lane": "general", "robots_allowed": True, "fetched_at": 100,
+            },
+            {
+                "url": "https://alpha.example/topics/orion-two",
+                "title": "Orion Mission Archive",
+                "description": "Public mission archive.",
+                "text": "A second public source page about the Orion mission.",
+                "lane": "general", "robots_allowed": True, "fetched_at": 101,
+            },
+            {
+                "url": "https://beta.example/topics/orion-three",
+                "title": "Orion Mission Records",
+                "description": "Public mission records.",
+                "text": "A third public source page about the Orion mission.",
+                "lane": "general", "robots_allowed": True, "fetched_at": 102,
+            },
+        ]
+        result = analyze_pages(pages, source_total=3)
+        catalog = next(
+            item for item in result["catalogs"]
+            if item.get("source_key") == _global_subject_catalog_source_key("orion")
+        )
+        records = {item["record_id"]: item for item in result["records"]}
+        self.assertEqual(catalog["source_page_count"], 3)
+        self.assertEqual(catalog["record_count"], 3)
+        self.assertEqual(len(catalog["source_page_ids"]), 3)
+        self.assertTrue(all(record_id in records for record_id in catalog["record_ids"]))
+        self.assertTrue(all(
+            records[record_id]["source_page_count"] == 1
+            and len(records[record_id]["source_urls"]) == 1
+            for record_id in catalog["record_ids"]
+        ))
+        hits = search_catalog_network("Orion", result)
+        self.assertTrue(any(hit["catalog_id"] == catalog["catalog_id"] for hit in hits))
+
     def test_source_page_evidence_is_reported_separately_from_catalogs(self):
         pages = [{
             "url": "https://example.org/las-vegas-story",
@@ -1492,6 +1534,8 @@ class CatalogInventoryTriggerTests(unittest.TestCase):
         self.assertNotIn('"public-search/manifest.json"', push_paths)
         self.assertIn('    - cron: "23 * * * *"', workflow)
         self.assertIn("  workflow_dispatch:", workflow)
+        self.assertIn("group: catalog-data-publish-v6-${{ github.ref }}", workflow)
+        self.assertIn("cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}", workflow)
 
     def test_catalog_publish_reuses_validated_snapshot_after_concurrent_updates(self):
         repository_root = Path(__file__).resolve().parents[1]
