@@ -3062,7 +3062,7 @@ def _write_gzip_jsonl_catalog_shards(
                     "items": expected_count,
                     "shard_items": 0,
                     "shard": 0,
-                }).encode("utf-8") + b"\\n")
+                }).encode("utf-8") + b"\n")
         temp.replace(path)
         files.append({"file": path.relative_to(output_dir).as_posix(), "bytes": path.stat().st_size, "sha256": hashlib.sha256(path.read_bytes()).hexdigest(), "items": 0, "format": "jsonl"})
     if written != expected_count:
