@@ -69,6 +69,10 @@ class StaticSearchTests(unittest.TestCase):
         shards = manifest["shards"]
         pages = api._manifest_int(manifest["total_pages"], "total_pages", 1, api.MAX_PAGES)
         shard_count = api._manifest_int(manifest["shard_count"], "shard_count", 1, api.MAX_SHARDS)
+        max_pages_per_shard = max(
+            api._manifest_int(item["pages"], "shard pages", 1, api.MAX_PAGES_PER_SHARD)
+            for item in shards
+        )
         compressed_bytes = sum(
             api._manifest_int(item["bytes"], "shard bytes", 1, api.MAX_SHARD_BYTES)
             for item in shards
@@ -89,6 +93,9 @@ class StaticSearchTests(unittest.TestCase):
         )
         self.assertEqual(api.MAX_PAGES, 250_000)
         self.assertEqual(api.MAX_SHARDS, 900)
+        self.assertEqual(api.MAX_PAGES_PER_SHARD, 2_000)
+        self.assertGreater(max_pages_per_shard, 1_000)
+        self.assertLessEqual(max_pages_per_shard, api.MAX_PAGES_PER_SHARD)
         self.assertEqual(api.MAX_SHARD_UNCOMPRESSED_BYTES, 600_000)
         self.assertEqual(api.MAX_MANIFEST_BYTES, 256_000)
         self.assertEqual(api.MAX_TOTAL_COMPRESSED_BYTES, 150_000_000)
@@ -98,6 +105,7 @@ class StaticSearchTests(unittest.TestCase):
         limits = [
             (250_001, "total_pages", api.MAX_PAGES),
             (901, "shard_count", api.MAX_SHARDS),
+            (2_001, "shard pages", api.MAX_PAGES_PER_SHARD),
             (150_000_001, "total compressed bytes", api.MAX_TOTAL_COMPRESSED_BYTES),
             (540_000_001, "total uncompressed bytes", api.MAX_TOTAL_UNCOMPRESSED_BYTES),
             (256_001, "manifest bytes", api.MAX_MANIFEST_BYTES),
