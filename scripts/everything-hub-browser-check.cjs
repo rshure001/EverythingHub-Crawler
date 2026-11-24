@@ -46,7 +46,7 @@ const EXPECTED_MODES = ["business", "images", "news", "places", "research", "sho
       const images = page.locator("#results .result .preview img");
       const imageCount = await images.count();
       for (let index = 0; index < Math.min(imageCount, 3); index++) await images.nth(index).scrollIntoViewIfNeeded();
-      await page.waitForFunction(() => [...document.querySelectorAll("#results .result .preview img")].filter(img => img.complete && img.naturalWidth > 0).length >= 2, { timeout: 30000 }).catch(() => {});
+      await page.waitForFunction(() => [...document.querySelectorAll("#results .result .preview img")].filter(img => img.complete && img.naturalWidth > 0).length >= 2, null, { timeout: 30000 }).catch(() => {});
       const loaded = await images.evaluateAll(nodes => nodes.filter(img => img.complete && img.naturalWidth > 0).length);
       const attributions = await page.locator("#results .result .result-copy .source").allTextContents();
       result.thumbnails = imageCount;
