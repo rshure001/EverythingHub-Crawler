@@ -40,8 +40,13 @@ class ProductionBrowserWorkflowContractTests(unittest.TestCase):
         self.assertIn("aria-pressed", workflow)
         self.assertIn("Refresh top news", workflow)
         self.assertIn("documentWidth > viewportWidth + 2", workflow)
-        self.assertIn("value.top < searchBounds.bottom", workflow)
-        self.assertIn("value.bottom > searchBounds.top", workflow)
+        self.assertIn("item.bounds.top < searchBounds.bottom", workflow)
+        self.assertIn("item.bounds.bottom > searchBounds.top", workflow)
+        self.assertIn("categoryDiscoveryOverlapIndexes", workflow)
+        self.assertIn("categoryOutsideArtworkIndexes", workflow)
+        self.assertIn('document.querySelectorAll("input#hub-search")', workflow)
+        self.assertIn("report.videos.ok", workflow)
+        self.assertIn("checkedTabs.length !== 6", workflow)
         self.assertIn(
             "github.event_name != 'workflow_run' || "
             "github.event.workflow_run.conclusion == 'success'",
