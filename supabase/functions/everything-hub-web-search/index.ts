@@ -282,6 +282,7 @@ Deno.serve(async (req: Request) => {
       status: "unavailable", previewOnly: true, resultCount: 0, error: "catalog_preview_unavailable",
     };
     try {
+      // Candidate-only preview: the loader verifies the manifest and per-catalog indexes before returning records.
       const pageDerived = await loadPageDerivedCatalogPreview();
       pageDerivedCatalogResults = await searchPageDerivedCatalogPreview(query, pageDerived, 5);
       const freshnessMatch = Boolean(pageDerived.freshnessMatch && !pageDerived.stale);
