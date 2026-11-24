@@ -107,10 +107,30 @@ jobs:
               await input.waitFor({ state: "visible", timeout: 12000 });
               const workspace = page.locator(".division-workspace:not(.division-destination-page)");
               const workspaceVisible = await workspace.isVisible().catch(() => false);
-              const title = await page.locator("#division-workspace-title").innerText().catch(() => "");
-              const ok = await button.isVisible().catch(() => false) && await input.isVisible().catch(() => false);
-              report.divisionChecks.push({ name, title, workspaceVisible, searchInputVisible: true, ok });
-              if (!ok) fail("Category " + name + " did not leave the search input usable.");
+              const titleLocator = page.locator("#division-workspace-title");
+              const title = await titleLocator.innerText().catch(() => "");
+              const titleVisible = await titleLocator.isVisible().catch(() => false);
+              const buttonState = await button.evaluate(node => ({
+                ariaPressed: node.getAttribute("aria-pressed"),
+                ariaCurrent: node.getAttribute("aria-current"),
+                className: node.className,
+                dataMode: node.getAttribute("data-mode")
+              })).catch(() => ({}));
+              const placeholder = await input.getAttribute("placeholder").catch(() => "");
+              const modeLabel = await page.locator("#modeLabel").innerText().catch(() => "");
+              const categoryStateChanged = buttonState.ariaPressed === "true" ||
+                buttonState.ariaCurrent === "true" ||
+                /\\b(active|selected)\\b/i.test(String(buttonState.className || "")) ||
+                String(placeholder || "").toLowerCase().includes(name.toLowerCase()) ||
+                String(modeLabel || "").toLowerCase().includes(name.toLowerCase()) ||
+                (workspaceVisible && titleVisible && title === "Explore " + name);
+              const ok = await button.isVisible().catch(() => false) &&
+                await input.isVisible().catch(() => false) && categoryStateChanged;
+              report.divisionChecks.push({
+                name, title, titleVisible, workspaceVisible, buttonState, inputPlaceholder: placeholder,
+                modeLabel, categoryStateChanged, searchInputVisible: true, ok
+              });
+              if (!ok) fail("Category " + name + " did not activate a visible workspace or selected search mode.");
               return workspace;
             };
             const closeWorkspace = async () => {
