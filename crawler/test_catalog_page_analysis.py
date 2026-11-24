@@ -90,22 +90,46 @@ class PageDerivedCatalogAnalysisTests(unittest.TestCase):
     def test_snapshot_writer_emits_progress_heartbeats(self):
         pages = [
             {
-                "url": "https://shop.example/products/rolex-submariner",
-                "title": "Rolex Submariner",
-                "description": "Rolex watch model collection",
-                "text": "Browse the Rolex Submariner collection and its watch models.",
-                "lane": "shopping",
-                "robots_allowed": True,
-                "fetched_at": 100,
+                "url": "https://www.rolex.com/watches/submariner",
+                "title": "Submariner",
+                "description": "Rolex watch model",
+                "text": "Discover the Rolex Submariner watch collection and its features.",
+                "lane": "shopping", "robots_allowed": True, "fetched_at": 100,
             },
             {
-                "url": "https://visitlasvegas.com/places/las-vegas-strip",
+                "url": "https://rolex.com/watches/day-date",
+                "title": "Day-Date",
+                "description": "Rolex watch model",
+                "text": "Explore the Rolex Day-Date watch and its details.",
+                "lane": "shopping", "robots_allowed": True, "fetched_at": 101,
+            },
+            {
+                "url": "https://www.nasa.gov/centers/ames",
+                "title": "NASA Ames Research Center",
+                "description": "NASA aerospace organization",
+                "text": "Organization profile for NASA Ames Research Center.",
+                "lane": "general", "robots_allowed": True, "fetched_at": 102,
+            },
+            {
+                "url": "https://nasa.gov/centers/johnson",
+                "title": "NASA Johnson Space Center",
+                "description": "NASA aerospace organization",
+                "text": "Organization profile for NASA Johnson Space Center.",
+                "lane": "general", "robots_allowed": True, "fetched_at": 103,
+            },
+            {
+                "url": "https://visitlasvegas.com/places/las-vegas/strip",
                 "title": "Las Vegas Strip",
-                "description": "Places and attractions in Las Vegas",
-                "text": "Explore places and attractions in Las Vegas.",
-                "lane": "places",
-                "robots_allowed": True,
-                "fetched_at": 101,
+                "description": "Explore the Las Vegas Strip.",
+                "text": "Places and attractions in Las Vegas.",
+                "lane": "places", "robots_allowed": True, "fetched_at": 104,
+            },
+            {
+                "url": "https://visitlasvegas.com/places/las-vegas/downtown",
+                "title": "Downtown Las Vegas",
+                "description": "Explore downtown Las Vegas.",
+                "text": "Places, attractions and destinations in Las Vegas.",
+                "lane": "places", "robots_allowed": True, "fetched_at": 105,
             },
         ]
         analysis = analyze_pages(pages, source_total=len(pages))
@@ -126,7 +150,7 @@ class PageDerivedCatalogAnalysisTests(unittest.TestCase):
             self.assertIn("catalog_validation_start", stages)
             self.assertIn("catalog_validation_complete", stages)
             self.assertIn("catalog_output_write_complete", stages)
-            self.assertGreaterEqual(manifest["catalog_count"], 1)
+            self.assertGreaterEqual(manifest["catalog_count"], 2)
 
     def test_analyze_pages_emits_bounded_progress_callbacks(self):
         pages = [{
