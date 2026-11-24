@@ -1,9 +1,11 @@
 import re
 import gzip
 import hashlib
+import io
 import json
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from unittest.mock import patch
 from pathlib import Path
 
@@ -84,6 +86,47 @@ class PageDerivedCatalogAnalysisTests(unittest.TestCase):
             self.assertEqual(second_digest, first_digest)
             self.assertEqual(json.loads(gzip.decompress(first_bytes)), payload)
             self.assertFalse(first_path.with_suffix(first_path.suffix + ".tmp").exists())
+
+    def test_snapshot_writer_emits_progress_heartbeats(self):
+        pages = [
+            {
+                "url": "https://shop.example/products/rolex-submariner",
+                "title": "Rolex Submariner",
+                "description": "Rolex watch model collection",
+                "text": "Browse the Rolex Submariner collection and its watch models.",
+                "lane": "shopping",
+                "robots_allowed": True,
+                "fetched_at": 100,
+            },
+            {
+                "url": "https://visitlasvegas.com/places/las-vegas-strip",
+                "title": "Las Vegas Strip",
+                "description": "Places and attractions in Las Vegas",
+                "text": "Explore places and attractions in Las Vegas.",
+                "lane": "places",
+                "robots_allowed": True,
+                "fetched_at": 101,
+            },
+        ]
+        analysis = analyze_pages(pages, source_total=len(pages))
+        with tempfile.TemporaryDirectory() as tmp:
+            output = io.StringIO()
+            with redirect_stdout(output):
+                manifest = write_outputs(
+                    analysis,
+                    Path(tmp),
+                    index_batch_size=1,
+                    progress=True,
+                )
+            events = [json.loads(line) for line in output.getvalue().splitlines() if line.strip()]
+            stages = {event.get("stage") for event in events}
+            self.assertIn("catalog_output_write_start", stages)
+            self.assertIn("catalog_search_index_start", stages)
+            self.assertIn("catalog_index_batch_progress", stages)
+            self.assertIn("catalog_validation_start", stages)
+            self.assertIn("catalog_validation_complete", stages)
+            self.assertIn("catalog_output_write_complete", stages)
+            self.assertGreaterEqual(manifest["catalog_count"], 1)
 
     def test_analyze_pages_emits_bounded_progress_callbacks(self):
         pages = [{
@@ -327,11 +370,11 @@ class PageDerivedCatalogAnalysisTests(unittest.TestCase):
             original_write = analysis_module._write_gzip
             written_indexes = []
 
-            def track_index_write(path, payload):
+            def track_index_write(path, payload, **kwargs):
                 relative = path.relative_to(output).as_posix()
                 if relative.startswith("indexes/"):
                     written_indexes.append(relative)
-                return original_write(path, payload)
+                return original_write(path, payload, **kwargs)
 
             with patch.object(analysis_module, "_write_gzip", side_effect=track_index_write):
                 resumed = write_outputs(analysis, output, index_batch_size=1)
