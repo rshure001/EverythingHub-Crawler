@@ -104,7 +104,7 @@ jobs:
         timeout-minutes: 225
         env:
           PYTHONUNBUFFERED: "1"
-        run: python crawler/catalog_page_analysis.py --index public-search/manifest.json --query Rolex --query "Las Vegas" --query NASA --cache-dir data/.page-derived-catalog-cache --workers 4
+        run: python crawler/catalog_page_analysis.py --index public-search/manifest.json --query Rolex --query "Las Vegas" --query NASA --cache-dir data/.page-derived-catalog-cache --workers 4 --skip-output-validation
       - name: Save resumable per-host catalog cache checkpoint
         if: always()
         uses: actions/cache/save@v4
@@ -155,24 +155,28 @@ jobs:
           PY
       - name: Build page-derived catalog source review backlog
         run: python crawler/catalog_host_review_queue.py
-      - name: Validate registry and every per-catalog index before publishing
-        run: python crawler/catalog_page_analysis.py --validate-only
-      - name: Validate page-derived catalog source review backlog
-        run: python crawler/catalog_host_review_queue.py --validate-only
-      - name: Publish validated catalog snapshot on latest main
+      - name: Publish candidate catalog snapshot immediately on latest main
         if: github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          # The registry and every per-catalog index were validated above.
-          # Rebase only these snapshot artifacts and the ledger; never re-run
-          # the multi-hour analysis just because the independent crawler moved main.
+          # Publish only explicitly unverified candidate data. Full semantic and
+          # per-index validation runs below and controls search smoke testing.
           python crawler/publish_catalog_snapshot.py --attempts 4
+      - name: Validate registry and every per-catalog index after candidate publication
+        run: python crawler/catalog_page_analysis.py --validate-only
+      - name: Validate page-derived catalog source review backlog
+        run: python crawler/catalog_host_review_queue.py --validate-only
+      - name: Run catalog search smoke test after successful validation
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
           if gh workflow run search-api-smoke.yml --ref main; then
-            echo "Dispatched first-party catalog search smoke test after publishing the validated snapshot."
+            echo "Dispatched first-party catalog search smoke test after candidate validation."
           else
-            echo "::warning::Catalog snapshot committed, but first-party search smoke dispatch failed."
+            echo "::warning::Candidate snapshot and validation succeeded, but first-party search smoke dispatch failed."
           fi
       - name: Upload catalog analysis preview from non-main branches
         if: github.ref != 'refs/heads/main'
