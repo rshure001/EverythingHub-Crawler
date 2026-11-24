@@ -87,7 +87,7 @@ jobs:
           }
           const haystack = JSON.stringify([...results, ...catalogs]).toLowerCase();
           const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
-          if (!terms.some(term => haystack.includes(term))) throw new Error(query + ": results do not visibly match query terms");
+          if (!terms.every(term => haystack.includes(term))) throw new Error(query + ": results do not visibly match query terms");
           console.log(JSON.stringify({
             status: "search_http_200", query, visibleWebResults: results.length,
             visibleCatalogResults: catalogs.length, source: data.source || null,
