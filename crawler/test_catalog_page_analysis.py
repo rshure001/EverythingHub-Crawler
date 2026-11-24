@@ -14,7 +14,7 @@ from catalog_page_analysis import (
     search_catalog_network, search_source_page_evidence, write_outputs, validate_outputs, stable_id,
     apply_source_policy_reviews, _reconcile_page_record_provenance,
     _add_global_subject_catalogs, _global_subject_catalog_source_key,
-    _merge_cross_host_records, measure_persisted_count_deltas,
+    _build_identity_catalogs, _merge_cross_host_records, measure_persisted_count_deltas,
 )
 
 
@@ -203,6 +203,56 @@ class PageDerivedCatalogAnalysisTests(unittest.TestCase):
         }], source_total=1)
         self.assertEqual(result["metrics"]["eligible_pages"], 0)
         self.assertEqual(result["metrics"]["unique_catalogs_discovered"], 0)
+
+    def test_identity_sidecars_use_page_owned_record_edges_without_duplicate_reverse_index(self):
+        page_rows = [
+            {
+                "page_id": "page-a",
+                "url": "https://a.example/one",
+                "record_ids": ["record-a"],
+                "fetched_at": 100,
+            },
+            {
+                "page_id": "page-b",
+                "url": "https://b.example/two",
+                "record_ids": ["record-a", "record-b"],
+                "fetched_at": 101,
+            },
+        ]
+        records = {
+            "record-a": {
+                "record_id": "record-a",
+                "title": "Shared record",
+                "record_type": "product",
+                "source_page_ids": ["page-a", "page-b"],
+                "source_urls": ["https://a.example/one", "https://b.example/two"],
+                "catalog_ids": ["catalog-a"],
+            },
+            "record-b": {
+                "record_id": "record-b",
+                "title": "Second record",
+                "record_type": "place",
+                "source_page_ids": ["page-b"],
+                "source_urls": ["https://b.example/two"],
+                "catalog_ids": ["catalog-b"],
+            },
+        }
+
+        metrics, page_sidecars, record_sidecars = _build_identity_catalogs(
+            page_rows, records, stream_catalogs=True
+        )
+        page_sidecars = list(page_sidecars)
+        record_sidecars = list(record_sidecars)
+
+        self.assertEqual(metrics["page_owned_identity_catalogs"], 2)
+        self.assertEqual(metrics["record_owned_identity_catalogs"], 2)
+        self.assertEqual([item["page_id"] for item in page_sidecars], ["page-a", "page-b"])
+        self.assertEqual(page_sidecars[0]["record_ids"], ["record-a"])
+        self.assertEqual(page_sidecars[1]["record_ids"], ["record-a", "record-b"])
+        self.assertEqual(
+            {item["record_id"]: item["source_page_ids"] for item in record_sidecars},
+            {"record-a": ["page-a", "page-b"], "record-b": ["page-b"]},
+        )
 
     def test_catalog_index_writes_resume_from_verified_batch_checkpoint(self):
         pages = [
