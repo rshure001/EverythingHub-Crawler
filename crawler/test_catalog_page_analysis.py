@@ -101,6 +101,32 @@ class PageDerivedCatalogAnalysisTests(unittest.TestCase):
         )
         self.assertEqual(events, [(1, 501), (500, 501), (501, 501)])
 
+    def test_parallel_host_analysis_matches_single_worker_and_reuses_cache(self):
+        pages = [
+            {"url": f"https://host{index}.example/about", "title": "About us",
+             "description": "Information about this organization.",
+             "text": "Contact and background information.",
+             "lane": "general", "robots_allowed": True}
+            for index in range(3)
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            parallel_dir = Path(tmp) / "parallel"
+            serial_dir = Path(tmp) / "serial"
+            parallel = analyze_pages_incremental(
+                pages, source_total=3, cache_dir=parallel_dir, workers=2
+            )
+            serial = analyze_pages_incremental(
+                pages, source_total=3, cache_dir=serial_dir, workers=1
+            )
+            self.assertEqual(parallel["metrics"]["pages_analyzed"], serial["metrics"]["pages_analyzed"])
+            self.assertEqual(parallel["metrics"]["unique_catalogs_discovered"], serial["metrics"]["unique_catalogs_discovered"])
+            self.assertEqual(parallel["metrics"]["unique_records"], serial["metrics"]["unique_records"])
+            cached = analyze_pages_incremental(
+                pages, source_total=3, cache_dir=parallel_dir, workers=2, cache_only=True
+            )
+            self.assertEqual(cached["cache_reused_hosts"], 3)
+            self.assertEqual(cached["cache_rebuilt_hosts"], 0)
+
     def test_rolex_model_pages_form_one_deduplicated_catalog(self):
         pages = [
             {
