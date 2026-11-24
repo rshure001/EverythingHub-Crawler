@@ -1,24 +1,11 @@
-# Live acceptance verifies the low-latency public RSS fallback when the full catalog index is cold.
-name: Everything Hub browser verification
+name: Everything Hub AppDeploy preview diagnostics
 on:
   push:
-    branches: [main, 'eh/fallback-attribution-2026-11-21', 'eh/catalog-preview-cards-2026-11-21', 'eh/nasa-video-search-2026-11-21']
-    paths:
-      - '.github/workflows/everything-hub-production-browser-check.yml'
-      - '.github/workflows/catalog-first-discovery.yml'
-      - 'vercel-homepage/**'
-      - 'vercel-search-backend/**'
-      - 'crawler/catalog_*.py'
-      - 'crawler/test_catalog_*.py'
-      - 'data/universal-catalog-indexes/**'
-      - 'data/page-derived-catalogs/**'
-      - 'public-search/manifest.json'
-      - 'supabase/functions/everything-hub-web-search/**'
-  workflow_dispatch:
-  workflow_run:
-    workflows: ["Publish and verify Everything Hub — in-house Supabase route"]
-    types: [completed]
     branches: [main]
+    paths:
+      - "vercel-homepage/**"
+      - "vercel-search-backend/**"
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:
