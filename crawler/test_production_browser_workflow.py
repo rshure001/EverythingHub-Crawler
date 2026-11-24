@@ -16,7 +16,17 @@ class ProductionBrowserWorkflowContractTests(unittest.TestCase):
         self.assertIn('workflows: ["Publish and verify Everything Hub — in-house Supabase route"]', workflow)
         self.assertIn("types: [completed]", workflow)
         self.assertIn("branches: [main]", workflow)
-        self.assertIn("vars.APPDEPLOY_ACCEPTANCE_ENABLED == 'true'", workflow)
+        self.assertNotIn("APPDEPLOY_ACCEPTANCE_ENABLED", workflow)
+        self.assertIn("TARGET_URL: https://everythinghub-search-engine-4x25f8.v2.appdeploy.ai/", workflow)
+        self.assertIn("everythinghub-production-*.png", workflow)
+        self.assertIn("production-report.json", workflow)
+        self.assertIn("nav.hub-hero-divisions button", workflow)
+        self.assertIn(".image-results-grid .image-result", workflow)
+        self.assertIn(".division-destination-page .destination-feature .top-news-card", workflow)
+        self.assertIn("section.top-news .discover-story-body", workflow)
+        self.assertIn("aria-pressed", workflow)
+        self.assertIn("Refresh top news", workflow)
+        self.assertIn("documentWidth > viewportWidth + 2", workflow)
         self.assertIn(
             "github.event_name != 'workflow_run' || "
             "github.event.workflow_run.conclusion == 'success'",
