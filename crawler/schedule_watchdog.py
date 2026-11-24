@@ -12,6 +12,12 @@ MAX_MANIFEST_AGE_SECONDS = 10 * 60
 MAX_MANIFEST_FUTURE_SKEW_SECONDS = 60
 MAX_SCHEDULE_AGE_SECONDS = 10 * 60
 ACTIVE_STATUSES = {"queued", "in_progress", "pending", "waiting", "requested"}
+CRAWLER_WORKFLOW_NAME = "Everything Hub crawler"
+BLOCKING_WORKFLOW_NAMES = {
+    CRAWLER_WORKFLOW_NAME,
+    "Retroactive catalog inventory",
+    "Catalog-first discovery",
+}
 
 
 def parse_time(value: str) -> datetime:
@@ -43,7 +49,11 @@ def schedule_health(
     """Measure scheduled delivery independently from push/manual crawler runs."""
     scheduled = []
     for run in runs:
-        if not isinstance(run, dict) or run.get("event") != "schedule":
+        if (
+            not isinstance(run, dict)
+            or run.get("name") != CRAWLER_WORKFLOW_NAME
+            or run.get("event") != "schedule"
+        ):
             continue
         created_at = run.get("created_at")
         if not isinstance(created_at, str):
@@ -103,11 +113,19 @@ def evaluate(
 
     active = [
         run for run in runs
-        if isinstance(run, dict) and run.get("status") in ACTIVE_STATUSES
+        if (
+            isinstance(run, dict)
+            and run.get("name") in BLOCKING_WORKFLOW_NAMES
+            and run.get("status") in ACTIVE_STATUSES
+        )
     ]
     attempts = []
     for run in runs:
-        if not isinstance(run, dict) or not isinstance(run.get("created_at"), str):
+        if (
+            not isinstance(run, dict)
+            or run.get("name") != CRAWLER_WORKFLOW_NAME
+            or not isinstance(run.get("created_at"), str)
+        ):
             continue
         try:
             attempts.append((parse_time(run["created_at"]), run))
@@ -130,7 +148,7 @@ def evaluate(
     if active:
         return {
             "action": "wait",
-            "reason": "a crawler run is already queued or running; do not update the recovery marker",
+            "reason": "a crawler or catalog-analysis run is already queued or running; do not update the recovery marker",
             "active_runs": len(active),
             **common,
         }
@@ -190,13 +208,13 @@ def recovery_dispatch_decision(runs: list[dict[str, Any]], recovery_sha: str) ->
     active = [
         run for run in runs
         if isinstance(run, dict)
-        and run.get("name") == "Everything Hub crawler"
+        and run.get("name") in BLOCKING_WORKFLOW_NAMES
         and run.get("status") in ACTIVE_STATUSES
     ]
     if active:
         return {
             "action": "wait",
-            "reason": "a crawler is queued or running after the recovery marker commit",
+            "reason": "a crawler or catalog-analysis run is queued or running after the recovery marker commit",
         }
 
     already_started = any(
@@ -214,7 +232,7 @@ def recovery_dispatch_decision(runs: list[dict[str, Any]], recovery_sha: str) ->
 
     return {
         "action": "dispatch",
-        "reason": "no crawler is active and no run has started from the recovery marker commit",
+        "reason": "no crawler or catalog-analysis run is active and no run has started from the recovery marker commit",
     }
 
 

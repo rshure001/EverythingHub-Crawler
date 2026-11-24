@@ -9,6 +9,7 @@ NOW = datetime(2026, 11, 16, 16, 0, tzinfo=timezone.utc)
 
 def scheduled(created_at, conclusion="success", status="completed", crawl_execution_conclusion=None):
     run = {
+        "name": "Everything Hub crawler",
         "status": status,
         "conclusion": conclusion,
         "event": "schedule",
@@ -99,6 +100,38 @@ class ScheduleWatchdogTests(unittest.TestCase):
         self.assertEqual(result["action"], "wait")
         self.assertEqual(result["active_runs"], 2)
 
+    def test_active_catalog_analysis_blocks_recovery_marker(self):
+        result = evaluate(
+            [
+                scheduled("2026-11-16T14:00:00Z"),
+                {
+                    "name": "Retroactive catalog inventory",
+                    "status": "in_progress",
+                    "event": "schedule",
+                    "created_at": "2026-11-16T15:59:00Z",
+                },
+            ],
+            now=NOW,
+            manifest_updated_at=manifest_minutes_ago(30),
+        )
+        self.assertEqual(result["action"], "wait")
+        self.assertEqual(result["active_runs"], 1)
+
+    def test_catalog_schedule_does_not_mask_stale_crawler_schedule(self):
+        result = evaluate(
+            [{
+                "name": "Catalog-first discovery",
+                "status": "completed",
+                "conclusion": "success",
+                "event": "schedule",
+                "created_at": "2026-11-16T15:59:00Z",
+            }],
+            now=NOW,
+            manifest_updated_at=manifest_minutes_ago(30),
+        )
+        self.assertEqual(result["action"], "mark")
+        self.assertEqual(result["schedule_status"], "unobserved")
+
     def test_stale_schedule_with_fresh_manifest_does_not_write_marker(self):
         result = evaluate(
             [scheduled("2026-11-16T14:00:00Z")],
@@ -119,7 +152,7 @@ class ScheduleWatchdogTests(unittest.TestCase):
 
     def test_unobserved_schedule_with_manifest_stale_over_10_minutes_marks_recovery(self):
         result = evaluate(
-            [{"status": "completed", "conclusion": "success", "event": "workflow_dispatch", "created_at": "2026-11-16T15:59:00Z"}],
+            [{"name": "Everything Hub crawler", "status": "completed", "conclusion": "success", "event": "workflow_dispatch", "created_at": "2026-11-16T15:59:00Z"}],
             now=NOW,
             manifest_updated_at=manifest_minutes_ago(60),
         )
@@ -130,7 +163,7 @@ class ScheduleWatchdogTests(unittest.TestCase):
 
     def test_unobserved_schedule_with_fresh_manifest_is_healthy(self):
         result = evaluate(
-            [{"status": "completed", "conclusion": "success", "event": "workflow_dispatch", "created_at": "2026-11-16T15:59:00Z"}],
+            [{"name": "Everything Hub crawler", "status": "completed", "conclusion": "success", "event": "workflow_dispatch", "created_at": "2026-11-16T15:59:00Z"}],
             now=NOW,
             manifest_updated_at=manifest_minutes_ago(5),
         )
@@ -167,7 +200,7 @@ class ScheduleWatchdogTests(unittest.TestCase):
             [
                 scheduled("2026-11-16T15:55:00Z"),
                 scheduled("2026-11-16T14:00:00Z"),
-                {"status": "completed", "conclusion": "success", "event": "workflow_dispatch", "created_at": "2026-11-16T15:59:00Z"},
+                {"name": "Everything Hub crawler", "status": "completed", "conclusion": "success", "event": "workflow_dispatch", "created_at": "2026-11-16T15:59:00Z"},
             ],
             now=NOW,
             manifest_updated_at=manifest_minutes_ago(60),
@@ -201,7 +234,7 @@ class ScheduleWatchdogTests(unittest.TestCase):
     def test_schedule_health_is_independent_of_recent_manual_crawl(self):
         result = evaluate(
             [
-                {"status": "completed", "conclusion": "success", "event": "workflow_dispatch", "created_at": "2026-11-16T15:59:00Z"},
+                {"name": "Everything Hub crawler", "status": "completed", "conclusion": "success", "event": "workflow_dispatch", "created_at": "2026-11-16T15:59:00Z"},
                 scheduled("2026-11-16T15:00:00Z"),
             ],
             now=NOW,
@@ -261,6 +294,16 @@ class ScheduleWatchdogTests(unittest.TestCase):
         )
         self.assertEqual(active["action"], "wait")
 
+        active_catalog = recovery_dispatch_decision(
+            [{
+                "name": "Catalog-first discovery",
+                "status": "in_progress",
+                "head_sha": "b" * 40,
+            }],
+            recovery_sha,
+        )
+        self.assertEqual(active_catalog["action"], "wait")
+
         already_started = recovery_dispatch_decision(
             [{
                 "name": "Everything Hub crawler",
@@ -290,8 +333,12 @@ class ScheduleWatchdogTests(unittest.TestCase):
         self.assertIn("actions/workflows/crawl.yml/runs?event=schedule&per_page=5", workflow)
         self.assertIn("actions/runs/${latest_scheduled_run_id}/jobs?per_page=100", workflow)
         self.assertIn("crawler/automation-trigger.json", workflow)
-        self.assertIn("--force-with-lease=", workflow)
-        self.assertIn("refs/heads/main:${expected_head}", workflow)
+        self.assertIn("actions/workflows/retroactive-catalog-index.yml/runs?per_page=100", workflow)
+        self.assertIn("actions/workflows/catalog-first-discovery.yml/runs?per_page=100", workflow)
+        self.assertIn("git rebase origin/main", workflow)
+        self.assertIn("for attempt in 1 2 3", workflow)
+        self.assertIn("git push origin HEAD:refs/heads/main", workflow)
+        self.assertNotIn("--force-with-lease", workflow)
         self.assertIn("status", workflow)
         self.assertIn("actions: write", workflow)
         self.assertIn("contents: write", workflow)
@@ -303,7 +350,7 @@ class ScheduleWatchdogTests(unittest.TestCase):
 
     def test_schedule_health_reports_unobserved_without_schedule_events(self):
         result = evaluate(
-            [{"status": "completed", "conclusion": "success", "event": "workflow_dispatch", "created_at": "2026-11-16T15:59:00Z"}],
+            [{"name": "Everything Hub crawler", "status": "completed", "conclusion": "success", "event": "workflow_dispatch", "created_at": "2026-11-16T15:59:00Z"}],
             now=NOW,
             manifest_updated_at=manifest_minutes_ago(5),
         )

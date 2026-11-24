@@ -50,6 +50,8 @@ jobs:
           set -euo pipefail
           gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/crawl.yml/runs?per_page=20" > /tmp/crawl-runs.json
           gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/crawl.yml/runs?event=schedule&per_page=5" > /tmp/crawl-scheduled-runs.json
+          gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/retroactive-catalog-index.yml/runs?per_page=100" > /tmp/catalog-runs.json
+          gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/catalog-first-discovery.yml/runs?per_page=100" > /tmp/catalog-discovery-runs.json
           gh api "repos/${GITHUB_REPOSITORY}/contents/public-search/manifest.json" > /tmp/public-manifest-envelope.json
           python - <<'PY'
           import base64
@@ -58,12 +60,20 @@ jobs:
 
           payload = json.loads(Path("/tmp/crawl-runs.json").read_text(encoding="utf-8"))
           scheduled_payload = json.loads(Path("/tmp/crawl-scheduled-runs.json").read_text(encoding="utf-8"))
+          catalog_payload = json.loads(Path("/tmp/catalog-runs.json").read_text(encoding="utf-8"))
+          discovery_payload = json.loads(Path("/tmp/catalog-discovery-runs.json").read_text(encoding="utf-8"))
           runs = payload.get("workflow_runs")
           scheduled = scheduled_payload.get("workflow_runs")
-          if not isinstance(runs, list) or not isinstance(scheduled, list):
-              raise SystemExit("GitHub did not return crawler workflow-run arrays")
+          catalog_runs = catalog_payload.get("workflow_runs")
+          discovery_runs = discovery_payload.get("workflow_runs")
+          if not all(isinstance(items, list) for items in (runs, scheduled, catalog_runs, discovery_runs)):
+              raise SystemExit("GitHub did not return crawler and catalog workflow-run arrays")
           known_ids = {row.get("id") for row in runs if isinstance(row, dict)}
-          runs.extend(row for row in scheduled if isinstance(row, dict) and row.get("id") not in known_ids)
+          for extra_runs in (scheduled, catalog_runs, discovery_runs):
+              for row in extra_runs:
+                  if isinstance(row, dict) and row.get("id") not in known_ids:
+                      runs.append(row)
+                      known_ids.add(row.get("id"))
           latest_scheduled = max(
               (row for row in scheduled if isinstance(row, dict) and row.get("id")),
               key=lambda row: row.get("created_at") or "",
@@ -168,6 +178,8 @@ jobs:
               git checkout -B main origin/main
               expected_head="$(git rev-parse origin/main)"
               gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/crawl.yml/runs?per_page=100" > /tmp/crawl-runs-final.json
+              gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/retroactive-catalog-index.yml/runs?per_page=100" > /tmp/catalog-runs-final.json
+              gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/catalog-first-discovery.yml/runs?per_page=100" > /tmp/catalog-discovery-runs-final.json
               gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/crawl.yml/runs?event=schedule&per_page=5" > /tmp/crawl-scheduled-final.json
               gh api "repos/${GITHUB_REPOSITORY}/contents/public-search/manifest.json" > /tmp/public-manifest-final-envelope.json
               python - <<'PY'
@@ -178,10 +190,22 @@ jobs:
 
           active_statuses = {"queued", "in_progress", "pending", "waiting", "requested"}
           runs_payload = json.loads(Path("/tmp/crawl-runs-final.json").read_text(encoding="utf-8"))
+          catalog_payload = json.loads(Path("/tmp/catalog-runs-final.json").read_text(encoding="utf-8"))
+          discovery_payload = json.loads(Path("/tmp/catalog-discovery-runs-final.json").read_text(encoding="utf-8"))
           runs = runs_payload.get("workflow_runs")
-          if not isinstance(runs, list):
-              raise SystemExit("Final GitHub crawler run check returned no workflow_runs array")
-          active = [run for run in runs if isinstance(run, dict) and run.get("status") in active_statuses]
+          catalog_runs = catalog_payload.get("workflow_runs")
+          discovery_runs = discovery_payload.get("workflow_runs")
+          if not all(isinstance(items, list) for items in (runs, catalog_runs, discovery_runs)):
+              raise SystemExit("Final GitHub crawler/catalog run check returned an invalid workflow_runs array")
+          runs.extend(catalog_runs)
+          runs.extend(discovery_runs)
+          blocking_names = {"Everything Hub crawler", "Retroactive catalog inventory", "Catalog-first discovery"}
+          active = [
+              run for run in runs
+              if isinstance(run, dict)
+              and run.get("name") in blocking_names
+              and run.get("status") in active_statuses
+          ]
           if active:
               print("Final check found an active crawler; no recovery marker will be written.")
               raise SystemExit(0)
@@ -265,6 +289,8 @@ jobs:
               fi
               git commit -m "Trigger one bounded crawler recovery after stale schedule"
               gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/crawl.yml/runs?per_page=100" > /tmp/crawl-runs-prepush.json
+              gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/retroactive-catalog-index.yml/runs?per_page=100" > /tmp/catalog-runs-prepush.json
+              gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/catalog-first-discovery.yml/runs?per_page=100" > /tmp/catalog-discovery-runs-prepush.json
               gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/crawl.yml/runs?event=schedule&per_page=5" > /tmp/crawl-scheduled-prepush.json
               gh api "repos/${GITHUB_REPOSITORY}/contents/public-search/manifest.json" > /tmp/public-manifest-prepush-envelope.json
               python - <<'PY'
@@ -275,9 +301,20 @@ jobs:
 
           active_statuses = {"queued", "in_progress", "pending", "waiting", "requested"}
           runs_payload = json.loads(Path("/tmp/crawl-runs-prepush.json").read_text(encoding="utf-8"))
+          catalog_payload = json.loads(Path("/tmp/catalog-runs-prepush.json").read_text(encoding="utf-8"))
+          discovery_payload = json.loads(Path("/tmp/catalog-discovery-runs-prepush.json").read_text(encoding="utf-8"))
           runs = runs_payload.get("workflow_runs", [])
-          if any(isinstance(run, dict) and run.get("status") in active_statuses for run in runs):
-              print("A crawler became queued or active before push; aborting marker commit.")
+          catalog_runs = catalog_payload.get("workflow_runs", [])
+          discovery_runs = discovery_payload.get("workflow_runs", [])
+          blocking_names = {"Everything Hub crawler", "Retroactive catalog inventory", "Catalog-first discovery"}
+          all_runs = runs + catalog_runs + discovery_runs
+          if any(
+              isinstance(run, dict)
+              and run.get("name") in blocking_names
+              and run.get("status") in active_statuses
+              for run in all_runs
+          ):
+              print("A crawler or catalog-analysis run became queued or active before push; aborting marker commit.")
               raise SystemExit(0)
           scheduled_payload = json.loads(Path("/tmp/crawl-scheduled-prepush.json").read_text(encoding="utf-8"))
           scheduled = scheduled_payload.get("workflow_runs", [])
@@ -322,12 +359,31 @@ jobs:
                 echo "Final recovery conditions changed; local marker commit discarded."
                 exit 0
               fi
-              git push --force-with-lease="refs/heads/main:${expected_head}" origin HEAD:refs/heads/main
-              echo "Committed one bounded recovery marker with expected-head protection."
+              pushed=0
+              for attempt in 1 2 3; do
+                git fetch origin main
+                if ! git rebase origin/main; then
+                  git rebase --abort || true
+                  echo "::warning title=Recovery marker deferred::The main branch changed the recovery marker concurrently; the next watchdog cycle will re-evaluate."
+                  exit 0
+                fi
+                if git push origin HEAD:refs/heads/main; then
+                  pushed=1
+                  break
+                fi
+                echo "Main advanced during recovery marker push; retrying rebase (attempt ${attempt}/3)."
+              done
+              if [ "$pushed" -ne 1 ]; then
+                echo "::warning title=Recovery marker deferred::Main advanced repeatedly; the next watchdog cycle will re-evaluate."
+                exit 0
+              fi
+              echo "Committed one bounded recovery marker after rebasing onto latest main."
 
               # GITHUB_TOKEN pushes do not start another push-triggered workflow.
               # Explicitly dispatch the crawl only after a fresh no-overlap check.
               gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/crawl.yml/runs?per_page=100" > /tmp/crawl-runs-postpush.json
+              gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/retroactive-catalog-index.yml/runs?per_page=100" > /tmp/catalog-runs-postpush.json
+              gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/catalog-first-discovery.yml/runs?per_page=100" > /tmp/catalog-discovery-runs-postpush.json
               recovery_sha="$(git rev-parse HEAD)"
               RECOVERY_SHA="$recovery_sha" python - <<'PY'
           import json
@@ -336,7 +392,16 @@ jobs:
           from crawler.schedule_watchdog import recovery_dispatch_decision
 
           payload = json.loads(Path("/tmp/crawl-runs-postpush.json").read_text(encoding="utf-8"))
-          decision = recovery_dispatch_decision(payload.get("workflow_runs"), os.environ["RECOVERY_SHA"])
+          catalog_payload = json.loads(Path("/tmp/catalog-runs-postpush.json").read_text(encoding="utf-8"))
+          discovery_payload = json.loads(Path("/tmp/catalog-discovery-runs-postpush.json").read_text(encoding="utf-8"))
+          runs = payload.get("workflow_runs")
+          catalog_runs = catalog_payload.get("workflow_runs")
+          discovery_runs = discovery_payload.get("workflow_runs")
+          if not all(isinstance(items, list) for items in (runs, catalog_runs, discovery_runs)):
+              raise SystemExit("Post-push crawler/catalog run check returned an invalid workflow_runs array")
+          runs.extend(catalog_runs)
+          runs.extend(discovery_runs)
+          decision = recovery_dispatch_decision(runs, os.environ["RECOVERY_SHA"])
           print("Post-push recovery dispatch decision:", json.dumps(decision, sort_keys=True))
           if decision["action"] == "dispatch":
               Path("/tmp/crawl-dispatch-eligible").write_text("yes", encoding="utf-8")
@@ -349,7 +414,7 @@ jobs:
               echo "Dispatched one bounded crawler workflow_dispatch after the post-push no-overlap check."
               ;;
             wait)
-              echo "An existing crawler is queued or running, or one of the freshness gates is not satisfied; no marker update."
+              echo "An existing crawler or catalog-analysis run is queued or running, or one of the freshness gates is not satisfied; no marker update."
               ;;
             healthy)
               echo "The public manifest is fresh; no recovery marker is needed."
