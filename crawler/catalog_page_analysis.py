@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import argparse
 import gzip
+import os
+from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
 import hashlib
 import json
 import re
@@ -2034,6 +2036,15 @@ def _merge_cross_host_records(records: list[dict]) -> tuple[dict[str, dict], int
             merge_count += _merge_cross_host_record_into(current, item)
     return _finalize_cross_host_record_map(merged), merge_count
 
+def _analyze_host_partition(host_pages: list[dict]) -> dict:
+    """CPU-bound worker entry point; kept module-level so process workers can pickle it."""
+    return analyze_pages(
+        host_pages,
+        source_total=len(host_pages),
+        include_identity_catalogs=False,
+    )
+
+
 def analyze_pages_incremental(
     pages: list[dict],
     source_total: int | None = None,
@@ -2042,6 +2053,7 @@ def analyze_pages_incremental(
     cache_dir: Path | None = None,
     progress: bool = False,
     cache_only: bool = False,
+    workers: int = 4,
 ) -> dict:
     """Reuse per-host analysis shards when that host's indexed pages are unchanged.
 
@@ -2077,43 +2089,26 @@ def analyze_pages_incremental(
             "host_count": host_count,
             "cache_dir": str(cache_dir),
         }, sort_keys=True), flush=True)
-    for host_index, (host, host_pages) in enumerate(sorted(grouped.items()), start=1):
-        host_started = time.monotonic()
-        cache_status = "rebuilt"
-        payload = json.dumps(host_pages, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
-        digest = hashlib.sha256(payload).hexdigest()
-        cache_path = cache_dir / (hashlib.sha256(host.encode("utf-8")).hexdigest()[:32] + ".json.gz")
-        shard = None
-        if cache_path.exists():
-            try:
-                cached = json.loads(gzip.decompress(cache_path.read_bytes()).decode("utf-8"))
-                if cached.get("analyzer_version") == ANALYZER_VERSION and cached.get("input_sha256") == digest:
-                    shard = cached.get("analysis")
-                    cache_status = "reused"
-                    reused += 1
-            except (OSError, ValueError, json.JSONDecodeError):
-                shard = None
-        if shard is None:
-            def report_host_progress(page_index: int, page_count: int) -> None:
-                if progress:
-                    print(json.dumps({
-                        "stage": "catalog_host_analysis_progress",
-                        "host": host,
-                        "host_index": host_index,
-                        "host_count": host_count,
-                        "pages_started": page_index,
-                        "host_page_count": page_count,
-                    }, sort_keys=True), flush=True)
-            shard = analyze_pages(
-                host_pages,
-                source_total=len(host_pages),
-                progress_callback=report_host_progress if progress else None,
-                include_identity_catalogs=False,
-            )
-            raw = json.dumps({"analyzer_version": ANALYZER_VERSION, "input_sha256": digest, "analysis": shard}, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-            temp = cache_path.with_suffix(".tmp")
+    workers = max(1, min(int(workers), os.cpu_count() or 1, max(1, host_count)))
+    max_inflight = max(workers, workers * 2)
+    executor = ProcessPoolExecutor(max_workers=workers) if workers > 1 else None
+    pending = {}
+
+    def consume_host(task: dict, shard: dict, cache_status: str) -> None:
+        nonlocal rebuilt, cross_host_record_merges
+        host = task["host"]
+        host_pages = task["host_pages"]
+        host_index = task["host_index"]
+        host_started = task["host_started"]
+        if cache_status == "rebuilt":
+            raw = json.dumps({
+                "analyzer_version": ANALYZER_VERSION,
+                "input_sha256": task["digest"],
+                "analysis": shard,
+            }, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+            temp = task["cache_path"].with_suffix(".tmp")
             temp.write_bytes(gzip.compress(raw, compresslevel=6, mtime=0))
-            temp.replace(cache_path)
+            temp.replace(task["cache_path"])
             rebuilt += 1
         if progress:
             print(json.dumps({
@@ -2131,9 +2126,8 @@ def analyze_pages_incremental(
                 "analysis_elapsed_seconds": round(time.monotonic() - analysis_started, 3),
                 "cache_reused_hosts": reused,
                 "cache_rebuilt_hosts": rebuilt,
+                "workers": workers,
             }, sort_keys=True), flush=True)
-        # Cache-only passes only materialize resumable host shards. Avoid building
-        # the global record/page object graph when the caller will return immediately.
         if not cache_only:
             all_catalogs.extend(shard["catalogs"])
             for item in shard["records"]:
@@ -2151,6 +2145,53 @@ def analyze_pages_incremental(
             structured_catalog_items += shard["metrics"].get("structured_catalog_items", 0)
             eligible += shard["metrics"]["eligible_pages"]
             signals += shard["metrics"]["pages_with_catalog_signals"]
+
+    def drain_one() -> None:
+        if not pending:
+            return
+        completed, _ = wait(tuple(pending), return_when=FIRST_COMPLETED)
+        for future in completed:
+            task = pending.pop(future)
+            consume_host(task, future.result(), "rebuilt")
+
+    try:
+        for host_index, (host, host_pages) in enumerate(sorted(grouped.items()), start=1):
+            host_started = time.monotonic()
+            payload = json.dumps(host_pages, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+            digest = hashlib.sha256(payload).hexdigest()
+            cache_path = cache_dir / (hashlib.sha256(host.encode("utf-8")).hexdigest()[:32] + ".json.gz")
+            task = {
+                "host": host,
+                "host_pages": host_pages,
+                "host_index": host_index,
+                "host_started": host_started,
+                "digest": digest,
+                "cache_path": cache_path,
+            }
+            shard = None
+            if cache_path.exists():
+                try:
+                    cached = json.loads(gzip.decompress(cache_path.read_bytes()).decode("utf-8"))
+                    if cached.get("analyzer_version") == ANALYZER_VERSION and cached.get("input_sha256") == digest:
+                        shard = cached.get("analysis")
+                        reused += 1
+                except (OSError, ValueError, json.JSONDecodeError):
+                    shard = None
+            if shard is not None:
+                consume_host(task, shard, "reused")
+                continue
+            if executor is None:
+                shard = _analyze_host_partition(host_pages)
+                consume_host(task, shard, "rebuilt")
+            else:
+                pending[executor.submit(_analyze_host_partition, host_pages)] = task
+                if len(pending) >= max_inflight:
+                    drain_one()
+        while pending:
+            drain_one()
+    finally:
+        if executor is not None:
+            executor.shutdown(wait=True, cancel_futures=True)
     if cache_only:
         return {
             "cache_only": True,
@@ -3532,6 +3573,7 @@ def main() -> None:
     parser.add_argument("--no-incremental", action="store_true")
     parser.add_argument("--cache-only", action="store_true", help="Build and persist per-host cache shards without catalog aggregation")
     parser.add_argument("--cache-dir", type=Path, default=ROOT / "data" / ".page-derived-catalog-cache")
+    parser.add_argument("--workers", type=int, default=4, help="Bounded CPU worker processes for uncached host partitions")
     args = parser.parse_args()
     if args.validate_only:
         print(json.dumps(validate_outputs(args.output_dir), indent=2))
@@ -3547,7 +3589,7 @@ def main() -> None:
         source_total=source_manifest.get("total_pages"),
         source_updated_at=datetime.fromtimestamp(source_manifest.get("updated_at", 0), timezone.utc).isoformat().replace("+00:00", "Z") if source_manifest.get("updated_at") else None,
         source_index_sha256=hashlib.sha256(args.index.read_bytes()).hexdigest(),
-        **({} if args.no_incremental else {"cache_dir": args.cache_dir, "progress": True, "cache_only": args.cache_only}),
+        **({} if args.no_incremental else {"cache_dir": args.cache_dir, "progress": True, "cache_only": args.cache_only, "workers": args.workers}),
     )
     if args.cache_only:
         print(json.dumps(analysis, indent=2))
