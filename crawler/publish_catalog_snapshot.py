@@ -89,7 +89,7 @@ def _read_snapshot(directory: Path) -> dict:
     except (OSError, ValueError, gzip.BadGzipFile, UnicodeDecodeError) as exc:
         raise ValueError("candidate catalog registry is unreadable") from exc
     catalogs = registry.get("catalogs") if isinstance(registry, dict) else None
-    if registry.get("status") != "candidate_staging_not_production" or not isinstance(catalogs, list):
+    if not isinstance(registry, dict) or registry.get("status") != "candidate_staging_not_production" or not isinstance(catalogs, list):
         raise ValueError("only a candidate-staging catalog registry may be published")
     if any(
         not isinstance(item, dict)
@@ -103,6 +103,8 @@ def _read_snapshot(directory: Path) -> dict:
     metrics = report.get("metrics")
     if not isinstance(metrics, dict):
         raise ValueError("catalog report metrics must be an object")
+    if metrics.get("unique_catalogs_discovered") != len(catalogs):
+        raise ValueError("candidate registry catalog count does not match the analysis report")
     source_pages = report.get("source_index_pages")
     if isinstance(source_pages, bool) or not isinstance(source_pages, int) or source_pages < 0:
         raise ValueError("catalog report source_index_pages must be a non-negative integer")
