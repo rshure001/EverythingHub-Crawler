@@ -1534,7 +1534,7 @@ class CatalogInventoryTriggerTests(unittest.TestCase):
         self.assertNotIn('"public-search/manifest.json"', push_paths)
         self.assertIn('    - cron: "23 * * * *"', workflow)
         self.assertIn("  workflow_dispatch:", workflow)
-        self.assertIn('"\.github/workflows/retroactive-catalog-index.yml"', push_paths)
+        self.assertIn('".github/workflows/retroactive-catalog-index.yml"', push_paths)
         self.assertIn("group: catalog-data-publish-v7-${{ github.ref }}", workflow)
         self.assertIn("cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}", workflow)
 
