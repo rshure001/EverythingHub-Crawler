@@ -181,7 +181,17 @@ jobs:
               let intercepted = false;
               await page.route("**/api/ai/answer", async route => {
                 intercepted = true;
-                await route.abort();
+                await route.fulfill({
+                  status: 200,
+                  contentType: "application/json",
+                  body: JSON.stringify({
+                    answer: "Research route verified; paid AI execution skipped.",
+                    sources: [],
+                    providers: [],
+                    unavailableProviders: ["Paid AI generation intentionally skipped in free-only browser acceptance."],
+                    sourceCount: 0
+                  })
+                });
               });
               const requestPromise = page.waitForRequest(request => new URL(request.url()).pathname.endsWith("/api/ai/answer"), { timeout: 20000 });
               await input.fill("NASA");
