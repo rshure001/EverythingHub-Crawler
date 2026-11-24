@@ -76,7 +76,7 @@ class ScheduleWatchdogTests(unittest.TestCase):
         result = evaluate(
             [
                 scheduled("2026-11-16T14:00:00Z", conclusion="cancelled"),
-                {"status": "completed", "conclusion": "success", "event": "push", "created_at": "2026-11-16T15:59:00Z"},
+                {"name": "Everything Hub crawler", "status": "completed", "conclusion": "success", "event": "push", "created_at": "2026-11-16T15:59:00Z"},
             ],
             now=NOW,
             manifest_updated_at=manifest_minutes_ago(150),
@@ -91,8 +91,8 @@ class ScheduleWatchdogTests(unittest.TestCase):
         result = evaluate(
             [
                 scheduled("2026-11-16T14:00:00Z"),
-                {"status": "queued", "event": "push", "created_at": "2026-11-16T15:59:00Z"},
-                {"status": "in_progress", "event": "push", "created_at": "2026-11-16T15:58:00Z"},
+                {"name": "Everything Hub crawler", "status": "queued", "event": "push", "created_at": "2026-11-16T15:59:00Z"},
+                {"name": "Everything Hub crawler", "status": "in_progress", "event": "push", "created_at": "2026-11-16T15:58:00Z"},
             ],
             now=NOW,
             manifest_updated_at=manifest_minutes_ago(120),
