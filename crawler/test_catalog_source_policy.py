@@ -56,8 +56,8 @@ class CatalogSourcePolicyTests(unittest.TestCase):
         self.assertGreaterEqual(canada["min_interval_seconds"], 1.0)
 
         parser = object()
-        with patch.object(policy, "load_robots_policy", return_value=parser), \\
-             patch.object(policy, "robots_can_fetch", return_value=True), \\
+        with patch.object(policy, "load_robots_policy", return_value=parser), \
+             patch.object(policy, "robots_can_fetch", return_value=True), \
              patch.object(policy, "effective_host_delay", return_value=0.5):
             source, loaded_parser, delay, paths = policy.authorize_source_url(
                 "https://open.canada.ca/data/en/api/3/action/package_search"
