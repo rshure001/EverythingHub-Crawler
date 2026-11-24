@@ -53,19 +53,42 @@ jobs:
               url, startedAt: new Date().toISOString(), status: null, branding: null, artwork: null,
               searchInputVisible: false, divisions: [], divisionChecks: [], categorySearches: [], searches: [],
               images: null, videos: null, publicFeeds: null, topStories: null, mobile: null, research: null,
-              navigation: null, pageErrors: [], consoleErrors: [], passed: false
+              navigation: null, pageErrors: [], consoleErrors: [], apiRequests: [], apiResponses: [], failedRequests: [],
+              visibleSearchInputs: null, passed: false
             };
             const browser = await chromium.launch({ headless: true });
             const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 1 });
             page.setDefaultTimeout(15000);
             page.on("pageerror", error => report.pageErrors.push(String(error)));
             page.on("console", message => { if (message.type() === "error") report.consoleErrors.push(message.text()); });
+            page.on("request", request => {
+              try {
+                const requestUrl = new URL(request.url());
+                if (requestUrl.pathname.startsWith("/api/")) {
+                  report.apiRequests.push({ method: request.method(), url: request.url(), postData: request.postData() || null });
+                }
+              } catch {}
+            });
+            page.on("response", response => {
+              try {
+                const responseUrl = new URL(response.url());
+                if (responseUrl.pathname.startsWith("/api/")) {
+                  report.apiResponses.push({ status: response.status(), url: response.url() });
+                }
+              } catch {}
+            });
+            page.on("requestfailed", request => report.failedRequests.push({
+              url: request.url(), error: request.failure()?.errorText || "unknown"
+            }));
             const shot = async name => page.screenshot({ path: "everythinghub-production-" + name + ".png", fullPage: true });
             const fail = message => { throw new Error(message); };
+            const searchInput = () => page.locator("form.homepage-live-search input#hub-search:visible").first();
             const goHome = async () => {
               const response = await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60000 });
               if (!response || response.status() !== 200) fail("Homepage HTTP " + (response ? response.status() : "unavailable"));
               await page.locator(".everythinghub-approved-home-art img.approved-master-image").first().waitFor({ state: "visible", timeout: 20000 });
+              report.visibleSearchInputs = await page.locator("input#hub-search:visible").count();
+              await searchInput().waitFor({ state: "visible", timeout: 12000 });
               await page.waitForFunction(() => {
                 const image = document.querySelector(".everythinghub-approved-home-art img.approved-master-image");
                 return image && image.complete && image.naturalWidth >= 800;
@@ -76,7 +99,11 @@ jobs:
               const button = page.locator('nav.hub-hero-divisions button[aria-label="' + name + '"]').first();
               if (!(await button.count())) fail("Division button " + name + " was not found.");
               await button.click();
-              const input = page.locator("input#hub-search:visible").first();
+              await page.waitForFunction(expected => {
+                const title = document.querySelector("#division-workspace-title");
+                return title && title.textContent?.trim() === "Explore " + expected;
+              }, name, { timeout: 12000 });
+              const input = searchInput();
               await input.waitFor({ state: "visible", timeout: 12000 });
               const workspace = page.locator(".division-workspace:not(.division-destination-page)");
               const workspaceVisible = await workspace.isVisible().catch(() => false);
@@ -94,7 +121,7 @@ jobs:
               await goHome();
               await openDivision("Web");
               await closeWorkspace();
-              const input = page.locator("input#hub-search:visible").first();
+              const input = searchInput();
               await input.fill(query);
               await input.press("Enter");
               await page.waitForFunction(arg => {
@@ -112,32 +139,36 @@ jobs:
             const searchCategoryMode = async (name, query, path, vertical, selector, pattern) => {
               await goHome();
               await openDivision(name);
-              const input = page.locator("input#hub-search:visible").first();
-              const responsePromise = page.waitForResponse(response => {
-                const responseUrl = new URL(response.url());
-                const queryMatches = (responseUrl.searchParams.get("q") || "").toLowerCase().includes(query.toLowerCase());
-                return responseUrl.pathname === path && queryMatches &&
-                  (!vertical || responseUrl.searchParams.get("vertical") === vertical);
-              }, { timeout: 45000 });
+              const input = searchInput();
+              const requestStart = report.apiRequests.length;
               await input.fill(query);
               await input.press("Enter");
-              const response = await responsePromise;
               await page.locator(selector).first().waitFor({ state: "visible", timeout: 45000 });
+              const requests = report.apiRequests.slice(requestStart);
+              const matchingRequests = requests.filter(item => {
+                const requestUrl = new URL(item.url);
+                const queryMatches = (requestUrl.searchParams.get("q") || "").toLowerCase().includes(query.toLowerCase());
+                return requestUrl.pathname === path && queryMatches &&
+                  (!vertical || requestUrl.searchParams.get("vertical") === vertical);
+              });
               const cards = await page.locator(selector).evaluateAll(nodes => nodes.slice(0, 8).map(node => node.innerText));
               const relevant = cards.some(text => new RegExp(pattern, "i").test(text));
               const result = {
-                name, query, endpoint: path, status: response.status(), count: cards.length,
-                visibleTitles: cards.map(text => text.split("\n")[0]), relevant,
-                ok: response.status() === 200 && cards.length > 0 && relevant
+                name, query, expectedEndpoint: path, expectedVertical: vertical,
+                requestUrls: requests.map(item => item.url),
+                matchingRequests: matchingRequests.map(item => item.url),
+                modeMatched: matchingRequests.length > 0,
+                count: cards.length, visibleTitles: cards.map(text => text.split("\n")[0]),
+                relevant, ok: matchingRequests.length > 0 && cards.length > 0 && relevant
               };
               report.categorySearches.push(result);
-              if (!result.ok) fail("Category " + name + " did not return relevant visible results.");
+              if (!result.ok) fail("Category " + name + " did not route to the expected source and return relevant visible results.");
               return result;
             };
             const verifyResearchRouteWithoutCallingAI = async () => {
               await goHome();
               await openDivision("Research");
-              const input = page.locator("input#hub-search:visible").first();
+              const input = searchInput();
               let intercepted = false;
               await page.route("**/api/ai/answer", async route => {
                 intercepted = true;
@@ -197,7 +228,7 @@ jobs:
               await goHome();
               await openDivision("Images");
               await closeWorkspace();
-              const imageInput = page.locator("input#hub-search:visible").first();
+              const imageInput = searchInput();
               await imageInput.fill("solar panels");
               await imageInput.press("Enter");
               await page.waitForFunction(() => document.querySelectorAll(".image-results-grid .image-result").length > 0, null, { timeout: 45000 });
@@ -315,7 +346,7 @@ jobs:
               const mobileLayout = await page.evaluate(() => {
                 const viewportWidth = window.innerWidth;
                 const documentWidth = document.documentElement.scrollWidth;
-                const search = Array.from(document.querySelectorAll("input#hub-search")).find(el => el.getClientRects().length > 0);
+                const search = document.querySelector("form.homepage-live-search input#hub-search");
                 const artwork = document.querySelector(".everythinghub-approved-home-art img.approved-master-image");
                 const buttons = Array.from(document.querySelectorAll("nav.hub-hero-divisions button"));
                 const rect = element => {
@@ -353,7 +384,7 @@ jobs:
               await page.setViewportSize({ width: 1440, height: 1000 });
               await goHome();
               await openDivision("Videos");
-              const videoInput = page.locator("input#hub-search:visible").first();
+              const videoInput = searchInput();
               const videoResponsePromise = page.waitForResponse(response => {
                 const responseUrl = new URL(response.url());
                 return responseUrl.pathname === "/api/videos" &&
