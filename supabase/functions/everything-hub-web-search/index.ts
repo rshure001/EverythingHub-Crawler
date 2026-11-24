@@ -242,7 +242,7 @@ async function loadPageShard(manifest: any, shardIndex: number, signal: AbortSig
   if (
     !meta ||
     typeof meta.file !== "string" ||
-    !/^shard-\\d{4}\\.json\\.gz$/.test(meta.file) ||
+    !/^shard-\d{4}\.json\.gz$/.test(meta.file) ||
     !Number.isInteger(meta.bytes) ||
     meta.bytes < 1 ||
     meta.bytes > MAX_PAGE_SHARD_COMPRESSED_BYTES ||
@@ -286,6 +286,26 @@ async function searchStaticQueryShards(
   if (!tokens.length) throw new Error("Query has no indexable terms");
   const signal = AbortSignal.timeout(STATIC_INDEX_LOAD_TIMEOUT_MS);
   const prefixes = [...new Set(await Promise.all(tokens.map(queryIndexPrefix)))];
+  const queryIndexEntries = prefixes.map((prefix) =>
+    manifest.query_index.shards.find((entry: any) => entry?.file === "query-index/" + prefix + ".json.gz")
+  );
+  if (queryIndexEntries.some((entry: any) => !entry)) {
+    return {
+      found: { results: [], count: 0, hasMore: false },
+      laneFallback: false,
+      updatedAt: normalizeManifestTimestamp(manifest.updated_at),
+      transport: "query-shards",
+    };
+  }
+  const queryIndexCompressedBytes = queryIndexEntries.reduce((total: number, entry: any) => total + entry.bytes, 0);
+  const queryIndexUncompressedBytes = queryIndexEntries.reduce((total: number, entry: any) => total + entry.uncompressed_bytes, 0);
+  if (
+    queryIndexCompressedBytes > MAX_QUERY_INDEX_REQUEST_COMPRESSED_BYTES ||
+    queryIndexUncompressedBytes > MAX_QUERY_INDEX_REQUEST_UNCOMPRESSED_BYTES
+  ) {
+    throw new Error("Query-index shards exceed the Edge Function request budget");
+  }
+
   const queryIndexPayloads = new Map<string, any>();
   for (const prefix of prefixes) {
     const payload = await loadQueryIndexShard(manifest, prefix, signal);
