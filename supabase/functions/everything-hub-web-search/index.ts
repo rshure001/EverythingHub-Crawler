@@ -122,13 +122,6 @@ async function loadStaticManifest(): Promise<any> {
 }
 
 async function loadStaticCatalog(manifest: any): Promise<StaticCatalog | null> {
-  if (
-    staticCatalogCache &&
-    staticCatalogCache.expiresAt > Date.now() &&
-    staticCatalogCache.sha256 === manifest.catalog_gzip?.sha256
-  ) {
-    return staticCatalogCache;
-  }
   if (staticCatalogPromise) return staticCatalogPromise;
 
   const pending = (async () => {
@@ -145,6 +138,13 @@ async function loadStaticCatalog(manifest: any): Promise<StaticCatalog | null> {
     ) {
       console.error("Compressed catalog metadata is outside the Edge Function budget; using query shards");
       return null;
+    }
+    if (
+      staticCatalogCache &&
+      staticCatalogCache.expiresAt > Date.now() &&
+      staticCatalogCache.sha256 === compressed.sha256
+    ) {
+      return staticCatalogCache;
     }
 
     try {
@@ -211,9 +211,6 @@ async function loadQueryIndexShard(manifest: any, prefix: string, signal: AbortS
   const file = "query-index/" + prefix + ".json.gz";
   const meta = queryIndex.shards.find((entry: any) => entry?.file === file);
   if (!meta) return null;
-  const cacheKey = prefix + ":" + String(meta.sha256 || "");
-  const cached = queryIndexShardCache.get(cacheKey);
-  if (cached && cached.expiresAt > Date.now()) return cached.value;
   if (
     !Number.isInteger(meta.bytes) ||
     meta.bytes < 1 ||
@@ -228,6 +225,9 @@ async function loadQueryIndexShard(manifest: any, prefix: string, signal: AbortS
   ) {
     throw new Error("Query-index shard metadata is invalid: " + file);
   }
+  const cacheKey = prefix + ":" + meta.sha256;
+  const cached = queryIndexShardCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.value;
 
   const response = await fetch(STATIC_INDEX_BASE + "/" + file, { headers: staticHeaders, signal });
   if (!response.ok) throw new Error("Query-index shard returned HTTP " + response.status + ": " + file);
