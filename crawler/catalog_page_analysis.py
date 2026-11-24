@@ -3994,7 +3994,7 @@ def validate_outputs(output_dir: Path, progress: bool = False) -> dict:
         raw = path.read_bytes()
         if len(raw) != entry["bytes"] or hashlib.sha256(raw).hexdigest() != entry["sha256"]:
             raise ValueError("catalog analysis artifact integrity mismatch: " + entry["file"])
-        if entry["file"] == "page-catalogs.jsonl.gz" or entry["file"].startswith("record-catalogs/"):
+        if entry["file"] in ("page-catalogs.jsonl.gz", "record-catalogs.jsonl.gz") or entry["file"].startswith("record-catalogs/"):
             if entry.get("format") != "jsonl":
                 raise ValueError("identity sidecar format declaration is invalid")
             continue
