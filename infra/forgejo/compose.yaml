@@ -1,0 +1,67 @@
+name: everythinghub-forge
+
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: everythinghub-forgejo-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: forgejo
+      POSTGRES_PASSWORD: ${FORGEJO_DB_PASSWORD:?Set FORGEJO_DB_PASSWORD in infra/forgejo/.env}
+      POSTGRES_DB: forgejo
+    volumes:
+      - forgejo-postgres:/var/lib/postgresql/data
+    networks:
+      - forgejo-internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U forgejo -d forgejo"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  server:
+    image: codeberg.org/forgejo/forgejo:17-rootless
+    container_name: everythinghub-forgejo
+    user: "1000:1000"
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      USER_UID: "1000"
+      USER_GID: "1000"
+      FORGEJO__database__DB_TYPE: postgres
+      FORGEJO__database__HOST: db:5432
+      FORGEJO__database__NAME: forgejo
+      FORGEJO__database__USER: forgejo
+      FORGEJO__database__PASSWD: ${FORGEJO_DB_PASSWORD:?Set FORGEJO_DB_PASSWORD in infra/forgejo/.env}
+      FORGEJO__server__DOMAIN: ${FORGEJO_DOMAIN:?Set FORGEJO_DOMAIN in infra/forgejo/.env}
+      FORGEJO__server__ROOT_URL: ${FORGEJO_ROOT_URL:?Set FORGEJO_ROOT_URL in infra/forgejo/.env}
+      FORGEJO__server__SSH_DOMAIN: ${FORGEJO_DOMAIN:?Set FORGEJO_DOMAIN in infra/forgejo/.env}
+      FORGEJO__server__SSH_PORT: "2222"
+      FORGEJO__server__SSH_LISTEN_PORT: "2222"
+      FORGEJO__service__DISABLE_REGISTRATION: "true"
+      FORGEJO__repository__DEFAULT_PRIVATE: private
+    volumes:
+      - forgejo-data:/var/lib/gitea
+    ports:
+      # Put HTTPS in front of this local-only listener (for example, Cloudflare Tunnel).
+      - "127.0.0.1:3000:3000"
+      # Git-over-SSH; restrict this port with the host firewall.
+      - "2222:2222"
+    networks:
+      - forgejo-internal
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+networks:
+  forgejo-internal:
+    driver: bridge
+    internal: false
+
+volumes:
+  forgejo-data:
+  forgejo-postgres:
