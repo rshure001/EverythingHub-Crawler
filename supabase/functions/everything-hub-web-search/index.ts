@@ -284,6 +284,16 @@ async function searchStaticQueryShards(
 ): Promise<any> {
   const tokens = tokenizeIndexedQuery(query);
   if (!tokens.length) throw new Error("Query has no indexable terms");
+  const queryIndex = manifest.query_index;
+  if (
+    !queryIndex ||
+    queryIndex.version !== 1 ||
+    !Array.isArray(queryIndex.shards) ||
+    queryIndex.shard_count !== queryIndex.shards.length ||
+    queryIndex.shard_count > 256
+  ) {
+    throw new Error("Public crawler query index is missing or invalid");
+  }
   const signal = AbortSignal.timeout(STATIC_INDEX_LOAD_TIMEOUT_MS);
   const prefixes = [...new Set(await Promise.all(tokens.map(queryIndexPrefix)))];
   const queryIndexEntries = prefixes.map((prefix) =>
