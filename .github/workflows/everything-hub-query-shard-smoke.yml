@@ -1,0 +1,73 @@
+name: Verify Everything Hub query-sharded owned search
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "public-search/manifest.json"
+permissions:
+  contents: read
+concurrency:
+  group: everythinghub-query-shard-smoke
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SEARCH_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-web-search
+      API_KEY: sb_publishable_XlIsACWhtVS1jVODWYGTpg_GMs8v3vJ
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require a published integrity-pinned query index
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require("node:fs");
+          const manifest = JSON.parse(fs.readFileSync("public-search/manifest.json", "utf8"));
+          const index = manifest.query_index;
+          if (!index || index.version !== 1 || !Number.isInteger(index.shard_count) || index.shard_count < 1 || !Array.isArray(index.shards) || index.shards.length !== index.shard_count) {
+            throw new Error("Public search manifest has no complete query-index shard directory.");
+          }
+          console.log(JSON.stringify({
+            pages: manifest.total_pages,
+            pageShards: manifest.shard_count,
+            queryIndexShards: index.shard_count,
+            queryTokens: index.token_count,
+            queryPostings: index.posting_count,
+            queryIndexCompressedBytes: index.compressed_bytes,
+            queryIndexUncompressedBytes: index.uncompressed_bytes
+          }, null, 2));
+          NODE
+      - name: Verify live Rolex search uses the owned query-shard index
+        run: |
+          set -euo pipefail
+          curl --silent --show-error --fail --max-time 25 -G "$SEARCH_URL" \
+            -H "apikey: $API_KEY" -H "accept: application/json" \
+            --data-urlencode "q=Rolex" --data-urlencode "limit=10" --data-urlencode "offset=0" \
+            -o /tmp/rolex.json
+          node <<'NODE'
+          const fs = require("node:fs");
+          const data = JSON.parse(fs.readFileSync("/tmp/rolex.json", "utf8"));
+          const results = Array.isArray(data.results) ? data.results : [];
+          if (data.source !== "Everything Hub public crawler index" || data.indexTransport !== "query-shards" || data.indexIntegrity !== "sha256" || !results.length) {
+            throw new Error("Rolex search did not use verified owned query shards: " + JSON.stringify({
+              source: data.source || null,
+              indexTransport: data.indexTransport || null,
+              indexIntegrity: data.indexIntegrity || null,
+              resultCount: results.length,
+              fallbackReason: data.fallbackReason || null
+            }));
+          }
+          console.log(JSON.stringify({
+            status: "owned_query_shard_search_http_200",
+            query: data.query,
+            resultCount: results.length,
+            totalMatches: data.count,
+            source: data.source,
+            indexTransport: data.indexTransport,
+            indexIntegrity: data.indexIntegrity,
+            firstResult: results[0]?.title || null,
+            catalogResults: Array.isArray(data.catalogResults) ? data.catalogResults.length : 0
+          }, null, 2));
+          NODE
