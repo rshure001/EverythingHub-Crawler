@@ -19,6 +19,7 @@ MAX_QUERY = 160
 MAX_LIMIT = 20
 MAX_PAGES = 250_000
 MAX_SHARDS = 900
+MAX_PAGES_PER_SHARD = 2_000
 MAX_MANIFEST_BYTES = 256_000
 MAX_SHARD_BYTES = 350_000
 MAX_SHARD_UNCOMPRESSED_BYTES = 600_000
@@ -136,7 +137,7 @@ def load_index(root: Path | str = ROOT) -> list[dict]:
         seen_files.add(filename)
 
         compressed_bytes = _manifest_int(meta.get("bytes"), "shard bytes", 1, MAX_SHARD_BYTES)
-        page_count = _manifest_int(meta.get("pages"), "shard pages", 1, 1000)
+        page_count = _manifest_int(meta.get("pages"), "shard pages", 1, MAX_PAGES_PER_SHARD)
         digest = meta.get("sha256")
         if not isinstance(digest, str) or not SHA256.fullmatch(digest):
             raise ValueError("manifest shard SHA-256 is invalid")
