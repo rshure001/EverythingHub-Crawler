@@ -406,7 +406,7 @@ jobs:
                   return style.display !== "none" && style.visibility !== "hidden" &&
                     Number(style.opacity || 1) > 0 && bounds.width > 0 && bounds.height > 0;
                 };
-                const searchCandidates = Array.from(document.querySelectorAll("form.homepage-live-search input#hub-search"));
+                const searchCandidates = Array.from(document.querySelectorAll("input#hub-search"));
                 const visibleSearches = searchCandidates.filter(visible);
                 const search = visibleSearches[0] || null;
                 const artwork = document.querySelector(".everythinghub-approved-home-art img.approved-master-image");
