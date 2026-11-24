@@ -5,6 +5,7 @@ import { intersectShardPostings, tokenizeIndexedQuery } from "./shard-search.mjs
 test("query tokenization matches crawler NFKC normalization and stop words", () => {
   assert.deepEqual(tokenizeIndexedQuery("The NASA — Café 42"), ["nasa", "café", "42"]);
   assert.deepEqual(tokenizeIndexedQuery("THE and with"), []);
+  assert.deepEqual(tokenizeIndexedQuery("Straße Σς"), ["strasse", "σσ"]);
 });
 
 test("query shard routing intersects every term and returns sorted ordinals", () => {
