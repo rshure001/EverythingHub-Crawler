@@ -103,7 +103,7 @@ jobs:
         env:
           PYTHONUNBUFFERED: "1"
         run: python crawler/catalog_page_analysis.py --index public-search/manifest.json --query Rolex --query "Las Vegas" --query NASA --cache-dir data/.page-derived-catalog-cache --workers 4
-      - name: Save resumable per-host and catalog-index checkpoints
+      - name: Save resumable per-host catalog cache checkpoint
         if: always()
         uses: actions/cache/save@v4
         with:
