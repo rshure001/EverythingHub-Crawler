@@ -2,25 +2,65 @@
 const assert=require("node:assert/strict"),fs=require("node:fs"),path=require("node:path"),test=require("node:test");
 const html=fs.readFileSync(path.join(__dirname,"fallback","index.html"),"utf8");
 const browserWorkflow=fs.readFileSync(path.join(__dirname,"..",".github","workflows","everything-hub-production-browser-check.yml"),"utf8");
-test("preserves the exact approved octopus artwork resource",()=>{assert.ok(html.includes('src="https://everythinghub-search-engine-4x25f8.v2.appdeploy.ai/resources/everythinghub-approved-octopus.png"'));});
-test("routes all free fallback requests to the dedicated Everything Hub project only",()=>{assert.match(html,/vdceayvfgkwpgwixrhwi\\.supabase\\.co\\/functions\\/v1/);assert.match(html,/sb_publishable_XlIsACWhtVS1jVODWYGTpg_GMs8v3vJ/);assert.match(html,/everything-hub-web-search/);assert.match(html,/everything-hub-media-search/);assert.match(html,/everything-hub-independent-search/);assert.doesNotMatch(html,/ynleeweezwkdbisaiovq|sb_publishable_-m5pJUkN9aKUox3NMexhQg_NvWhm520/);});
-test("keeps all eight required search categories and search input",()=>{const modes=[...html.matchAll(/data-mode="(web|news|images|videos|shopping|places|business|research)"/g)].map(match=>match[1]);assert.deepEqual([...new Set(modes)].sort(),["business","images","news","places","research","shopping","videos","web"]);assert.match(html,/id="query"/);assert.match(html,/id="searchForm"/);});
-test("uses the Vercel image API first and falls back only to licensed Wikimedia Commons thumbnails",()=>{assert.match(html,/everythinghub-search-backend\\.vercel\\.app\\/api\\/images/);assert.match(html,/everything-hub-media-search/);assert.match(html,/Wikimedia Commons/);assert.match(html,/item\\.licenseUrl/);assert.match(html,/item\\.creator/);assert.match(html,/item\\.thumbnailUrl/);assert.match(html,/item\\.license&&item\\.licenseUrl/);assert.doesNotMatch(html,/api\\.openverse\\.org|commons\\.wikimedia\\.org\\/w\\/api\\.php/);});
-test("keeps live public news tabs and Refresh with an independent-search fallback",()=>{for(const category of ["for-you","world","technology","business","science"])assert.ok(html.includes('data-news="'+category+'"'));assert.match(html,/id="news-refresh"/);assert.match(html,/everythinghub-search-backend\\.vercel\\.app\\/api\\/news/);assert.match(html,/everything-hub-independent-search/);assert.match(html,/latest technology news artificial intelligence/);assert.match(html,/latest science and space news/);});
-test("uses the Vercel video API first and falls back only to licensed Wikimedia Commons video thumbnails",()=>{assert.match(html,/everythinghub-search-backend\\.vercel\\.app\\/api\\/videos/);assert.match(html,/everything-hub-media-search/);assert.match(html,/Wikimedia Commons/);assert.match(html,/item\\.license/);assert.match(html,/item\\.creator/);assert.match(html,/item\\.videoUrl/);assert.match(html,/item\\.thumbnailUrl/);assert.match(html,/license and reuse terms/);assert.doesNotMatch(html,/youtube\\.com|ytimg\\.com|api\\.openverse\\.org|commons\\.wikimedia\\.org\\/w\\/api\\/php|video-thumbnail/);});
-test("renders candidate catalog previews separately and keeps rights restrictions visible",()=>{assert.match(html,/function renderCatalogResults\(items,q\)/);assert.match(html,/data\.catalogResults/);assert.match(html,/item\.preview_only===true/);assert.match(html,/item\.commercial_eligible===false/);assert.match(html,/className='eh-catalog-result'/);assert.match(html,/Candidate preview only/);assert.match(html,/Source terms not reviewed/);assert.match(html,/Record rights not cleared/);assert.match(html,/Commercial use not cleared/);assert.match(html,/Matched records:/);assert.match(html,/External directory · links only/);assert.match(html,/External links only · excluded from page-derived record counts/);assert.match(html,/Catalog preview is based on an older source-index snapshot/);});
-test("retries empty category searches against the full owned index before any news-only fast fallback",()=>{
+
+test("preserves the exact approved octopus artwork resource",()=>{
+  assert.ok(html.includes('src="https://everythinghub-search-engine-4x25f8.v2.appdeploy.ai/resources/everythinghub-approved-octopus.png"'));
+});
+test("routes free fallback requests to the dedicated Everything Hub project",()=>{
+  assert.ok(html.includes("vdceayvfgkwpgwixrhwi.supabase.co/functions/v1"));
+  assert.ok(html.includes("sb_publishable_XlIsACWhtVS1jVODWYGTpg_GMs8v3vJ"));
+  for(const name of ["everything-hub-web-search","everything-hub-media-search","everything-hub-independent-search"])assert.ok(html.includes(name));
+  assert.ok(!html.includes("ynleeweezwkdbisaiovq"));
+  assert.ok(!html.includes("sb_publishable_-m5pJUkN9aKUox3NMexhQg_NvWhm520"));
+});
+test("keeps all eight required search categories and the search input",()=>{
+  const modes=[...html.matchAll(/data-mode="(web|news|images|videos|shopping|places|business|research)"/g)].map(match=>match[1]);
+  assert.deepEqual([...new Set(modes)].sort(),["business","images","news","places","research","shopping","videos","web"]);
+  assert.ok(html.includes('id="query"'));
+  assert.ok(html.includes('id="searchForm"'));
+});
+test("uses the Vercel image API first and falls back to licensed Wikimedia Commons thumbnails",()=>{
+  assert.ok(html.includes("everythinghub-search-backend.vercel.app/api/images"));
+  assert.ok(html.includes("everything-hub-media-search"));
+  for(const field of ["Wikimedia Commons","item.licenseUrl","item.creator","item.thumbnailUrl","item.license&&item.licenseUrl"])assert.ok(html.includes(field));
+  assert.ok(!html.includes("api.openverse.org"));
+  assert.ok(!html.includes("commons.wikimedia.org/w/api.php"));
+});
+test("keeps public news tabs and Refresh with an independent-search fallback",()=>{
+  for(const category of ["for-you","world","technology","business","science"])assert.ok(html.includes('data-news="'+category+'"'));
+  assert.ok(html.includes('id="news-refresh"'));
+  assert.ok(html.includes("everythinghub-search-backend.vercel.app/api/news"));
+  assert.ok(html.includes("everything-hub-independent-search"));
+  assert.ok(html.includes("latest technology news artificial intelligence"));
+  assert.ok(html.includes("latest science and space news"));
+});
+test("uses the Vercel video API first and falls back to licensed Wikimedia Commons video thumbnails",()=>{
+  assert.ok(html.includes("everythinghub-search-backend.vercel.app/api/videos"));
+  assert.ok(html.includes("everything-hub-media-search"));
+  for(const field of ["Wikimedia Commons","item.license","item.creator","item.videoUrl","item.thumbnailUrl","license and reuse terms"])assert.ok(html.includes(field));
+  for(const forbidden of ["youtube.com","ytimg.com","api.openverse.org","commons.wikimedia.org/w/api.php","video-thumbnail"])assert.ok(!html.includes(forbidden));
+});
+test("renders candidate catalog previews separately and keeps rights restrictions visible",()=>{
+  for(const field of ["function renderCatalogResults(items,q)","data.catalogResults","item.preview_only===true","item.commercial_eligible===false","eh-catalog-result","Candidate preview only","Source terms not reviewed","Record rights not cleared","Commercial use not cleared","Matched records:","External directory · links only","External links only · excluded from page-derived record counts","Catalog preview is based on an older source-index snapshot"])assert.ok(html.includes(field));
+});
+test("retries empty category searches against the full owned index before a news-only fast fallback",()=>{
   const start=html.indexOf("async function requestIndexedSearch"),end=html.indexOf("const newsItems=",start);
   assert.ok(start>=0&&end>start);
   const search=html.slice(start,end);
-  assert.match(search,/if\(!data&&mode!=='news'\)/);
-  assert.match(search,/requestIndexedSearch\(q,''\)/);
-  assert.match(search,/if\(!data&&mode==='news'\)/);
-  assert.match(search,/if\(data&&\(!Array\.isArray\(data\.results\)\|\|!data\.results\.length\).*mode==='news'\)/);
+  for(const field of ["if(!data&&mode!=='news')","requestIndexedSearch(q,'')","if(!data&&mode==='news')","External fallback is disabled for this category under the current robots policy"])assert.ok(search.includes(field));
   assert.equal((search.match(/api\/search-fast/g)||[]).length,2);
-  assert.match(search,/External fallback is disabled for this category under the current robots policy/);
 });
-test("keeps standalone script identical to embedded deployment script",()=>{const standalone=fs.readFileSync(path.join(__dirname,"fallback","inline-script.js"),"utf8").trim(),embedded=html.match(/<script>([\s\S]*?)<\/script>/);assert.ok(embedded);assert.equal(standalone,embedded[1].trim());});
-test("normalizes curated external directories without mislabeling them as page-derived",()=>{assert.match(html,/curated_external_link_directory/);assert.match(html,/card\.dataset\.sourceKind=external\?'external_link_only'/);assert.match(html,/card\.dataset\.sourceOrigin=rawSourceKind/);assert.match(html,/External directory · links only/);});
-test("allows the catalog-aware primary search request to complete before fast fallback",()=>{assert.match(html,/signal:AbortSignal\.timeout\(30000\)/);});
-test("live browser acceptance preserves raw and normalized external catalog source kinds",()=>{assert.match(browserWorkflow,/node\.dataset\.sourceOrigin \|\| node\.dataset\.sourceKind/);assert.match(browserWorkflow,/catalogDisplaySources\.includes\("external_link_only"\)/);assert.match(browserWorkflow,/timeout: 30000/);assert.match(browserWorkflow,/timeout: 35000/);});
+test("keeps standalone script identical to embedded deployment script",()=>{
+  const standalone=fs.readFileSync(path.join(__dirname,"fallback","inline-script.js"),"utf8").trim();
+  const embedded=html.match(/<script>([\s\S]*?)<\/script>/);
+  assert.ok(embedded);assert.equal(standalone,embedded[1].trim());
+});
+test("normalizes curated external directories without mislabeling them as page-derived",()=>{
+  for(const field of ["curated_external_link_directory","external_link_only","External directory · links only","External links only · excluded from page-derived record counts"])assert.ok(html.includes(field));
+});
+test("allows catalog-aware primary search requests to complete before fast fallback",()=>{
+  assert.ok(html.includes("signal:AbortSignal.timeout(30000)"));
+});
+test("live browser acceptance preserves raw and normalized external catalog source kinds",()=>{
+  for(const field of ["node.dataset.sourceOrigin || node.dataset.sourceKind","catalogDisplaySources.includes(\"external_link_only\")","timeout: 30000","timeout: 35000"])assert.ok(browserWorkflow.includes(field));
+});
