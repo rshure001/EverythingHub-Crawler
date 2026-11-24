@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import gzip
 import os
+import shutil
 from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
 import hashlib
 import json
@@ -17,6 +18,7 @@ import time
 import unicodedata
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
+from itertools import islice
 from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
@@ -3020,9 +3022,15 @@ def _write_gzip_jsonl_catalog_shards(
     shard_size: int = 5000,
     progress_label: str | None = None,
 ) -> list[dict]:
-    """Write record identity catalogs as bounded, deterministic gzip JSONL shards."""
+    """Write record identity catalogs as bounded, deterministic gzip JSONL shards.
+
+    Accepts any iterable, including the streaming generator used by incremental
+    analysis. Never materializes the full identity catalog list in memory.
+    """
     if isinstance(shard_size, bool) or not isinstance(shard_size, int) or shard_size < 1:
         raise ValueError("shard_size must be a positive integer")
+    if isinstance(expected_count, bool) or not isinstance(expected_count, int) or expected_count < 0:
+        raise ValueError("expected_count must be a non-negative integer")
     directory = output_dir / "record-catalogs"
     if directory.exists():
         shutil.rmtree(directory)
@@ -3030,8 +3038,12 @@ def _write_gzip_jsonl_catalog_shards(
     encoder = json.JSONEncoder(ensure_ascii=False, separators=(",", ":"))
     files = []
     written = 0
-    for shard_number, start in enumerate(range(0, len(catalogs), shard_size)):
-        chunk = catalogs[start:start + shard_size]
+    iterator = iter(catalogs)
+    shard_number = 0
+    while True:
+        chunk = list(islice(iterator, shard_size))
+        if not chunk:
+            break
         path = directory / f"{shard_number:05d}.jsonl.gz"
         temp = path.with_suffix(path.suffix + ".tmp")
         with temp.open("wb") as raw_file:
@@ -3042,15 +3054,16 @@ def _write_gzip_jsonl_catalog_shards(
                     "items": expected_count,
                     "shard_items": len(chunk),
                     "shard": shard_number,
-                }).encode("utf-8") + b"\n")
+                }).encode("utf-8") + b"\\n")
                 for item in chunk:
-                    stream.write(encoder.encode(item).encode("utf-8") + b"\n")
+                    stream.write(encoder.encode(item).encode("utf-8") + b"\\n")
                     written += 1
         temp.replace(path)
         digest = hashlib.sha256(path.read_bytes()).hexdigest()
         relative = path.relative_to(output_dir).as_posix()
         files.append({"file": relative, "bytes": path.stat().st_size, "sha256": digest, "items": len(chunk), "format": "jsonl"})
         _emit_progress(bool(progress_label), (progress_label + "_progress") if progress_label else "", shards_written=shard_number + 1, items_written=written, items_expected=expected_count)
+        shard_number += 1
     if not files:
         path = directory / "00000.jsonl.gz"
         temp = path.with_suffix(path.suffix + ".tmp")
@@ -3062,13 +3075,12 @@ def _write_gzip_jsonl_catalog_shards(
                     "items": expected_count,
                     "shard_items": 0,
                     "shard": 0,
-                }).encode("utf-8") + b"\n")
+                }).encode("utf-8") + b"\\n")
         temp.replace(path)
         files.append({"file": path.relative_to(output_dir).as_posix(), "bytes": path.stat().st_size, "sha256": hashlib.sha256(path.read_bytes()).hexdigest(), "items": 0, "format": "jsonl"})
     if written != expected_count:
         raise ValueError(f"record identity shard count mismatch: expected {expected_count}, wrote {written}")
     return files
-
 
 def _write_gzip_record_shards(
     output_dir: Path,
