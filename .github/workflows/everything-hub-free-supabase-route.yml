@@ -35,7 +35,7 @@ jobs:
           const html = fs.readFileSync("/tmp/home.html", "utf8");
           const required = [
             "<title>Everything Hub — Everything within reach</title>",
-            "everythinghub-approved.png",
+            "https://everythinghub-search-engine-4x25f8.v2.appdeploy.ai/resources/everythinghub-approved-octopus.png",
             'id="searchForm"',
             'id="q"',
             "View related items",
@@ -50,6 +50,8 @@ jobs:
             'data-mode="research"'
           ];
           const missing = required.filter(value => !html.includes(value));
+          if (html.includes("ynleeweezwkdbisaiovq") || html.includes("sb_publishable_-m5pJUkN9aKUox3NMexhQg_NvWhm520")) missing.push("Story Wall project reference");
+          if (!html.includes("vdceayvfgkwpgwixrhwi")) missing.push("Everything Hub control project endpoint");
           if (missing.length) throw new Error("Homepage contract missing: " + missing.join(", "));
           console.log(JSON.stringify({
             status: "homepage_http_200",
