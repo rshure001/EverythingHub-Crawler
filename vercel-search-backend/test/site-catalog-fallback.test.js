@@ -7,36 +7,50 @@ const path = require("node:path");
 const root = path.resolve(__dirname, "../..");
 const site = fs.readFileSync(path.join(root, "site/index.html"), "utf8");
 const vercelHomepage = fs.readFileSync(path.join(root, "vercel-homepage/index.html"), "utf8");
+const edgeSiteFunction = fs.readFileSync(path.join(root, "supabase/functions/everything-hub-site/index.ts"), "utf8");
 
-test("primary site search renders catalogResults and falls back to the first-party Edge search", () => {
-  const searchStart = site.indexOf("async function search(reset=true)");
-  const searchEnd = site.indexOf("form.addEventListener", searchStart);
-  assert.ok(searchStart >= 0 && searchEnd > searchStart);
-  const search = site.slice(searchStart, searchEnd);
-  assert.ok(site.includes('const SEARCH_API=BASE+"/everything-hub-web-search"'));
-  assert.ok(search.includes("new URL(SEARCH_API)"));
-  assert.ok(search.includes('new URL(BASE+"/everything-hub-web-search")'));
-  assert.ok(search.includes("data.catalogResults"));
-  assert.ok(search.includes("catalogItems.concat(pageItems)"));
-  assert.ok(search.includes("catalogItems=offset===0&&Array.isArray(data.catalogResults)"));
-  assert.ok(search.includes("if(!items.length){if(reset)message("));
-  assert.ok(search.includes("apikey:KEY"));
+test("public homepage uses only the dedicated free Everything Hub Edge services", () => {
+  assert.equal(site, vercelHomepage, "the deployed Edge site and Vercel source homepage must stay in sync");
+  for (const source of [site, vercelHomepage]) {
+    assert.ok(source.includes("vdceayvfgkwpgwixrhwi.supabase.co"));
+    assert.ok(source.includes("sb_publishable_XlIsACWhtVS1jVODWYGTpg_GMs8v3vJ"));
+    assert.ok(source.includes("everything-hub-web-search"));
+    assert.ok(source.includes("everything-hub-media-search"));
+    assert.ok(source.includes("everything-hub-independent-search"));
+    assert.ok(source.includes("https://everythinghub-search-engine-4x25f8.v2.appdeploy.ai/resources/everythinghub-approved-octopus.png"));
+    assert.ok(source.includes('id="discoverRefresh"'));
+    assert.ok(source.includes("EHMediaPreviewPolicy"));
+    assert.ok(!source.includes("everythinghub-search-backend.vercel.app"));
+    assert.ok(!source.includes("ynleeweezwkdbisaiovq"));
+  }
 });
 
-test("Vercel homepage crawler fallback preserves first-party catalog preview cards", () => {
-  assert.ok(vercelHomepage.includes("https://everythinghub-search-backend.vercel.app/api/search"));
-  const start = vercelHomepage.indexOf("async function searchCrawlerIndex(query)");
+test("homepage crawler search preserves typed catalog previews and uses supported Edge lanes", () => {
+  const start = vercelHomepage.indexOf("async function searchCrawlerIndex(query,offset=0)");
   const end = vercelHomepage.indexOf("async function searchPublicSources(query)", start);
   assert.ok(start >= 0 && end > start);
   const search = vercelHomepage.slice(start, end);
-  assert.ok(search.includes("data.catalogResults"));
-  assert.ok(search.includes("catalogResults.concat(pageResults)"));
-  assert.ok(search.includes("preview_only:true"));
-  assert.ok(search.includes("commercial_eligible:false"));
+  assert.ok(search.includes("everything-hub-web-search"));
+  assert.ok(search.includes("searchParams.set('tentacle'"));
+  assert.ok(search.includes("searchParams.set('offset'"));
+  assert.ok(vercelHomepage.includes("catalogResults=(page===1?(d.catalogResults||[]):[])"));
+  assert.ok(vercelHomepage.includes("preview_only:true"));
+  assert.ok(vercelHomepage.includes("commercial_eligible:false"));
 
   const apiStart = vercelHomepage.indexOf("const loadApiPage=async(page)=>{");
-  const apiEnd = vercelHomepage.indexOf("const render=()=>", apiStart);
+  const apiEnd = vercelHomepage.indexOf("const mediaAllowed=", apiStart);
   assert.ok(apiStart >= 0 && apiEnd > apiStart);
   const api = vercelHomepage.slice(apiStart, apiEnd);
-  assert.ok(api.includes("catalogResults=(page===1?(d.catalogResults||[]):[])"));
+  assert.ok(api.includes("searchCrawlerIndex(q,offset)"));
+  assert.ok(!api.includes("everythinghub-search-backend.vercel.app"));
+});
+
+test("free Edge site serves the homepage, discovery directory and catalog directory from its own route", () => {
+  assert.ok(edgeSiteFunction.includes('const ROOT = "https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-site";'));
+  assert.ok(edgeSiteFunction.includes("function discoverIndexPage()"));
+  assert.ok(edgeSiteFunction.includes("function discoverCategoryPage(slug: string)"));
+  assert.ok(edgeSiteFunction.includes("function catalogIndexPage()"));
+  assert.ok(edgeSiteFunction.includes('const di=parts.indexOf("discover")'));
+  assert.ok(edgeSiteFunction.includes('const ci=parts.indexOf("catalogs")'));
+  assert.ok(edgeSiteFunction.includes("edge-homepage-v3-supabase"));
 });
