@@ -204,6 +204,80 @@ class PageDerivedCatalogAnalysisTests(unittest.TestCase):
         self.assertEqual(result["metrics"]["eligible_pages"], 0)
         self.assertEqual(result["metrics"]["unique_catalogs_discovered"], 0)
 
+    def test_catalog_index_writes_resume_from_verified_batch_checkpoint(self):
+        pages = [
+            {
+                "url": "https://www.rolex.com/watches/submariner",
+                "title": "Submariner",
+                "description": "Rolex watch model",
+                "text": "Discover the Rolex Submariner watch collection and its features.",
+                "lane": "shopping", "robots_allowed": True, "fetched_at": 100,
+            },
+            {
+                "url": "https://rolex.com/watches/day-date",
+                "title": "Day-Date",
+                "description": "Rolex watch model",
+                "text": "Explore the Rolex Day-Date watch and its details.",
+                "lane": "shopping", "robots_allowed": True, "fetched_at": 101,
+            },
+            {
+                "url": "https://www.nasa.gov/centers/ames",
+                "title": "NASA Ames Research Center",
+                "description": "NASA aerospace organization",
+                "text": "Organization profile for NASA Ames Research Center.",
+                "lane": "general", "robots_allowed": True, "fetched_at": 102,
+            },
+            {
+                "url": "https://nasa.gov/centers/johnson",
+                "title": "NASA Johnson Space Center",
+                "description": "NASA aerospace organization",
+                "text": "Organization profile for NASA Johnson Space Center.",
+                "lane": "general", "robots_allowed": True, "fetched_at": 103,
+            },
+        ]
+        analysis = analyze_pages(pages, source_total=len(pages))
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp)
+            initial = write_outputs(analysis, output, index_batch_size=1)
+            index_entries = [
+                item for item in initial["files"]
+                if item["file"].startswith("indexes/")
+            ]
+            self.assertGreaterEqual(len(index_entries), 2)
+            first_entry, second_entry = index_entries[:2]
+            first_catalog = next(
+                item for item in analysis["catalogs"]
+                if item["index_file"] == first_entry["file"]
+            )
+            checkpoint = {
+                "schema_version": 1,
+                "analysis_version": analysis.get("analysis_version", ANALYZER_VERSION),
+                "source_index_sha256": analysis.get("source_index_sha256"),
+                "source_policy_register_sha256": analysis["source_policy_review"]["register_sha256"],
+                "completed": {first_catalog["catalog_id"]: first_entry},
+            }
+            checkpoint_path = output / ".catalog-index-progress.json"
+            checkpoint_path.write_text(json.dumps(checkpoint), encoding="utf-8")
+            (output / second_entry["file"]).unlink()
+
+            original_write = analysis_module._write_gzip
+            written_indexes = []
+
+            def track_index_write(path, payload):
+                relative = path.relative_to(output).as_posix()
+                if relative.startswith("indexes/"):
+                    written_indexes.append(relative)
+                return original_write(path, payload)
+
+            with patch.object(analysis_module, "_write_gzip", side_effect=track_index_write):
+                resumed = write_outputs(analysis, output, index_batch_size=1)
+
+            self.assertNotIn(first_entry["file"], written_indexes)
+            self.assertIn(second_entry["file"], written_indexes)
+            self.assertGreaterEqual(resumed["catalog_index_build"]["reused"], 1)
+            self.assertGreaterEqual(resumed["catalog_index_build"]["written"], 1)
+            self.assertFalse(checkpoint_path.exists())
+
     def test_registry_and_per_catalog_indexes_validate_after_round_trip(self):
         pages = [
             {"url": "https://shop.example/products/a", "title": "Product A", "text": "Product details and specifications.", "lane": "shopping"},
