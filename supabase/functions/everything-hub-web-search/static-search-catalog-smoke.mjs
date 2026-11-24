@@ -91,8 +91,8 @@ if (lasVegas.count < 1 || lasVegas.results.length < 1) throw new Error("Las Vega
 const rolex = searchStaticPages(pages, "Rolex", null, 5, 0);
 if (rolex.count < 1 || rolex.results.length < 1) throw new Error("Rolex catalog query returned no results");
 console.log(JSON.stringify({
-  catalogPages: pages.length,
-  shardCount: manifest.shard_count,
+  sourcePagesIndexed: pages.length,
+  indexShardCount: manifest.shard_count,
   transport,
   compressedBytes,
   nasaMatches: nasa.count,
