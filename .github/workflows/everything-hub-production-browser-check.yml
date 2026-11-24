@@ -565,6 +565,37 @@ jobs:
             } catch (error) {
               report.error = error instanceof Error ? error.message : String(error);
               try { await page.screenshot({ path: "everythinghub-production-failure.png", fullPage: true }); } catch {}
+              try {
+                await page.setViewportSize({ width: 390, height: 844 });
+                await page.goto(report.url, { waitUntil: "domcontentloaded", timeout: 30000 });
+                await page.waitForSelector("#hub-search", { state: "visible", timeout: 15000 });
+                report.mobileDiagnostic = await page.evaluate(() => {
+                  const rect = element => {
+                    if (!element) return null;
+                    const r = element.getBoundingClientRect();
+                    return { left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: r.width, height: r.height };
+                  };
+                  const art = document.querySelector(".everythinghub-approved-home-art img.approved-master-image");
+                  const search = document.querySelector("#hub-search");
+                  const buttons = [...document.querySelectorAll("nav.hub-hero-divisions button")];
+                  const categoryRects = buttons.map(rect);
+                  return {
+                    viewportWidth: document.documentElement.clientWidth,
+                    documentWidth: document.documentElement.scrollWidth,
+                    artworkVisible: !!art && art.complete && art.naturalWidth >= 800 && !!art.getClientRects().length,
+                    artwork: rect(art),
+                    searchVisible: !!search && !!search.getClientRects().length,
+                    search: rect(search),
+                    categoryCount: buttons.length,
+                    visibleCategoryCount: buttons.filter(button => button.getClientRects().length && button.getBoundingClientRect().width > 0).length,
+                    categoryRects,
+                    brokenImages: [...document.images].filter(image => image.complete && image.naturalWidth === 0).length
+                  };
+                });
+                await page.screenshot({ path: "everythinghub-production-mobile-diagnostic.png", fullPage: true });
+              } catch (mobileError) {
+                report.mobileDiagnosticError = mobileError instanceof Error ? mobileError.message : String(mobileError);
+              }
               throw error;
             } finally {
               report.finishedAt = new Date().toISOString();
@@ -979,6 +1010,19 @@ jobs:
               report.error = error instanceof Error ? error.message : String(error);
               report.finishedAt = new Date().toISOString();
               await page.screenshot({ path: "everythinghub-fallback-failure.png", fullPage: true }).catch(() => undefined);
+              try {
+                await page.setViewportSize({ width: 390, height: 844 });
+                report.mobileDiagnostic = await page.evaluate(() => ({
+                  viewportWidth: document.documentElement.clientWidth,
+                  documentWidth: document.documentElement.scrollWidth,
+                  title: document.title,
+                  bodyText: (document.body?.innerText || "").slice(0, 500),
+                  brokenImages: [...document.images].filter(image => image.complete && image.naturalWidth === 0).length
+                }));
+                await page.screenshot({ path: "everythinghub-fallback-mobile-failure.png", fullPage: true }).catch(() => undefined);
+              } catch (mobileError) {
+                report.mobileDiagnosticError = mobileError instanceof Error ? mobileError.message : String(mobileError);
+              }
             } finally {
               report.browserErrors = { pageErrors, consoleErrors };
               fs.writeFileSync("fallback-report.json", JSON.stringify(report, null, 2));
@@ -1004,6 +1048,7 @@ jobs:
             everythinghub-fallback-images.png
             everythinghub-fallback-videos.png
             everythinghub-fallback-failure.png
+            everythinghub-fallback-mobile-failure.png
             fallback-report.json
           if-no-files-found: warn
           retention-days: 30
