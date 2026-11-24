@@ -2957,7 +2957,38 @@ def build_search_index(analysis: dict) -> dict[str, dict]:
     }
 
 
-def write_outputs(analysis: dict, output_dir: Path) -> dict:
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _json_payload_sha256(payload: dict) -> str:
+    """Hash deterministic JSON incrementally without building a second full string."""
+    digest = hashlib.sha256()
+    encoder = json.JSONEncoder(
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    for chunk in encoder.iterencode(payload):
+        digest.update(chunk.encode("utf-8"))
+    return digest.hexdigest()
+
+
+def _write_json_atomic(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp = path.with_suffix(path.suffix + ".tmp")
+    temp.write_text(
+        json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n",
+        encoding="utf-8",
+    )
+    temp.replace(path)
+
+
+def write_outputs(analysis: dict, output_dir: Path, index_batch_size: int = 64) -> dict:
     apply_source_policy_reviews(analysis)
     output_dir.mkdir(parents=True, exist_ok=True)
     for obsolete_name in ("page-catalogs.json.gz", "record-catalogs.json.gz"):
@@ -3014,17 +3045,125 @@ def write_outputs(analysis: dict, output_dir: Path) -> dict:
         "metrics": analysis["metrics"], "source_policy_review": analysis.get("source_policy_review"), "catalogs": analysis["catalogs"],
     })
     files.append({"file": "registry.json.gz", "bytes": size, "sha256": digest, "items": len(analysis["catalogs"])})
+    if isinstance(index_batch_size, bool) or not isinstance(index_batch_size, int) or not 1 <= index_batch_size <= 4096:
+        raise ValueError("index_batch_size must be an integer from 1 to 4096")
+
     records_by_catalog = defaultdict(list)
     for record in analysis["records"]:
         for catalog_id in record.get("catalog_ids", []):
             records_by_catalog[catalog_id].append(record)
+
+    checkpoint_path = output_dir / ".catalog-index-progress.json"
+    checkpoint_identity = {
+        "schema_version": 1,
+        "analysis_version": analysis.get("analysis_version", ANALYZER_VERSION),
+        "source_index_sha256": analysis.get("source_index_sha256"),
+        "source_policy_register_sha256": (
+            analysis.get("source_policy_review") or {}
+        ).get("register_sha256"),
+    }
+    completed_indexes = {}
+    if checkpoint_path.is_file():
+        try:
+            saved_checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+            if all(saved_checkpoint.get(key) == value for key, value in checkpoint_identity.items()):
+                candidate = saved_checkpoint.get("completed")
+                if isinstance(candidate, dict):
+                    completed_indexes = candidate
+        except (OSError, ValueError, json.JSONDecodeError):
+            completed_indexes = {}
+
+    previous_index_entries = {}
+    previous_manifest_path = output_dir / "manifest.json"
+    if previous_manifest_path.is_file():
+        try:
+            previous_manifest = json.loads(previous_manifest_path.read_text(encoding="utf-8"))
+            previous_index_entries = {
+                item.get("file"): item
+                for item in previous_manifest.get("files", [])
+                if isinstance(item, dict) and isinstance(item.get("file"), str)
+            }
+        except (OSError, ValueError, json.JSONDecodeError):
+            previous_index_entries = {}
+
+    def reusable_index_entry(entry: dict | None, relative_path: str, input_digest: str, target: Path) -> bool:
+        if (
+            not isinstance(entry, dict)
+            or entry.get("file") != relative_path
+            or entry.get("input_sha256") != input_digest
+            or not target.is_file()
+        ):
+            return False
+        expected_size = entry.get("bytes")
+        expected_digest = entry.get("sha256")
+        if (
+            isinstance(expected_size, bool)
+            or not isinstance(expected_size, int)
+            or expected_size != target.stat().st_size
+            or not isinstance(expected_digest, str)
+            or not re.fullmatch(r"[0-9a-f]{64}", expected_digest)
+        ):
+            return False
+        return _file_sha256(target) == expected_digest
+
+    indexes_reused = indexes_written = processed_indexes = 0
     for catalog in analysis["catalogs"]:
-        related = records_by_catalog.get(catalog["catalog_id"], [])
-        size, digest = _write_gzip(output_dir / catalog["index_file"], {
-            "version": 1, "catalog_id": catalog["catalog_id"],
-            "title": catalog["title"], "status": catalog["status"], "records": related,
-        })
-        files.append({"file": catalog["index_file"], "bytes": size, "sha256": digest, "items": len(related)})
+        catalog_id = catalog["catalog_id"]
+        relative_path = catalog["index_file"]
+        target = output_dir / relative_path
+        related = records_by_catalog.get(catalog_id, [])
+        payload = {
+            "version": 1,
+            "catalog_id": catalog_id,
+            "title": catalog["title"],
+            "status": catalog["status"],
+            "records": related,
+        }
+        input_digest = _json_payload_sha256(payload)
+        checkpoint_entry = completed_indexes.get(catalog_id)
+        previous_entry = previous_index_entries.get(relative_path)
+        if reusable_index_entry(checkpoint_entry, relative_path, input_digest, target):
+            entry = {
+                "file": relative_path,
+                "bytes": checkpoint_entry["bytes"],
+                "sha256": checkpoint_entry["sha256"],
+                "items": len(related),
+                "input_sha256": input_digest,
+            }
+            indexes_reused += 1
+        elif reusable_index_entry(previous_entry, relative_path, input_digest, target):
+            entry = {
+                "file": relative_path,
+                "bytes": previous_entry["bytes"],
+                "sha256": previous_entry["sha256"],
+                "items": len(related),
+                "input_sha256": input_digest,
+            }
+            indexes_reused += 1
+        else:
+            size, digest = _write_gzip(target, payload)
+            entry = {
+                "file": relative_path,
+                "bytes": size,
+                "sha256": digest,
+                "items": len(related),
+                "input_sha256": input_digest,
+            }
+            indexes_written += 1
+
+        completed_indexes[catalog_id] = entry
+        files.append(entry)
+        processed_indexes += 1
+        if processed_indexes % index_batch_size == 0:
+            _write_json_atomic(checkpoint_path, {
+                **checkpoint_identity,
+                "completed": completed_indexes,
+            })
+
+    _write_json_atomic(checkpoint_path, {
+        **checkpoint_identity,
+        "completed": completed_indexes,
+    })
     search_index_dir = output_dir / "search-index"
     search_index_dir.mkdir(parents=True, exist_ok=True)
     expected_search_files = set()
@@ -3082,11 +3221,18 @@ def write_outputs(analysis: dict, output_dir: Path) -> dict:
         "generated_at": analysis["generated_at"],
         "metrics": analysis["metrics"],
         "source_policy_review": analysis.get("source_policy_review"),
+        "catalog_index_build": {
+            "reused": indexes_reused,
+            "written": indexes_written,
+            "batch_size": index_batch_size,
+            "resumable_checkpoint": True,
+        },
         **snapshot_fields,
         "files": sorted(files, key=lambda x: x["file"]),
     }
     (output_dir / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     validate_outputs(output_dir)
+    checkpoint_path.unlink(missing_ok=True)
     return manifest
 
 
@@ -3575,6 +3721,7 @@ def main() -> None:
     parser.add_argument("--cache-only", action="store_true", help="Build and persist per-host cache shards without catalog aggregation")
     parser.add_argument("--cache-dir", type=Path, default=ROOT / "data" / ".page-derived-catalog-cache")
     parser.add_argument("--workers", type=int, default=4, help="Bounded CPU worker processes for uncached host partitions")
+    parser.add_argument("--index-batch-size", type=int, default=64, help="Catalog indexes written between durable progress checkpoints")
     args = parser.parse_args()
     if args.validate_only:
         print(json.dumps(validate_outputs(args.output_dir), indent=2))
@@ -3619,7 +3766,7 @@ def main() -> None:
         analysis["count_deltas"] = None
         analysis["elapsed_wall_clock_seconds"] = None
         analysis["throughput"] = None
-    manifest = write_outputs(analysis, args.output_dir)
+    manifest = write_outputs(analysis, args.output_dir, index_batch_size=args.index_batch_size)
     print(json.dumps({
         "metrics": analysis["metrics"],
         "previous_counts": analysis["previous_counts"],
