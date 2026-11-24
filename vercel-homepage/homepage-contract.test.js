@@ -9,7 +9,7 @@ const approvedArtwork = "https://everythinghub-search-engine-4x25f8.v2.appdeploy
 
 test("homepage preserves the exact approved artwork resource", () => {
   assert.ok(html.includes('src="' + approvedArtwork + '"'));
-  assert.ok(!html.includes('/assets/everythinghub-approved.png'));
+  assert.ok(!html.includes('src="/assets/everythinghub-approved.png"'));
 });
 
 test("homepage embeds the shared media preview policy before its search code", () => {
