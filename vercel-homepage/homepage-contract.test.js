@@ -5,25 +5,29 @@ const test = require("node:test");
 
 const root = __dirname;
 const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
+const approvedArtwork = "https://everythinghub-search-engine-4x25f8.v2.appdeploy.ai/resources/everythinghub-approved-octopus.png";
 
-test("homepage uses the approved artwork from the same deployment", () => {
-  assert.match(html, /src=["']\/assets\/everythinghub-approved\.png["']/);
-  assert.doesNotMatch(html, /everythinghub-homepage-fixed-[^"'\s]+\/assets\/everythinghub-approved\.png/);
-  assert.ok(fs.existsSync(path.join(root, "assets", "everythinghub-approved.png")));
+test("homepage preserves the exact approved artwork resource", () => {
+  assert.ok(html.includes('src="' + approvedArtwork + '"'));
+  assert.ok(!html.includes('/assets/everythinghub-approved.png'));
 });
 
-test("homepage loads the tested media preview policy before its search code", () => {
-  const policy = html.indexOf('<script src="/media-preview-policy.js"></script>');
-  const app = html.indexOf("<script>", policy + 1);
-  assert.ok(policy >= 0, "media preview policy script reference is required");
-  assert.ok(app > policy, "media preview policy must load before the homepage search script");
+test("homepage embeds the shared media preview policy before its search code", () => {
+  const policy = html.indexOf("window.EHMediaPreviewPolicy");
+  const app = html.indexOf("async function searchCrawlerIndex(query,offset=0)");
+  assert.ok(policy >= 0, "shared media preview policy must be embedded");
+  assert.ok(app > policy, "media preview policy must load before homepage search code");
   assert.ok(fs.existsSync(path.join(root, "media-preview-policy.js")));
 });
 
-test("homepage search and media use only the dedicated Everything Hub Supabase project", () => {
+test("homepage search and media use only the dedicated free Everything Hub Edge services", () => {
   assert.match(html, /const EH_SUPABASE_URL=['"]https:\/\/vdceayvfgkwpgwixrhwi\.supabase\.co['"]/);
   assert.match(html, /const EH_PUBLIC_KEY=['"]sb_publishable_XlIsACWhtVS1jVODWYGTpg_GMs8v3vJ['"]/);
-  assert.doesNotMatch(html, /ynleeweezwkdbisaiovq|sb_publishable_-m5pJUkN9aKUox3NMexhQg_NvWhm520/);
+  for (const endpoint of ["everything-hub-web-search", "everything-hub-media-search", "everything-hub-independent-search"]) {
+    assert.ok(html.includes(endpoint));
+  }
+  assert.ok(!html.includes("everythinghub-search-backend.vercel.app"));
+  assert.ok(!html.includes("ynleeweezwkdbisaiovq"));
 });
 
 test("homepage keeps one search form and eight category modes", () => {
@@ -33,4 +37,27 @@ test("homepage keeps one search form and eight category modes", () => {
     .map(match => match[1])
     .sort();
   assert.deepEqual(modes, ["business", "images", "news", "places", "research", "shopping", "videos", "web"]);
+});
+
+test("image and video search previews require license and attribution metadata", () => {
+  assert.ok(html.includes("window.EHMediaPreviewPolicy?.isMediaPreviewAllowed(x)===true"));
+  assert.ok(html.includes("x.creator||x.credit"));
+  assert.ok(html.includes("x.license"));
+  assert.ok(html.includes("const previewAllowed=mediaAllowed(x)"));
+  assert.ok(html.includes("const sourceLabel=isMedia?"));
+});
+
+test("Top Stories has five public-source tabs and a working Refresh control", () => {
+  for (const topic of ["world", "technology", "sports", "entertainment", "business"]) {
+    assert.ok(html.includes('data-topic="' + topic + '"'));
+  }
+  assert.ok(html.includes('id="discoverRefresh"'));
+  assert.ok(html.includes("document.getElementById('discoverRefresh')?.addEventListener"));
+  assert.ok(html.includes("everything-hub-independent-search"));
+});
+
+test("homepage does not call the paused Vercel API or the unrelated legacy Supabase project", () => {
+  assert.ok(!html.includes("everythinghub-search-backend.vercel.app"));
+  assert.ok(!html.includes("ynleeweezwkdbisaiovq"));
+  assert.ok(!html.includes("api.gdeltproject.org"));
 });
