@@ -369,16 +369,17 @@ jobs:
                 const lower = title.toLowerCase();
                 return ["now voyager", "curiosity company", "two sides same coin"].some(term => lower.includes(term));
               });
-              const irrelevantVideoCards = videoStats.cardTexts.filter((cardText, index) => {
-                const fullText = cardText.toLowerCase();
-                const title = videoStats.titles[index].toLowerCase();
-                const hasNASA = fullText.includes("nasa");
-                const hasMissionTitle = ["apollo", "artemis", "hubble", "space shuttle", "international space station", "mars rover", "perseverance", "voyager", "james webb"].some(term => title.includes(term));
-                return !hasNASA && !hasMissionTitle;
+              const relevantVideoTitles = videoStats.titles.filter(title => {
+                const lower = title.toLowerCase();
+                return /\bnasa\b/.test(lower) ||
+                  /\b(?:apollo|artemis|hubble|space shuttle|international space station|mars|curiosity|perseverance|voyager|james webb|geminids|meteor shower|earth|universe)\b/.test(lower);
               });
-              videoStats.relevance = { unrelatedVideoTitles, irrelevantVideoCards };
+              const irrelevantVideoTitles = videoStats.titles.filter(title =>
+                !relevantVideoTitles.includes(title) || unrelatedVideoTitles.includes(title)
+              );
+              videoStats.relevance = { relevantVideoTitles, unrelatedVideoTitles, irrelevantVideoTitles };
               report.checks.videos = videoStats;
-              if (unrelatedVideoTitles.length || irrelevantVideoCards.length) throw new Error("NASA video relevance checks failed: " + JSON.stringify(videoStats.relevance));
+              if (relevantVideoTitles.length < 2 || irrelevantVideoTitles.length) throw new Error("NASA video title relevance checks failed: " + JSON.stringify(videoStats.relevance));
               const videoHrefs = await videoCards.evaluateAll(cards => cards.map(card => card.tagName.toLowerCase() === "a" ? card.href : card.querySelector("a")?.href || "").filter(Boolean));
               await openCoreLink("videoSource", videoHrefs.find(href => { try { return new URL(href).hostname.toLowerCase() === "archive.org"; } catch { return false; } }));
               report.checks.coreLinks = coreLinks;
