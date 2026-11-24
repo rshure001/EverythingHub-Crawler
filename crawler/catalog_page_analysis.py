@@ -3042,15 +3042,29 @@ def _write_gzip_jsonl_catalog_shards(
                     "items": expected_count,
                     "shard_items": len(chunk),
                     "shard": shard_number,
-                }).encode("utf-8") + b"\\n")
+                }).encode("utf-8") + b"\n")
                 for item in chunk:
-                    stream.write(encoder.encode(item).encode("utf-8") + b"\\n")
+                    stream.write(encoder.encode(item).encode("utf-8") + b"\n")
                     written += 1
         temp.replace(path)
         digest = hashlib.sha256(path.read_bytes()).hexdigest()
         relative = path.relative_to(output_dir).as_posix()
         files.append({"file": relative, "bytes": path.stat().st_size, "sha256": digest, "items": len(chunk), "format": "jsonl"})
         _emit_progress(bool(progress_label), (progress_label + "_progress") if progress_label else "", shards_written=shard_number + 1, items_written=written, items_expected=expected_count)
+    if not files:
+        path = directory / "00000.jsonl.gz"
+        temp = path.with_suffix(path.suffix + ".tmp")
+        with temp.open("wb") as raw_file:
+            with gzip.GzipFile(fileobj=raw_file, mode="wb", filename="", compresslevel=9, mtime=0) as stream:
+                stream.write(encoder.encode({
+                    "schema_version": 1,
+                    "kind": "record_identity_catalogs",
+                    "items": expected_count,
+                    "shard_items": 0,
+                    "shard": 0,
+                }).encode("utf-8") + b"\\n")
+        temp.replace(path)
+        files.append({"file": path.relative_to(output_dir).as_posix(), "bytes": path.stat().st_size, "sha256": hashlib.sha256(path.read_bytes()).hexdigest(), "items": 0, "format": "jsonl"})
     if written != expected_count:
         raise ValueError(f"record identity shard count mismatch: expected {expected_count}, wrote {written}")
     return files
@@ -3297,7 +3311,7 @@ def write_outputs(
     )
     apply_source_policy_reviews(analysis)
     output_dir.mkdir(parents=True, exist_ok=True)
-    for obsolete_name in ("page-catalogs.json.gz", "record-catalogs.json.gz"):
+    for obsolete_name in ("page-catalogs.json.gz", "record-catalogs.json.gz", "records.json.gz", "record-catalogs.jsonl.gz"):
         obsolete_path = output_dir / obsolete_name
         if obsolete_path.is_file():
             obsolete_path.unlink()
