@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "updated_at": "2026-11-24T18:48:45.522Z",
-  "reason": "Queue one follow-up version-21 page-derived catalog analysis for the latest 214112-page public-search manifest after the current 213786-page snapshot run; reuse checkpoints and keep integrity, deduplication, and source-rights publication gates closed.",
-  "manifest_before_pages": 214112,
-  "manifest_before_updated_at": "2026-11-24T18:43:52Z"
+  "updated_at": "2026-11-24T19:28:02.921Z",
+  "reason": "Explicit workflow_dispatch fallback after scheduled crawl delivery was 23431s old (>10 minutes); no queued or running crawler; public manifest was 1822s old (>10 minutes). One bounded recovery crawl; normal schedule unchanged.",
+  "manifest_before_pages": 214376,
+  "manifest_before_updated_at": "2026-11-24T18:57:40Z"
 }
