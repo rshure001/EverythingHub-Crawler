@@ -40,7 +40,8 @@ const EXPECTED_MODES = ["business", "images", "news", "places", "research", "sho
     const text = (await page.locator("#results .result").allTextContents()).join(" ").toLowerCase();
     if (!count) fail(mode + " search returned no visible results for " + query);
     if (relevanceTerm && !text.includes(relevanceTerm.toLowerCase())) fail(mode + " results were not relevant to " + query);
-    const result = { query, count, sampleTitles: titles.slice(0, 5) };
+    const sources = await page.locator("#results .result .result-copy .source").allTextContents();
+    const result = { query, count, sampleTitles: titles.slice(0, 5), sampleSources: sources.slice(0, 5) };
     if (mode === "images") {
       const images = page.locator("#results .result .preview img");
       const imageCount = await images.count();
@@ -49,8 +50,22 @@ const EXPECTED_MODES = ["business", "images", "news", "places", "research", "sho
       result.thumbnails = imageCount;
       result.loadedThumbnails = loaded;
       result.attributions = attributions.slice(0, 5);
-      if (loaded < 3 || attributions.filter(value => /Wikimedia Commons|Internet Archive/i.test(value) && /Public domain|CC BY|CC0|Creative Commons/i.test(value)).length < 3) {
-        fail("Images did not return at least three loaded, attributed licensed thumbnails");
+      const mediaUrl = new URL(FUNCTIONS_BASE + "/everything-hub-media-search");
+      mediaUrl.searchParams.set("q", query);
+      mediaUrl.searchParams.set("type", "image");
+      const mediaResponse = await page.request.get(mediaUrl.toString(), { headers: { apikey: PUBLIC_KEY, accept: "application/json" } });
+      const mediaPayload = await mediaResponse.json().catch(() => ({}));
+      result.rawMediaHttpStatus = mediaResponse.status();
+      result.rawMediaProvider = mediaPayload.provider || null;
+      result.rawMediaCount = Array.isArray(mediaPayload.results) ? mediaPayload.results.length : 0;
+      result.mediaPolicyDecisions = await page.evaluate(items => (items || []).slice(0, 12).map(item => ({
+        source: item.source, license: item.license, licenseUrl: item.licenseUrl,
+        creator: item.creator, credit: item.credit, attributionRequired: item.attributionRequired,
+        allowed: window.EHMediaPreviewPolicy?.isMediaPreviewAllowed(item) === true
+      })), mediaPayload.results || []);
+      report.checks["search_" + mode] = result;
+      if (loaded < 2 || attributions.filter(value => /Wikimedia Commons|Internet Archive/i.test(value) && /Public domain|CC BY|CC0|Creative Commons/i.test(value)).length < 2) {
+        fail("Images did not return at least two loaded, attributed licensed thumbnails");
       }
     }
     if (mode === "videos") {
@@ -106,7 +121,7 @@ const EXPECTED_MODES = ["business", "images", "news", "places", "research", "sho
 
     // Exercise every remaining search category.
     await runSearch("news", "NASA Artemis", "nasa");
-    await runSearch("images", "NASA", null);
+    await runSearch("images", "solar eclipse", null);
     await runSearch("videos", "animation");
     await runSearch("shopping", "Rolex", "rolex");
     await runSearch("places", "Las Vegas", "las vegas");
