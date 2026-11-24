@@ -76,7 +76,6 @@ def _read_snapshot(directory: Path) -> dict:
         "manifest.json",
         "report.json",
         "registry.json.gz",
-        "records.json.gz",
     )
     for name in required:
         if not (directory / name).is_file():
@@ -84,6 +83,29 @@ def _read_snapshot(directory: Path) -> dict:
     if not (directory / "indexes").is_dir():
         raise ValueError("validated catalog snapshot is missing per-catalog indexes")
     report = json.loads((directory / "report.json").read_text(encoding="utf-8"))
+    manifest = json.loads((directory / "manifest.json").read_text(encoding="utf-8"))
+    manifest_files = manifest.get("files")
+    if isinstance(manifest_files, list) and manifest_files:
+        names = {item.get("file") for item in manifest_files if isinstance(item, dict)}
+        has_records = "records.json.gz" in names or any(
+            isinstance(name, str) and name.startswith("records/") for name in names
+        )
+        has_record_identities = "record-catalogs.jsonl.gz" in names or any(
+            isinstance(name, str) and name.startswith("record-catalogs/") for name in names
+        )
+        if not has_records or not has_record_identities:
+            raise ValueError("catalog snapshot is missing global record or record-identity artifacts")
+        for entry in manifest_files:
+            if not isinstance(entry, dict) or not isinstance(entry.get("file"), str):
+                raise ValueError("catalog snapshot file manifest entry is malformed")
+            artifact = directory / entry["file"]
+            if not artifact.is_file():
+                raise ValueError("catalog snapshot artifact is missing: " + entry["file"])
+            raw = artifact.read_bytes()
+            if len(raw) >= 100_000_000:
+                raise ValueError("catalog snapshot artifact exceeds GitHub's per-file limit: " + entry["file"])
+            if len(raw) != entry.get("bytes") or hashlib.sha256(raw).hexdigest() != entry.get("sha256"):
+                raise ValueError("catalog snapshot artifact integrity mismatch: " + entry["file"])
     try:
         registry = json.loads(gzip.decompress((directory / "registry.json.gz").read_bytes()).decode("utf-8"))
     except (OSError, ValueError, gzip.BadGzipFile, UnicodeDecodeError) as exc:
