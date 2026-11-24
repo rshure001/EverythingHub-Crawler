@@ -8,6 +8,7 @@ on:
       - ".github/workflows/retroactive-catalog-index.yml"
       - "crawler/catalog_retro_discovery.py"
       - "crawler/catalog_page_analysis.py"
+      - "crawler/publish_catalog_snapshot.py"
       - "crawler/automation-trigger.json"
       - "crawler/catalog_host_review_queue.py"
       - "crawler/catalog_source_policy.py"
