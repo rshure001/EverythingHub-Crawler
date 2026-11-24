@@ -926,7 +926,7 @@ async function loadDiscoverFeed(topic='world'){
   if(!stories.length)throw Error('Bing RSS returned no stories for '+topic);
   target.dataset.provider=data.provider||'Bing RSS';
   target.innerHTML=stories.map(a=>{
-   const href=safe(a.url),img=safe(a.image||'');
+   const href=safe(a.url),img=window.EHMediaPreviewPolicy?.isMediaPreviewAllowed(a)===true?safe(a.image||''):'#';
    const title=esc(a.title),source=esc(a.source||host(a.url));
    const stamp=Date.parse(a.publishedAt||'');
    const date=Number.isFinite(stamp)?new Date(stamp).toLocaleDateString('en-US',{month:'short',day:'numeric'}):'Latest';
