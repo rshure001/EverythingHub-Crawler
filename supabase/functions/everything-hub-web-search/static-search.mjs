@@ -11,7 +11,7 @@ const UNKNOWN_FRESHNESS = 0.35;
 const TRACKING_PARAMS = new Set(["fbclid", "gclid", "mc_cid", "mc_eid"]);
 
 function normalize(value) {
-  return String(value ?? "").normalize("NFKC").toLowerCase();
+  return String(value ?? "").normalize("NFKC").toLowerCase().replace(/ß/g, "ss").replace(/ς/g, "σ");
 }
 
 function tokenize(value) {

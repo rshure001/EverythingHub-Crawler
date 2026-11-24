@@ -1,6 +1,6 @@
 // Structural bound aligned with the 250,000-page publisher and 900-shard first-party catalog ceiling.
-// The Edge Function still refuses shard-only catalogs and retains its separate
-// 6 MB compressed / 30 MB decoded limits.
+// The Edge Function routes shard-only searches through query-index prefixes
+// and fetches only verified page shards matching every query term.
 export const MAX_STATIC_INDEX_PAGES = 250_000;
 export const MAX_STATIC_INDEX_SHARDS = 900;
 

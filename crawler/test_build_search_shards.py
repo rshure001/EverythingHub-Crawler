@@ -14,6 +14,7 @@ from validate_public_index import (
     MAX_PAGES_PER_SHARD as VALIDATOR_MAX_PAGES_PER_SHARD,
     MAX_TOTAL_COMPRESSED_SHARD_BYTES,
     MAX_TOTAL_SHARD_UNCOMPRESSED_BYTES,
+    MAX_QUERY_INDEX_TOTAL_UNCOMPRESSED_BYTES as VALIDATOR_MAX_QUERY_INDEX_TOTAL_UNCOMPRESSED_BYTES,
 )
 
 from build_search_shards import (
@@ -24,6 +25,7 @@ from build_search_shards import (
     SHARD_GZIP_LEVEL,
     MAX_CATALOG_GZIP_BYTES,
     MAX_CATALOG_UNCOMPRESSED_BYTES,
+    MAX_QUERY_INDEX_TOTAL_UNCOMPRESSED_BYTES,
     batch_fits,
     batch_size_from_item_sizes,
     encoded_page_size,
@@ -37,6 +39,13 @@ from build_search_shards import (
 
 
 class SearchShardBatchBoundaryTests(unittest.TestCase):
+    def test_query_index_budget_allows_edge_to_fetch_only_query_matched_prefix_shards(self):
+        self.assertEqual(MAX_QUERY_INDEX_TOTAL_UNCOMPRESSED_BYTES, 256_000_000)
+        self.assertEqual(
+            MAX_QUERY_INDEX_TOTAL_UNCOMPRESSED_BYTES,
+            VALIDATOR_MAX_QUERY_INDEX_TOTAL_UNCOMPRESSED_BYTES,
+        )
+
     def test_builder_target_keeps_headroom_under_public_hard_cap(self):
         self.assertEqual(MAX_BYTES, 600_000)
         self.assertEqual(MAX_COMPRESSED_BYTES, 350_000)

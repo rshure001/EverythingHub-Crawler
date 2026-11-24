@@ -1,0 +1,121 @@
+name: Everything Hub free-site browser verification
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/everything-hub-free-site-browser-check.yml"
+      - "site/index.html"
+      - "public-search/manifest.json"
+      - "supabase/functions/everything-hub-site/**"
+      - "supabase/functions/everything-hub-web-search/**"
+      - "supabase/functions/everything-hub-media-search/**"
+  workflow_dispatch:
+  workflow_run:
+    workflows: ["Publish and verify Everything Hub — in-house Supabase route"]
+    types: [completed]
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: eh-free-site-browser
+  cancel-in-progress: true
+jobs:
+  free-site-browser-check:
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SITE_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-site/
+      SEARCH_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-web-search
+      MEDIA_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-media-search
+      API_KEY: sb_publishable_XlIsACWhtVS1jVODWYGTpg_GMs8v3vJ
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install Playwright
+        run: |
+          npm init -y
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+      - name: Verify the free production homepage, owned search, media and mobile layout
+        run: |
+          cat > free-site-check.cjs <<'JS'
+          (async () => {
+            const { chromium } = require("playwright");
+            const fs = require("node:fs");
+            const site = process.env.SITE_URL;
+            const searchUrl = process.env.SEARCH_URL;
+            const mediaUrl = process.env.MEDIA_URL;
+            const key = process.env.API_KEY;
+            const manifest = JSON.parse(fs.readFileSync("public-search/manifest.json", "utf8"));
+            const report = { site, pageErrors: [], search: null, images: null, videos: null, feeds: null, mobile: null };
+            const browser = await chromium.launch({ headless: true });
+            const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+            page.on("pageerror", error => report.pageErrors.push(String(error)));
+            try {
+              const response = await page.goto(site, { waitUntil: "domcontentloaded", timeout: 60000 });
+              if (!response || response.status() !== 200) throw new Error("Free homepage did not return HTTP 200");
+              if (!(await page.title()).includes("Everything Hub")) throw new Error("Homepage title is incorrect");
+              await page.locator("#q").waitFor({ state: "visible", timeout: 15000 });
+              if (await page.locator("button[data-mode]").count() !== 8) throw new Error("Homepage does not expose all eight search categories");
+              const artwork = await page.locator(".art img").evaluate(img => ({ complete: img.complete, width: img.naturalWidth }));
+              if (!artwork.complete || artwork.width < 800) throw new Error("Approved octopus artwork did not load");
+              await page.locator("#q").fill("Rolex");
+              await page.locator("#q").press("Enter");
+              await page.waitForFunction(() => document.querySelectorAll(".result").length > 0, null, { timeout: 35000 });
+              const api = new URL(searchUrl);
+              api.searchParams.set("q", "Rolex");
+              api.searchParams.set("limit", "10");
+              api.searchParams.set("offset", "0");
+              const apiResponse = await fetch(api, { headers: { apikey: key, accept: "application/json" } });
+              if (!apiResponse.ok) throw new Error("Rolex API returned HTTP " + apiResponse.status);
+              const data = await apiResponse.json();
+              const results = Array.isArray(data.results) ? data.results : [];
+              if (!results.length) throw new Error("Rolex search returned no results");
+              if (manifest.query_index && (data.source !== "Everything Hub public crawler index" || data.indexTransport !== "query-shards" || data.indexIntegrity !== "sha256")) {
+                throw new Error("Live search did not use the verified owned query-shard index: " + JSON.stringify({ source: data.source, transport: data.indexTransport, integrity: data.indexIntegrity }));
+              }
+              report.search = { resultCount: results.length, totalMatches: data.count, source: data.source, transport: data.indexTransport || null, firstResult: results[0]?.title || null, queryIndexPublished: Boolean(manifest.query_index) };
+              const feeds = await Promise.all(["feed-news", "feed-images", "feed-videos"].map(async id => {
+                await page.locator("#" + id + " .feed-item").first().waitFor({ state: "attached", timeout: 30000 }).catch(() => {});
+                return { id, count: await page.locator("#" + id + " .feed-item").count() };
+              }));
+              report.feeds = feeds;
+              if (feeds.some(feed => feed.count < 1)) throw new Error("One or more discovery feeds did not load an item");
+              for (const [type, query] of [["image", "solar panels"], ["video", "wildlife"]]) {
+                const u = new URL(mediaUrl);
+                u.searchParams.set("q", query);
+                u.searchParams.set("type", type);
+                const r = await fetch(u, { headers: { apikey: key, accept: "application/json" } });
+                if (!r.ok) throw new Error(type + " search returned HTTP " + r.status);
+                const d = await r.json();
+                if (!Array.isArray(d.results) || !d.results.length) throw new Error(type + " search returned no media results");
+                report[type === "image" ? "images" : "videos"] = { count: d.results.length, provider: d.provider || null };
+              }
+              await page.setViewportSize({ width: 390, height: 844 });
+              report.mobile = await page.evaluate(() => ({
+                viewportWidth: window.innerWidth,
+                documentWidth: document.documentElement.scrollWidth,
+                searchVisible: !!document.querySelector("#q") && getComputedStyle(document.querySelector("#q")).display !== "none"
+              }));
+              if (report.mobile.documentWidth > report.mobile.viewportWidth + 2 || !report.mobile.searchVisible) {
+                throw new Error("Mobile layout has horizontal overflow or a hidden search field");
+              }
+              if (report.pageErrors.length) throw new Error("Browser page errors: " + report.pageErrors.join("; "));
+              await page.screenshot({ path: "everythinghub-free-production.png", fullPage: true });
+              console.log(JSON.stringify({ status: "passed", ...report }, null, 2));
+            } finally {
+              await browser.close();
+            }
+          })().catch(error => { console.error(error); process.exit(1); });
+          JS
+          node free-site-check.cjs
+      - name: Save free production screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: everything-hub-free-production-browser
+          path: everythinghub-free-production.png
+          if-no-files-found: ignore

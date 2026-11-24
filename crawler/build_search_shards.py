@@ -20,9 +20,9 @@ MAX_COMPRESSED_BYTES = 350_000
 MAX_SHARD_COUNT = 900  # Keeps page shards plus metadata below GitHub's 1,000-entry directory API cap.
 MAX_PAGES_PER_SHARD = 2_000
 SHARD_GZIP_LEVEL = 6
-# The independent Vercel backend safely decompresses up to 64 MB. The
-# Supabase Edge Function has a smaller 30 MB/6 MB budget and delegates larger
-# catalogs to Vercel rather than scanning all shards in its CPU-limited isolate.
+# The Edge Function serves large shard-only catalogs through a compact query
+# index: it fetches only the page shards containing every query term, bounded
+# by the 6 MB compressed / 24 MB decoded per-request search budget.
 MAX_CATALOG_GZIP_BYTES = 16_000_000
 MAX_CATALOG_UNCOMPRESSED_BYTES = 64_000_000
 CATALOG_NAME = "catalog-v1.json.gz"
@@ -31,7 +31,7 @@ MAX_QUERY_INDEX_SHARDS = 256
 MAX_QUERY_INDEX_SHARD_COMPRESSED_BYTES = 2_000_000
 MAX_QUERY_INDEX_SHARD_UNCOMPRESSED_BYTES = 8_000_000
 MAX_QUERY_INDEX_TOTAL_COMPRESSED_BYTES = 32_000_000
-MAX_QUERY_INDEX_TOTAL_UNCOMPRESSED_BYTES = 64_000_000
+MAX_QUERY_INDEX_TOTAL_UNCOMPRESSED_BYTES = 256_000_000
 QUERY_STOP_TOKENS = {
     "a", "an", "and", "are", "as", "at", "be", "by", "for", "from",
     "in", "into", "is", "it", "of", "on", "or", "our", "the", "to",
