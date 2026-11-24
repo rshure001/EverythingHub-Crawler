@@ -56,6 +56,9 @@ class ProductionBrowserWorkflowContractTests(unittest.TestCase):
         self.assertIn("exploreLinkVisible", workflow)
         self.assertIn("aboutLinkVisible", workflow)
         self.assertIn("dogTagDayLinkVisible", workflow)
+        self.assertIn("await route.fulfill({", workflow)
+        self.assertIn('answer: "Research route verified; paid AI execution skipped."', workflow)
+        self.assertNotIn("await route.abort();", workflow)
 
     def test_catalog_updates_use_publisher_completion_trigger(self):
         workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
