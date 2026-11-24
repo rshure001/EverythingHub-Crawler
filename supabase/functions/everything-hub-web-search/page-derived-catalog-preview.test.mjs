@@ -5,6 +5,7 @@ import {
   loadPageDerivedCatalogPreview,
   searchPageDerivedCatalogPreview,
   resolveRecordRelatedCatalogPreview,
+  validateManifest,
 } from "./page-derived-catalog-preview.mjs";
 
 const encoder = new TextEncoder();
@@ -33,6 +34,46 @@ async function gzipJson(value) {
 async function fileEntry(file, bytes, items) {
   return { file, bytes: bytes.byteLength, sha256: await digest(bytes), items };
 }
+
+test("manifest validation accepts 19,866 per-catalog indexes, 256 search shards, and shared artifacts", () => {
+  const sha = "a".repeat(64);
+  const baseFiles = [
+    { file: "pages.json.gz", bytes: 1, sha256: sha, items: 176151 },
+    { file: "page-catalogs.jsonl.gz", bytes: 1, sha256: sha, items: 0 },
+    { file: "record-catalogs.jsonl.gz", bytes: 1, sha256: sha, items: 0 },
+    { file: "registry.json.gz", bytes: 1, sha256: sha, items: 19866 },
+    { file: "records.json.gz", bytes: 1, sha256: sha, items: 1011743 },
+    { file: "media-references.json.gz", bytes: 1, sha256: sha, items: 7893 },
+  ];
+  const catalogFiles = Array.from({ length: 19866 }, (_, index) => {
+    const id = index.toString(16).padStart(24, "0");
+    return { file: "indexes/" + id.slice(0, 2) + "/" + id + ".json.gz", bytes: 1, sha256: sha, items: 0 };
+  });
+  const searchFiles = Array.from({ length: 256 }, (_, index) => ({
+    file: "search-index/" + index.toString(16).padStart(2, "0") + ".json.gz",
+    bytes: 1,
+    sha256: sha,
+    items: 0,
+  }));
+  const files = [...baseFiles, ...catalogFiles, ...searchFiles];
+  assert.equal(files.length, 20128);
+  const metadata = validateManifest({
+    version: 1,
+    analysis_version: 15,
+    integrity: "sha256",
+    source_index_pages: 176642,
+    source_index_updated_at: "2026-11-22T07:43:23Z",
+    source_index_sha256: sha,
+    catalog_count: 19866,
+    record_count: 1011743,
+    generated_at: "2026-11-22T07:43:23Z",
+    metrics: { records_published: 0 },
+    catalogs_verified: 0,
+    files,
+  });
+  assert.equal(metadata.files.size, 20128);
+  assert.equal(metadata.searchIndexFiles.length, 256);
+});
 
 function record({ id, entityId, type, title, description, catalogId, sourceUrl, attributes = {} }) {
   return {
