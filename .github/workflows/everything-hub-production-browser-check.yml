@@ -342,25 +342,40 @@ jobs:
               }
 
               await goHome();
-              await page.locator("button.nav-library").first().click();
+              // The approved launch-only hero intentionally hides the top bar until search or Library is active.
+              await searchWeb("NASA", "nasa|space|aerospace", "nasa");
+              const libraryNavButton = page.locator("button.nav-library").first();
+              await libraryNavButton.waitFor({ state: "visible", timeout: 12000 });
+              await libraryNavButton.click();
               await page.locator(".library-page").waitFor({ state: "visible", timeout: 12000 });
               const librarySearchVisible = await page.locator('.library-page input[aria-label="Search the Library"]').isVisible().catch(() => false);
-              await page.locator(".library-topline button").first().click();
-              await page.locator(".everythinghub-approved-home-art img.approved-master-image").first().waitFor({ state: "visible", timeout: 12000 });
+              const headerLibraryVisible = await libraryNavButton.isVisible().catch(() => false);
+              const exploreLink = page.locator('a[href="#divisions"]').first();
+              const aboutLink = page.locator('a[href="#how-it-works"]').first();
+              const exploreLinkVisible = await exploreLink.isVisible().catch(() => false);
+              const aboutLinkVisible = await aboutLink.isVisible().catch(() => false);
+              const exploreTargetExists = (await page.locator("#divisions").count()) > 0;
+              const aboutTargetExists = (await page.locator("#how-it-works").count()) > 0;
               await page.locator("footer").scrollIntoViewIfNeeded();
               const dogTagLink = page.locator('footer a[href="https://dogtagday.org/"]').first();
+              const dogTagDayLinkVisible = await dogTagLink.isVisible().catch(() => false);
               report.navigation = {
                 ...(report.navigation || {}),
                 libraryOpened: true,
                 librarySearchVisible,
+                headerLibraryVisible,
+                exploreLinkVisible,
+                aboutLinkVisible,
+                exploreTargetExists,
+                aboutTargetExists,
                 dogTagDayLinkCount: await dogTagLink.count(),
-                dogTagDayLinkHref: await dogTagLink.getAttribute("href").catch(() => null),
-                exploreLinkCount: await page.locator('a[href="#divisions"]').count(),
-                aboutLinkCount: await page.locator('a[href="#how-it-works"]').count()
+                dogTagDayLinkVisible,
+                dogTagDayLinkHref: await dogTagLink.getAttribute("href").catch(() => null)
               };
-              if (!librarySearchVisible || !(await dogTagLink.count()) ||
-                  !report.navigation.exploreLinkCount || !report.navigation.aboutLinkCount) {
-                fail("Core Library, Explore, About or Dog Tag Day navigation is missing.");
+              if (!librarySearchVisible || !headerLibraryVisible || !exploreLinkVisible || !aboutLinkVisible ||
+                  !exploreTargetExists || !aboutTargetExists || !dogTagDayLinkVisible ||
+                  report.navigation.dogTagDayLinkHref !== "https://dogtagday.org/") {
+                fail("Core Library, Explore, About or Dog Tag Day navigation is missing or not visible.");
               }
               await shot("navigation");
 
