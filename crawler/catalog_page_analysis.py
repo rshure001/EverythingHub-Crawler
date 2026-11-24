@@ -3012,6 +3012,80 @@ def _write_gzip_jsonl_catalogs(
     return size, result_digest, count
 
 
+
+def _write_gzip_jsonl_catalog_shards(
+    output_dir: Path,
+    catalogs,
+    expected_count: int,
+    shard_size: int = 5000,
+    progress_label: str | None = None,
+) -> list[dict]:
+    """Write record identity catalogs as bounded, deterministic gzip JSONL shards."""
+    if isinstance(shard_size, bool) or not isinstance(shard_size, int) or shard_size < 1:
+        raise ValueError("shard_size must be a positive integer")
+    directory = output_dir / "record-catalogs"
+    if directory.exists():
+        shutil.rmtree(directory)
+    directory.mkdir(parents=True, exist_ok=True)
+    encoder = json.JSONEncoder(ensure_ascii=False, separators=(",", ":"))
+    files = []
+    written = 0
+    for shard_number, start in enumerate(range(0, len(catalogs), shard_size)):
+        chunk = catalogs[start:start + shard_size]
+        path = directory / f"{shard_number:05d}.jsonl.gz"
+        temp = path.with_suffix(path.suffix + ".tmp")
+        with temp.open("wb") as raw_file:
+            with gzip.GzipFile(fileobj=raw_file, mode="wb", filename="", compresslevel=9, mtime=0) as stream:
+                stream.write(encoder.encode({
+                    "schema_version": 1,
+                    "kind": "record_identity_catalogs",
+                    "items": expected_count,
+                    "shard_items": len(chunk),
+                    "shard": shard_number,
+                }).encode("utf-8") + b"\\n")
+                for item in chunk:
+                    stream.write(encoder.encode(item).encode("utf-8") + b"\\n")
+                    written += 1
+        temp.replace(path)
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        relative = path.relative_to(output_dir).as_posix()
+        files.append({"file": relative, "bytes": path.stat().st_size, "sha256": digest, "items": len(chunk), "format": "jsonl"})
+        _emit_progress(bool(progress_label), (progress_label + "_progress") if progress_label else "", shards_written=shard_number + 1, items_written=written, items_expected=expected_count)
+    if written != expected_count:
+        raise ValueError(f"record identity shard count mismatch: expected {expected_count}, wrote {written}")
+    return files
+
+
+def _write_gzip_record_shards(
+    output_dir: Path,
+    records,
+    shard_size: int = 5000,
+    progress_label: str | None = None,
+) -> list[dict]:
+    """Write global records as bounded deterministic gzip JSON shards."""
+    if isinstance(shard_size, bool) or not isinstance(shard_size, int) or shard_size < 1:
+        raise ValueError("shard_size must be a positive integer")
+    directory = output_dir / "records"
+    if directory.exists():
+        shutil.rmtree(directory)
+    directory.mkdir(parents=True, exist_ok=True)
+    files = []
+    for shard_number, start in enumerate(range(0, len(records), shard_size)):
+        chunk = records[start:start + shard_size]
+        relative = "records/" + f"{shard_number:05d}.json.gz"
+        size, digest = _write_gzip(
+            output_dir / relative,
+            {"version": 1, "shard": shard_number, "shard_count": (len(records) + shard_size - 1) // shard_size, "records": chunk},
+            progress_label=(progress_label + "_" + f"{shard_number:05d}") if progress_label else None,
+        )
+        files.append({"file": relative, "bytes": size, "sha256": digest, "items": len(chunk), "format": "json"})
+        _emit_progress(bool(progress_label), (progress_label + "_progress") if progress_label else "", shards_written=shard_number + 1, shards_total=(len(records) + shard_size - 1) // shard_size)
+    if not records:
+        relative = "records/00000.json.gz"
+        size, digest = _write_gzip(output_dir / relative, {"version": 1, "shard": 0, "shard_count": 1, "records": []}, progress_label=progress_label)
+        files.append({"file": relative, "bytes": size, "sha256": digest, "items": 0, "format": "json"})
+    return files
+
 def _singular_search_token(token: str) -> str | None:
     if token in {"news", "series", "species", "politics", "physics", "mathematics", "economics", "ethics"}:
         return None
@@ -3253,17 +3327,14 @@ def write_outputs(
         "items": written_page_identity_count, "format": "jsonl",
     })
     record_identity_count = analysis["metrics"].get("record_owned_identity_catalogs", 0)
-    size, digest, written_record_identity_count = _write_gzip_jsonl_catalogs(
-        output_dir / "record-catalogs.jsonl.gz",
-        "record_identity_catalogs",
+    record_identity_files = _write_gzip_jsonl_catalog_shards(
+        output_dir,
         analysis.get("record_catalogs", []),
         record_identity_count,
+        shard_size=5000,
         progress_label="catalog_write_record_identity",
     )
-    files.append({
-        "file": "record-catalogs.jsonl.gz", "bytes": size, "sha256": digest,
-        "items": written_record_identity_count, "format": "jsonl",
-    })
+    files.extend(record_identity_files)
     search_shards = build_search_index(analysis, progress=progress)
     if not search_shards:
         search_shards = {"00": {"version": 1, "prefix": "00", "tokens": {}}}
@@ -3446,10 +3517,13 @@ def write_outputs(
         if relative_path not in expected_search_files:
             stale_path.unlink()
 
-    size, digest = _write_gzip(output_dir / "records.json.gz", {
-        "version": 1, "records": analysis["records"],
-    }, progress_label="catalog_write_records")
-    files.append({"file": "records.json.gz", "bytes": size, "sha256": digest, "items": len(analysis["records"])})
+    record_files = _write_gzip_record_shards(
+        output_dir,
+        analysis["records"],
+        shard_size=5000,
+        progress_label="catalog_write_records",
+    )
+    files.extend(record_files)
     size, digest = _write_gzip(output_dir / "media-references.json.gz", {
         "version": 2, "references": analysis["media_references"],
         "unique_media_urls": analysis["media_urls"],
@@ -3581,8 +3655,31 @@ def validate_outputs(output_dir: Path, progress: bool = False) -> dict:
     unique_media_urls = sorted({x.get("media_url") for x in media_references})
     if unique_media_urls != media_payload.get("unique_media_urls", []):
         raise ValueError("media URL registry does not match its provenance references")
-    records_raw = (output_dir / "records.json.gz").read_bytes()
-    records = json.loads(gzip.decompress(records_raw).decode("utf-8"))["records"]
+    manifest_entries = {item["file"]: item for item in manifest.get("files", [])}
+    record_shard_entries = sorted(
+        (item for item in manifest_entries.values() if item["file"].startswith("records/")),
+        key=lambda item: item["file"],
+    )
+    if record_shard_entries:
+        records = []
+        for shard_index, entry in enumerate(record_shard_entries, start=1):
+            raw = (output_dir / entry["file"]).read_bytes()
+            payload = json.loads(gzip.decompress(raw).decode("utf-8"))
+            shard_records = payload.get("records") if isinstance(payload, dict) else None
+            if (
+                payload.get("version") != 1
+                or not isinstance(shard_records, list)
+                or len(shard_records) != entry.get("items")
+                or payload.get("shard") != shard_index - 1
+                or payload.get("shard_count") != len(record_shard_entries)
+            ):
+                raise ValueError("global record shard metadata or item count is invalid")
+            records.extend(shard_records)
+            if progress and (shard_index % 10 == 0 or shard_index == len(record_shard_entries)):
+                emit("catalog_validation_record_shards_progress", shards_processed=shard_index, shards_total=len(record_shard_entries), records_loaded=len(records))
+    else:
+        records_raw = (output_dir / "records.json.gz").read_bytes()
+        records = json.loads(gzip.decompress(records_raw).decode("utf-8"))["records"]
     emit("catalog_validation_records_loaded", records=len(records))
     page_ids = {
         item["page_id"] for item in pages
@@ -3627,16 +3724,26 @@ def validate_outputs(output_dir: Path, progress: bool = False) -> dict:
     page_identity_path = output_dir / "page-catalogs.jsonl.gz"
     record_identity_path = output_dir / "record-catalogs.jsonl.gz"
     page_identity_entry = manifest_entries.get("page-catalogs.jsonl.gz")
-    record_identity_entry = manifest_entries.get("record-catalogs.jsonl.gz")
+    record_identity_entries = sorted(
+        (item for item in manifest_entries.values() if item["file"].startswith("record-catalogs/")),
+        key=lambda item: item["file"],
+    )
+    legacy_record_identity_entry = manifest_entries.get("record-catalogs.jsonl.gz")
     expected_page_identity_count = len(page_by_id)
     expected_record_identity_count = len(records_by_id)
+    record_identity_items = (
+        sum(item.get("items", 0) for item in record_identity_entries)
+        if record_identity_entries else
+        (legacy_record_identity_entry.get("items", 0) if legacy_record_identity_entry else 0)
+    )
     if (
         page_identity_entry is None
-        or record_identity_entry is None
+        or (not record_identity_entries and legacy_record_identity_entry is None)
         or page_identity_entry.get("format") != "jsonl"
-        or record_identity_entry.get("format") != "jsonl"
+        or any(item.get("format") != "jsonl" for item in record_identity_entries)
+        or (legacy_record_identity_entry is not None and legacy_record_identity_entry.get("format") != "jsonl")
         or page_identity_entry.get("items") != expected_page_identity_count
-        or record_identity_entry.get("items") != expected_record_identity_count
+        or record_identity_items != expected_record_identity_count
         or manifest.get("page_identity_catalog_count") != expected_page_identity_count
         or manifest.get("record_identity_catalog_count") != expected_record_identity_count
     ):
@@ -3699,48 +3806,55 @@ def validate_outputs(output_dir: Path, progress: bool = False) -> dict:
 
     seen_record_identity_count = 0
     previous_record_identity_id = None
-    with gzip.open(record_identity_path, "rt", encoding="utf-8") as stream:
-        header = json.loads(stream.readline())
-        if (
-            header.get("schema_version") != 1
-            or header.get("kind") != "record_identity_catalogs"
-            or header.get("items") != expected_record_identity_count
-        ):
-            raise ValueError("record identity sidecar header is invalid")
-        for line in stream:
-            if not line.strip():
-                continue
-            item = json.loads(line)
-            record_id = item.get("record_id")
-            record = records_by_id.get(record_id)
-            expected_source_pages = sorted(set(record.get("source_page_ids", []))) if record else []
-            expected_page_catalog_ids = sorted({
-                stable_id("catalog", "__page__|" + page_id)
-                for page_id in expected_source_pages
-                if page_id in page_by_id
-            })
+    record_identity_paths = (
+        [output_dir / item["file"] for item in record_identity_entries]
+        if record_identity_entries else [record_identity_path]
+    )
+    for identity_shard_index, identity_path in enumerate(record_identity_paths, start=1):
+        with gzip.open(identity_path, "rt", encoding="utf-8") as stream:
+            header = json.loads(stream.readline())
             if (
-                record is None
-                or not isinstance(record_id, str)
-                or (previous_record_identity_id is not None and record_id <= previous_record_identity_id)
-                or item.get("identity_type") != "record"
-                or item.get("catalog_id") != stable_id("record-catalog", record_id)
-                or item.get("catalog_id") in registry_catalog_ids
-                or item.get("source_key") != "__record__|" + record_id
-                or item.get("record_ids") != [record_id]
-                or item.get("record_type") != record.get("record_type")
-                or item.get("page_catalog_ids") != expected_page_catalog_ids
-                or item.get("source_catalog_ids") != sorted(set(record.get("catalog_ids", [])))
-                or item.get("source_page_ids") != expected_source_pages
-                or item.get("source_urls") != sorted(set(record.get("source_urls", [])))
-                or item.get("catalog_origin") != "record_owned_identity_catalog"
+                header.get("schema_version") != 1
+                or header.get("kind") != "record_identity_catalogs"
+                or header.get("items") != expected_record_identity_count
+                or (record_identity_entries and header.get("shard") != identity_shard_index - 1)
+                or (record_identity_entries and header.get("shard_items") != record_identity_entries[identity_shard_index - 1].get("items"))
             ):
-                raise ValueError("record identity catalog provenance or stable ID is invalid")
-            validate_private_identity_status(item)
-            seen_record_identity_count += 1
-            previous_record_identity_id = record_id
-            if progress and seen_record_identity_count % 50000 == 0:
-                emit("catalog_validation_record_identity_progress", items_validated=seen_record_identity_count, items_expected=expected_record_identity_count)
+                raise ValueError("record identity sidecar header is invalid")
+            for line in stream:
+                if not line.strip():
+                    continue
+                item = json.loads(line)
+                record_id = item.get("record_id")
+                record = records_by_id.get(record_id)
+                expected_source_pages = sorted(set(record.get("source_page_ids", []))) if record else []
+                expected_page_catalog_ids = sorted({
+                    stable_id("catalog", "__page__|" + page_id)
+                    for page_id in expected_source_pages
+                    if page_id in page_by_id
+                })
+                if (
+                    record is None
+                    or not isinstance(record_id, str)
+                    or (previous_record_identity_id is not None and record_id <= previous_record_identity_id)
+                    or item.get("identity_type") != "record"
+                    or item.get("catalog_id") != stable_id("record-catalog", record_id)
+                    or item.get("catalog_id") in registry_catalog_ids
+                    or item.get("source_key") != "__record__|" + record_id
+                    or item.get("record_ids") != [record_id]
+                    or item.get("record_type") != record.get("record_type")
+                    or item.get("page_catalog_ids") != expected_page_catalog_ids
+                    or item.get("source_catalog_ids") != sorted(set(record.get("catalog_ids", [])))
+                    or item.get("source_page_ids") != expected_source_pages
+                    or item.get("source_urls") != sorted(set(record.get("source_urls", [])))
+                    or item.get("catalog_origin") != "record_owned_identity_catalog"
+                ):
+                    raise ValueError("record identity catalog provenance or stable ID is invalid")
+                validate_private_identity_status(item)
+                seen_record_identity_count += 1
+                previous_record_identity_id = record_id
+                if progress and seen_record_identity_count % 50000 == 0:
+                    emit("catalog_validation_record_identity_progress", items_validated=seen_record_identity_count, items_expected=expected_record_identity_count)
     if seen_record_identity_count != expected_record_identity_count:
         raise ValueError("record identity sidecar does not contain exactly one row per record")
     emit(
@@ -3866,7 +3980,7 @@ def validate_outputs(output_dir: Path, progress: bool = False) -> dict:
         raw = path.read_bytes()
         if len(raw) != entry["bytes"] or hashlib.sha256(raw).hexdigest() != entry["sha256"]:
             raise ValueError("catalog analysis artifact integrity mismatch: " + entry["file"])
-        if entry["file"] in ("page-catalogs.jsonl.gz", "record-catalogs.jsonl.gz"):
+        if entry["file"] == "page-catalogs.jsonl.gz" or entry["file"].startswith("record-catalogs/"):
             if entry.get("format") != "jsonl":
                 raise ValueError("identity sidecar format declaration is invalid")
             continue
