@@ -35,6 +35,38 @@ class CatalogSourcePolicyTests(unittest.TestCase):
         self.assertIn("doi", frontiers["allowed_metadata_fields"])
         self.assertIn("full_text", frontiers["prohibited_content"])
 
+    def test_canada_open_data_api_is_reviewed_metadata_only_and_rate_limited(self):
+        canada = policy.policy_for_host("open.canada.ca")
+        self.assertIsNotNone(canada)
+        self.assertTrue(canada["discovery_allowed"])
+        self.assertEqual(canada["terms_status"], "reviewed_per_dataset")
+        self.assertTrue(canada["metadata_only"])
+        self.assertTrue(canada["per_dataset_rights_required"])
+        self.assertTrue(canada["attribution_required"])
+        self.assertEqual(
+            canada["terms_url"],
+            "https://open.canada.ca/en/open-government-licence-canada/",
+        )
+        self.assertTrue(canada["reviewed_at"])
+        self.assertEqual(
+            canada["allowed_api_paths"],
+            ["/data/en/api/3/action/package_search"],
+        )
+        self.assertEqual(canada["max_requests_per_run"], 80)
+        self.assertGreaterEqual(canada["min_interval_seconds"], 1.0)
+
+        parser = object()
+        with patch.object(policy, "load_robots_policy", return_value=parser), \\
+             patch.object(policy, "robots_can_fetch", return_value=True), \\
+             patch.object(policy, "effective_host_delay", return_value=0.5):
+            source, loaded_parser, delay, paths = policy.authorize_source_url(
+                "https://open.canada.ca/data/en/api/3/action/package_search"
+            )
+        self.assertIs(loaded_parser, parser)
+        self.assertEqual(delay, 1.0)
+        self.assertIn("/data/en/api/3/action/package_search", paths)
+        self.assertEqual(source["terms_status"], "reviewed_per_dataset")
+
     def test_unreviewed_host_is_rejected_before_robots_fetch(self):
         with patch.object(policy, "load_robots_policy") as load_robots:
             with self.assertRaises(policy.SourcePolicyError):
