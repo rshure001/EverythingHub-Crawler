@@ -41,6 +41,7 @@ type StaticCatalog = {
   pages: any[];
   updatedAt: string | null;
   mode: "gzip";
+  sha256: string;
   expiresAt: number;
 };
 type CachedPayload<T> = { value: T; expiresAt: number };
@@ -50,7 +51,7 @@ let staticManifestPromise: Promise<any> | null = null;
 let staticCatalogCache: StaticCatalog | null = null;
 let staticCatalogPromise: Promise<StaticCatalog | null> | null = null;
 const queryIndexShardCache = new Map<string, CachedPayload<any>>();
-const pageShardCache = new Map<number, CachedPayload<any[]>>();
+const pageShardCache = new Map<string, CachedPayload<any[]>>();
 
 function setBoundedCache<T>(cache: Map<any, CachedPayload<T>>, key: any, value: T, maxEntries: number): void {
   if (cache.has(key)) cache.delete(key);
@@ -121,7 +122,11 @@ async function loadStaticManifest(): Promise<any> {
 }
 
 async function loadStaticCatalog(manifest: any): Promise<StaticCatalog | null> {
-  if (staticCatalogCache && staticCatalogCache.expiresAt > Date.now()) {
+  if (
+    staticCatalogCache &&
+    staticCatalogCache.expiresAt > Date.now() &&
+    staticCatalogCache.sha256 === manifest.catalog_gzip?.sha256
+  ) {
     return staticCatalogCache;
   }
   if (staticCatalogPromise) return staticCatalogPromise;
@@ -166,6 +171,7 @@ async function loadStaticCatalog(manifest: any): Promise<StaticCatalog | null> {
         pages: payload.pages,
         updatedAt: normalizeManifestTimestamp(manifest.updated_at),
         mode: "gzip",
+        sha256: compressed.sha256,
         expiresAt: Date.now() + STATIC_INDEX_CACHE_MS,
       };
       staticCatalogCache = catalog;
@@ -191,9 +197,6 @@ async function queryIndexPrefix(token: string): Promise<string> {
 }
 
 async function loadQueryIndexShard(manifest: any, prefix: string, signal: AbortSignal): Promise<any | null> {
-  const cached = queryIndexShardCache.get(prefix);
-  if (cached && cached.expiresAt > Date.now()) return cached.value;
-
   const queryIndex = manifest.query_index;
   if (
     !queryIndex ||
@@ -208,6 +211,9 @@ async function loadQueryIndexShard(manifest: any, prefix: string, signal: AbortS
   const file = "query-index/" + prefix + ".json.gz";
   const meta = queryIndex.shards.find((entry: any) => entry?.file === file);
   if (!meta) return null;
+  const cacheKey = prefix + ":" + String(meta.sha256 || "");
+  const cached = queryIndexShardCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.value;
   if (
     !Number.isInteger(meta.bytes) ||
     meta.bytes < 1 ||
@@ -240,14 +246,11 @@ async function loadQueryIndexShard(manifest: any, prefix: string, signal: AbortS
   ) {
     throw new Error("Query-index shard schema or decoded size is invalid: " + file);
   }
-  setBoundedCache(queryIndexShardCache, prefix, payload, 2);
+  setBoundedCache(queryIndexShardCache, cacheKey, payload, 2);
   return payload;
 }
 
 async function loadPageShard(manifest: any, shardIndex: number, signal: AbortSignal): Promise<any[]> {
-  const cached = pageShardCache.get(shardIndex);
-  if (cached && cached.expiresAt > Date.now()) return cached.value;
-
   const meta = manifest.shards[shardIndex];
   if (
     !meta ||
@@ -266,6 +269,9 @@ async function loadPageShard(manifest: any, shardIndex: number, signal: AbortSig
   ) {
     throw new Error("Page-shard metadata is invalid for ordinal " + shardIndex);
   }
+  const cacheKey = String(shardIndex) + ":" + meta.sha256;
+  const cached = pageShardCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.value;
 
   const response = await fetch(STATIC_INDEX_BASE + "/" + meta.file, { headers: staticHeaders, signal });
   if (!response.ok) throw new Error("Page shard returned HTTP " + response.status + ": " + meta.file);
@@ -281,7 +287,7 @@ async function loadPageShard(manifest: any, shardIndex: number, signal: AbortSig
   ) {
     throw new Error("Page-shard schema or decoded size is invalid: " + meta.file);
   }
-  setBoundedCache(pageShardCache, shardIndex, payload.pages, 40);
+  setBoundedCache(pageShardCache, cacheKey, payload.pages, 40);
   return payload.pages;
 }
 
