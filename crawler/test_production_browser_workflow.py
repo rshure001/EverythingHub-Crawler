@@ -22,7 +22,7 @@ class ProductionBrowserWorkflowContractTests(unittest.TestCase):
         self.assertIn("production-report.json", workflow)
         self.assertIn("nav.hub-hero-divisions button", workflow)
         self.assertIn(".image-results-grid .image-result", workflow)
-        self.assertIn(".division-destination-page .destination-feature .top-news-card", workflow)
+        self.assertIn("section.top-news .discover-filters button", workflow)
         self.assertIn("section.top-news .discover-story-body", workflow)
         self.assertIn("aria-pressed", workflow)
         self.assertIn("Refresh top news", workflow)
