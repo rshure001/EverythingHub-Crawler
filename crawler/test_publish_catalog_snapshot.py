@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gzip
 import json
 import os
 import shutil
@@ -91,7 +92,16 @@ class CatalogSnapshotPublicationTests(unittest.TestCase):
         self.snapshot_dir = self.first / "data" / "page-derived-catalogs"
         write_json(self.snapshot_dir / "report.json", report("2026-11-22T12:00:00Z", 10, "a" * 64))
         write_json(self.snapshot_dir / "manifest.json", {"version": 1, "validated": True})
-        (self.snapshot_dir / "registry.json.gz").write_bytes(b"new-registry")
+        candidate_registry = {
+            "status": "candidate_staging_not_production",
+            "catalogs": [
+                {"verified": False, "commercial_eligible": False, "source_terms_status": "not_reviewed"},
+                {"verified": False, "commercial_eligible": False, "source_terms_status": "not_reviewed"},
+            ],
+        }
+        (self.snapshot_dir / "registry.json.gz").write_bytes(
+            gzip.compress(json.dumps(candidate_registry).encode("utf-8"))
+        )
         (self.snapshot_dir / "records.json.gz").write_bytes(b"new-records")
         (self.snapshot_dir / "indexes" / "catalog-1.json.gz").parent.mkdir(parents=True, exist_ok=True)
         (self.snapshot_dir / "indexes" / "catalog-1.json.gz").write_bytes(b"new-index")
