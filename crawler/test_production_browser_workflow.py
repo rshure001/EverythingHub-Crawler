@@ -10,48 +10,36 @@ WORKFLOW_PATH = (
 )
 
 
+FREE_SITE_WORKFLOW_PATH = (
+    Path(__file__).resolve().parents[1]
+    / ".github"
+    / "workflows"
+    / "everything-hub-free-site-browser-check.yml"
+)
+
+
 class ProductionBrowserWorkflowContractTests(unittest.TestCase):
     def test_browser_check_runs_after_successful_catalog_publisher(self):
-        workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+        workflow = FREE_SITE_WORKFLOW_PATH.read_text(encoding="utf-8")
         self.assertIn('workflows: ["Publish and verify Everything Hub — in-house Supabase route"]', workflow)
         self.assertIn("types: [completed]", workflow)
         self.assertIn("branches: [main]", workflow)
-        self.assertNotIn("APPDEPLOY_ACCEPTANCE_ENABLED", workflow)
+        self.assertIn("SITE_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-site/", workflow)
+        self.assertIn("SEARCH_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-web-search", workflow)
+        self.assertIn("MEDIA_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-media-search", workflow)
+        self.assertIn('page.locator("#q")', workflow)
+        self.assertIn('button[data-mode]', workflow)
+        self.assertIn('manifest.query_index', workflow)
+        self.assertIn('data.indexTransport !== "query-shards"', workflow)
+        self.assertIn("everythinghub-free-production.png", workflow)
+        self.assertIn("report.pageErrors", workflow)
+
+    def test_appdeploy_preview_is_separate_from_free_production_gate(self):
+        workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+        self.assertNotIn("workflow_run:", workflow)
+        self.assertIn('vercel-homepage/**', workflow)
+        self.assertIn('vercel-search-backend/**', workflow)
         self.assertIn("TARGET_URL: https://everythinghub-search-engine-4x25f8.v2.appdeploy.ai/", workflow)
-        self.assertIn("everythinghub-production-*.png", workflow)
-        self.assertIn("production-report.json", workflow)
-        self.assertIn("nav.hub-hero-divisions button", workflow)
-        self.assertIn(".image-results-grid .image-result", workflow)
-        self.assertIn("section.top-news .discover-filters button", workflow)
-        self.assertIn("section.top-news .discover-story-body", workflow)
-        self.assertIn('node.querySelector(".eh-result-title")', workflow)
-        self.assertIn('node.querySelector(".eh-result-title, .place-result-heading h3, h3, h2")', workflow)
-        self.assertIn("section.top-news .top-news-heading p", workflow)
-        self.assertIn("refreshResponseStatus", workflow)
-        self.assertIn("report.images.loaded < 3", workflow)
-        self.assertNotIn("section.top-news .top-news-status", workflow)
-        self.assertIn("requestUrl.pathname.endsWith(path)", workflow)
-        self.assertIn("const apiResponse = (path, predicate)", workflow)
-        self.assertIn("report.apiResponses.filter", workflow)
-        self.assertIn('pathname.endsWith("/api/ai/answer")', workflow)
-        self.assertIn('requestUrl.pathname.includes("/api/")', workflow)
-        self.assertIn('responseUrl.pathname.includes("/api/")', workflow)
-        self.assertIn('url.pathname.endsWith("/api/news")', workflow)
-        self.assertIn("aria-pressed", workflow)
-        self.assertIn("Refresh top news", workflow)
-        self.assertIn("documentWidth > viewportWidth + 2", workflow)
-        self.assertIn("item.bounds.top < searchBounds.bottom", workflow)
-        self.assertIn("item.bounds.bottom > searchBounds.top", workflow)
-        self.assertIn("categoryDiscoveryOverlapIndexes", workflow)
-        self.assertIn("categoryOutsideArtworkIndexes", workflow)
-        self.assertIn('document.querySelectorAll("input#hub-search")', workflow)
-        self.assertIn("report.videos.ok", workflow)
-        self.assertIn("checkedTabs.length !== 6", workflow)
-        self.assertIn(
-            "github.event_name != 'workflow_run' || "
-            "github.event.workflow_run.conclusion == 'success'",
-            workflow,
-        )
 
     def test_library_navigation_is_checked_after_leaving_hero_only_state(self):
         workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
@@ -69,8 +57,11 @@ class ProductionBrowserWorkflowContractTests(unittest.TestCase):
 
     def test_catalog_updates_use_publisher_completion_trigger(self):
         workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+        free_workflow = FREE_SITE_WORKFLOW_PATH.read_text(encoding="utf-8")
         self.assertNotIn('"public-search/**"', workflow)
         self.assertIn('vercel-homepage/**', workflow)
+        self.assertIn('public-search/manifest.json', free_workflow)
+        self.assertIn('workflow_run:', free_workflow)
 
     def test_free_fallback_discloses_partial_query_scan_coverage(self):
         homepage = (
