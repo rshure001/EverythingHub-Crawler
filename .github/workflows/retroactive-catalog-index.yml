@@ -60,6 +60,8 @@ jobs:
           path: |
             data/.page-derived-catalog-cache
             data/page-derived-catalogs/report.json
+            data/page-derived-catalogs/indexes
+            data/page-derived-catalogs/.catalog-index-progress.json
           key: ${{ runner.os }}-catalog-cache-${{ github.ref_name }}-${{ github.run_id }}
           restore-keys: |
             ${{ runner.os }}-catalog-cache-${{ github.ref_name }}-
@@ -101,11 +103,14 @@ jobs:
         env:
           PYTHONUNBUFFERED: "1"
         run: python crawler/catalog_page_analysis.py --index public-search/manifest.json --query Rolex --query "Las Vegas" --query NASA --cache-dir data/.page-derived-catalog-cache --workers 4
-      - name: Save resumable per-host catalog cache checkpoint
+      - name: Save resumable per-host and catalog-index checkpoints
         if: always()
         uses: actions/cache/save@v4
         with:
-          path: data/.page-derived-catalog-cache
+          path: |
+            data/.page-derived-catalog-cache
+            data/page-derived-catalogs/indexes
+            data/page-derived-catalogs/.catalog-index-progress.json
           key: ${{ runner.os }}-catalog-cache-${{ github.ref_name }}-checkpoint-${{ github.run_id }}
       - name: Record persisted catalog and record throughput
         run: |
