@@ -9,7 +9,7 @@ function New-Secret([int]$Bytes = 48) {
   $buffer = New-Object byte[] $Bytes
   $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
   try { $rng.GetBytes($buffer) } finally { $rng.Dispose() }
-  return [Convert]::ToHexString($buffer).ToLowerInvariant()
+  return ([System.BitConverter]::ToString($buffer) -replace "-", "").ToLowerInvariant()
 }
 
 Write-Host "Everything Hub independent database — Windows setup" -ForegroundColor Cyan
@@ -57,13 +57,9 @@ try {
 
   $ready = $false
   for ($i = 0; $i -lt 36; $i++) {
-    $state = (& docker compose -f $Compose ps --format json 2>$null) -join "`n"
-    try {
-      $items = @($state | ConvertFrom-Json)
-      $db = $items | Where-Object { $_.Service -eq "everythinghub-db" -or $_.Name -eq "everythinghub-db" } | Select-Object -First 1
-      $api = $items | Where-Object { $_.Service -eq "everythinghub-search" -or $_.Name -eq "everythinghub-search" } | Select-Object -First 1
-      if (($db.Health -eq "healthy") -and ($api.Health -eq "healthy")) { $ready = $true; break }
-    } catch { }
+    $dbHealth = (& docker inspect --format "{{.State.Health.Status}}" everythinghub-db 2>$null)
+    $apiHealth = (& docker inspect --format "{{.State.Health.Status}}" everythinghub-search 2>$null)
+    if ($dbHealth -eq "healthy" -and $apiHealth -eq "healthy") { $ready = $true; break }
     Start-Sleep -Seconds 5
   }
   if (-not $ready) {
