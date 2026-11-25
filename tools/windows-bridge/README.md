@@ -9,9 +9,9 @@ Requirements: Windows x64, Git, Python 3.12+, and GitHub CLI (gh).
 2. From PowerShell run `powershell -ExecutionPolicy Bypass -File .\tools\windows-bridge\install.ps1`.
 3. Start the runner in the foreground:
    `cd "$env:USERPROFILE\EverythingHub-Windows-Runner"`
-   `.` + String.raw`\run.cmd`
+   `.un.cmd`
 
-The installer gets a short-lived registration token directly through GitHub CLI. It does not store the token in the repository, install a Windows service, or change firewall, DNS, database, or production settings.
+The installer gets a short-lived registration token directly through GitHub CLI. It does not store that token in the repository, install a Windows service, or change firewall, DNS, database, or production settings.
 
 ## Dispatch
 In the repository Actions tab, select **Everything Hub Windows bridge**, choose **Run workflow**, then choose:
