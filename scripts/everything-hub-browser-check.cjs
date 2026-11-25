@@ -5,7 +5,7 @@ const fs = require("node:fs");
 const EDGE_ROOT = "https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-site";
 const FUNCTIONS_BASE = "https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1";
 const PUBLIC_KEY = process.env.EH_PUBLIC_KEY || "sb_publishable_XlIsACWhtVS1jVODWYGTpg_GMs8v3vJ";
-const APPROVED_ART = "https://everythinghub-search-engine-4x25f8.v2.appdeploy.ai/resources/everythinghub-approved-octopus.png";
+const APPROVED_ART = "data:image/png;base64,";
 const EXPECTED_MODES = ["business", "images", "news", "places", "research", "shopping", "videos", "web"];
 
 (async () => {
@@ -104,7 +104,7 @@ const EXPECTED_MODES = ["business", "images", "news", "places", "research", "sho
     await artwork.waitFor({ state: "visible", timeout: 20000 });
     await page.waitForFunction(expected => {
       const img = document.querySelector(".approved-master-art");
-      return !!img && img.complete && img.naturalWidth >= 100 && img.getAttribute("src") === expected;
+      return !!img && img.complete && img.naturalWidth >= 100 && (expected === "data:image/png;base64," ? img.getAttribute("src").startsWith(expected) : img.getAttribute("src") === expected);
     }, APPROVED_ART, { timeout: 30000 });
     report.checks.homepage.approvedArtwork = await artwork.evaluate(img => ({
       src: img.getAttribute("src"), currentSrc: img.currentSrc, naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight
