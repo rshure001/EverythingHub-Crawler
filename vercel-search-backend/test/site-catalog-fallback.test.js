@@ -17,7 +17,10 @@ test("public homepage uses only the dedicated free Everything Hub Edge services"
     assert.ok(source.includes("everything-hub-web-search"));
     assert.ok(source.includes("everything-hub-media-search"));
     assert.ok(source.includes("everything-hub-independent-search"));
-    assert.ok(source.includes("https://everythinghub-search-engine-4x25f8.v2.appdeploy.ai/resources/everythinghub-approved-octopus.png"));
+    assert.ok(source.includes('<script src="search.js"></script>'));
+    assert.ok(source.includes("EverythingHubSearch.create"));
+    assert.ok(source.includes("https://raw.githubusercontent.com/rshure001/EverythingHub-Crawler/main/public-search/manifest.json"));
+    assert.ok(!source.includes("appdeploy.ai"));
     assert.ok(source.includes('id="discoverRefresh"'));
     assert.ok(source.includes("EHMediaPreviewPolicy"));
     assert.ok(!source.includes("everythinghub-search-backend.vercel.app"));
@@ -26,8 +29,8 @@ test("public homepage uses only the dedicated free Everything Hub Edge services"
 });
 
 test("homepage crawler search preserves typed catalog previews and uses supported Edge lanes", () => {
-  const start = vercelHomepage.indexOf("async function searchCrawlerIndex(query,offset=0)");
-  const end = vercelHomepage.indexOf("async function searchPublicSources(query)", start);
+  const start = vercelHomepage.indexOf("async function searchCrawlerIndex(query,offset=0,mode=selectedMode)");
+  const end = vercelHomepage.indexOf("async function searchPublicSources(query,mode=selectedMode)", start);
   assert.ok(start >= 0 && end > start);
   const search = vercelHomepage.slice(start, end);
   assert.ok(search.includes("everything-hub-web-search"));
@@ -41,7 +44,7 @@ test("homepage crawler search preserves typed catalog previews and uses supporte
   const apiEnd = vercelHomepage.indexOf("const mediaAllowed=", apiStart);
   assert.ok(apiStart >= 0 && apiEnd > apiStart);
   const api = vercelHomepage.slice(apiStart, apiEnd);
-  assert.ok(api.includes("searchCrawlerIndex(q,offset)"));
+  assert.ok(api.includes("searchCrawlerIndex(q,offset,mode)"));
   assert.ok(!api.includes("everythinghub-search-backend.vercel.app"));
 });
 
