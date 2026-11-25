@@ -35,11 +35,11 @@ jobs:
           const html = fs.readFileSync("/tmp/home.html", "utf8");
           const headers = fs.readFileSync("/tmp/home.headers", "utf8").toLowerCase();
           if (!headers.includes("content-type: text/html")) throw new Error("Homepage did not return HTML content type");
-          if (!headers.includes("x-eh-release: edge-homepage-v3-supabase-r3")) throw new Error("Unexpected live Edge homepage release");
+          if (!headers.includes("x-eh-release: edge-homepage-v3-supabase-r4")) throw new Error("Unexpected live Edge homepage release");
           const required = [
             "<title>Everything Hub — Everything within reach</title>",
             'class="approved-master-art"',
-            "https://everythinghub-search-engine-4x25f8.v2.appdeploy.ai/resources/everythinghub-approved-octopus.png",
+            "https://raw.githubusercontent.com/rshure001/EverythingHub-Crawler/main/assets/everythinghub-approved.png",
             'id="search"',
             'id="q"',
             "Top Stories",
@@ -67,6 +67,21 @@ jobs:
             categories: 8,
             searchEndpoint: "Supabase Edge Function"
           }, null, 2));
+          NODE
+      - name: Verify the approved artwork is served from the free GitHub asset
+        env:
+          ART_URL: https://raw.githubusercontent.com/rshure001/EverythingHub-Crawler/main/assets/everythinghub-approved.png
+        run: |
+          set -euo pipefail
+          curl --silent --show-error --location --fail --max-time 30 "$ART_URL" -o /tmp/approved-art.png
+          node <<'NODE'
+          const fs = require("node:fs");
+          const b = fs.readFileSync("/tmp/approved-art.png");
+          const png = Buffer.from([137,80,78,71,13,10,26,10]);
+          if (b.length < 100000 || !b.subarray(0,8).equals(png)) throw new Error("Approved GitHub artwork is missing or is not a valid PNG");
+          const width = b.readUInt32BE(16), height = b.readUInt32BE(20);
+          if (width < 500 || height < 300) throw new Error("Approved artwork dimensions are unexpectedly small: " + width + "x" + height);
+          console.log(JSON.stringify({status:"approved_artwork_http_download_ok",bytes:b.length,width,height},null,2));
           NODE
       - name: Verify representative live searches through the free Edge Function
         run: |
