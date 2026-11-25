@@ -82,7 +82,8 @@ Deno.serve((req: Request) => {
       if(rendered) body=rendered; else {body="Not found";type="text/plain; charset=utf-8";status=404;}
     }
   }
-  const rootPath = new URL(ROOT).pathname.replace(/\\/+$/, "");
+  const rootPathRaw = new URL(ROOT).pathname;
+  const rootPath = rootPathRaw.endsWith("/") ? rootPathRaw.slice(0, -1) : rootPathRaw;
   if(path === rootPath || path === rootPath + "/index.html" || path === "/") { body=html; type="text/html; charset=utf-8"; status=200; }
   const responseHeaders = new Headers();
   responseHeaders.set("content-type", type);
