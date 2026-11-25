@@ -10,6 +10,7 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+  id-token: write
 concurrency:
   group: everything-hub-static-publish
   cancel-in-progress: true
@@ -19,21 +20,28 @@ jobs:
     timeout-minutes: 10
     env:
       PUBLISHER_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-static-publisher
-      PUBLISHER_USER_JWT: ${{ secrets.SUPABASE_PUBLISHER_USER_JWT }}
     steps:
       - uses: actions/checkout@v4
-      - name: Require a signed-in publisher JWT before network access
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Request short-lived GitHub Actions publishing identity
         run: |
           set -euo pipefail
-          if [ -z "$PUBLISHER_USER_JWT" ]; then
-            echo "::error::Missing GitHub Actions secret SUPABASE_PUBLISHER_USER_JWT. Add a fresh signed-in Supabase user access token to repository Actions secrets; do not paste it into chat."
-            exit 1
-          fi
-          if [[ ! "$PUBLISHER_USER_JWT" =~ ^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$ ]]; then
-            echo "::error::SUPABASE_PUBLISHER_USER_JWT is present but is not JWT-shaped. No token value was printed."
-            exit 1
-          fi
-          echo "Publisher JWT is present and JWT-shaped; token value withheld."
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const endpoint=new URL(process.env.ACTIONS_ID_TOKEN_REQUEST_URL);
+          endpoint.searchParams.set("audience","supabase-static-publisher");
+          const response=await fetch(endpoint,{headers:{Authorization:"Bearer "+process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN}});
+          if(!response.ok)throw new Error("GitHub OIDC token request failed: "+response.status);
+          const data=await response.json();
+          if(typeof data.value!=="string"||data.value.split(".").length!==3)throw new Error("GitHub did not return a valid OIDC token");
+          const segment=data.value.split(".")[1].replace(/-/g,"+").replace(/_/g,"/");
+          const payload=JSON.parse(Buffer.from(segment,"base64").toString("utf8"));
+          if(payload.repository!=="rshure001/EverythingHub-Crawler"||payload.ref!=="refs/heads/main"||payload.sha!==process.env.GITHUB_SHA)throw new Error("GitHub OIDC claims do not match the expected repository, branch, and commit");
+          fs.writeFileSync("/tmp/github-oidc-token",data.value,{mode:0o600});
+          console.log(JSON.stringify({repository:payload.repository,ref:payload.ref,workflow_ref:payload.workflow_ref,sha:payload.sha,event_name:payload.event_name,audience:payload.aud},null,2));
+          NODE
       - name: Read-only publisher storage preflight
         run: |
           set -euo pipefail
@@ -47,8 +55,9 @@ jobs:
         id: publish
         run: |
           set -euo pipefail
+          TOKEN="$(cat /tmp/github-oidc-token)"
           curl --silent --show-error --max-time 45 -X POST "$PUBLISHER_URL" \
-            -H "Authorization: Bearer $PUBLISHER_USER_JWT" \
+            -H "Authorization: Bearer $TOKEN" \
             -H "Content-Type: application/json" \
             --data '{"sha":"'"$GITHUB_SHA"'"}' -o /tmp/publish.json -w 'HTTP %{http_code}\n'
           node --input-type=module <<'NODE'
@@ -57,7 +66,7 @@ jobs:
           if(d.status!=="published"||!d.url||!d.searchUrl||!Number.isInteger(d.bytes)||!Number.isInteger(d.searchBytes))throw new Error("Publisher did not confirm both assets: "+JSON.stringify(d));
           fs.appendFileSync(process.env.GITHUB_OUTPUT,'url='+d.url+'\n');
           fs.appendFileSync(process.env.GITHUB_OUTPUT,'search_url='+d.searchUrl+'\n');
-          console.log(JSON.stringify({status:d.status,url:d.url,searchUrl:d.searchUrl,bytes:d.bytes,searchBytes:d.searchBytes,commitSha:d.commitSha},null,2));
+          console.log(JSON.stringify({status:d.status,url:d.url,searchUrl:d.searchUrl,bytes:d.bytes,searchBytes:d.searchBytes,commitSha:d.commitSha,publisher:d.publisher},null,2));
           NODE
       - name: Verify published HTML and JavaScript assets
         env:
