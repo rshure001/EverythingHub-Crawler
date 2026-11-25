@@ -11,11 +11,11 @@ WORKFLOW_PATH = (
 
 
 class ProductionBrowserWorkflowContractTests(unittest.TestCase):
-    def test_browser_check_runs_after_successful_catalog_publisher(self):
+    def test_legacy_appdeploy_browser_check_is_manual_only(self):
         workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
-        self.assertIn('workflows: ["Publish and verify Everything Hub — in-house Supabase route"]', workflow)
-        self.assertIn("types: [completed]", workflow)
-        self.assertIn("branches: [main]", workflow)
+        self.assertIn("name: Legacy AppDeploy browser acceptance — manual only", workflow)
+        self.assertIn("on:\\n  workflow_dispatch:", workflow)
+        self.assertNotIn("workflow_run:", workflow)
         self.assertNotIn("APPDEPLOY_ACCEPTANCE_ENABLED", workflow)
         self.assertIn("TARGET_URL: https://everythinghub-search-engine-4x25f8.v2.appdeploy.ai/", workflow)
         self.assertIn("everythinghub-production-*.png", workflow)
@@ -67,10 +67,24 @@ class ProductionBrowserWorkflowContractTests(unittest.TestCase):
         self.assertIn('answer: "Research route verified; paid AI execution skipped."', workflow)
         self.assertNotIn("await route.abort();", workflow)
 
-    def test_catalog_updates_use_publisher_completion_trigger(self):
+    def test_legacy_browser_check_is_not_triggered_by_catalog_data_changes(self):
         workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+        self.assertIn("on:\\n  workflow_dispatch:", workflow)
         self.assertNotIn('"public-search/**"', workflow)
-        self.assertIn('vercel-homepage/**', workflow)
+        self.assertNotIn('vercel-homepage/**', workflow)
+
+    def test_free_fallback_acceptance_uses_the_existing_vercel_project(self):
+        fallback = (
+            Path(__file__).resolve().parents[1]
+            / ".github"
+            / "workflows"
+            / "eh-free-fallback-acceptance.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn("workflow_dispatch:", fallback)
+        self.assertIn("TARGET_URL: https://everythinghub-homepage-fixed.vercel.app/", fallback)
+        self.assertIn("scripts/everything-hub-browser-check.cjs", fallback)
+        self.assertIn('LIVE_EDGE: "0"', fallback)
+        self.assertIn("npx playwright install --with-deps chromium", fallback)
 
     def test_free_fallback_discloses_partial_query_scan_coverage(self):
         homepage = (
