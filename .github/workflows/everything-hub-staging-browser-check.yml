@@ -80,14 +80,15 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Wait for the newly deployed public Edge homepage
         env:
-          TARGET_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-site
-          EXPECTED_RELEASE: edge-homepage-v3-supabase
+          TARGET_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-site?eh_cache_bust=${{ github.run_id }}
+          EXPECTED_RELEASE: edge-homepage-v3-supabase-r2
         run: |
           for attempt in $(seq 1 45); do
             curl -fsS -D /tmp/eh-headers "$TARGET_URL" -o /tmp/eh-homepage.html || true
             release=$(awk 'BEGIN{IGNORECASE=1} /^x-eh-release:/ {gsub("\r","",$2); print $2}' /tmp/eh-headers 2>/dev/null | tail -n 1)
-            if [ "$release" = "$EXPECTED_RELEASE" ]; then
-              echo "Live Edge release confirmed: $release"
+            content_type=$(awk 'BEGIN{IGNORECASE=1} /^content-type:/ {sub(/^[^:]*:[[:space:]]*/, ""); gsub("\r",""); print; exit}' /tmp/eh-headers 2>/dev/null)
+            if [ "$release" = "$EXPECTED_RELEASE" ] && [[ "$content_type" == text/html* ]] && grep -qi 'approved-master-art' /tmp/eh-homepage.html; then
+              echo "Live Edge HTML and approved artwork confirmed: $release ($content_type)"
               exit 0
             fi
             echo "Waiting for Edge release; observed: ${release:-not deployed}"
@@ -98,7 +99,7 @@ jobs:
           exit 1
       - name: Test the actual public website at desktop and mobile widths
         env:
-          TARGET_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-site
+          TARGET_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-site?eh_cache_bust=${{ github.run_id }}
           LIVE_EDGE: "1"
           EH_PUBLIC_KEY: sb_publishable_XlIsACWhtVS1jVODWYGTpg_GMs8v3vJ
         run: node scripts/everything-hub-browser-check.cjs
