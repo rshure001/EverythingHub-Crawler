@@ -133,10 +133,14 @@ def validate_query_index(
         for shard_index in expected_shard_indexes
     ):
         errors.append("query-index source references a page-shard ordinal outside the verified manifest")
-    expected_prefixes = {
-        hashlib.sha256(token.encode("utf-8")).hexdigest()[:2]
-        for token in expected_postings
-    }
+    expected_postings_by_prefix: dict[str, dict[str, list[list[int]]]] = {}
+    for token in sorted(expected_postings):
+        prefix = hashlib.sha256(token.encode("utf-8")).hexdigest()[:2]
+        expected_postings_by_prefix.setdefault(prefix, {})[token] = [
+            [shard_index, page_hits]
+            for shard_index, page_hits in sorted(expected_postings[token].items())
+        ]
+    expected_prefixes = set(expected_postings_by_prefix)
 
     seen_files: set[str] = set()
     seen_prefixes: set[str] = set()
@@ -209,14 +213,10 @@ def validate_query_index(
             errors.append(f"query-index shard schema or item count is invalid: {name}")
             continue
 
-        expected_for_prefix = {
-            token: [
-                [shard_index, page_hits]
-                for shard_index, page_hits in sorted(expected_postings[token].items())
-            ]
-            for token in sorted(expected_postings)
-            if hashlib.sha256(token.encode("utf-8")).hexdigest()[:2] == prefix
-        }
+        # Build the prefix-filtered expected postings once per prefix. Re-scanning
+        # every token for every one of the 256 possible prefix shards made
+        # validation quadratic in the token count on large catalogs.
+        expected_for_prefix = expected_postings_by_prefix.get(prefix, {})
         if tokens != expected_for_prefix:
             errors.append(f"query-index postings do not match verified page shards: {name}")
 
