@@ -83,12 +83,14 @@ Deno.serve((req: Request) => {
   }
   const rootPathRaw = new URL(ROOT).pathname;
   const rootPath = rootPathRaw.endsWith("/") ? rootPathRaw.slice(0, -1) : rootPathRaw;
-  if(path === rootPath || path === rootPath + "/index.html" || path === "/") { body=html; type="text/html; charset=utf-8"; status=200; }
+  if(path === rootPath || path === rootPath + "/index.html" || path === "/") {
+    return Response.redirect("https://cdn.jsdelivr.net/gh/rshure001/EverythingHub-Crawler@main/site/index.html", 302);
+  }
   const responseHeaders = {
     "Content-Type": type,
     "Cache-Control": "no-store",
     "X-Content-Type-Options": "nosniff",
-    "X-EH-Release": "edge-homepage-v3-supabase-r4"
+    "X-EH-Release": "edge-homepage-v3-cdn-redirect"
   };
   return new Response(req.method==="HEAD" ? null : body,{status,headers:responseHeaders});
 });

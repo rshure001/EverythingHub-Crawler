@@ -1,12 +1,5 @@
-name: Publish and verify Everything Hub — free Supabase Storage route
+name: Optional Supabase Storage publisher — paused during database recovery
 on:
-  push:
-    branches: [main]
-    paths:
-      - "site/index.html"
-      - "site/search.js"
-      - "supabase/functions/everything-hub-static-publisher/index.ts"
-      - ".github/workflows/everything-hub-publish-and-verify.yml"
   workflow_dispatch:
 permissions:
   contents: read

@@ -1,4 +1,4 @@
-name: Everything Hub free Supabase Storage and catalog API diagnostic
+name: Everything Hub free CDN and legacy URL redirect diagnostic
 on:
   workflow_dispatch:
 permissions:
@@ -8,39 +8,36 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      SITE_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/storage/v1/object/public/everythinghub-public-site/index.html
-      SEARCH_JS_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/storage/v1/object/public/everythinghub-public-site/search.js
-      SEARCH_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-web-search
-      API_KEY: sb_publishable_XlIsACWhtVS1jVODWYGTpg_GMs8v3vJ
+      LEGACY_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-site/
+      CDN_URL: https://cdn.jsdelivr.net/gh/rshure001/EverythingHub-Crawler@main/site/index.html
+      SEARCH_JS_URL: https://cdn.jsdelivr.net/gh/rshure001/EverythingHub-Crawler@main/site/search.js
+      MANIFEST_URL: https://raw.githubusercontent.com/rshure001/EverythingHub-Crawler/main/public-search/manifest.json
     steps:
       - uses: actions/checkout@v4
-      - name: Verify public Storage homepage and MIME type
+      - name: Verify the existing homepage URL redirects to the free CDN
         run: |
           set -euo pipefail
-          code="$(curl --silent --show-error --location --max-time 30 -D /tmp/home.headers -o /tmp/home.html -w '%{http_code}' "$SITE_URL")"
+          code="$(curl --silent --show-error --max-time 30 -D /tmp/redirect.headers -o /dev/null -w '%{http_code}' "$LEGACY_URL")"
+          test "$code" = "302"
+          grep -Eiq '^location: https://cdn.jsdelivr.net/gh/rshure001/EverythingHub-Crawler@main/site/index.html' /tmp/redirect.headers
+      - name: Verify the CDN serves the approved homepage as HTML
+        run: |
+          set -euo pipefail
+          code="$(curl --silent --show-error --location --max-time 45 -D /tmp/home.headers -o /tmp/home.html -w '%{http_code}' "$CDN_URL")"
           test "$code" = "200"
           grep -Eiq '^content-type: *text/html' /tmp/home.headers
+          cmp -s site/index.html /tmp/home.html
           for needle in 'class="approved-master-art"' 'data:image/png;base64,' 'id="search"' 'id="q"' 'src="search.js"' 'data-mode="web"' 'data-mode="news"' 'data-mode="images"' 'data-mode="videos"' 'data-mode="shopping"' 'data-mode="places"' 'data-mode="business"' 'data-mode="research"'; do
             grep -Fqi "$needle" /tmp/home.html || { echo "Missing homepage feature: $needle"; exit 1; }
           done
-      - name: Verify the public search client is served as JavaScript
+      - name: Verify the CDN serves the client search script
         run: |
           set -euo pipefail
           curl --silent --show-error --location --fail --max-time 30 -D /tmp/search.headers "$SEARCH_JS_URL" -o /tmp/search.js
           cmp -s site/search.js /tmp/search.js
           grep -Eiq '^content-type: *application/javascript' /tmp/search.headers
-      - name: Verify catalog preview API contract
+      - name: Verify the public crawler manifest is available
         run: |
           set -euo pipefail
-          for query in Rolex "Las Vegas" NASA; do
-            safe="$(printf '%s' "$query" | tr '[:upper:] ' '[:lower:]_')"
-            code="$(curl --silent --show-error --location --max-time 35 -G "$SEARCH_URL" -H "apikey: $API_KEY" -H "accept: application/json" --data-urlencode "q=$query" --data-urlencode "limit=10" --data-urlencode "offset=0" -o "/tmp/search-$safe.json" -w '%{http_code}')"
-            test "$code" = "200"
-            QUERY="$query" FILE="/tmp/search-$safe.json" node <<'NODE'
-          const fs=require("node:fs"),q=process.env.QUERY,data=JSON.parse(fs.readFileSync(process.env.FILE,"utf8"));
-          if(!Array.isArray(data.results)||!Array.isArray(data.catalogResults))throw new Error(q+": catalog API response contract missing arrays");
-          console.log(JSON.stringify({query:q,webResults:data.results.length,catalogResults:data.catalogResults.length},null,2));
-          NODE
-          done
-      - name: Verify the browser search client accepts the current manifest
-        run: cd public-search && node test-search.js
+          curl --silent --show-error --location --fail --max-time 30 "$MANIFEST_URL" -o /tmp/manifest.json
+          node -e "const m=require('/tmp/manifest.json'); if(!Array.isArray(m.shards)||!m.shards.length) process.exit(1); console.log(JSON.stringify({shards:m.shards.length,pageCount:m.pageCount||m.totalPages||null}))"
