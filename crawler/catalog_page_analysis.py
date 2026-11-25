@@ -29,7 +29,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_INDEX = ROOT / "data" / "index.json"
 DEFAULT_OUTPUT = ROOT / "data" / "page-derived-catalogs"
 DEFAULT_SOURCE_POLICY_REVIEWS = ROOT / "data" / "source-policy-reviews.json"
-ANALYZER_VERSION = 21
+ANALYZER_VERSION = 22
 TRACKING_KEYS = {"fbclid", "gclid", "dclid", "mc_cid", "mc_eid", "ref", "source"}
 STOP_TOKENS = {
     "the", "and", "for", "with", "from", "our", "your", "all", "new", "home", "page",
@@ -4003,6 +4003,11 @@ def validate_outputs(output_dir: Path, progress: bool = False) -> dict:
                     or (previous_record_identity_id is not None and record_id <= previous_record_identity_id)
                     or item.get("identity_type") != "record"
                     or item.get("catalog_id") != stable_id("record-catalog", record_id)
+                    or item.get("record_catalog_id") != stable_id("record-catalog", record_id)
+                    or item.get("owner_record_id") != record_id
+                    or item.get("catalog_kind") != "record_related_items"
+                    or item.get("membership_mode") != "virtual_shared_catalog_references"
+                    or item.get("shared_catalog_ids") != sorted(set(record.get("catalog_ids", [])))
                     or item.get("catalog_id") in registry_catalog_ids
                     or item.get("source_key") != "__record__|" + record_id
                     or item.get("record_ids") != [record_id]
@@ -4231,12 +4236,23 @@ def validate_outputs(output_dir: Path, progress: bool = False) -> dict:
         raise ValueError("source-page catalog coverage metrics are missing or invalid")
     if with_catalogs + without_catalogs != eligible_page_count or multiple_catalogs > with_catalogs:
         raise ValueError("source-page catalog coverage metrics do not match eligible pages")
+    expected_shared_catalog_references = sum(
+        len(set(record.get("catalog_ids", []))) for record in records
+    )
     if (
         metrics.get("page_owned_identity_catalogs") != expected_page_identity_count
         or metrics.get("record_owned_identity_catalogs") != expected_record_identity_count
         or metrics.get("identity_catalogs_total") != expected_page_identity_count + expected_record_identity_count
     ):
         raise ValueError("identity sidecar metrics do not match validated registries")
+    if (
+        metrics.get("record_catalog_registry_valid") is not True
+        or metrics.get("record_catalogs_expected") != expected_record_identity_count
+        or metrics.get("record_catalog_shared_references") != expected_shared_catalog_references
+        or metrics.get("record_related_catalogs") != expected_record_identity_count
+        or metrics.get("record_related_catalog_shared_catalog_references") != expected_shared_catalog_references
+    ):
+        raise ValueError("record-related catalog validation metrics do not match the persisted record registry")
     if (
         not search_index_prefixes
         or metrics.get("search_index_tokens") != len(search_index_tokens)
