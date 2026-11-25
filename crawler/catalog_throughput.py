@@ -115,10 +115,12 @@ def record_throughput(report_path: Path, baseline_path: Path) -> dict[str, Any]:
         if elapsed > 0:
             minutes = elapsed / 60.0
             report["throughput"] = {
+                "measurement": "persisted_count_delta_over_wall_clock_interval",
                 "basis": "persisted cumulative count deltas divided by elapsed wall-clock minutes",
-                "pages_per_minute": round(deltas.get("pages_analyzed", 0) / minutes, 4),
-                "catalogs_per_minute": round(deltas.get("unique_catalogs_discovered", 0) / minutes, 4),
-                "records_per_minute": round(deltas.get("unique_records", 0) / minutes, 4),
+                "pages_per_minute": round(max(0, deltas.get("pages_analyzed", 0)) / minutes, 4),
+                "catalogs_per_minute": round(max(0, deltas.get("unique_catalogs_discovered", 0)) / minutes, 4),
+                "records_per_minute": round(max(0, deltas.get("unique_records", 0)) / minutes, 4),
+                "negative_count_deltas_excluded": True,
             }
             report["throughput_status"] = "measured"
             report.pop("throughput_note", None)
