@@ -45,7 +45,10 @@ jobs:
       - name: Read-only publisher storage preflight
         run: |
           set -euo pipefail
-          curl --silent --show-error --fail --max-time 20 "$PUBLISHER_URL?probe=publisher-diagnostic" -o /tmp/probe.json
+          code="$(curl --silent --show-error --max-time 20 "$PUBLISHER_URL?probe=publisher-diagnostic" -o /tmp/probe.json -w '%{http_code}')"
+          echo "Publisher probe HTTP status: $code"
+          cat /tmp/probe.json
+          test "$code" = "200"
           node <<'NODE'
           const fs=require("node:fs"),d=JSON.parse(fs.readFileSync("/tmp/probe.json","utf8"));
           if(!["ready","bucket_missing"].includes(d.status)||d.publishOnProbe!==false)throw new Error("Publisher storage preflight failed: "+JSON.stringify(d));

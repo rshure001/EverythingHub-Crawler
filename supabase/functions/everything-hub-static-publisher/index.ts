@@ -88,7 +88,7 @@ async function verifyGitHubActionsToken(token: string, expectedSha: string) {
   }
 
   const authHeader = req.headers.get("Authorization") || "";
-  const token = authHeader.replace(/^Bearer\\s+/i, "");
+  const token = authHeader.replace(/^Bearer\s+/i, "");
   if (!token) return Response.json({ error: "GitHub Actions OIDC identity required." }, { status: 401 });
   const publishRequest = await req.json().catch(() => ({}));
   const sha = typeof publishRequest.sha === "string" && /^[0-9a-f]{40}$/i.test(publishRequest.sha) ? publishRequest.sha : "";
