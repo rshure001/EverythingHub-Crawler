@@ -31,7 +31,7 @@ EH_DB_PASSWORD=$dbPassword
 EH_SEARCH_API_TOKEN=$apiToken
 DATABASE_URL=postgresql://everythinghub:$dbPassword@127.0.0.1:55432/everythinghub
 "@
-  [System.IO.File]::WriteAllText($EnvFile, $envText, (New-Object System.Text.UTF8Encoding($false)))
+  [System.IO.File]::WriteAllText($EnvFile, $envText, (New-Object -TypeName System.Text.UTF8Encoding -ArgumentList $false))
   Write-Host "Created a private .env with new random credentials (not committed to Git)." -ForegroundColor Green
 } else {
   Write-Host "Existing database/.env found; preserving its credentials." -ForegroundColor Yellow
