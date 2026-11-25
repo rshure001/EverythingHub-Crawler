@@ -31,8 +31,10 @@ jobs:
           sparse-checkout-cone-mode: true
           filter: blob:none
 
-      - name: Configure GitHub Pages
+      - name: Enable and configure GitHub Pages
         uses: actions/configure-pages@v5
+        with:
+          enablement: true
 
       - name: Package the static site
         uses: actions/upload-pages-artifact@v3
