@@ -84,7 +84,9 @@ Deno.serve((req: Request) => {
   const rootPathRaw = new URL(ROOT).pathname;
   const rootPath = rootPathRaw.endsWith("/") ? rootPathRaw.slice(0, -1) : rootPathRaw;
   if(path === rootPath || path === rootPath + "/index.html" || path === "/") {
-    return Response.redirect("https://cdn.jsdelivr.net/gh/rshure001/EverythingHub-Crawler@main/site/index.html", 302);
+    const cdnUrl = new URL("https://cdn.jsdelivr.net/gh/rshure001/EverythingHub-Crawler@main/site/index.html");
+    cdnUrl.searchParams.set("eh_cache_bust", String(Date.now()));
+    return Response.redirect(cdnUrl.toString(), 302);
   }
   const responseHeaders = {
     "Content-Type": type,
