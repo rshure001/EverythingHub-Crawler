@@ -92,7 +92,7 @@ Deno.serve((req: Request) => {
     "Content-Type": type,
     "Cache-Control": "no-store",
     "X-Content-Type-Options": "nosniff",
-    "X-EH-Release": "edge-homepage-v3-cdn-redirect"
+    "X-EH-Release": "edge-homepage-v3-supabase-r4"
   };
   return new Response(req.method==="HEAD" ? null : body,{status,headers:responseHeaders});
 });
