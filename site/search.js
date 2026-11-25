@@ -425,6 +425,152 @@
     return payload.pages;
   }
 
+  const QUERY_STOP_TOKENS = new Set([
+    "a", "an", "and", "are", "as", "at", "be", "by", "for", "from",
+    "in", "into", "is", "it", "of", "on", "or", "our", "the", "to",
+    "with", "your", "you", "we", "this", "that", "these", "those"
+  ]);
+  const MAX_QUERY_INDEX_SHARDS = 256;
+  const MAX_QUERY_INDEX_SHARD_BYTES = 2000000;
+  const MAX_QUERY_INDEX_SHARD_UNCOMPRESSED_BYTES = 8000000;
+
+  async function loadQueryDirectedCatalog(manifest, manifestUrl, fetcher, options) {
+    const descriptor = manifest.query_index;
+    if (!descriptor || descriptor.version !== 1 ||
+        !Number.isSafeInteger(descriptor.shard_count) ||
+        descriptor.shard_count < 1 || descriptor.shard_count > MAX_QUERY_INDEX_SHARDS ||
+        !Array.isArray(descriptor.shards) || descriptor.shards.length !== descriptor.shard_count) {
+      throw new Error("Query-index manifest metadata is invalid.");
+    }
+    const terms = [...new Set(tokenize(String(options.query || "").slice(0, 240)))]
+      .filter(term => !QUERY_STOP_TOKENS.has(term)).slice(0, 12);
+    if (!terms.length) throw new Error("Search query has no indexable terms.");
+
+    const prefixByTerm = new Map();
+    for (const term of terms) {
+      const digest = await root.crypto.subtle.digest("SHA-256", new TextEncoder().encode(term));
+      const prefix = Array.from(new Uint8Array(digest)).slice(0, 1)
+        .map(value => value.toString(16).padStart(2, "0")).join("");
+      prefixByTerm.set(term, prefix);
+    }
+
+    const entries = new Map();
+    for (const entry of descriptor.shards) {
+      if (!entry || typeof entry.file !== "string" ||
+          !/^query-index\/[0-9a-f]{2}\.json\.gz$/.test(entry.file) ||
+          !Number.isSafeInteger(entry.bytes) || entry.bytes < 2 ||
+          entry.bytes > MAX_QUERY_INDEX_SHARD_BYTES ||
+          !Number.isSafeInteger(entry.uncompressed_bytes) ||
+          entry.uncompressed_bytes < 2 ||
+          entry.uncompressed_bytes > MAX_QUERY_INDEX_SHARD_UNCOMPRESSED_BYTES ||
+          typeof entry.sha256 !== "string" || !/^[a-f0-9]{64}$/i.test(entry.sha256)) {
+        throw new Error("Query-index shard metadata is invalid.");
+      }
+      const prefix = entry.file.slice("query-index/".length, -".json.gz".length);
+      if (entries.has(prefix)) throw new Error("Query-index contains duplicate prefix shards.");
+      entries.set(prefix, entry);
+    }
+
+    const indexByPrefix = new Map();
+    for (const prefix of new Set(prefixByTerm.values())) {
+      const entry = entries.get(prefix);
+      if (!entry) throw new Error("Query-index prefix shard is missing: " + prefix);
+      const bytes = await fetchBytes(new URL(entry.file, manifestUrl).href, fetcher);
+      if (bytes.byteLength !== entry.bytes) throw new Error(entry.file + ": byte length mismatch.");
+      if ((await sha256Hex(bytes)).toLowerCase() !== entry.sha256.toLowerCase()) {
+        throw new Error(entry.file + ": SHA-256 mismatch.");
+      }
+      const decoded = await decodeGzip(bytes, MAX_QUERY_INDEX_SHARD_UNCOMPRESSED_BYTES);
+      if (decoded.byteLength !== entry.uncompressed_bytes) {
+        throw new Error(entry.file + ": uncompressed byte length mismatch.");
+      }
+      const payload = JSON.parse(new TextDecoder().decode(decoded));
+      if (!payload || payload.version !== 1 || payload.prefix !== prefix ||
+          !payload.tokens || typeof payload.tokens !== "object" || Array.isArray(payload.tokens) ||
+          Object.keys(payload.tokens).length !== entry.items) {
+        throw new Error(entry.file + ": query-index schema or token count mismatch.");
+      }
+      indexByPrefix.set(prefix, payload.tokens);
+    }
+
+    let candidateShardIds = null;
+    for (const term of terms) {
+      const tokens = indexByPrefix.get(prefixByTerm.get(term)) || {};
+      const postings = tokens[term];
+      if (!Array.isArray(postings)) {
+        candidateShardIds = new Set();
+        break;
+      }
+      const ids = new Set();
+      let previous = -1;
+      for (const pair of postings) {
+        if (!Array.isArray(pair) || pair.length !== 2 ||
+            !Number.isSafeInteger(pair[0]) || pair[0] < 0 ||
+            pair[0] >= manifest.shards.length ||
+            !Number.isSafeInteger(pair[1]) || pair[1] < 1 ||
+            pair[0] <= previous) {
+          throw new Error("Query-index postings contain an invalid or unsorted page-shard reference.");
+        }
+        previous = pair[0];
+        ids.add(pair[0]);
+      }
+      candidateShardIds = candidateShardIds === null
+        ? ids : new Set([...candidateShardIds].filter(id => ids.has(id)));
+      if (!candidateShardIds.size) break;
+    }
+
+    const selectedIds = [...(candidateShardIds || new Set())].sort((a, b) => a - b).slice(0, 48);
+    const pages = [];
+    const seenUrls = new Set();
+    const onProgress = typeof options.onProgress === "function" ? options.onProgress : null;
+    let loadedBytes = 0;
+    for (let position = 0; position < selectedIds.length; position++) {
+      const shardIndex = selectedIds[position];
+      const entry = manifest.shards[shardIndex];
+      if (!entry || !Number.isSafeInteger(entry.bytes) || entry.bytes < 1 ||
+          entry.bytes > MAX_SHARD_BYTES || !/^[a-f0-9]{64}$/i.test(String(entry.sha256 || ""))) {
+        throw new Error("Selected page-shard metadata is invalid.");
+      }
+      const bytes = await fetchBytes(new URL(entry.file, manifestUrl).href, fetcher);
+      if (bytes.byteLength !== entry.bytes) throw new Error(entry.file + ": byte length mismatch.");
+      if ((await sha256Hex(bytes)).toLowerCase() !== entry.sha256.toLowerCase()) {
+        throw new Error(entry.file + ": SHA-256 mismatch.");
+      }
+      const decoded = await decodeGzip(bytes, MAX_SHARD_UNCOMPRESSED_BYTES);
+      if (decoded.byteLength !== (entry.uncompressed_bytes ?? entry.bytes)) {
+        throw new Error(entry.file + ": uncompressed byte length mismatch.");
+      }
+      const payload = JSON.parse(new TextDecoder().decode(decoded));
+      if (!payload || payload.version !== 1 || !Array.isArray(payload.pages) ||
+          payload.pages.length !== entry.pages) {
+        throw new Error(entry.file + ": page count or schema mismatch.");
+      }
+      for (const page of payload.pages) {
+        const url = page && canonicalHttpUrl(page.url);
+        if (!url || page.robots_allowed === false || seenUrls.has(url)) {
+          throw new Error(entry.file + ": invalid, robots-denied, or duplicate page.");
+        }
+        seenUrls.add(url);
+        pages.push(page);
+      }
+      loadedBytes += bytes.byteLength;
+      if (onProgress) {
+        try {
+          onProgress({
+            loadedShards: position + 1,
+            totalShards: selectedIds.length,
+            loadedBytes,
+            totalBytes: selectedIds.reduce((sum, id) => sum + manifest.shards[id].bytes, 0),
+            queryDirected: true
+          });
+        } catch {
+          // Progress callbacks must not interrupt integrity validation.
+        }
+      }
+    }
+    return { pages, selectedShardCount: selectedIds.length };
+  }
+
   async function create(options) {
     const opts = options || {};
     const fetcher = getFetcher(opts);
@@ -449,8 +595,16 @@
     const totals = validateManifest(manifest);
     let pages = null;
     let transport = "shards";
+    let selectedShardCount = manifest.shard_count;
 
-    if (manifest.catalog_gzip) {
+    if (opts.query && manifest.query_index && !manifest.catalog_gzip) {
+      const selected = await loadQueryDirectedCatalog(manifest, manifestUrl, fetcher, opts);
+      pages = selected.pages;
+      selectedShardCount = selected.selectedShardCount;
+      transport = "query-shards";
+    }
+
+    if (!pages && manifest.catalog_gzip) {
       try {
         pages = await loadGzipCatalog(
           manifest.catalog_gzip,
@@ -472,7 +626,9 @@
     }
 
     return Object.freeze({
-      pageCount: pages.length,
+      pageCount: transport === "query-shards" ? manifest.total_pages : pages.length,
+      candidatePageCount: pages.length,
+      selectedShardCount,
       updatedAt: manifest.updated_at,
       transport,
       search: (query, searchOptions) => rank(pages, query, searchOptions)
