@@ -1135,7 +1135,7 @@ def _build_identity_catalogs(page_rows: list[dict], records, stream_catalogs: bo
         "page_owned_identity_catalogs": page_catalog_count,
         "page_owned_identity_catalogs_with_records": page_catalogs_with_records,
         "page_owned_identity_catalogs_without_records": page_catalog_count - page_catalogs_with_records,
-         "record_owned_identity_catalogs": len(record_map),
+        "record_owned_identity_catalogs": len(record_map),
         "record_related_catalogs": len(record_map),
         "record_related_catalog_shared_catalog_references": sum(
             len({
