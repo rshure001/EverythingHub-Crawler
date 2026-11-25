@@ -7,8 +7,11 @@ on:
       - ".github/workflows/everything-hub-staging-browser-check.yml"
       - "scripts/everything-hub-browser-check.cjs"
       - "site/index.html"
+      - "site/search.js"
       - "vercel-homepage/index.html"
       - "vercel-homepage/media-preview-policy.js"
+      - "vercel-homepage/search.js"
+      - "vercel-homepage/vercel.json"
       - "supabase/functions/everything-hub-site/index.ts"
       - "supabase/functions/everything-hub-homepage-release/index.ts"
       - "supabase/functions/everything-hub-web-search/**"
@@ -66,7 +69,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-  live-edge-browser-check:
+  live-vercel-browser-check:
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
@@ -79,15 +82,15 @@ jobs:
           npm init -y
           npm install --no-save playwright
           npx playwright install --with-deps chromium
-      - name: Wait for the newly deployed public Edge homepage
+      - name: Wait for the newly deployed free Vercel homepage
         env:
-          TARGET_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-homepage-release?eh_cache_bust=${{ github.run_id }}
+          TARGET_URL: https://everythinghub-homepage-fixed.vercel.app/?eh_cache_bust=${{ github.run_id }}
         run: |
           for attempt in $(seq 1 45); do
             curl -fsS -D /tmp/eh-headers "$TARGET_URL" -o /tmp/eh-homepage.html || true
             release=$(awk 'BEGIN{IGNORECASE=1} /^x-eh-release:/ {gsub("\r","",$2); print $2}' /tmp/eh-headers 2>/dev/null | tail -n 1)
             content_type=$(awk 'BEGIN{IGNORECASE=1} /^content-type:/ {sub(/^[^:]*:[[:space:]]*/, ""); gsub("\r",""); print; exit}' /tmp/eh-headers 2>/dev/null)
-            if [[ "$content_type" == text/html* ]] && grep -qi 'approved-master-art' /tmp/eh-homepage.html && grep -q '/functions/v1/everything-hub-homepage-release/assets/everythinghub-approved.png' /tmp/eh-homepage.html; then
+            if [[ "$content_type" == text/html* ]] && grep -qi 'approved-master-art' /tmp/eh-homepage.html && grep -q '/assets/everythinghub-approved.png' /tmp/eh-homepage.html; then
               echo "Live homepage HTML and self-hosted approved artwork confirmed ($content_type)"
               exit 0
             fi
@@ -99,8 +102,8 @@ jobs:
           exit 1
       - name: Test the actual public website at desktop and mobile widths
         env:
-          TARGET_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-homepage-release?eh_cache_bust=${{ github.run_id }}
-          LIVE_EDGE: "1"
+          TARGET_URL: https://everythinghub-homepage-fixed.vercel.app/?eh_cache_bust=${{ github.run_id }}
+          LIVE_EDGE: "0"
           EH_PUBLIC_KEY: sb_publishable_XlIsACWhtVS1jVODWYGTpg_GMs8v3vJ
         run: node scripts/everything-hub-browser-check.cjs
       - name: Upload live desktop and mobile screenshots and test report

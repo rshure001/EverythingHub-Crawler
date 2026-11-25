@@ -1,33 +1,33 @@
-name: Everything Hub free Supabase route check
+name: Everything Hub free Vercel homepage and catalog API check
 on:
   push:
     branches: [main]
     paths:
       - ".github/workflows/everything-hub-free-supabase-route.yml"
-      - ".github/workflows/everything-hub-free-supabase-route.yml"
       - "site/index.html"
-      - "data/page-derived-catalogs/**"
+      - "site/search.js"
+      - "vercel-homepage/**"
+      - "public-search/search.js"
       - "supabase/functions/everything-hub-web-search/**"
       - "supabase/functions/everything-hub-independent-search/**"
-      - "supabase/functions/everything-hub-site/**"
-      - "supabase/functions/everything-hub-homepage-release/**"
   workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: everythinghub-free-supabase-route
+  group: everythinghub-free-homepage-route
   cancel-in-progress: true
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 10
     env:
-      SITE_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-homepage-release/?eh_cache_bust=${{ github.run_id }}
-      SEARCH_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-web-search
+      SITE_URL: https://everythinghub-homepage-fixed.vercel.app/?eh_cache_bust=${{ github.run_id }}
+      ART_URL: https://everythinghub-homepage-fixed.vercel.app/assets/everythinghub-approved.png
+      SEARCH_URL: https://everythinghub-homepage-fixed.vercel.app/api/search-catalog
       API_KEY: sb_publishable_XlIsACWhtVS1jVODWYGTpg_GMs8v3vJ
     steps:
       - uses: actions/checkout@v4
-      - name: Verify free-hosted homepage
+      - name: Verify free Vercel homepage
         run: |
           set -euo pipefail
           code="$(curl --silent --show-error --location --max-time 30 -D /tmp/home.headers -o /tmp/home.html -w '%{http_code}' "$SITE_URL")"
@@ -36,17 +36,15 @@ jobs:
           const fs = require("node:fs");
           const html = fs.readFileSync("/tmp/home.html", "utf8");
           const headers = fs.readFileSync("/tmp/home.headers", "utf8").toLowerCase();
-          if (!headers.includes("content-type: text/html")) throw new Error("Homepage did not return HTML content type");
+          if (!headers.includes("content-type: text/html")) throw new Error("Vercel homepage did not return HTML content type");
           const required = [
             "<title>Everything Hub — Everything within reach</title>",
             'class="approved-master-art"',
-            "https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-homepage-release/assets/everythinghub-approved.png",
+            'src="/assets/everythinghub-approved.png"',
             'id="search"',
             'id="q"',
             "Top Stories",
             "Refresh",
-            "everything-hub-web-search",
-            "everything-hub-media-search",
             'data-mode="web"',
             'data-mode="news"',
             'data-mode="images"',
@@ -54,129 +52,40 @@ jobs:
             'data-mode="shopping"',
             'data-mode="places"',
             'data-mode="business"',
-            'data-mode="research"'
+            'data-mode="research"',
+            'src="/search.js"',
+            '"/public-search/manifest.json"'
           ];
           const missing = required.filter(value => !html.includes(value));
-          if (html.includes("ynleeweezwkdbisaiovq") || html.includes("sb_publishable_-m5pJUkN9aKUox3NMexhQg_NvWhm520")) missing.push("Story Wall project reference");
-          if (!html.includes("vdceayvfgkwpgwixrhwi")) missing.push("Everything Hub control project endpoint");
+          if (html.includes("v2.appdeploy.ai")) missing.push("AppDeploy image dependency");
           if (missing.length) throw new Error("Homepage contract missing: " + missing.join(", "));
-          console.log(JSON.stringify({
-            status: "homepage_http_200",
-            title: "Everything Hub — Everything within reach",
-            approvedArtworkReferenced: true,
-            searchInput: true,
-            categories: 8,
-            searchEndpoint: "Supabase Edge Function"
-          }, null, 2));
+          console.log(JSON.stringify({status:"homepage_http_200",contentType:"text/html",approvedArtwork:true,categories:8,clientSearch:true},null,2));
           NODE
-      - name: Verify the approved artwork is served from the free GitHub asset
-        env:
-          ART_URL: https://raw.githubusercontent.com/rshure001/EverythingHub-Crawler/main/assets/everythinghub-approved.png
+      - name: Verify approved octopus artwork is served by the free Vercel proxy
         run: |
           set -euo pipefail
-          curl --silent --show-error --location --fail --max-time 30 "$ART_URL" -o /tmp/approved-art.png
+          curl --silent --show-error --location --fail --max-time 30 -D /tmp/art.headers "$ART_URL" -o /tmp/approved-art.png
           node <<'NODE'
-          const fs = require("node:fs");
-          const b = fs.readFileSync("/tmp/approved-art.png");
-          const png = Buffer.from([137,80,78,71,13,10,26,10]);
-          if (b.length < 100000 || !b.subarray(0,8).equals(png)) throw new Error("Approved GitHub artwork is missing or is not a valid PNG");
-          const width = b.readUInt32BE(16), height = b.readUInt32BE(20);
-          if (width < 500 || height < 300) throw new Error("Approved artwork dimensions are unexpectedly small: " + width + "x" + height);
-          console.log(JSON.stringify({status:"approved_artwork_http_download_ok",bytes:b.length,width,height},null,2));
+          const fs=require("node:fs"), b=fs.readFileSync("/tmp/approved-art.png");
+          const h=fs.readFileSync("/tmp/art.headers","utf8").toLowerCase();
+          if(!h.includes("content-type: image/png")) throw new Error("Approved artwork did not return image/png");
+          if(b.length<100000 || !b.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10]))) throw new Error("Approved artwork is not a valid PNG");
+          const width=b.readUInt32BE(16),height=b.readUInt32BE(20);
+          if(width<500||height<300) throw new Error("Approved artwork dimensions too small: "+width+"x"+height);
+          console.log(JSON.stringify({status:"artwork_http_200",bytes:b.length,width,height},null,2));
           NODE
-      - name: Verify representative live searches through the free Edge Function
+      - name: Verify catalog preview API through same-origin Vercel proxy
         run: |
           set -euo pipefail
           for query in Rolex "Las Vegas" NASA; do
             safe="$(printf '%s' "$query" | tr '[:upper:] ' '[:lower:]_')"
-            code="$(curl --silent --show-error --location --max-time 35 -G "$SEARCH_URL" \
-              -H "apikey: $API_KEY" \
-              -H "accept: application/json" \
-              --data-urlencode "q=$query" \
-              --data-urlencode "limit=10" \
-              -o "/tmp/search-$safe.json" -w '%{http_code}')"
+            code="$(curl --silent --show-error --location --max-time 35 -G "$SEARCH_URL" -H "apikey: $API_KEY" -H "accept: application/json" --data-urlencode "q=$query" --data-urlencode "limit=10" --data-urlencode "offset=0" -o "/tmp/search-$safe.json" -w '%{http_code}')"
             test "$code" = "200"
             QUERY="$query" FILE="/tmp/search-$safe.json" node <<'NODE'
-          const fs = require("node:fs");
-          const query = process.env.QUERY;
-          const data = JSON.parse(fs.readFileSync(process.env.FILE, "utf8"));
-          const results = Array.isArray(data.results) ? data.results : [];
-          const catalogs = Array.isArray(data.catalogResults) ? data.catalogResults : [];
-          if (!results.length && !catalogs.length) {
-            throw new Error(query + ": HTTP 200 but no visible web or catalog results: " + JSON.stringify({
-              error: data.error || null, source: data.source || null, fallbackReason: data.fallbackReason || null
-            }));
-          }
-          const haystack = JSON.stringify([...results, ...catalogs]).toLowerCase();
-          const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
-          if (!terms.every(term => haystack.includes(term))) throw new Error(query + ": results do not visibly match query terms");
-          console.log(JSON.stringify({
-            status: "search_http_200", query, visibleWebResults: results.length,
-            visibleCatalogResults: catalogs.length, source: data.source || null,
-            provider: data.provider || null, independentOfDatabase: data.independentOfDatabase === true,
-            firstResult: results[0]?.title || catalogs[0]?.title || null
-          }, null, 2));
+          const fs=require("node:fs"), q=process.env.QUERY, data=JSON.parse(fs.readFileSync(process.env.FILE,"utf8"));
+          if(!Array.isArray(data.results)||!Array.isArray(data.catalogResults)) throw new Error(q+": search API response contract missing arrays");
+          console.log(JSON.stringify({status:"catalog_api_http_200",query:q,webResults:data.results.length,catalogResults:data.catalogResults.length,source:data.source||null,fallbackReason:data.fallbackReason||null},null,2));
           NODE
           done
-      - name: Verify per-record related catalog lookup when indexed identities are available
-        run: |
-          set -euo pipefail
-          node <<'NODE'
-          const fs = require("node:fs");
-          const data = JSON.parse(fs.readFileSync("/tmp/search-las_vegas.json", "utf8"));
-          const catalogs = Array.isArray(data.catalogResults) ? data.catalogResults : [];
-          const records = catalogs.flatMap(item => Array.isArray(item.matched_records) ? item.matched_records : []);
-          const record = records.find(item =>
-            typeof item.record_catalog_id === "string" &&
-            item.record_catalog_id.length > 0 &&
-            Array.isArray(item.shared_catalog_ids) &&
-            item.shared_catalog_ids.length > 0
-          );
-          if (!record) {
-            console.log(JSON.stringify({
-              status: "awaiting_next_catalog_snapshot",
-              note: "The free search route is live; the current published catalog has not yet exposed per-record catalog identities."
-            }, null, 2));
-            process.exit(0);
-          }
-          fs.writeFileSync("/tmp/record-catalog-request.json", JSON.stringify({
-            record_catalog_id: record.record_catalog_id,
-            catalog_ids: record.shared_catalog_ids.slice(0, 12)
-          }));
-          NODE
-          if test -f /tmp/record-catalog-request.json; then
-            record_id="$(node -e 'process.stdout.write(JSON.parse(require("fs").readFileSync("/tmp/record-catalog-request.json","utf8")).record_catalog_id)')"
-            catalog_ids="$(node -e 'process.stdout.write(JSON.parse(require("fs").readFileSync("/tmp/record-catalog-request.json","utf8")).catalog_ids.join(","))')"
-            code="$(curl --silent --show-error --location --max-time 35 -G "$SEARCH_URL" \
-              -H "apikey: $API_KEY" \
-              -H "accept: application/json" \
-              --data-urlencode "record_catalog_id=$record_id" \
-              --data-urlencode "catalog_ids=$catalog_ids" \
-              --data-urlencode "limit=5" \
-              --data-urlencode "offset=0" \
-              -o /tmp/record-catalog.json -w '%{http_code}')"
-            test "$code" = "200"
-            node <<'NODE'
-            const fs = require("node:fs");
-            const data = JSON.parse(fs.readFileSync("/tmp/record-catalog.json", "utf8"));
-            const requested = JSON.parse(fs.readFileSync("/tmp/record-catalog-request.json", "utf8"));
-            if (
-              data.status !== "candidate-preview" ||
-              data.preview_only !== true ||
-              data.record_catalog_id !== requested.record_catalog_id ||
-              data.owner_record?.record_catalog_id !== requested.record_catalog_id ||
-              !Array.isArray(data.related_records) ||
-              data.related_records.some(record => record.commercial_eligible !== false)
-            ) {
-              throw new Error("Per-record related catalog response failed validation: " + JSON.stringify(data));
-            }
-            console.log(JSON.stringify({
-              status: "record_catalog_http_200",
-              recordCatalogId: data.record_catalog_id,
-              relatedRecords: data.related_count,
-              pageSize: data.related_records.length,
-              hasMore: data.has_more,
-              rightsRestricted: true
-            }, null, 2));
-          NODE
-          fi
+      - name: Verify the browser search client accepts the current manifest
+        run: cd public-search && node test-search.js

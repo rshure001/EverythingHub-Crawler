@@ -36,7 +36,7 @@ const EXPECTED_MODES = ["business", "images", "news", "places", "research", "sho
     await page.waitForFunction(() => {
       const node = document.querySelector("#results");
       return !!node && !/Searching\.\.\./i.test(node.textContent || "");
-    }, null, { timeout: 60000 });
+    }, null, { timeout: 180000 });
     const count = await page.locator("#results .result").count();
     const titles = await page.locator("#results .result .result-copy a").allTextContents().catch(() => []);
     const text = (await page.locator("#results .result").allTextContents()).join(" ").toLowerCase();

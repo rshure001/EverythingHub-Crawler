@@ -1,6 +1,26 @@
 {
   "rewrites": [
     {
+      "source": "/assets/:path*",
+      "destination": "https://raw.githubusercontent.com/rshure001/EverythingHub-Crawler/main/assets/:path*"
+    },
+    {
+      "source": "/public-search/:path*",
+      "destination": "https://raw.githubusercontent.com/rshure001/EverythingHub-Crawler/main/public-search/:path*"
+    },
+    {
+      "source": "/api/search-catalog",
+      "destination": "https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-web-search"
+    },
+    {
+      "source": "/api/independent-search",
+      "destination": "https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-independent-search"
+    },
+    {
+      "source": "/api/media-search",
+      "destination": "https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-media-search"
+    },
+    {
       "source": "/topics",
       "destination": "https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-site/topics/"
     },
