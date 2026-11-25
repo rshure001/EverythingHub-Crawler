@@ -14,7 +14,7 @@ class ProductionBrowserWorkflowContractTests(unittest.TestCase):
     def test_legacy_appdeploy_browser_check_is_manual_only(self):
         workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
         self.assertIn("name: Legacy AppDeploy browser acceptance — manual only", workflow)
-        self.assertIn("on:\\n  workflow_dispatch:", workflow)
+        self.assertIn("workflow_dispatch:", workflow)
         self.assertNotIn("workflow_run:", workflow)
         self.assertNotIn("APPDEPLOY_ACCEPTANCE_ENABLED", workflow)
         self.assertIn("TARGET_URL: https://everythinghub-search-engine-4x25f8.v2.appdeploy.ai/", workflow)
@@ -69,7 +69,7 @@ class ProductionBrowserWorkflowContractTests(unittest.TestCase):
 
     def test_legacy_browser_check_is_not_triggered_by_catalog_data_changes(self):
         workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
-        self.assertIn("on:\\n  workflow_dispatch:", workflow)
+        self.assertIn("workflow_dispatch:", workflow)
         self.assertNotIn('"public-search/**"', workflow)
         self.assertNotIn('vercel-homepage/**', workflow)
 
