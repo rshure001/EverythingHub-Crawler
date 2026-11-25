@@ -12113,25 +12113,27 @@ async function loadDashboard(){
 loadDashboard();
 
 function functionEndpoint(name){return EH_SUPABASE_URL+'/functions/v1/'+name;}
-let ehSearchEnginePromise=null;
-async function getEverythingHubSearchEngine(){
- if(!ehSearchEnginePromise){
+const ehSearchEnginePromises=new Map();
+async function getEverythingHubSearchEngine(query){
+ const normalized=String(query||'').normalize('NFKC').trim().toLocaleLowerCase();
+ if(!ehSearchEnginePromises.has(normalized)){
   const manifestUrl='https://raw.githubusercontent.com/rshure001/EverythingHub-Crawler/main/public-search/manifest.json';
-  ehSearchEnginePromise=window.EverythingHubSearch.create({
-   manifestUrl,
-   maxParallel:4,
+  const pending=window.EverythingHubSearch.create({
+   manifestUrl,query:normalized,maxParallel:4,
    onProgress:progress=>{
-    out.innerHTML='<p>Searching... loading verified search index '+progress.loadedShards.toLocaleString()+'/'+progress.totalShards.toLocaleString()+' shards</p>';
+    out.innerHTML='<p>Searching... verifying '+progress.loadedShards.toLocaleString()+'/'+progress.totalShards.toLocaleString()+' relevant index shards</p>';
    }
-  }).catch(error=>{ehSearchEnginePromise=null;throw error;});
+  }).catch(error=>{ehSearchEnginePromises.delete(normalized);throw error;});
+  ehSearchEnginePromises.set(normalized,pending);
+  while(ehSearchEnginePromises.size>8)ehSearchEnginePromises.delete(ehSearchEnginePromises.keys().next().value);
  }
- return ehSearchEnginePromise;
+ return ehSearchEnginePromises.get(normalized);
 }
 async function searchCrawlerIndex(query,offset=0,mode=selectedMode){
  const local=location.hostname==='localhost'||location.hostname==='127.0.0.1'||location.hostname==='cdn.jsdelivr.net';
  const lanes={web:null,news:'news',images:'general',videos:'general',shopping:'business',places:'culture',business:'business',research:'science'};
  const [engineResult,catalogResult]=await Promise.allSettled([
-  getEverythingHubSearchEngine(),
+  getEverythingHubSearchEngine(query),
   local?Promise.resolve({catalogResults:[]}):(async()=>{
    const u=new URL(functionEndpoint('everything-hub-web-search'));
    u.searchParams.set('q',query);u.searchParams.set('limit','20');u.searchParams.set('offset',String(offset));
@@ -12144,7 +12146,14 @@ async function searchCrawlerIndex(query,offset=0,mode=selectedMode){
  // A failed or unavailable static-index fetch must not block the independent public search fallback.
  const engine=engineResult.status==='fulfilled'?engineResult.value:null;
  const all=engine?engine.search(query,{limit:50,lane:lanes[mode]||null}):[];
- let results=all.slice(offset,offset+20),count=all.length,indexedPages=engine?.pageCount||0,hasMore=offset+20<all.length;
+ let results=all.slice(offset,offset+20),count=all.length,indexedPages=engine?.candidatePageCount||0,hasMore=offset+20<all.length;
+ const indexScan=engine?{
+  candidateShardCount:engine.selectedShardCount||0,
+  totalCandidateShardCount:engine.totalCandidateShardCount||0,
+  candidatePageCount:engine.candidatePageCount||0,
+  totalCandidatePageCount:engine.totalCandidatePageCount||0,
+  candidateTruncated:Boolean(engine.candidateTruncated)
+ }:null;
  let source='Everything Hub verified public crawler index';
  if(!all.length&&offset===0&&!['images','videos','news'].includes(mode)){
   try{
@@ -12166,7 +12175,8 @@ async function searchCrawlerIndex(query,offset=0,mode=selectedMode){
   results,
   catalogResults:catalogResult.status==='fulfilled'&&Array.isArray(catalogResult.value.catalogResults)?catalogResult.value.catalogResults:[],
   count,totalMatches:count,indexedPages,hasMore,
-  source,indexUpdatedAt:engine?.updatedAt||null,indexTransport:engine?.transport||'unavailable'
+  source,indexUpdatedAt:engine?.updatedAt||null,indexTransport:engine?.transport||'unavailable',
+  indexScan
  };
 }
 async function searchPublicSources(query,mode=selectedMode){
@@ -12274,7 +12284,7 @@ form.addEventListener('submit',async e=>{
    return '<article class="result">'+preview+'<div class="result-copy"><a target="_blank" rel="noopener noreferrer" href="'+link+'">'+esc(x.title||'Public source result')+'</a>'+(isVideo(x)?'<span class="media-tag">VIDEO</span>':'')+'<p>'+esc(x.snippet||'')+'</p><div class="source">'+esc(sourceLabel)+'</div></div></article>';
   }).join('');
   const moreAvailable=shown<matches.length||(shown>=matches.length&&apiHasMore);
-  const resultLabel=activeType==='web'&&totalIndexed?'Showing '+matches.length.toLocaleString()+' results · '+totalIndexed.toLocaleString()+' pages indexed':matches.length.toLocaleString()+' '+activeType+' results';
+  const resultLabel=activeType==='web'&&totalIndexed?'Showing '+matches.length.toLocaleString()+' results · '+totalIndexed.toLocaleString()+' matching candidate pages scanned':matches.length.toLocaleString()+' '+activeType+' results';
   const scanNote=activeType==='web'&&searchScan?.candidateTruncated
    ?'<p class="source result-count" role="status">Partial index scan: searched '+Number(searchScan.candidateShardCount||0).toLocaleString()+' of '+Number(searchScan.totalCandidateShardCount||0).toLocaleString()+' matching shards ('+Number(searchScan.candidatePageCount||0).toLocaleString()+' of '+Number(searchScan.totalCandidatePageCount||0).toLocaleString()+' candidate pages). Results may be incomplete.</p>'
    :'';
