@@ -31,17 +31,20 @@ const EXPECTED_MODES = ["business", "images", "news", "places", "research", "sho
 
   async function runSearch(mode, query, relevanceTerm) {
     const modeButton = page.locator('.eh-modebar .eh-mode[data-mode="' + mode + '"]');
-    await modeButton.click();
     await page.locator("#q").fill(query);
-    await page.locator("#search button[type=submit]").click();
-    await page.locator("#results .result").first().waitFor({ state: "visible", timeout: 60000 });
+    await modeButton.click();
+    await page.waitForFunction(() => {
+      const node = document.querySelector("#results");
+      return !!node && !/Searching\.\.\./i.test(node.textContent || "");
+    }, null, { timeout: 60000 });
     const count = await page.locator("#results .result").count();
     const titles = await page.locator("#results .result .result-copy a").allTextContents().catch(() => []);
     const text = (await page.locator("#results .result").allTextContents()).join(" ").toLowerCase();
+    const sources = await page.locator("#results .result .result-copy .source").allTextContents().catch(() => []);
+    const result = { query, count, sampleTitles: titles.slice(0, 5), sampleSources: sources.slice(0, 5), sampleText: text.slice(0, 800) };
+    report.checks["search_" + mode] = result;
     if (!count) fail(mode + " search returned no visible results for " + query);
     if (relevanceTerm && !text.includes(relevanceTerm.toLowerCase())) fail(mode + " results were not relevant to " + query);
-    const sources = await page.locator("#results .result .result-copy .source").allTextContents();
-    const result = { query, count, sampleTitles: titles.slice(0, 5), sampleSources: sources.slice(0, 5) };
     if (mode === "images") {
       const images = page.locator("#results .result .preview img");
       const imageCount = await images.count();

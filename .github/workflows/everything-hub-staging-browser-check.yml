@@ -81,7 +81,7 @@ jobs:
       - name: Wait for the newly deployed public Edge homepage
         env:
           TARGET_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-site?eh_cache_bust=${{ github.run_id }}
-          EXPECTED_RELEASE: edge-homepage-v3-supabase-r2
+          EXPECTED_RELEASE: edge-homepage-v3-supabase-r3
         run: |
           for attempt in $(seq 1 45); do
             curl -fsS -D /tmp/eh-headers "$TARGET_URL" -o /tmp/eh-homepage.html || true
