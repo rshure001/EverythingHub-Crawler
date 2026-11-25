@@ -1,0 +1,79 @@
+name: Everything Hub Windows bridge
+
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: Local Windows task to run
+        required: true
+        type: choice
+        options:
+          - validate
+          - build-search-index
+        default: validate
+permissions:
+  contents: read
+concurrency:
+  group: everythinghub-windows-bridge
+  cancel-in-progress: false
+jobs:
+  local-build:
+    runs-on: [self-hosted, Windows, X64, everythinghub]
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          clean: true
+          persist-credentials: false
+      - name: Verify local toolchain
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          python --version
+          if ($LASTEXITCODE -ne 0) { throw "Python is required." }
+          git --version
+          if ($LASTEXITCODE -ne 0) { throw "Git is required." }
+      - name: Run crawler and index tests
+        if: inputs.task == 'validate'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          python -m py_compile crawler/index_store.py crawler/crawl.py crawler/report.py crawler/build_search_shards.py crawler/validate_public_index.py crawler/validate_media_catalog.py
+          if ($LASTEXITCODE -ne 0) { throw "Python compile checks failed." }
+          python -m unittest discover -s crawler -p 'test_*.py' -v
+          if ($LASTEXITCODE -ne 0) { throw "Crawler tests failed." }
+          python crawler/validate_public_index.py
+          if ($LASTEXITCODE -ne 0) { throw "Public index validation failed." }
+      - name: Build and validate local public search index
+        if: inputs.task == 'build-search-index'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          python crawler/build_search_shards.py
+          if ($LASTEXITCODE -ne 0) { throw "Search shard build failed." }
+          python crawler/validate_public_index.py
+          if ($LASTEXITCODE -ne 0) { throw "Public index validation failed." }
+          python crawler/validate_media_catalog.py
+          if ($LASTEXITCODE -ne 0) { throw "Media catalog validation failed." }
+      - name: Package local build output
+        if: always()
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path bridge-output | Out-Null
+          @"
+          task=${{ inputs.task }}
+          revision=${{ github.sha }}
+          machine=$env:COMPUTERNAME
+          completed_utc=$([DateTime]::UtcNow.ToString('o'))
+          "@ | Set-Content bridge-output/bridge-report.txt
+          if (Test-Path public-search) {
+            Compress-Archive -Path public-search -DestinationPath bridge-output/public-search.zip -Force
+          }
+      - name: Return build report and index artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: everythinghub-windows-${{ inputs.task }}-${{ github.run_id }}
+          path: bridge-output/
+          if-no-files-found: warn
+          retention-days: 7
