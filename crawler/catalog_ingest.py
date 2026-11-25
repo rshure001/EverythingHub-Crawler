@@ -568,8 +568,23 @@ def build_public_catalog_indexes(result):
                     *tags,
                 ]
                 search_text = " ".join(str(value).strip() for value in search_parts if str(value).strip())[:1200]
+                record_catalog_id = "record-catalog:" + hashlib.sha256(record_id.encode("utf-8")).hexdigest()[:24]
+                record_catalog = {
+                    "catalog_id": record_catalog_id,
+                    "record_catalog_id": record_catalog_id,
+                    "owner_record_id": record_id,
+                    "catalog_kind": "record_related_items",
+                    "membership_mode": "virtual_shared_catalog_references",
+                    "shared_catalog_ids": memberships,
+                    "source_urls": source_urls[:5],
+                    "rights_status": str(attributes.get("rights_status") or "review_required")[:100],
+                    "source_terms_status": str(attributes.get("source_terms_status") or "not_reviewed")[:100],
+                    "public_search_allowed": True,
+                }
                 record_search_documents.append({
                     "record_id": record_id,
+                    "record_catalog_id": record_catalog_id,
+                    "related_catalog": record_catalog,
                     "title": title,
                     "record_type": record_type,
                     "source_url": source_url,
