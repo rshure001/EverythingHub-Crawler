@@ -85,7 +85,7 @@ jobs:
         run: |
           for attempt in $(seq 1 18); do
             curl --silent --show-error --location --max-time 45 -D /tmp/eh-headers "$TARGET_URL" -o /tmp/eh-homepage.html || true
-            content_type=$(awk 'BEGIN{IGNORECASE=1} /^content-type:/ {sub(/^[^:]*:[[:space:]]*/, ""); gsub("\r",""); print; exit}' /tmp/eh-headers 2>/dev/null)
+            content_type=$(awk 'BEGIN{IGNORECASE=1} /^content-type:/ {sub(/^[^:]*:[[:space:]]*/, ""); gsub("\r",""); ct=$0} END{print ct}' /tmp/eh-headers 2>/dev/null)
             if [[ "$content_type" == text/html* ]] && grep -qi 'approved-master-art' /tmp/eh-homepage.html && grep -q 'data:image/png;base64,' /tmp/eh-homepage.html && grep -q 'src="search.js"' /tmp/eh-homepage.html; then
               echo "Existing homepage URL redirects to HTML CDN page with approved artwork and search client ($content_type)"
               exit 0
