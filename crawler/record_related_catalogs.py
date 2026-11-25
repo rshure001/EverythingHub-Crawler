@@ -165,6 +165,8 @@ def validate_record_catalog_inputs(
         catalog_ids = record.get("catalog_ids", [])
         if not isinstance(catalog_ids, (list, tuple)):
             raise ValueError(f"catalog_ids must be a list for record: {record_id}")
+        if any(not isinstance(item, str) or not item for item in catalog_ids):
+            raise ValueError(f"invalid shared catalog reference for record: {record_id}")
         if len(catalog_ids) != len(set(catalog_ids)):
             raise ValueError(f"duplicate shared catalog references for record: {record_id}")
         if catalog_ids:
