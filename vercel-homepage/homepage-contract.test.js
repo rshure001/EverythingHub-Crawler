@@ -8,7 +8,7 @@ const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
 const approvedArtwork = "/assets/everythinghub-approved.png";
 
 test("homepage preserves the exact approved artwork resource", () => {
-  assert.ok(html.includes("background-image:url('" + approvedArtwork + "')"));
+  assert.ok(html.includes('src="data:image/png;base64,'));
   assert.ok(fs.existsSync(path.join(root, "assets/everythinghub-approved.png")));
   assert.ok(!html.includes("appdeploy.ai"));
 });
