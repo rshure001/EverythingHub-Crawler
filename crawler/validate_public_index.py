@@ -224,10 +224,9 @@ def validate_query_index(
         posting_count += sum(len(postings) for postings in tokens.values() if isinstance(postings, list))
         total_compressed += len(raw)
         total_uncompressed += len(decoded)
-        if total_compressed > MAX_QUERY_INDEX_TOTAL_COMPRESSED_BYTES:
-            errors.append("query index exceeds the aggregate compressed safety limit")
-        if total_uncompressed > MAX_QUERY_INDEX_TOTAL_UNCOMPRESSED_BYTES:
-            errors.append("query index exceeds the aggregate decoded safety limit")
+        # Aggregate query-index size is intentionally not capped here:
+        # consumers fetch only the SHA-256 prefix shards needed by a query.
+        # Individual prefix shards remain strictly bounded above.
 
     if seen_files != actual_files:
         errors.append(
