@@ -643,6 +643,18 @@ class UniversalCatalogIngestTests(unittest.TestCase):
             self.assertIn(document["source_url"], document["source_urls"])
             self.assertIn(root["catalog_id"], document["catalog_ids"])
             self.assertTrue(document["search_text"])
+            related_catalog = document["related_catalog"]
+            expected_record_catalog_id = "record-catalog:" + hashlib.sha256(
+                document["record_id"].encode("utf-8")
+            ).hexdigest()[:24]
+            self.assertEqual(document["record_catalog_id"], expected_record_catalog_id)
+            self.assertEqual(related_catalog["catalog_id"], expected_record_catalog_id)
+            self.assertEqual(related_catalog["owner_record_id"], document["record_id"])
+            self.assertEqual(related_catalog["catalog_kind"], "record_related_items")
+            self.assertEqual(related_catalog["membership_mode"], "virtual_shared_catalog_references")
+            self.assertEqual(related_catalog["shared_catalog_ids"], document["catalog_ids"])
+            self.assertTrue(related_catalog["public_search_allowed"])
+            self.assertNotIn("record_ids", related_catalog)
             self.assertNotIn("description", document)
             self.assertNotIn("attributes", document)
             self.assertNotIn("resources", document)
