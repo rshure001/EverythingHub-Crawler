@@ -463,7 +463,7 @@ test("query-scoped catalog search fetches only matching per-catalog indexes", as
   assert.equal(nasa[0].matched_records[0].record_id, "record:nasa-artemis");
 
   assert.equal(fixture.requested.some((url) => url.endsWith("/records.json.gz")), false);
-  assert.equal(fixture.requested.some((url) => /\\/records\\/\\d{5}\\.json\\.gz$/.test(url)), false);
+  assert.equal(fixture.requested.some((url) => url.includes("/records/")), false);
   assert.equal(fixture.requested.some((url) => url.endsWith("/registry.json.gz")), false);
   assert.equal(fixture.requested.some((url) => url.includes("/registry-shards/")), true);
   assert.equal(fixture.requested.some((url) => url.endsWith("/" + fixture.rolexPath)), true);
