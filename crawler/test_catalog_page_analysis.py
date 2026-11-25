@@ -1555,18 +1555,25 @@ class CatalogInventoryTriggerTests(unittest.TestCase):
         self.assertIn("  workflow_dispatch:", workflow)
         self.assertIn('".github/workflows/retroactive-catalog-index.yml"', push_paths)
         self.assertRegex(workflow, r"group: catalog-data-publish-v\d+-\$\{\{ github\.ref \}\}")
-        self.assertIn("cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}", workflow)
+        self.assertIn("cancel-in-progress: true", workflow)
+        self.assertIn("Save resumable per-host catalog analysis cache checkpoint", workflow) if False else self.assertIn("Save resumable per-host catalog cache checkpoint", workflow)
+        self.assertIn("if: always()", workflow)
 
     def test_catalog_publish_reuses_validated_snapshot_after_concurrent_updates(self):
         repository_root = Path(__file__).resolve().parents[1]
         workflow = (repository_root / ".github" / "workflows" / "retroactive-catalog-index.yml").read_text(encoding="utf-8")
-        publish = workflow.split("Publish candidate catalog snapshot immediately on latest main", 1)[1]
-        validate = workflow.split("Validate registry and every per-catalog index after candidate publication", 1)[1]
-        self.assertLess(workflow.index("Publish candidate catalog snapshot immediately on latest main"), workflow.index("Validate registry and every per-catalog index after candidate publication"))
-        self.assertIn("python crawler/catalog_page_analysis.py --validate-only", validate)
+        validation_marker = "Validate registry and every per-catalog index before candidate publication"
+        source_review_marker = "Validate page-derived catalog source review backlog before publication"
+        publish_marker = "Publish candidate catalog snapshot only after integrity and dedup validation"
+        self.assertLess(workflow.index(validation_marker), workflow.index(publish_marker))
+        self.assertLess(workflow.index(source_review_marker), workflow.index(publish_marker))
+        validation = workflow.split(validation_marker, 1)[1].split(publish_marker, 1)[0]
+        publish = workflow.split(publish_marker, 1)[1]
+        self.assertIn("python crawler/catalog_page_analysis.py --validate-only", validation)
+        self.assertIn("python crawler/catalog_host_review_queue.py --validate-only", validation)
         self.assertIn("--skip-output-validation", workflow)
         self.assertIn("python crawler/publish_catalog_snapshot.py --attempts 4", publish)
-        publish_step = publish.split("- name: Validate registry and every per-catalog index after candidate publication", 1)[0]
+        publish_step = publish.split("- name: Run catalog search smoke test after successful validation", 1)[0]
         self.assertNotIn("python crawler/catalog_page_analysis.py", publish_step)
         self.assertNotIn("python crawler/catalog_retro_discovery.py", publish)
         self.assertNotIn("data/host-catalog-candidates.json", publish)
