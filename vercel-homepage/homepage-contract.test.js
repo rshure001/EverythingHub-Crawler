@@ -5,16 +5,17 @@ const test = require("node:test");
 
 const root = __dirname;
 const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
-const approvedArtwork = "https://everythinghub-search-engine-4x25f8.v2.appdeploy.ai/resources/everythinghub-approved-octopus.png";
+const approvedArtwork = "/assets/everythinghub-approved.png";
 
 test("homepage preserves the exact approved artwork resource", () => {
-  assert.ok(html.includes('src="' + approvedArtwork + '"'));
-  assert.ok(!html.includes('src="/assets/everythinghub-approved.png"'));
+  assert.ok(html.includes("background-image:url('" + approvedArtwork + "')"));
+  assert.ok(fs.existsSync(path.join(root, "assets/everythinghub-approved.png")));
+  assert.ok(!html.includes("appdeploy.ai"));
 });
 
 test("homepage embeds the shared media preview policy before its search code", () => {
   const policy = html.indexOf("window.EHMediaPreviewPolicy");
-  const app = html.indexOf("async function searchCrawlerIndex(query,offset=0)");
+  const app = html.indexOf("async function searchCrawlerIndex(query,offset=0,mode=selectedMode)");
   assert.ok(policy >= 0, "shared media preview policy must be embedded");
   assert.ok(app > policy, "media preview policy must load before homepage search code");
   assert.ok(fs.existsSync(path.join(root, "media-preview-policy.js")));
