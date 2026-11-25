@@ -126,3 +126,64 @@ def resolve_related_records(
         "has_more": has_more,
         "membership_mode": "virtual_shared_catalog_references",
     }
+
+
+def validate_record_catalog_inputs(
+    records_by_id: Mapping[str, Mapping[str, Any]],
+    shared_catalogs: Any,
+) -> dict[str, Any]:
+    """Validate one stable record-owned catalog and its shared references per record.
+
+    This validates compact registry inputs without materializing related-record
+    membership lists. Every referenced shared catalog must exist and contain
+    its owner record; rights/publication state is intentionally not promoted.
+    """
+    if not isinstance(shared_catalogs, (list, tuple)):
+        raise ValueError("shared_catalogs must be a list or tuple")
+    catalogs_by_id: dict[str, Mapping[str, Any]] = {}
+    for catalog in shared_catalogs:
+        if not isinstance(catalog, Mapping):
+            raise ValueError("shared catalog entries must be mappings")
+        catalog_id = catalog.get("catalog_id")
+        if not isinstance(catalog_id, str) or not catalog_id:
+            raise ValueError("shared catalog is missing catalog_id")
+        if catalog_id in catalogs_by_id:
+            raise ValueError(f"duplicate shared catalog ID: {catalog_id}")
+        catalogs_by_id[catalog_id] = catalog
+
+    records_with_refs = 0
+    reference_count = 0
+    records_with_provenance = 0
+    for record_id, record in records_by_id.items():
+        if not isinstance(record_id, str) or not record_id:
+            raise ValueError("record map contains an invalid record ID")
+        if not isinstance(record, Mapping) or record.get("record_id") != record_id:
+            raise ValueError(f"record map key mismatch: {record_id}")
+        expected_id = stable_record_catalog_id(record_id)
+        if record.get("record_catalog_id", expected_id) != expected_id:
+            raise ValueError(f"unstable record catalog ID: {record_id}")
+        catalog_ids = record.get("catalog_ids", [])
+        if not isinstance(catalog_ids, (list, tuple)):
+            raise ValueError(f"catalog_ids must be a list for record: {record_id}")
+        if len(catalog_ids) != len(set(catalog_ids)):
+            raise ValueError(f"duplicate shared catalog references for record: {record_id}")
+        if catalog_ids:
+            records_with_refs += 1
+        reference_count += len(catalog_ids)
+        for catalog_id in catalog_ids:
+            if not isinstance(catalog_id, str) or catalog_id not in catalogs_by_id:
+                raise ValueError(f"missing shared catalog reference for record: {record_id}")
+            members = catalogs_by_id[catalog_id].get("record_ids", [])
+            if not isinstance(members, (list, tuple, set)) or record_id not in members:
+                raise ValueError(f"shared catalog does not contain owner record: {record_id}")
+        if record.get("source_urls") and record.get("source_page_ids"):
+            records_with_provenance += 1
+
+    return {
+        "record_catalog_registry_valid": True,
+        "record_catalogs_expected": len(records_by_id),
+        "record_catalogs_with_shared_references": records_with_refs,
+        "record_catalogs_without_shared_references": len(records_by_id) - records_with_refs,
+        "record_catalog_shared_references": reference_count,
+        "record_catalogs_with_provenance": records_with_provenance,
+    }
