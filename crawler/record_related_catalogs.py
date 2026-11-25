@@ -101,10 +101,15 @@ def resolve_related_records(
     limit: int = 20,
 ) -> dict[str, Any]:
     """Resolve a stable, deduplicated page of related records."""
-    if offset < 0:
-        raise ValueError("offset must be non-negative")
-    if not 1 <= limit <= 200:
-        raise ValueError("limit must be between 1 and 200")
+    if related_catalog.get("owner_record_id") != owner_record_id:
+        raise ValueError("related catalog owner does not match the requested record")
+    expected_catalog_id = stable_record_catalog_id(owner_record_id)
+    if related_catalog.get("record_catalog_id") != expected_catalog_id:
+        raise ValueError("related catalog ID is not stable for the requested record")
+    if isinstance(offset, bool) or not isinstance(offset, int) or offset < 0:
+        raise ValueError("offset must be a non-negative integer")
+    if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 200:
+        raise ValueError("limit must be an integer between 1 and 200")
     iterator = iter_related_records(owner_record_id, related_catalog, catalogs_by_id, records_by_id)
     page: list[dict[str, Any]] = []
     skipped = 0
