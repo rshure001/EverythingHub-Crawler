@@ -130,7 +130,7 @@ async function loadStaticCatalog(query: string): Promise<StaticCatalog> {
               pair[0] < manifest.shards.length && Number.isInteger(pair[1]) && pair[1] > 0) ids.add(pair[0]);
         }
         candidateShardIds = candidateShardIds === null
-          ? ids : new Set([...candidateShardIds].filter((id) => ids.has(id)));
+          ? ids : new Set<number>([...candidateShardIds].filter((id: number) => ids.has(id)));
         if (!candidateShardIds.size) break;
       }
       const selectedIds = [...(candidateShardIds || new Set<number>())].slice(0, 48);
