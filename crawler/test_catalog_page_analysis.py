@@ -1558,6 +1558,9 @@ class CatalogInventoryTriggerTests(unittest.TestCase):
         self.assertIn("cancel-in-progress: true", workflow)
         self.assertIn("Save resumable per-host catalog cache checkpoint", workflow)
         self.assertIn("if: always()", workflow)
+        self.assertIn("python crawler/catalog_throughput.py capture", workflow)
+        self.assertIn("python crawler/catalog_throughput.py record", workflow)
+        self.assertLess(workflow.index("Capture previous persisted catalog baseline"), workflow.index("Analyze every eligible existing indexed page"))
 
     def test_catalog_publish_reuses_validated_snapshot_after_concurrent_updates(self):
         repository_root = Path(__file__).resolve().parents[1]

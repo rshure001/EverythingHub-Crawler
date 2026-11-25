@@ -86,11 +86,16 @@ jobs:
         run: python -m unittest test_catalog_host_review_queue.py -v
       - name: Test fail-closed catalog source policy
         working-directory: crawler
+      - name: Test persisted catalog throughput accounting
+        working-directory: crawler
+        run: python -m unittest test_catalog_throughput.py -v
         run: python -m unittest test_catalog_source_policy.py -v
 
       - name: Test public search publisher limits
         working-directory: publisher
         run: python -m unittest test_stage_search_catalog.py -v
+      - name: Capture previous persisted catalog baseline
+        run: python crawler/catalog_throughput.py capture --report data/page-derived-catalogs/report.json --output "$RUNNER_TEMP/eh-catalog-baseline.json"
       - name: Inventory every existing indexed host
         run: python crawler/catalog_retro_discovery.py
       - name: Prepare per-host catalog cache before aggregation
@@ -120,44 +125,7 @@ jobs:
             data/page-derived-catalogs/.catalog-index-progress.json
           key: ${{ runner.os }}-catalog-cache-${{ github.ref_name }}-checkpoint-${{ github.run_id }}
       - name: Record persisted catalog and record throughput
-        run: |
-          python - <<'PY'
-          import json
-          from pathlib import Path
-          report = json.loads(Path("data/page-derived-catalogs/report.json").read_text(encoding="utf-8"))
-          print(json.dumps({
-              "source_index_pages": report["source_index_pages"],
-              "pages_analyzed": report["metrics"]["pages_analyzed"],
-              "eligible_pages": report["metrics"]["eligible_pages"],
-              "unique_catalogs_discovered": report["metrics"]["unique_catalogs_discovered"],
-              "unique_catalogs_by_type": report["metrics"]["unique_catalogs_by_type"],
-              "source_declared_catalogs": report["metrics"]["source_declared_catalogs"],
-              "content_list_catalogs": report["metrics"]["content_list_catalogs"],
-              "derived_catalogs": report["metrics"]["derived_catalogs"],
-              "catalog_page_associations": report["metrics"]["catalog_page_associations"],
-              "catalog_candidate_occurrences": report["metrics"]["catalog_candidate_occurrences"],
-              "duplicate_catalog_candidates": report["metrics"]["duplicate_catalog_candidates"],
-              "subcatalogs_discovered": report["metrics"]["subcatalogs_discovered"],
-              "unique_entities": report["metrics"]["unique_entities"],
-              "cross_host_record_merges": report["metrics"]["cross_host_record_merges"],
-              "unique_records_by_type": report["metrics"]["unique_records_by_type"],
-              "structured_product_pages": report["metrics"]["structured_product_pages"],
-              "structured_product_records": report["metrics"]["structured_product_records"],
-              "structured_brand_records": report["metrics"]["structured_brand_records"],
-              "records_staged": report["metrics"]["records_staged"],
-              "records_published": report["metrics"]["records_published"],
-              "media_references": report["metrics"]["media_references"],
-              "unique_media_urls": report["metrics"]["unique_media_urls"],
-              "coverage_percentage": report["metrics"]["coverage_percentage"],
-              "unique_source_coverage_percentage": report["metrics"]["unique_source_coverage_percentage"],
-              "eligible_page_coverage_percentage": report["metrics"]["eligible_page_coverage_percentage"],
-              "eligible_unique_source_page_coverage_percentage": report["metrics"]["eligible_unique_source_page_coverage_percentage"],
-              "previous_counts": report.get("previous_counts"),
-              "count_deltas": report.get("count_deltas"),
-              "elapsed_wall_clock_seconds": report.get("elapsed_wall_clock_seconds"),
-              "throughput": report.get("throughput"),
-          }, indent=2))
-          PY
+        run: python crawler/catalog_throughput.py record --report data/page-derived-catalogs/report.json --baseline "$RUNNER_TEMP/eh-catalog-baseline.json"
       - name: Build page-derived catalog source review backlog
         run: python crawler/catalog_host_review_queue.py
       - name: Validate registry and every per-catalog index before candidate publication
