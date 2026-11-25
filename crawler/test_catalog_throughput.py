@@ -45,6 +45,8 @@ class CatalogThroughputTests(unittest.TestCase):
             self.assertEqual(result["throughput"]["pages_per_minute"], 15.0)
             self.assertEqual(result["throughput"]["catalogs_per_minute"], 3.0)
             self.assertEqual(result["throughput"]["records_per_minute"], 60.0)
+            self.assertEqual(result["throughput"]["measurement"], "persisted_count_delta_over_wall_clock_interval")
+            self.assertTrue(result["throughput"]["negative_count_deltas_excluded"])
 
     def test_negative_deduplicated_counts_are_preserved(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -58,8 +60,10 @@ class CatalogThroughputTests(unittest.TestCase):
             self.assertEqual(result["count_deltas"]["unique_records"], -10)
             self.assertIn("unique_catalogs_discovered", result["negative_count_deltas"])
             self.assertIn("unique_records_by_type.product", result["negative_count_deltas"])
-            self.assertEqual(result["throughput"]["catalogs_per_minute"], -0.5)
-            self.assertEqual(result["throughput"]["records_per_minute"], -5.0)
+            self.assertEqual(result["throughput"]["catalogs_per_minute"], 0.0)
+            self.assertEqual(result["throughput"]["records_per_minute"], 0.0)
+            self.assertEqual(result["throughput"]["measurement"], "persisted_count_delta_over_wall_clock_interval")
+            self.assertTrue(result["throughput"]["negative_count_deltas_excluded"])
 
     def test_missing_prior_snapshot_is_not_fabricated(self):
         with tempfile.TemporaryDirectory() as directory:
