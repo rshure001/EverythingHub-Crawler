@@ -422,6 +422,25 @@ class PageDerivedCatalogAnalysisTests(unittest.TestCase):
             manifest = write_outputs(result, output)
             verified = validate_outputs(output)
             registry = json.loads(gzip.decompress((output / "registry.json.gz").read_bytes()))
+            registry_shards = [
+                item for item in manifest["files"]
+                if item["file"].startswith("registry-shards/")
+            ]
+            self.assertTrue(registry_shards)
+            self.assertEqual(sum(item["items"] for item in registry_shards), len(registry["catalogs"]))
+            compact_ids = set()
+            for entry in registry_shards:
+                payload = json.loads(gzip.decompress((output / entry["file"]).read_bytes()))
+                self.assertEqual(payload["status"], "candidate_staging_not_production")
+                for compact_catalog in payload["catalogs"]:
+                    catalog_id = compact_catalog["catalog_id"]
+                    self.assertNotIn("record_ids", compact_catalog)
+                    self.assertNotIn("source_page_ids", compact_catalog)
+                    prefix = hashlib.sha256(catalog_id.encode("utf-8")).hexdigest()[:2]
+                    self.assertEqual(entry["file"], f"registry-shards/{prefix}.json.gz")
+                    self.assertNotIn(catalog_id, compact_ids)
+                    compact_ids.add(catalog_id)
+            self.assertEqual(compact_ids, {item["catalog_id"] for item in registry["catalogs"]})
             self.assertEqual(manifest["catalog_count"], 1)
             self.assertEqual(verified["pages_analyzed"], 2)
             self.assertEqual(len(registry["catalogs"]), 1)

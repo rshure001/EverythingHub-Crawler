@@ -158,12 +158,16 @@ async function makeFixture() {
     catalogId: vegasSubjectId,
     sourceUrl: "https://www.visitlasvegas.com/places/las-vegas-strip",
   });
-  const rolexPath = "indexes/aa/aaaaaaaaaaaaaaaaaaaaaaaa.json.gz";
-  const vegasPath = "indexes/bb/bbbbbbbbbbbbbbbbbbbbbbbb.json.gz";
-  const vegasProductPath = "indexes/cc/cccccccccccccccccccccccc.json.gz";
-  const genericSubjectPath = "indexes/dd/dddddddddddddddddddddddd.json.gz";
-  const nasaSubjectPath = "indexes/ee/eeeeeeeeeeeeeeeeeeeeeeee.json.gz";
-  const vegasSubjectPath = "indexes/ff/ffffffffffffffffffffffff.json.gz";
+  const catalogIndexPath = async (catalogId) => {
+    const hash = await digest(encoder.encode(catalogId));
+    return "indexes/" + hash.slice(0, 2) + "/" + hash.slice(0, 24) + ".json.gz";
+  };
+  const rolexPath = await catalogIndexPath(rolexId);
+  const vegasPath = await catalogIndexPath(vegasId);
+  const vegasProductPath = await catalogIndexPath(vegasProductId);
+  const genericSubjectPath = await catalogIndexPath(genericSubjectId);
+  const nasaSubjectPath = await catalogIndexPath(nasaSubjectId);
+  const vegasSubjectPath = await catalogIndexPath(vegasSubjectId);
   const catalogs = [
     {
       catalog_id: rolexId,
@@ -292,12 +296,31 @@ async function makeFixture() {
   ];
   const registry = {
     version: 1,
-    analysis_version: 10,
+    analysis_version: 21,
     status: "candidate_staging_not_production",
     source_policy_review: policyReview,
     catalogs,
   };
   const registryBytes = await gzipJson(registry);
+  const registryShardGroups = new Map();
+  for (const catalog of catalogs) {
+    const prefix = (await digest(encoder.encode(catalog.catalog_id))).slice(0, 2);
+    if (!registryShardGroups.has(prefix)) registryShardGroups.set(prefix, []);
+    const compactCatalog = Object.fromEntries(
+      Object.entries(catalog).filter(([key]) => !["record_ids", "source_page_ids"].includes(key)),
+    );
+    registryShardGroups.get(prefix).push(compactCatalog);
+  }
+  const registryShardBytes = new Map();
+  for (const [prefix, shardCatalogs] of registryShardGroups) {
+    registryShardBytes.set(prefix, await gzipJson({
+      version: 1,
+      analysis_version: 21,
+      status: "candidate_staging_not_production",
+      source_policy_review: policyReview,
+      catalogs: shardCatalogs,
+    }));
+  }
   const rolexIndexBytes = await gzipJson({
     version: 1, catalog_id: rolexId, title: "Rolex Watch Models", status: "candidate", records: [rolexRecord],
   });
@@ -344,7 +367,7 @@ async function makeFixture() {
   const placeholderRecords = new Uint8Array([1]);
   const files = [
     await fileEntry("registry.json.gz", registryBytes, catalogs.length),
-    await fileEntry("records.json.gz", placeholderRecords, 6),
+    await fileEntry("records/00000.json.gz", placeholderRecords, 6),
     await fileEntry(rolexPath, rolexIndexBytes, 1),
     await fileEntry(vegasPath, vegasIndexBytes, 1),
     await fileEntry(vegasProductPath, vegasProductIndexBytes, 1),
@@ -352,6 +375,9 @@ async function makeFixture() {
     await fileEntry(nasaSubjectPath, nasaSubjectIndexBytes, 1),
     await fileEntry(vegasSubjectPath, vegasSubjectIndexBytes, 1),
   ];
+  for (const [prefix, bytes] of registryShardBytes) {
+    files.push(await fileEntry("registry-shards/" + prefix + ".json.gz", bytes, registryShardGroups.get(prefix).length));
+  }
   for (const [prefix, bytes] of searchBytes) {
     files.push(await fileEntry("search-index/" + prefix + ".json.gz", bytes, Object.keys(grouped.get(prefix)).length));
   }
@@ -359,7 +385,7 @@ async function makeFixture() {
   const updatedIso = new Date(updatedAt * 1000).toISOString();
   const manifest = {
     version: 1,
-    analysis_version: 10,
+    analysis_version: 21,
     integrity: "sha256",
     source_index_pages: 144241,
     source_index_updated_at: updatedIso,
@@ -386,6 +412,9 @@ async function makeFixture() {
   responses.set(rawBase + "data/page-derived-catalogs/manifest.json", jsonResponse(manifest));
   responses.set(rawBase + "public-search/manifest.json", jsonResponse(publicManifest));
   responses.set(rawBase + "data/page-derived-catalogs/registry.json.gz", new Response(registryBytes));
+  for (const [prefix, bytes] of registryShardBytes) {
+    responses.set(rawBase + "data/page-derived-catalogs/registry-shards/" + prefix + ".json.gz", new Response(bytes));
+  }
   responses.set(rawBase + "data/page-derived-catalogs/" + rolexPath, new Response(rolexIndexBytes));
   responses.set(rawBase + "data/page-derived-catalogs/" + vegasPath, new Response(vegasIndexBytes));
   responses.set(rawBase + "data/page-derived-catalogs/" + vegasProductPath, new Response(vegasProductIndexBytes));
@@ -434,6 +463,9 @@ test("query-scoped catalog search fetches only matching per-catalog indexes", as
   assert.equal(nasa[0].matched_records[0].record_id, "record:nasa-artemis");
 
   assert.equal(fixture.requested.some((url) => url.endsWith("/records.json.gz")), false);
+  assert.equal(fixture.requested.some((url) => /\\/records\\/\\d{5}\\.json\\.gz$/.test(url)), false);
+  assert.equal(fixture.requested.some((url) => url.endsWith("/registry.json.gz")), false);
+  assert.equal(fixture.requested.some((url) => url.includes("/registry-shards/")), true);
   assert.equal(fixture.requested.some((url) => url.endsWith("/" + fixture.rolexPath)), true);
   assert.equal(fixture.requested.some((url) => url.endsWith("/" + fixture.vegasPath)), true);
   assert.equal(fixture.requested.some((url) => url.endsWith("/" + fixture.vegasProductPath)), true);
