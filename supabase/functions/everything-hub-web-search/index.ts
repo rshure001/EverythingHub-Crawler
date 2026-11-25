@@ -45,14 +45,12 @@ type StaticCatalog = {
 };
 
 let staticCatalogCache: StaticCatalog | null = null;
-let staticCatalogPromise: Promise<StaticCatalog> | null = null;
 
 async function loadStaticCatalog(query: string): Promise<StaticCatalog> {
   if (staticCatalogCache && staticCatalogCache.expiresAt > Date.now() &&
       (staticCatalogCache.mode === "gzip" || staticCatalogCache.queryKey === String(query || "").trim().toLowerCase())) {
     return staticCatalogCache;
   }
-  if (staticCatalogPromise) return staticCatalogPromise;
 
   const pending = (async () => {
     // Bound the complete first-party catalog load, not just each shard request.
@@ -239,12 +237,7 @@ async function loadStaticCatalog(query: string): Promise<StaticCatalog> {
     return catalog;
   })();
 
-  staticCatalogPromise = pending;
-  try {
-    return await pending;
-  } finally {
-    if (staticCatalogPromise === pending) staticCatalogPromise = null;
-  }
+  return await pending;
 }
 
 Deno.serve(async (req: Request) => {
