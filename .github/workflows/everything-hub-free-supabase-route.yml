@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     env:
-      SITE_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-site/
+      SITE_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-site/?eh_cache_bust=${{ github.run_id }}
       SEARCH_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-web-search
       API_KEY: sb_publishable_XlIsACWhtVS1jVODWYGTpg_GMs8v3vJ
     steps:
@@ -28,18 +28,24 @@ jobs:
       - name: Verify free-hosted homepage
         run: |
           set -euo pipefail
-          code="$(curl --silent --show-error --location --max-time 30 -o /tmp/home.html -w '%{http_code}' "$SITE_URL")"
+          code="$(curl --silent --show-error --location --max-time 30 -D /tmp/home.headers -o /tmp/home.html -w '%{http_code}' "$SITE_URL")"
           test "$code" = "200"
           node <<'NODE'
           const fs = require("node:fs");
           const html = fs.readFileSync("/tmp/home.html", "utf8");
+          const headers = fs.readFileSync("/tmp/home.headers", "utf8").toLowerCase();
+          if (!headers.includes("content-type: text/html")) throw new Error("Homepage did not return HTML content type");
+          if (!headers.includes("x-eh-release: edge-homepage-v3-supabase-r3")) throw new Error("Unexpected live Edge homepage release");
           const required = [
             "<title>Everything Hub — Everything within reach</title>",
+            'class="approved-master-art"',
             "https://everythinghub-search-engine-4x25f8.v2.appdeploy.ai/resources/everythinghub-approved-octopus.png",
-            'id="searchForm"',
+            'id="search"',
             'id="q"',
-            "View related items",
-            'SEARCH_API=BASE+"/everything-hub-web-search"',
+            "Top Stories",
+            "Refresh",
+            "everything-hub-web-search",
+            "everything-hub-media-search",
             'data-mode="web"',
             'data-mode="news"',
             'data-mode="images"',

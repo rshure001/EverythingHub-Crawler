@@ -855,7 +855,7 @@ const form=document.querySelector('#search'),input=document.querySelector('#q'),
 const EH_SUPABASE_URL='https://vdceayvfgkwpgwixrhwi.supabase.co';
 const EH_PUBLIC_KEY='sb_publishable_XlIsACWhtVS1jVODWYGTpg_GMs8v3vJ';
 const modeNames={web:'the web',news:'News',images:'Images',videos:'Videos',shopping:'Shopping',places:'Places',business:'Business',research:'Research'};
-let selectedMode=new URLSearchParams(location.search).get('mode')||'web';
+let selectedMode=new URLSearchParams(location.search).get('mode')||'web';let searchRequestId=0;
 function setSelectedMode(mode){selectedMode=modeNames[mode]?mode:'web';input.placeholder='Search '+modeNames[selectedMode]+'…';document.querySelectorAll('.tile').forEach(tile=>tile.classList.toggle('selected',new URL(tile.href).searchParams.get('mode')===selectedMode));}
 document.querySelectorAll('.tile').forEach(tile=>tile.addEventListener('click',event=>{event.preventDefault();setSelectedMode(new URL(tile.href).searchParams.get('mode')||'web');input.focus();}));
 document.querySelectorAll('.eh-mode').forEach(button=>button.addEventListener('click',()=>{setSelectedMode(button.dataset.mode);document.querySelectorAll('.eh-mode').forEach(b=>b.classList.toggle('active',b===button));input.focus();if(input.value.trim())form.requestSubmit();}));
@@ -976,20 +976,20 @@ async function loadDashboard(){
 }
 loadDashboard();
 
-async function searchCrawlerIndex(query,offset=0){
+async function searchCrawlerIndex(query,offset=0,mode=selectedMode){
  const u=new URL(EH_SUPABASE_URL+'/functions/v1/everything-hub-web-search');
  u.searchParams.set('q',query);
  u.searchParams.set('limit','20');
  u.searchParams.set('offset',String(offset));
  const lanes={web:null,news:'news',images:'general',videos:'general',shopping:'business',places:'culture',business:'business',research:'science'};
- if(lanes[selectedMode])u.searchParams.set('tentacle',lanes[selectedMode]);
+ if(lanes[mode])u.searchParams.set('tentacle',lanes[mode]);
  const response=await fetch(u,{headers:{apikey:EH_PUBLIC_KEY,accept:'application/json'},signal:AbortSignal.timeout(15000)});
  if(!response.ok)throw Error('Everything Hub Edge search '+response.status);
  return await response.json();
 }
-async function searchPublicSources(query){
- if(selectedMode==='images'||selectedMode==='videos'){
-  const mediaType=selectedMode==='videos'?'video':'image';
+async function searchPublicSources(query,mode=selectedMode){
+ if(mode==='images'||mode==='videos'){
+  const mediaType=mode==='videos'?'video':'image';
   const u=new URL(EH_SUPABASE_URL+'/functions/v1/everything-hub-media-search');
   u.searchParams.set('q',query);u.searchParams.set('type',mediaType);
   const r=await fetch(u,{headers:{apikey:EH_PUBLIC_KEY,accept:'application/json'},signal:AbortSignal.timeout(15000)});
@@ -1004,7 +1004,7 @@ async function searchPublicSources(query){
     attributionRequired:x.attributionRequired,score:0
    }));
  }
- if(selectedMode==='news'){
+ if(mode==='news'){
   const u=new URL(EH_SUPABASE_URL+'/functions/v1/everything-hub-independent-search');
   u.searchParams.set('q',query);
   const r=await fetch(u,{headers:{apikey:EH_PUBLIC_KEY,accept:'application/json'},signal:AbortSignal.timeout(15000)});
@@ -1017,10 +1017,11 @@ async function searchPublicSources(query){
 form.addEventListener('submit',async e=>{
  e.preventDefault();
  const q=input.value.trim();if(!q)return;
- const pageUrl=new URL(location.href);pageUrl.searchParams.set('q',q);pageUrl.searchParams.set('mode',selectedMode);history.replaceState({},'',pageUrl);
+  const mode=selectedMode,requestId=++searchRequestId;
+ const pageUrl=new URL(location.href);pageUrl.searchParams.set('q',q);pageUrl.searchParams.set('mode',mode);history.replaceState({},'',pageUrl);
  out.innerHTML="<p>Searching Everything Hub's public index…</p>";
  let apiPage=1,apiHasMore=false,totalIndexed=0,searchScan=null,loadingMore=false,shown=24;
- let activeType=['news','images','videos','shopping','places','business','research'].includes(selectedMode)?selectedMode:'web';
+ let activeType=['news','images','videos','shopping','places','business','research'].includes(mode)?mode:'web';
  const seenUrls=new Set(),items=[],itemByUrl=new Map();
  const isCrawlerOrigin=value=>/Everything Hub (?:public crawler|eh_quad) index/i.test(String(value||''));
  const addItems=rows=>{
@@ -1050,16 +1051,16 @@ form.addEventListener('submit',async e=>{
  };
  const loadApiPage=async(page)=>{
   const offset=(page-1)*20;
-  const d=await searchCrawlerIndex(q,offset);
+  const d=await searchCrawlerIndex(q,offset,mode);
   if(page===1)searchScan=d.indexScan||null;
   apiHasMore=Boolean(d.hasMore)||(Number(d.totalMatches)>offset+(d.results||[]).length);
   totalIndexed=Number(d.indexedPages)||Number(d.indexed_pages)||totalIndexed;
-  const mediaMode=selectedMode==='images'||selectedMode==='videos'||selectedMode==='news';
+  const mediaMode=mode==='images'||mode==='videos'||mode==='news';
   const catalogResults=(page===1?(d.catalogResults||[]):[]).map(x=>{
    const snippet=x.snippet||x.description||'Candidate catalog preview; source terms and reuse rights have not been reviewed.';
-   return {...x,title:x.title||x.catalog_title||x.catalog_id||'Catalog candidate',url:x.url||x.source_url||'',snippet,description:snippet,source:x.source||'Everything Hub Catalog Preview',origin:x.origin||'Everything Hub Catalog Preview',mediaType:mediaMode?'web':selectedMode,score:Number(x.score)||0,preview_only:true,commercial_eligible:false};
+   return {...x,title:x.title||x.catalog_title||x.catalog_id||'Catalog candidate',url:x.url||x.source_url||'',snippet,description:snippet,source:x.source||'Everything Hub Catalog Preview',origin:x.origin||'Everything Hub Catalog Preview',mediaType:mediaMode?'web':mode,score:Number(x.score)||0,preview_only:true,commercial_eligible:false};
   }).filter(x=>x.url);
-  const pageResults=(d.results||[]).map(x=>({...x,title:x.title||x.url,url:x.url,description:x.snippet||x.description||'',snippet:x.snippet||x.description||'',source:x.source||d.provider||'Everything Hub public search',origin:x.origin||d.source||'Everything Hub public search',mediaType:mediaMode?'web':selectedMode,score:Number(x.relevance??x.score)||0}));
+  const pageResults=(d.results||[]).map(x=>({...x,title:x.title||x.url,url:x.url,description:x.snippet||x.description||'',snippet:x.snippet||x.description||'',source:x.source||d.provider||'Everything Hub public search',origin:x.origin||d.source||'Everything Hub public search',mediaType:mediaMode?'web':mode,score:Number(x.relevance??x.score)||0}));
   return catalogResults.concat(pageResults);
  };
  const mediaAllowed=x=>window.EHMediaPreviewPolicy?.isMediaPreviewAllowed(x)===true;
@@ -1102,20 +1103,21 @@ form.addEventListener('submit',async e=>{
   const more=out.querySelector('#moreResults');
   if(more)more.addEventListener('click',async()=>{
    if(loadingMore)return;loadingMore=true;more.disabled=true;more.textContent='Loading more results…';
-   try{if(shown>=matches.length&&apiHasMore){apiPage++;addItems(await loadApiPage(apiPage));}shown=Math.min(shown+24,matches.length);render();}
-   catch(error){more.disabled=false;more.textContent='Retry loading more results';}
+   try{if(shown>=matches.length&&apiHasMore){apiPage++;const nextPage=await loadApiPage(apiPage);if(requestId!==searchRequestId)return;addItems(nextPage);}shown=Math.min(shown+24,matches.length);render();}
+   catch(error){if(requestId!==searchRequestId)return;more.disabled=false;more.textContent='Retry loading more results';}
    finally{loadingMore=false;}
   });
  };
  try{
-  const [apiResult,publicResult]=await Promise.allSettled([loadApiPage(1),searchPublicSources(q)]);
+  const [apiResult,publicResult]=await Promise.allSettled([loadApiPage(1),searchPublicSources(q,mode)]);
+   if(requestId!==searchRequestId)return;
   if(apiResult.status==='fulfilled')addItems(apiResult.value);
   if(publicResult.status==='fulfilled')addItems(publicResult.value);
   if(apiResult.status==='rejected'&&publicResult.status==='rejected'){
    out.innerHTML='<p>Everything Hub public search is temporarily unavailable. Please try again shortly.</p>';return;
   }
   render();
- }catch(error){out.innerHTML='<p>Everything Hub search is temporarily unavailable. Please try again shortly.</p>';}
+ }catch(error){if(requestId===searchRequestId)out.innerHTML='<p>Everything Hub search is temporarily unavailable. Please try again shortly.</p>';}
 });
 
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
