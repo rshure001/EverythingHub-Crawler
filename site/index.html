@@ -12128,7 +12128,7 @@ async function getEverythingHubSearchEngine(){
  return ehSearchEnginePromise;
 }
 async function searchCrawlerIndex(query,offset=0,mode=selectedMode){
- const local=location.hostname==='localhost'||location.hostname==='127.0.0.1';
+ const local=location.hostname==='localhost'||location.hostname==='127.0.0.1'||location.hostname==='cdn.jsdelivr.net';
  const lanes={web:null,news:'news',images:'general',videos:'general',shopping:'business',places:'culture',business:'business',research:'science'};
  const [engineResult,catalogResult]=await Promise.allSettled([
   getEverythingHubSearchEngine(),
@@ -12144,13 +12144,29 @@ async function searchCrawlerIndex(query,offset=0,mode=selectedMode){
  if(engineResult.status==='rejected')throw engineResult.reason;
  const engine=engineResult.value;
  const all=engine.search(query,{limit:50,lane:lanes[mode]||null});
+ let results=all.slice(offset,offset+20),count=all.length,indexedPages=engine.pageCount,hasMore=offset+20<all.length;
+ let source='Everything Hub verified public crawler index';
+ if(!all.length&&offset===0&&!['images','videos','news'].includes(mode)){
+  try{
+   const hints={web:'',shopping:' shopping products',places:' places maps',business:' companies businesses',research:' research studies papers'};
+   const u=new URL(functionEndpoint('everything-hub-independent-search'));
+   u.searchParams.set('q',query+(hints[mode]||''));
+   const response=await fetch(u,{headers:{apikey:EH_PUBLIC_KEY,accept:'application/json'},signal:AbortSignal.timeout(15000)});
+   if(response.ok){
+    const data=await response.json();
+    results=(data.results||[]).filter(x=>x.title&&x.url).map(x=>({...x,mediaType:mode,source:x.source||data.provider||'Bing RSS',origin:'Bing RSS independent fallback',score:0}));
+    count=Number(data.count)||results.length;
+    indexedPages=0;
+    hasMore=false;
+    if(results.length)source='Bing RSS independent fallback';
+   }
+  }catch(_){}
+ }
  return {
-  results:all.slice(offset,offset+20),
+  results,
   catalogResults:catalogResult.status==='fulfilled'&&Array.isArray(catalogResult.value.catalogResults)?catalogResult.value.catalogResults:[],
-  count:all.length,totalMatches:all.length,indexedPages:engine.pageCount,
-  hasMore:offset+20<all.length,
-  source:'Everything Hub verified public crawler index',
-  indexUpdatedAt:engine.updatedAt,indexTransport:engine.transport
+  count,totalMatches:count,indexedPages,hasMore,
+  source,indexUpdatedAt:engine.updatedAt,indexTransport:engine.transport
  };
 }
 async function searchPublicSources(query,mode=selectedMode){
