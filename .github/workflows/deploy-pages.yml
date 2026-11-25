@@ -24,8 +24,12 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
-      - name: Check out the published site
+      - name: Check out only the published site files
         uses: actions/checkout@v4
+        with:
+          sparse-checkout: site
+          sparse-checkout-cone-mode: true
+          filter: blob:none
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
