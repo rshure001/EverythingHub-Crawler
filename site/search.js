@@ -519,7 +519,10 @@
       if (!candidateShardIds.size) break;
     }
 
-    const selectedIds = [...(candidateShardIds || new Set())].sort((a, b) => a - b).slice(0, 48);
+    const allCandidateIds = [...(candidateShardIds || new Set())].sort((a, b) => a - b);
+    const totalCandidateShardCount = allCandidateIds.length;
+    const totalCandidatePageCount = allCandidateIds.reduce((sum, id) => sum + manifest.shards[id].pages, 0);
+    const selectedIds = allCandidateIds.slice(0, 48);
     const pages = [];
     const seenUrls = new Set();
     const onProgress = typeof options.onProgress === "function" ? options.onProgress : null;
@@ -568,7 +571,15 @@
         }
       }
     }
-    return { pages, selectedShardCount: selectedIds.length };
+    return {
+      pages,
+      selectedShardCount: selectedIds.length,
+      candidateShardCount: selectedIds.length,
+      totalCandidateShardCount,
+      candidatePageCount: pages.length,
+      totalCandidatePageCount,
+      candidateTruncated: totalCandidateShardCount > selectedIds.length
+    };
   }
 
   async function create(options) {
@@ -629,6 +640,9 @@
       pageCount: transport === "query-shards" ? manifest.total_pages : pages.length,
       candidatePageCount: pages.length,
       selectedShardCount,
+      totalCandidateShardCount: transport === "query-shards" ? selected.totalCandidateShardCount : manifest.shard_count,
+      totalCandidatePageCount: transport === "query-shards" ? selected.totalCandidatePageCount : manifest.total_pages,
+      candidateTruncated: transport === "query-shards" ? selected.candidateTruncated : false,
       updatedAt: manifest.updated_at,
       transport,
       search: (query, searchOptions) => rank(pages, query, searchOptions)
