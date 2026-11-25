@@ -3,11 +3,13 @@ import { readBoundedText } from "./bounded-stream.mjs";
 const REF_URL = "https://api.github.com/repos/rshure001/EverythingHub-Crawler/git/ref/heads/main";
 const RAW_BASE = "https://raw.githubusercontent.com/rshure001/EverythingHub-Crawler/";
 const MAX_REF_BYTES = 16_000;
-const MAX_MANIFEST_BYTES = 8_000_000;
+const MAX_MANIFEST_BYTES = 16_000_000;
 const MAX_PUBLIC_MANIFEST_BYTES = 1_000_000;
 const MAX_REGISTRY_GZIP_BYTES = 8_000_000;
 const MAX_RECORDS_GZIP_BYTES = 32_000_000;
 const MAX_REGISTRY_JSON_BYTES = 48_000_000;
+const MAX_REGISTRY_SHARD_GZIP_BYTES = 2_000_000;
+const MAX_REGISTRY_SHARD_JSON_BYTES = 12_000_000;
 const MAX_RECORDS_JSON_BYTES = 96_000_000;
 const MAX_SEARCH_INDEX_SHARD_BYTES = 4_000_000;
 const MAX_SEARCH_INDEX_JSON_BYTES = 16_000_000;
@@ -19,7 +21,7 @@ const MAX_CATALOG_CACHE_ENTRIES = 64;
 const MAX_SOURCE_PAGES = 250_000;
 const MAX_CATALOGS = 30_000;
 // A catalog snapshot contains one index per catalog, up to 256 search shards, and six shared artifacts.
-const MAX_MANIFEST_FILES = MAX_CATALOGS + 512;
+const MAX_MANIFEST_FILES = MAX_CATALOGS + 1024;
 const MAX_RECORDS = 2_000_000;
 const CACHE_MS = 600_000;
 const STALE_MS = 3_600_000;
@@ -42,6 +44,7 @@ let cache = null;
 let pending = null;
 const searchIndexCache = new Map();
 const catalogIndexCache = new Map();
+const registryShardCache = new Map();
 
 function safeUrl(value) {
   try {
@@ -134,6 +137,7 @@ async function decodeGzip(bytes, maxBytes, label) {
 export function validateManifest(manifest) {
   const analysisVersion = Number(manifest && manifest.analysis_version || 0);
   const legacy = analysisVersion < 10;
+  const shardedRegistry = analysisVersion >= 21;
   if (!manifest || manifest.version !== 1 || manifest.integrity !== "sha256") {
     throw new Error("page_catalog_manifest_schema_invalid");
   }
@@ -169,29 +173,55 @@ export function validateManifest(manifest) {
   }
   const registry = files.get("registry.json.gz");
   const records = files.get("records.json.gz");
+  const registryShardFiles = Array.from(files.values()).filter((file) => file.file.startsWith("registry-shards/"));
+  const recordShardFiles = Array.from(files.values()).filter((file) => file.file.startsWith("records/"));
   const searchIndexFiles = Array.from(files.values()).filter((file) => file.file.startsWith("search-index/"));
-  if (!registry || !records || (!legacy && !searchIndexFiles.length)) {
+  if (!registry || (!records && !recordShardFiles.length) || (!legacy && !searchIndexFiles.length)) {
     throw new Error("page_catalog_artifacts_missing");
   }
-  if (registry.bytes > MAX_REGISTRY_GZIP_BYTES || records.bytes > MAX_RECORDS_GZIP_BYTES ||
-      searchIndexFiles.some((file) => file.bytes > MAX_SEARCH_INDEX_SHARD_BYTES)) {
-    throw new Error("page_catalog_compressed_limit");
-  }
-  if (registry.items !== manifest.catalog_count || records.items !== manifest.record_count) {
+  if (registry.items !== manifest.catalog_count) {
     throw new Error("page_catalog_artifact_item_count_invalid");
+  }
+  if (shardedRegistry) {
+    if (!registryShardFiles.length || !recordShardFiles.length ||
+        registryShardFiles.some((file) => file.bytes > MAX_REGISTRY_SHARD_GZIP_BYTES) ||
+        recordShardFiles.some((file) => file.bytes > MAX_RECORDS_GZIP_BYTES) ||
+        registryShardFiles.reduce((total, file) => total + file.items, 0) !== manifest.catalog_count ||
+        recordShardFiles.reduce((total, file) => total + file.items, 0) !== manifest.record_count) {
+      throw new Error("page_catalog_sharded_artifact_limit_or_count_invalid");
+    }
+  } else {
+    if (!records || registry.bytes > MAX_REGISTRY_GZIP_BYTES || records.bytes > MAX_RECORDS_GZIP_BYTES) {
+      throw new Error("page_catalog_compressed_limit");
+    }
+    if (records.items !== manifest.record_count) {
+      throw new Error("page_catalog_artifact_item_count_invalid");
+    }
+  }
+  if (searchIndexFiles.some((file) => file.bytes > MAX_SEARCH_INDEX_SHARD_BYTES)) {
+    throw new Error("page_catalog_compressed_limit");
   }
   for (const file of searchIndexFiles) {
     if (!/^search-index\/[0-9a-f]{2}\.json\.gz$/.test(file.file)) {
       throw new Error("page_catalog_search_index_path_invalid");
     }
   }
+  for (const file of registryShardFiles) {
+    if (!/^registry-shards\/[0-9a-f]{2}\.json\.gz$/.test(file.file)) {
+      throw new Error("page_catalog_registry_shard_path_invalid");
+    }
+  }
+  for (const file of recordShardFiles) {
+    if (!/^records\/\d{5}\.json\.gz$/.test(file.file)) {
+      throw new Error("page_catalog_record_shard_path_invalid");
+    }
+  }
   if (Number(manifest.metrics && manifest.metrics.records_published || 0) !== 0 ||
       Number(manifest.catalogs_verified || 0) !== 0) {
     throw new Error("page_catalog_candidate_only_contract_invalid");
   }
-  return { registry, records, searchIndexFiles, files, legacy };
+  return { registry, records, registryShardFiles, recordShardFiles, searchIndexFiles, files, legacy, shardedRegistry };
 }
-
 function validatePolicyAnnotation(item, policyReview) {
   if (!policyReview) return;
   const status = item.source_policy_review_status;
@@ -211,6 +241,102 @@ function validatePolicyAnnotation(item, policyReview) {
   if (status === "not_reviewed" &&
       ((Array.isArray(hosts) && hosts.length) || (Array.isArray(evidence) && evidence.length))) {
     throw new Error("page_catalog_unreviewed_policy_has_evidence");
+  }
+}
+
+function validatePolicyReviewSummary(policyReview) {
+  if (!policyReview || policyReview.schema_version !== 1 ||
+      typeof policyReview.register_sha256 !== "string" ||
+      !/^[a-f0-9]{64}$/i.test(policyReview.register_sha256) ||
+      policyReview.scope !== "source-level-only" ||
+      policyReview.record_level_clearance !== "not_reviewed" ||
+      policyReview.commercial_eligibility !== false ||
+      policyReview.republication !== "not_cleared") {
+    throw new Error("page_catalog_policy_review_invalid");
+  }
+  return policyReview;
+}
+
+async function loadRegistryShard(network, prefix, fetchImpl) {
+  const path = "registry-shards/" + prefix + ".json.gz";
+  const file = network.registryShardFiles && network.registryShardFiles.get(path);
+  if (!file) return [];
+  const cacheKey = network.gitCommit + ":" + path;
+  let payload = registryShardCache.get(cacheKey);
+  if (!payload) {
+    payload = await loadVerifiedGzipArtifact(
+      network, file, fetchImpl, MAX_REGISTRY_SHARD_GZIP_BYTES, MAX_REGISTRY_SHARD_JSON_BYTES,
+      "page_catalog_registry_shard",
+    );
+    if (payload.version !== 1 || payload.analysis_version !== network.analysisVersion ||
+        payload.status !== "candidate_staging_not_production" ||
+        !Array.isArray(payload.catalogs) || payload.catalogs.length !== file.items) {
+      throw new Error("page_catalog_registry_shard_schema_invalid");
+    }
+    const policyReview = validatePolicyReviewSummary(payload.source_policy_review || network.sourcePolicyReview);
+    if (network.sourcePolicyReview &&
+        policyReview.register_sha256 !== network.sourcePolicyReview.register_sha256) {
+      throw new Error("page_catalog_policy_review_digest_mismatch");
+    }
+    registryShardCache.set(cacheKey, payload);
+  }
+  const seenInShard = new Set();
+  for (const catalog of payload.catalogs) {
+    if (!catalog || typeof catalog.catalog_id !== "string" || !catalog.catalog_id ||
+        seenInShard.has(catalog.catalog_id) ||
+        !Number.isSafeInteger(catalog.record_count) || catalog.record_count < 0 ||
+        !Number.isSafeInteger(catalog.source_page_count) || catalog.source_page_count < 0 ||
+        catalog.commercial_eligible !== false ||
+        Array.isArray(catalog.record_ids) || Array.isArray(catalog.source_page_ids) ||
+        typeof catalog.index_file !== "string" ||
+        !/^indexes\/[0-9a-f]{2}\/[0-9a-f]{24}\.json\.gz$/.test(catalog.index_file)) {
+      throw new Error("page_catalog_registry_shard_catalog_invalid");
+    }
+    seenInShard.add(catalog.catalog_id);
+    const digest = await sha256(new TextEncoder().encode(catalog.catalog_id));
+    if (digest.slice(0, 2) !== prefix ||
+        catalog.index_file !== "indexes/" + digest.slice(0, 2) + "/" + digest.slice(0, 24) + ".json.gz") {
+      throw new Error("page_catalog_registry_shard_identity_invalid");
+    }
+    const indexEntry = network.filesByPath.get(catalog.index_file);
+    if (!indexEntry || indexEntry.items !== catalog.record_count ||
+        indexEntry.bytes > MAX_CATALOG_INDEX_GZIP_BYTES) {
+      throw new Error("page_catalog_index_manifest_entry_invalid");
+    }
+    if (catalog.source_url && !safeUrl(catalog.source_url)) {
+      throw new Error("page_catalog_source_url_invalid");
+    }
+    validatePolicyAnnotation(catalog, network.sourcePolicyReview);
+    const existing = network.catalogsById.get(catalog.catalog_id);
+    if (existing && existing.index_file !== catalog.index_file) {
+      throw new Error("page_catalog_registry_duplicate_identity");
+    }
+    if (!existing) {
+      network.catalogsById.set(catalog.catalog_id, catalog);
+      network.catalogs.push(catalog);
+    }
+  }
+  return payload.catalogs;
+}
+
+async function ensureCatalogsLoaded(network, catalogIds, fetchImpl) {
+  const ids = Array.from(new Set((catalogIds || []).map((id) => String(id || "").trim())));
+  const missing = ids.filter((id) => id && !network.catalogsById.has(id));
+  if (!missing.length) return;
+  if (!network.registryShardFiles || !network.registryShardFiles.size) {
+    throw new Error("page_catalog_registry_shards_unavailable");
+  }
+  const prefixes = new Set();
+  for (const id of missing) {
+    const digest = await sha256(new TextEncoder().encode(id));
+    prefixes.add(digest.slice(0, 2));
+  }
+  const shards = Array.from(prefixes);
+  for (let offset = 0; offset < shards.length; offset += 8) {
+    await Promise.all(shards.slice(offset, offset + 8).map((prefix) => loadRegistryShard(network, prefix, fetchImpl)));
+  }
+  if (ids.some((id) => !network.catalogsById.has(id))) {
+    throw new Error("page_catalog_registry_catalog_missing");
   }
 }
 
@@ -384,38 +510,59 @@ async function loadSnapshot(fetchImpl) {
     throw new Error("public_search_manifest_invalid");
   }
 
-  const registryUrl = base + "data/page-derived-catalogs/registry.json.gz";
-  const registryBytes = await fetchBytes(registryUrl, MAX_REGISTRY_GZIP_BYTES, fetchImpl);
-  if (registryBytes.byteLength !== metadata.registry.bytes) {
-    throw new Error("page_catalog_registry_size_mismatch");
-  }
-  const registryDigest = await sha256(registryBytes);
-  if (registryDigest.toLowerCase() !== metadata.registry.sha256.toLowerCase()) {
-    throw new Error("page_catalog_registry_sha256_mismatch");
-  }
-  const registry = await decodeGzip(registryBytes, MAX_REGISTRY_JSON_BYTES, "page_catalog_registry");
-
   let network;
-  if (metadata.legacy) {
-    const recordsBytes = await fetchBytes(
-      base + "data/page-derived-catalogs/records.json.gz",
-      MAX_RECORDS_GZIP_BYTES,
-      fetchImpl,
-    );
-    if (recordsBytes.byteLength !== metadata.records.bytes) {
-      throw new Error("page_catalog_records_size_mismatch");
-    }
-    const recordsDigest = await sha256(recordsBytes);
-    if (recordsDigest.toLowerCase() !== metadata.records.sha256.toLowerCase()) {
-      throw new Error("page_catalog_records_sha256_mismatch");
-    }
-    const recordsPayload = await decodeGzip(recordsBytes, MAX_RECORDS_JSON_BYTES, "page_catalog_records");
-    network = validateLegacyNetwork(manifest, registry, recordsPayload);
+  if (metadata.shardedRegistry) {
+    const policyReview = validatePolicyReviewSummary(manifest.source_policy_review);
+    network = {
+      catalogs: [],
+      catalogsById: new Map(),
+      filesByPath: metadata.files,
+      registryShardFiles: new Map(metadata.registryShardFiles.map((file) => [file.file, file])),
+      baseUrl: base + "data/page-derived-catalogs/",
+      generatedAt: manifest.generated_at,
+      analysisVersion: manifest.analysis_version,
+      sourceIndexPages: manifest.source_index_pages,
+      sourceIndexUpdatedAt: manifest.source_index_updated_at,
+      sourceIndexSha256: manifest.source_index_sha256,
+      catalogCount: manifest.catalog_count,
+      recordCount: manifest.record_count,
+      metrics: manifest.metrics || {},
+      sourcePolicyReview: policyReview,
+      legacySnapshot: false,
+    };
   } else {
-    network = validateRegistry(manifest, registry, metadata);
-    network.filesByPath = metadata.files;
-    network.baseUrl = base + "data/page-derived-catalogs/";
-    network.legacySnapshot = false;
+    const registryUrl = base + "data/page-derived-catalogs/registry.json.gz";
+    const registryBytes = await fetchBytes(registryUrl, MAX_REGISTRY_GZIP_BYTES, fetchImpl);
+    if (registryBytes.byteLength !== metadata.registry.bytes) {
+      throw new Error("page_catalog_registry_size_mismatch");
+    }
+    const registryDigest = await sha256(registryBytes);
+    if (registryDigest.toLowerCase() !== metadata.registry.sha256.toLowerCase()) {
+      throw new Error("page_catalog_registry_sha256_mismatch");
+    }
+    const registry = await decodeGzip(registryBytes, MAX_REGISTRY_JSON_BYTES, "page_catalog_registry");
+
+    if (metadata.legacy) {
+      const recordsBytes = await fetchBytes(
+        base + "data/page-derived-catalogs/records.json.gz",
+        MAX_RECORDS_GZIP_BYTES,
+        fetchImpl,
+      );
+      if (recordsBytes.byteLength !== metadata.records.bytes) {
+        throw new Error("page_catalog_records_size_mismatch");
+      }
+      const recordsDigest = await sha256(recordsBytes);
+      if (recordsDigest.toLowerCase() !== metadata.records.sha256.toLowerCase()) {
+        throw new Error("page_catalog_records_sha256_mismatch");
+      }
+      const recordsPayload = await decodeGzip(recordsBytes, MAX_RECORDS_JSON_BYTES, "page_catalog_records");
+      network = validateLegacyNetwork(manifest, registry, recordsPayload);
+    } else {
+      network = validateRegistry(manifest, registry, metadata);
+      network.filesByPath = metadata.files;
+      network.baseUrl = base + "data/page-derived-catalogs/";
+      network.legacySnapshot = false;
+    }
   }
 
   const publicUpdatedAt = publicManifest.updated_at * 1000;
@@ -427,7 +574,6 @@ async function loadSnapshot(fetchImpl) {
   network.gitCommit = sha;
   return network;
 }
-
 async function loadVerifiedGzipArtifact(network, file, fetchImpl, maxCompressedBytes, maxJsonBytes, label) {
   if (!file || typeof file.file !== "string") throw new Error(label + "_manifest_entry_missing");
   const bytes = await fetchBytes(network.baseUrl + file.file, maxCompressedBytes, fetchImpl);
@@ -454,7 +600,7 @@ async function loadSearchIndexShard(network, prefix, fetchImpl) {
   }
   for (const [token, catalogIds] of Object.entries(payload.tokens)) {
     if (!token || token.length < 2 || !Array.isArray(catalogIds) || !catalogIds.length ||
-        new Set(catalogIds).size !== catalogIds.length || catalogIds.some((id) => !network.catalogsById.has(id))) {
+        new Set(catalogIds).size !== catalogIds.length || catalogIds.some((id) => typeof id !== "string" || !id)) {
       throw new Error("page_catalog_search_index_postings_invalid");
     }
   }
@@ -480,16 +626,15 @@ async function loadCatalogIndex(network, catalog, fetchImpl) {
       payload.records.length !== catalog.record_count) {
     throw new Error("page_catalog_index_schema_invalid");
   }
-  const expectedIds = new Set(catalog.record_ids);
   const seenIds = new Set();
   for (const record of payload.records) {
     if (!record || typeof record.record_id !== "string" || !record.record_id ||
-        seenIds.has(record.record_id) || !expectedIds.has(record.record_id) ||
+        seenIds.has(record.record_id) ||
         typeof record.entity_id !== "string" || !record.entity_id ||
         typeof record.record_type !== "string" || !record.record_type ||
         !Array.isArray(record.catalog_ids) || !record.catalog_ids.includes(catalog.catalog_id) ||
         new Set(record.catalog_ids).size !== record.catalog_ids.length ||
-        record.catalog_ids.some((id) => !network.catalogsById.has(id)) ||
+        record.catalog_ids.some((id) => typeof id !== "string" || !id) ||
         !Array.isArray(record.source_urls) || !record.source_urls.length ||
         record.source_urls.some((url) => !safeUrl(url)) ||
         record.commercial_eligible !== false) {
@@ -498,7 +643,7 @@ async function loadCatalogIndex(network, catalog, fetchImpl) {
     validatePolicyAnnotation(record, network.sourcePolicyReview);
     seenIds.add(record.record_id);
   }
-  if (seenIds.size !== expectedIds.size || Array.from(expectedIds).some((id) => !seenIds.has(id))) {
+  if (seenIds.size !== catalog.record_count) {
     throw new Error("page_catalog_index_membership_mismatch");
   }
   catalogIndexCache.set(cacheKey, payload.records);
@@ -523,7 +668,11 @@ export async function resolveRecordRelatedCatalogPreview(
     throw new Error("record_catalog_request_invalid");
   }
   const ids = Array.from(new Set(sharedCatalogIds.map((id) => String(id || "").trim())));
-  if (ids.length !== sharedCatalogIds.length || ids.some((id) => !id || !network.catalogsById.has(id))) {
+  if (ids.length !== sharedCatalogIds.length || ids.some((id) => !id)) {
+    throw new Error("record_catalog_membership_invalid");
+  }
+  await ensureCatalogsLoaded(network, ids, fetchImpl);
+  if (ids.some((id) => !network.catalogsById.has(id))) {
     throw new Error("record_catalog_membership_invalid");
   }
   const catalogs = ids.map((id) => network.catalogsById.get(id));
@@ -684,6 +833,7 @@ async function searchPageDerivedCatalogPreviewIndexed(query, network, limit = 5,
   if (postings.some((set) => set.size === 0)) return [];
   const candidateIds = Array.from(postings[0]).filter((id) => postings.every((set) => set.has(id)));
   if (!candidateIds.length) return [];
+  await ensureCatalogsLoaded(network, candidateIds, fetchImpl);
 
   const contentIntent = terms.some((term) => CONTENT_INTENT.has(term));
   const productTerms = new Set(["product", "products", "model", "models", "watch", "watches", "buy", "retailer", "retailers", "price", "prices", "reference", "references"]);
@@ -963,4 +1113,5 @@ export function clearPageDerivedCatalogPreviewCache() {
   pending = null;
   searchIndexCache.clear();
   catalogIndexCache.clear();
+  registryShardCache.clear();
 }

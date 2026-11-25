@@ -3373,6 +3373,47 @@ def write_outputs(
         "metrics": analysis["metrics"], "source_policy_review": analysis.get("source_policy_review"), "catalogs": analysis["catalogs"],
     }, progress_label="catalog_write_registry")
     files.append({"file": "registry.json.gz", "bytes": size, "sha256": digest, "items": len(analysis["catalogs"])})
+
+    # Keep the full registry for offline validation, but publish compact,
+    # query-loadable metadata shards for the Edge search path. Large membership
+    # arrays remain in the per-catalog indexes and provenance artifacts.
+    registry_shard_dir = output_dir / "registry-shards"
+    registry_shard_dir.mkdir(parents=True, exist_ok=True)
+    registry_groups = defaultdict(list)
+    for catalog in analysis["catalogs"]:
+        catalog_id = catalog["catalog_id"]
+        registry_prefix = hashlib.sha256(catalog_id.encode("utf-8")).hexdigest()[:2]
+        compact_catalog = {
+            key: value for key, value in catalog.items()
+            if key not in {"record_ids", "source_page_ids"}
+        }
+        registry_groups[registry_prefix].append(compact_catalog)
+
+    expected_registry_paths = set()
+    for registry_prefix, shard_catalogs in sorted(registry_groups.items()):
+        relative_path = f"registry-shards/{registry_prefix}.json.gz"
+        expected_registry_paths.add(relative_path)
+        size, digest = _write_gzip(
+            output_dir / relative_path,
+            {
+                "version": 1,
+                "analysis_version": analysis.get("analysis_version", ANALYZER_VERSION),
+                "status": "candidate_staging_not_production",
+                "source_policy_review": analysis.get("source_policy_review"),
+                "catalogs": sorted(shard_catalogs, key=lambda item: item["catalog_id"]),
+            },
+            progress_label="catalog_write_registry_shard_" + registry_prefix,
+        )
+        files.append({
+            "file": relative_path,
+            "bytes": size,
+            "sha256": digest,
+            "items": len(shard_catalogs),
+        })
+    for stale_path in registry_shard_dir.glob("*.json.gz"):
+        if stale_path.relative_to(output_dir).as_posix() not in expected_registry_paths:
+            stale_path.unlink()
+
     if isinstance(index_batch_size, bool) or not isinstance(index_batch_size, int) or not 1 <= index_batch_size <= 4096:
         raise ValueError("index_batch_size must be an integer from 1 to 4096")
 
@@ -3636,6 +3677,81 @@ def validate_outputs(output_dir: Path, progress: bool = False) -> dict:
     registry = json.loads(gzip.decompress(registry_raw).decode("utf-8"))
     report = json.loads((output_dir / "report.json").read_text(encoding="utf-8"))
     emit("catalog_validation_registry_loaded", catalogs=len(registry.get("catalogs", [])))
+    if int(manifest.get("analysis_version", 0) or 0) >= 21:
+        full_registry_catalogs = registry.get("catalogs") if isinstance(registry, dict) else None
+        if not isinstance(full_registry_catalogs, list):
+            raise ValueError("full candidate registry catalog list is invalid")
+        full_registry_by_id = {
+            item.get("catalog_id"): item for item in full_registry_catalogs
+            if isinstance(item, dict) and isinstance(item.get("catalog_id"), str)
+        }
+        if len(full_registry_by_id) != len(full_registry_catalogs):
+            raise ValueError("full candidate registry contains duplicate catalog IDs")
+        registry_shard_entries = sorted(
+            (
+                item for item in manifest.get("files", [])
+                if isinstance(item, dict) and str(item.get("file", "")).startswith("registry-shards/")
+            ),
+            key=lambda item: item.get("file", ""),
+        )
+        if not registry_shard_entries:
+            raise ValueError("compact registry shards are missing")
+        seen_registry_catalog_ids = set()
+        for shard_index, entry in enumerate(registry_shard_entries, start=1):
+            relative_path = entry["file"]
+            if not re.fullmatch(r"registry-shards/[0-9a-f]{2}[.]json[.]gz", relative_path):
+                raise ValueError("compact registry shard path is invalid")
+            raw = (output_dir / relative_path).read_bytes()
+            if (
+                len(raw) != entry.get("bytes")
+                or hashlib.sha256(raw).hexdigest() != entry.get("sha256")
+            ):
+                raise ValueError("compact registry shard integrity mismatch: " + relative_path)
+            payload = json.loads(gzip.decompress(raw).decode("utf-8"))
+            if not isinstance(payload, dict):
+                raise ValueError("compact registry shard payload is invalid")
+            shard_catalogs = payload.get("catalogs")
+            if (
+                payload.get("version") != 1
+                or payload.get("status") != "candidate_staging_not_production"
+                or payload.get("source_policy_review") != manifest.get("source_policy_review")
+                or not isinstance(shard_catalogs, list)
+                or len(shard_catalogs) != entry.get("items")
+            ):
+                raise ValueError("compact registry shard metadata or item count is invalid")
+            for compact_catalog in shard_catalogs:
+                catalog_id = compact_catalog.get("catalog_id") if isinstance(compact_catalog, dict) else None
+                full_catalog = full_registry_by_id.get(catalog_id)
+                if not isinstance(catalog_id, str) or not catalog_id or full_catalog is None:
+                    raise ValueError("compact registry shard references an unknown catalog")
+                expected_prefix = hashlib.sha256(catalog_id.encode("utf-8")).hexdigest()[:2]
+                if relative_path != f"registry-shards/{expected_prefix}.json.gz":
+                    raise ValueError("compact registry catalog is in the wrong shard")
+                if catalog_id in seen_registry_catalog_ids:
+                    raise ValueError("compact registry shards contain duplicate catalog IDs")
+                if "record_ids" in compact_catalog or "source_page_ids" in compact_catalog:
+                    raise ValueError("compact registry shard duplicates large membership arrays")
+                expected_compact = {
+                    key: value for key, value in full_catalog.items()
+                    if key not in {"record_ids", "source_page_ids"}
+                }
+                if compact_catalog != expected_compact:
+                    raise ValueError("compact registry metadata differs from the full registry")
+                seen_registry_catalog_ids.add(catalog_id)
+            if progress and (shard_index % 32 == 0 or shard_index == len(registry_shard_entries)):
+                emit(
+                    "catalog_validation_registry_shards_progress",
+                    shards_processed=shard_index,
+                    shards_total=len(registry_shard_entries),
+                    catalogs_validated=len(seen_registry_catalog_ids),
+                )
+        if seen_registry_catalog_ids != set(full_registry_by_id):
+            raise ValueError("compact registry shards do not cover the full catalog registry")
+        emit(
+            "catalog_validation_registry_shards_loaded",
+            shards=len(registry_shard_entries),
+            catalogs=len(seen_registry_catalog_ids),
+        )
     if manifest.get("metrics") != report.get("metrics"):
         raise ValueError("report and manifest metrics do not match")
     policy_review = manifest.get("source_policy_review")
