@@ -12141,10 +12141,10 @@ async function searchCrawlerIndex(query,offset=0,mode=selectedMode){
    return await response.json();
   })()
  ]);
- if(engineResult.status==='rejected')throw engineResult.reason;
- const engine=engineResult.value;
- const all=engine.search(query,{limit:50,lane:lanes[mode]||null});
- let results=all.slice(offset,offset+20),count=all.length,indexedPages=engine.pageCount,hasMore=offset+20<all.length;
+ // A failed or unavailable static-index fetch must not block the independent public search fallback.
+ const engine=engineResult.status==='fulfilled'?engineResult.value:null;
+ const all=engine?engine.search(query,{limit:50,lane:lanes[mode]||null}):[];
+ let results=all.slice(offset,offset+20),count=all.length,indexedPages=engine?.pageCount||0,hasMore=offset+20<all.length;
  let source='Everything Hub verified public crawler index';
  if(!all.length&&offset===0&&!['images','videos','news'].includes(mode)){
   try{
@@ -12166,7 +12166,7 @@ async function searchCrawlerIndex(query,offset=0,mode=selectedMode){
   results,
   catalogResults:catalogResult.status==='fulfilled'&&Array.isArray(catalogResult.value.catalogResults)?catalogResult.value.catalogResults:[],
   count,totalMatches:count,indexedPages,hasMore,
-  source,indexUpdatedAt:engine.updatedAt,indexTransport:engine.transport
+  source,indexUpdatedAt:engine?.updatedAt||null,indexTransport:engine?.transport||'unavailable'
  };
 }
 async function searchPublicSources(query,mode=selectedMode){
