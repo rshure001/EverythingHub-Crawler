@@ -52,6 +52,25 @@ class RecordRelatedCatalogTests(unittest.TestCase):
         self.assertEqual([x["record_id"] for x in second["items"]], ["r4"])
         self.assertFalse(second["has_more"])
 
+    def test_empty_related_catalog_returns_honest_empty_page(self):
+        definition = build_related_catalog_definition({"record_id": "r1", "catalog_ids": []})
+        result = resolve_related_records("r1", definition, self.catalogs, self.records)
+        self.assertEqual(result["items"], [])
+        self.assertFalse(result["has_more"])
+        self.assertEqual(result["membership_mode"], "virtual_shared_catalog_references")
+
+    def test_resolver_rejects_catalog_owned_by_another_record(self):
+        definition = build_related_catalog_definition({"record_id": "r2", "catalog_ids": ["c1"]})
+        with self.assertRaisesRegex(ValueError, "owner does not match"):
+            resolve_related_records("r1", definition, self.catalogs, self.records)
+
+    def test_resolver_rejects_boolean_pagination_values(self):
+        definition = build_related_catalog_definition({"record_id": "r1", "catalog_ids": ["c1"]})
+        with self.assertRaisesRegex(ValueError, "offset must be a non-negative integer"):
+            resolve_related_records("r1", definition, self.catalogs, self.records, offset=True)
+        with self.assertRaisesRegex(ValueError, "limit must be an integer"):
+            resolve_related_records("r1", definition, self.catalogs, self.records, limit=True)
+
     def test_unsorted_legacy_catalogs_are_normalized(self):
         catalogs = {"c": {"record_ids": ["r3", "r1", "r2", "r2"]}}
         definition = build_related_catalog_definition({"record_id": "r1", "catalog_ids": ["c"]})
