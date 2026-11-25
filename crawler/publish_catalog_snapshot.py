@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Publish a candidate catalog snapshot promptly, before exhaustive validation.
+"""Publish a candidate catalog snapshot after exhaustive integrity validation.
 
-This publisher accepts only a candidate-staging registry with every catalog
-explicitly unverified and commercially ineligible. Full per-index semantic
-validation runs after publication and must pass before search smoke testing.
-The snapshot remains tied to the immutable source-index SHA in report.json.
+The caller must run catalog_page_analysis.py --validate-only successfully
+before invoking this publisher. This publisher independently checks every
+artifact checksum and accepts only candidate-staging records that remain
+explicitly unverified and commercially ineligible. The snapshot remains tied
+to the immutable source-index SHA in report.json.
 """
 from __future__ import annotations
 

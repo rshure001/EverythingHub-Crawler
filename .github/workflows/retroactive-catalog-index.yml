@@ -28,7 +28,8 @@ permissions:
 
 concurrency:
   group: catalog-data-publish-v9-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  # Newer catalog runs supersede stale snapshots; the checkpoint step saves resumable host state on cancellation.
+  cancel-in-progress: true
 
 jobs:
   inventory:
@@ -159,19 +160,19 @@ jobs:
           PY
       - name: Build page-derived catalog source review backlog
         run: python crawler/catalog_host_review_queue.py
-      - name: Publish candidate catalog snapshot immediately on latest main
+      - name: Validate registry and every per-catalog index before candidate publication
+        run: python crawler/catalog_page_analysis.py --validate-only
+      - name: Validate page-derived catalog source review backlog before publication
+        run: python crawler/catalog_host_review_queue.py --validate-only
+      - name: Publish candidate catalog snapshot only after integrity and dedup validation
         if: github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          # Publish only explicitly unverified candidate data. Full semantic and
-          # per-index validation runs below and controls search smoke testing.
+          # The full integrity and deduplication gates above must pass before publication.
+          # Candidate status and commercial-ineligible flags remain enforced by the publisher.
           python crawler/publish_catalog_snapshot.py --attempts 4
-      - name: Validate registry and every per-catalog index after candidate publication
-        run: python crawler/catalog_page_analysis.py --validate-only
-      - name: Validate page-derived catalog source review backlog
-        run: python crawler/catalog_host_review_queue.py --validate-only
       - name: Run catalog search smoke test after successful validation
         if: github.ref == 'refs/heads/main'
         env:
