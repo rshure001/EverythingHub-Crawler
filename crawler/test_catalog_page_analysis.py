@@ -1570,6 +1570,8 @@ class CatalogInventoryTriggerTests(unittest.TestCase):
         publish_marker = "Publish candidate catalog snapshot only after integrity and dedup validation"
         self.assertLess(workflow.index(validation_marker), workflow.index(publish_marker))
         self.assertLess(workflow.index(source_review_marker), workflow.index(publish_marker))
+        self.assertLess(workflow.index("Analyze every eligible existing indexed page"), workflow.index("Record persisted catalog and record throughput"))
+        self.assertLess(workflow.index("Record persisted catalog and record throughput"), workflow.index(validation_marker))
         validation = workflow.split(validation_marker, 1)[1].split(publish_marker, 1)[0]
         publish = workflow.split(publish_marker, 1)[1]
         self.assertIn("python crawler/catalog_page_analysis.py --validate-only", validation)

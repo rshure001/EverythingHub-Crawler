@@ -15,6 +15,8 @@ on:
       - "crawler/automation-trigger.json"
       - "crawler/catalog_host_review_queue.py"
       - "crawler/catalog_source_policy.py"
+      - "crawler/catalog_throughput.py"
+      - "crawler/test_catalog_throughput.py"
       - "crawler/catalog-source-terms.json"
       - "crawler/product_metadata.py"
       - "data/source-policy-reviews.json"
@@ -86,11 +88,10 @@ jobs:
         run: python -m unittest test_catalog_host_review_queue.py -v
       - name: Test fail-closed catalog source policy
         working-directory: crawler
+        run: python -m unittest test_catalog_source_policy.py -v
       - name: Test persisted catalog throughput accounting
         working-directory: crawler
         run: python -m unittest test_catalog_throughput.py -v
-        run: python -m unittest test_catalog_source_policy.py -v
-
       - name: Test public search publisher limits
         working-directory: publisher
         run: python -m unittest test_stage_search_catalog.py -v
