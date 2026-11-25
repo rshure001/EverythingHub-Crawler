@@ -23,6 +23,7 @@ on:
       - ".github/workflows/validate-vercel-search.yml"
       - ".github/workflows/eh-free-fallback-acceptance.yml"
       - ".github/workflows/everything-hub-production-browser-check.yml"
+      - ".github/workflows/windows-local-build.yml"
   pull_request:
     paths:
       - "crawler/**"
@@ -45,6 +46,7 @@ on:
       - ".github/workflows/recovery-search-check.yml"
       - ".github/workflows/validate-vercel-search.yml"
       - ".github/workflows/eh-free-fallback-acceptance.yml"
+      - ".github/workflows/windows-local-build.yml"
   workflow_dispatch:
 permissions:
   contents: read
