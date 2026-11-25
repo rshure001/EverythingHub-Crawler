@@ -12146,7 +12146,14 @@ async function searchCrawlerIndex(query,offset=0,mode=selectedMode){
  // A failed or unavailable static-index fetch must not block the independent public search fallback.
  const engine=engineResult.status==='fulfilled'?engineResult.value:null;
  const all=engine?engine.search(query,{limit:50,lane:lanes[mode]||null}):[];
- let results=all.slice(offset,offset+20),count=all.length,indexedPages=engine?.pageCount||0,hasMore=offset+20<all.length;
+ let results=all.slice(offset,offset+20),count=all.length,indexedPages=engine?.candidatePageCount||0,hasMore=offset+20<all.length;
+ const indexScan=engine?{
+  candidateShardCount:engine.selectedShardCount||0,
+  totalCandidateShardCount:engine.totalCandidateShardCount||0,
+  candidatePageCount:engine.candidatePageCount||0,
+  totalCandidatePageCount:engine.totalCandidatePageCount||0,
+  candidateTruncated:Boolean(engine.candidateTruncated)
+ }:null;
  let source='Everything Hub verified public crawler index';
  if(!all.length&&offset===0&&!['images','videos','news'].includes(mode)){
   try{
@@ -12168,7 +12175,8 @@ async function searchCrawlerIndex(query,offset=0,mode=selectedMode){
   results,
   catalogResults:catalogResult.status==='fulfilled'&&Array.isArray(catalogResult.value.catalogResults)?catalogResult.value.catalogResults:[],
   count,totalMatches:count,indexedPages,hasMore,
-  source,indexUpdatedAt:engine?.updatedAt||null,indexTransport:engine?.transport||'unavailable'
+  source,indexUpdatedAt:engine?.updatedAt||null,indexTransport:engine?.transport||'unavailable',
+  indexScan
  };
 }
 async function searchPublicSources(query,mode=selectedMode){
@@ -12276,7 +12284,7 @@ form.addEventListener('submit',async e=>{
    return '<article class="result">'+preview+'<div class="result-copy"><a target="_blank" rel="noopener noreferrer" href="'+link+'">'+esc(x.title||'Public source result')+'</a>'+(isVideo(x)?'<span class="media-tag">VIDEO</span>':'')+'<p>'+esc(x.snippet||'')+'</p><div class="source">'+esc(sourceLabel)+'</div></div></article>';
   }).join('');
   const moreAvailable=shown<matches.length||(shown>=matches.length&&apiHasMore);
-  const resultLabel=activeType==='web'&&totalIndexed?'Showing '+matches.length.toLocaleString()+' results · '+totalIndexed.toLocaleString()+' pages indexed':matches.length.toLocaleString()+' '+activeType+' results';
+  const resultLabel=activeType==='web'&&totalIndexed?'Showing '+matches.length.toLocaleString()+' results · '+totalIndexed.toLocaleString()+' matching candidate pages scanned':matches.length.toLocaleString()+' '+activeType+' results';
   const scanNote=activeType==='web'&&searchScan?.candidateTruncated
    ?'<p class="source result-count" role="status">Partial index scan: searched '+Number(searchScan.candidateShardCount||0).toLocaleString()+' of '+Number(searchScan.totalCandidateShardCount||0).toLocaleString()+' matching shards ('+Number(searchScan.candidatePageCount||0).toLocaleString()+' of '+Number(searchScan.totalCandidatePageCount||0).toLocaleString()+' candidate pages). Results may be incomplete.</p>'
    :'';
