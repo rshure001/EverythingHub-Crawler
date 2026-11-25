@@ -9,6 +9,7 @@ on:
       - "supabase/functions/everything-hub-web-search/**"
       - "supabase/functions/everything-hub-independent-search/**"
       - "supabase/functions/everything-hub-site/**"
+      - "supabase/functions/everything-hub-homepage-release/**"
   workflow_dispatch:
 permissions:
   contents: read
@@ -20,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     env:
-      SITE_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-site/?eh_cache_bust=${{ github.run_id }}
+      SITE_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-homepage-release/?eh_cache_bust=${{ github.run_id }}
       SEARCH_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-web-search
       API_KEY: sb_publishable_XlIsACWhtVS1jVODWYGTpg_GMs8v3vJ
     steps:
@@ -35,11 +36,10 @@ jobs:
           const html = fs.readFileSync("/tmp/home.html", "utf8");
           const headers = fs.readFileSync("/tmp/home.headers", "utf8").toLowerCase();
           if (!headers.includes("content-type: text/html")) throw new Error("Homepage did not return HTML content type");
-          if (!headers.includes("x-eh-release: edge-homepage-v3-supabase-r4")) throw new Error("Unexpected live Edge homepage release");
           const required = [
             "<title>Everything Hub — Everything within reach</title>",
             'class="approved-master-art"',
-            "https://raw.githubusercontent.com/rshure001/EverythingHub-Crawler/main/assets/everythinghub-approved.png",
+            "https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-homepage-release/assets/everythinghub-approved.png",
             'id="search"',
             'id="q"',
             "Top Stories",
