@@ -67,7 +67,7 @@ def iter_related_records(
     related_catalog: Mapping[str, Any],
     catalogs_by_id: Mapping[str, Mapping[str, Any]],
     records_by_id: Mapping[str, Mapping[str, Any]],
-) -> Iterator[dict[str, Any]]:
+) -> Iterator[Mapping[str, Any]]:
     """Stream a deduplicated union of shared catalog members, excluding owner."""
     catalog_ids = related_catalog.get("shared_catalog_ids", [])
     if not isinstance(catalog_ids, (list, tuple, set)):
@@ -87,9 +87,8 @@ def iter_related_records(
             continue
         record = records_by_id.get(related_id)
         if isinstance(record, Mapping):
-            # Copy only the returned page of records, preserving original
-            # provenance and policy/rights metadata without cloning records.
-            yield dict(record)
+            # Defer copying until the requested page is assembled.
+            yield record
 
 
 def resolve_related_records(
@@ -117,7 +116,7 @@ def resolve_related_records(
         if len(page) == limit:
             has_more = True
             break
-        page.append(record)
+        page.append(dict(record))
     return {
         "owner_record_id": owner_record_id,
         "record_catalog_id": related_catalog.get("record_catalog_id"),
