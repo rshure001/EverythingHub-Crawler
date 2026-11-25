@@ -697,6 +697,8 @@ def build_public_catalog_indexes(result):
         "restricted_records_excluded_from_public_indexes": len(staged_record_ids - eligible_record_ids),
         "eligible_records_without_public_index": len(eligible_without_index),
         "catalog_index_shards": len(shard_payloads),
+        "record_owned_catalogs": len(root_record_search_document_ids),
+        "record_owned_catalog_membership_mode": "virtual_shared_catalog_references",
     })
 
     manifest = {
@@ -719,6 +721,8 @@ def build_public_catalog_indexes(result):
         "record_search_schema_version": 1,
         "root_record_search_document_occurrences": root_record_search_document_occurrences,
         "unique_root_record_search_documents": len(root_record_search_document_ids),
+        "record_owned_catalog_count": len(root_record_search_document_ids),
+        "record_owned_catalog_membership_mode": "virtual_shared_catalog_references",
         "catalog_indexes": catalog_index_manifest,
         "shards": shard_manifest,
     }
