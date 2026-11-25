@@ -23,6 +23,7 @@ from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from index_store import load_index
+from record_related_catalogs import validate_record_catalog_inputs
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_INDEX = ROOT / "data" / "index.json"
@@ -1864,6 +1865,10 @@ def analyze_pages(
     global_subject_catalogs = _add_global_subject_catalogs(pages, page_rows, records, catalogs)
     _reconcile_page_record_provenance(page_rows, records)
     global_typed_catalogs_by_type = _add_global_typed_entity_catalogs(page_rows, records, catalogs)
+    registry_metrics = (
+        validate_record_catalog_inputs(records, list(catalogs.values()))
+        if include_identity_catalogs else {}
+    )
 
     for item in records.values():
         item["source_urls"] = sorted(item["source_urls"])
@@ -1981,6 +1986,7 @@ def analyze_pages(
         "eligible_unique_source_page_coverage_percentage": round(eligible_coverage, 4) if eligible_coverage is not None else None,
     }
     metrics.update(identity_metrics)
+    metrics.update(registry_metrics)
     return {
         "schema_version": 1,
         "analysis_version": ANALYZER_VERSION,
@@ -2281,6 +2287,7 @@ def analyze_pages_incremental(
         }, sort_keys=True), flush=True)
     _reconcile_page_record_provenance(all_page_rows, all_records)
     global_typed_catalogs_by_type = _add_global_typed_entity_catalogs(all_page_rows, all_records, all_catalogs)
+    registry_metrics = validate_record_catalog_inputs(all_records, all_catalogs)
     if progress:
         print(json.dumps({
             "stage": "catalog_global_typed_catalogs_complete",
@@ -2418,6 +2425,7 @@ def analyze_pages_incremental(
         "host_partitions_reused": reused, "host_partitions_rebuilt": rebuilt,
     }
     metrics.update(identity_metrics)
+    metrics.update(registry_metrics)
     _emit_progress(
         progress,
         "catalog_metrics_complete",
