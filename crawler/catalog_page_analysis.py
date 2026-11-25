@@ -1108,6 +1108,14 @@ def _build_identity_catalogs(page_rows: list[dict], records, stream_catalogs: bo
                 "record_type": record.get("record_type", "other"),
                 "page_catalog_ids": page_catalog_ids,
                 "source_catalog_ids": sorted(set(record.get("catalog_ids", []))),
+                "record_catalog_id": stable_id("record-catalog", record_id),
+                "owner_record_id": record_id,
+                "catalog_kind": "record_related_items",
+                "membership_mode": "virtual_shared_catalog_references",
+                "shared_catalog_ids": sorted({
+                    catalog_id for catalog_id in record.get("catalog_ids", [])
+                    if isinstance(catalog_id, str) and catalog_id
+                }),
                 "source_page_ids": source_page_ids,
                 "source_urls": sorted(set(record.get("source_urls", []))),
                 "record_ids": [record_id],
@@ -1127,7 +1135,15 @@ def _build_identity_catalogs(page_rows: list[dict], records, stream_catalogs: bo
         "page_owned_identity_catalogs": page_catalog_count,
         "page_owned_identity_catalogs_with_records": page_catalogs_with_records,
         "page_owned_identity_catalogs_without_records": page_catalog_count - page_catalogs_with_records,
-        "record_owned_identity_catalogs": len(record_map),
+         "record_owned_identity_catalogs": len(record_map),
+        "record_related_catalogs": len(record_map),
+        "record_related_catalog_shared_catalog_references": sum(
+            len({
+                catalog_id for catalog_id in record.get("catalog_ids", [])
+                if isinstance(catalog_id, str) and catalog_id
+            })
+            for record in record_map.values() if isinstance(record, dict)
+        ),
         "identity_catalogs_total": page_catalog_count + len(record_map),
     }
     page_catalogs = iter_page_catalogs()
@@ -1886,6 +1902,8 @@ def analyze_pages(
             "page_owned_identity_catalogs_with_records": 0,
             "page_owned_identity_catalogs_without_records": 0,
             "record_owned_identity_catalogs": 0,
+            "record_related_catalogs": 0,
+            "record_related_catalog_shared_catalog_references": 0,
             "identity_catalogs_total": 0,
         }
         page_identity_catalogs, record_identity_catalogs = [], []
