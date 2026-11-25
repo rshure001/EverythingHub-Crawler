@@ -1,5 +1,10 @@
 name: Everything Hub free fallback acceptance
 on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/eh-free-fallback-acceptance.yml"
+      - "vercel-homepage/**"
   # The Vercel projects are not Git-linked. Dispatch the live browser gate only
   # after the stable aliases have been deployed, or after data-only catalog runs.
   workflow_dispatch:
