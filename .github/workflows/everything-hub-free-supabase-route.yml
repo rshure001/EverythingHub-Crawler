@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/everything-hub-free-supabase-route.yml"
+      - ".github/workflows/everything-hub-free-supabase-route.yml"
       - "site/index.html"
       - "data/page-derived-catalogs/**"
       - "supabase/functions/everything-hub-web-search/**"
