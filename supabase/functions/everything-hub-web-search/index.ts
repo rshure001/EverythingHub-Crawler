@@ -123,7 +123,7 @@ async function loadStaticCatalog(query: string): Promise<StaticCatalog> {
       for (const term of terms) {
         const tokens = indexByPrefix.get(prefixByTerm.get(term)!) || {};
         const postings = tokens[term];
-        if (!Array.isArray(postings)) { candidateShardIds = new Set(); break; }
+        if (!Array.isArray(postings)) { candidateShardIds = new Set<number>(); break; }
         const ids = new Set<number>();
         for (const pair of postings) {
           if (Array.isArray(pair) && Number.isInteger(pair[0]) && pair[0] >= 0 &&
