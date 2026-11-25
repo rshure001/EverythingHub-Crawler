@@ -1,80 +1,35 @@
-name: Everything Hub free Vercel homepage and catalog API check
+name: Everything Hub free Supabase Storage and catalog API diagnostic
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/everything-hub-free-supabase-route.yml"
-      - "site/index.html"
-      - "site/search.js"
-      - "vercel-homepage/**"
-      - "public-search/search.js"
-      - "supabase/functions/everything-hub-web-search/**"
-      - "supabase/functions/everything-hub-independent-search/**"
   workflow_dispatch:
 permissions:
   contents: read
-concurrency:
-  group: everythinghub-free-homepage-route
-  cancel-in-progress: true
 jobs:
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      SITE_URL: https://everythinghub-homepage-fixed.vercel.app/?eh_cache_bust=${{ github.run_id }}
-      ART_URL: https://everythinghub-homepage-fixed.vercel.app/assets/everythinghub-approved.png
-      SEARCH_URL: https://everythinghub-homepage-fixed.vercel.app/api/search-catalog
+      SITE_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/storage/v1/object/public/everythinghub-public-site/index.html
+      SEARCH_JS_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/storage/v1/object/public/everythinghub-public-site/search.js
+      SEARCH_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-web-search
       API_KEY: sb_publishable_XlIsACWhtVS1jVODWYGTpg_GMs8v3vJ
     steps:
       - uses: actions/checkout@v4
-      - name: Verify free Vercel homepage
+      - name: Verify public Storage homepage and MIME type
         run: |
           set -euo pipefail
           code="$(curl --silent --show-error --location --max-time 30 -D /tmp/home.headers -o /tmp/home.html -w '%{http_code}' "$SITE_URL")"
           test "$code" = "200"
-          node <<'NODE'
-          const fs = require("node:fs");
-          const html = fs.readFileSync("/tmp/home.html", "utf8");
-          const headers = fs.readFileSync("/tmp/home.headers", "utf8").toLowerCase();
-          if (!headers.includes("content-type: text/html")) throw new Error("Vercel homepage did not return HTML content type");
-          const required = [
-            "<title>Everything Hub — Everything within reach</title>",
-            'class="approved-master-art"',
-            'src="/assets/everythinghub-approved.png"',
-            'id="search"',
-            'id="q"',
-            "Top Stories",
-            "Refresh",
-            'data-mode="web"',
-            'data-mode="news"',
-            'data-mode="images"',
-            'data-mode="videos"',
-            'data-mode="shopping"',
-            'data-mode="places"',
-            'data-mode="business"',
-            'data-mode="research"',
-            'src="/search.js"',
-            '"/public-search/manifest.json"'
-          ];
-          const missing = required.filter(value => !html.includes(value));
-          if (html.includes("v2.appdeploy.ai")) missing.push("AppDeploy image dependency");
-          if (missing.length) throw new Error("Homepage contract missing: " + missing.join(", "));
-          console.log(JSON.stringify({status:"homepage_http_200",contentType:"text/html",approvedArtwork:true,categories:8,clientSearch:true},null,2));
-          NODE
-      - name: Verify approved octopus artwork is served by the free Vercel proxy
+          grep -Eiq '^content-type: *text/html' /tmp/home.headers
+          for needle in 'class="approved-master-art"' 'data:image/png;base64,' 'id="search"' 'id="q"' 'src="search.js"' 'data-mode="web"' 'data-mode="news"' 'data-mode="images"' 'data-mode="videos"' 'data-mode="shopping"' 'data-mode="places"' 'data-mode="business"' 'data-mode="research"'; do
+            grep -Fqi "$needle" /tmp/home.html || { echo "Missing homepage feature: $needle"; exit 1; }
+          done
+      - name: Verify the public search client is served as JavaScript
         run: |
           set -euo pipefail
-          curl --silent --show-error --location --fail --max-time 30 -D /tmp/art.headers "$ART_URL" -o /tmp/approved-art.png
-          node <<'NODE'
-          const fs=require("node:fs"), b=fs.readFileSync("/tmp/approved-art.png");
-          const h=fs.readFileSync("/tmp/art.headers","utf8").toLowerCase();
-          if(!h.includes("content-type: image/png")) throw new Error("Approved artwork did not return image/png");
-          if(b.length<100000 || !b.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10]))) throw new Error("Approved artwork is not a valid PNG");
-          const width=b.readUInt32BE(16),height=b.readUInt32BE(20);
-          if(width<500||height<300) throw new Error("Approved artwork dimensions too small: "+width+"x"+height);
-          console.log(JSON.stringify({status:"artwork_http_200",bytes:b.length,width,height},null,2));
-          NODE
-      - name: Verify catalog preview API through same-origin Vercel proxy
+          curl --silent --show-error --location --fail --max-time 30 -D /tmp/search.headers "$SEARCH_JS_URL" -o /tmp/search.js
+          cmp -s site/search.js /tmp/search.js
+          grep -Eiq '^content-type: *application/javascript' /tmp/search.headers
+      - name: Verify catalog preview API contract
         run: |
           set -euo pipefail
           for query in Rolex "Las Vegas" NASA; do
@@ -82,9 +37,9 @@ jobs:
             code="$(curl --silent --show-error --location --max-time 35 -G "$SEARCH_URL" -H "apikey: $API_KEY" -H "accept: application/json" --data-urlencode "q=$query" --data-urlencode "limit=10" --data-urlencode "offset=0" -o "/tmp/search-$safe.json" -w '%{http_code}')"
             test "$code" = "200"
             QUERY="$query" FILE="/tmp/search-$safe.json" node <<'NODE'
-          const fs=require("node:fs"), q=process.env.QUERY, data=JSON.parse(fs.readFileSync(process.env.FILE,"utf8"));
-          if(!Array.isArray(data.results)||!Array.isArray(data.catalogResults)) throw new Error(q+": search API response contract missing arrays");
-          console.log(JSON.stringify({status:"catalog_api_http_200",query:q,webResults:data.results.length,catalogResults:data.catalogResults.length,source:data.source||null,fallbackReason:data.fallbackReason||null},null,2));
+          const fs=require("node:fs"),q=process.env.QUERY,data=JSON.parse(fs.readFileSync(process.env.FILE,"utf8"));
+          if(!Array.isArray(data.results)||!Array.isArray(data.catalogResults))throw new Error(q+": catalog API response contract missing arrays");
+          console.log(JSON.stringify({query:q,webResults:data.results.length,catalogResults:data.catalogResults.length},null,2));
           NODE
           done
       - name: Verify the browser search client accepts the current manifest

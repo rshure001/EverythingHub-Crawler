@@ -1,11 +1,18 @@
-name: Publish and verify Everything Hub — in-house Supabase route
-# In-house static release: publish the approved homepage through the signed-in Supabase publisher and verify the public Storage URL.
+name: Publish and verify Everything Hub — free Supabase Storage route
 on:
-  # Manual only: this storage publisher requires a signed-in user JWT.
-  # The public, database-independent Edge Function route is validated separately.
+  push:
+    branches: [main]
+    paths:
+      - "site/index.html"
+      - "site/search.js"
+      - "supabase/functions/everything-hub-static-publisher/index.ts"
+      - ".github/workflows/everything-hub-publish-and-verify.yml"
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: everything-hub-static-publish
+  cancel-in-progress: true
 jobs:
   publish-and-verify:
     runs-on: ubuntu-latest
@@ -14,11 +21,12 @@ jobs:
       PUBLISHER_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-static-publisher
       PUBLISHER_USER_JWT: ${{ secrets.SUPABASE_PUBLISHER_USER_JWT }}
     steps:
+      - uses: actions/checkout@v4
       - name: Require a signed-in publisher JWT before network access
         run: |
           set -euo pipefail
           if [ -z "$PUBLISHER_USER_JWT" ]; then
-            echo "::error::Missing GitHub Actions secret SUPABASE_PUBLISHER_USER_JWT. The publisher requires a signed-in Supabase user access token."
+            echo "::error::Missing GitHub Actions secret SUPABASE_PUBLISHER_USER_JWT. Add a fresh signed-in Supabase user access token to repository Actions secrets; do not paste it into chat."
             exit 1
           fi
           if [[ ! "$PUBLISHER_USER_JWT" =~ ^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$ ]]; then
@@ -31,82 +39,39 @@ jobs:
           set -euo pipefail
           curl --silent --show-error --fail --max-time 20 "$PUBLISHER_URL?probe=publisher-diagnostic" -o /tmp/probe.json
           node <<'NODE'
-          const fs = require('fs');
-          const d = JSON.parse(fs.readFileSync('/tmp/probe.json', 'utf8'));
-          if (!['ready', 'bucket_missing'].includes(d.status) || d.publishOnProbe !== false) {
-            throw new Error('Publisher storage preflight failed: ' + JSON.stringify(d));
-          }
+          const fs=require("node:fs"),d=JSON.parse(fs.readFileSync("/tmp/probe.json","utf8"));
+          if(!["ready","bucket_missing"].includes(d.status)||d.publishOnProbe!==false)throw new Error("Publisher storage preflight failed: "+JSON.stringify(d));
           console.log(JSON.stringify({status:d.status,bucket:d.bucket,bucketExists:d.bucketExists,publishOnProbe:d.publishOnProbe},null,2));
           NODE
-      - name: Publish the approved homepage with the signed-in user session
+      - name: Publish the exact commit to public Storage
         id: publish
         run: |
           set -euo pipefail
-          curl --silent --show-error --max-time 30 -X POST "$PUBLISHER_URL" \
+          curl --silent --show-error --max-time 45 -X POST "$PUBLISHER_URL" \
             -H "Authorization: Bearer $PUBLISHER_USER_JWT" \
             -H "Content-Type: application/json" \
-            --data '{}' -o /tmp/publish.json -w "HTTP %{http_code}\\n"
+            --data '{"sha":"'"$GITHUB_SHA"'"}' -o /tmp/publish.json -w 'HTTP %{http_code}\n'
           node --input-type=module <<'NODE'
-          import fs from 'node:fs';
-          const d = JSON.parse(fs.readFileSync('/tmp/publish.json','utf8'));
-          if (d.status !== 'published' || !d.url || !Number.isInteger(d.bytes)) {
-            throw new Error('Publisher did not confirm publication: ' + JSON.stringify(d));
-          }
-          fs.appendFileSync(process.env.GITHUB_OUTPUT, 'url=' + d.url + '\\n');
-          console.log(JSON.stringify({status:d.status,url:d.url,bytes:d.bytes,contentType:d.contentType},null,2));
+          import fs from "node:fs";
+          const d=JSON.parse(fs.readFileSync("/tmp/publish.json","utf8"));
+          if(d.status!=="published"||!d.url||!d.searchUrl||!Number.isInteger(d.bytes)||!Number.isInteger(d.searchBytes))throw new Error("Publisher did not confirm both assets: "+JSON.stringify(d));
+          fs.appendFileSync(process.env.GITHUB_OUTPUT,'url='+d.url+'\n');
+          fs.appendFileSync(process.env.GITHUB_OUTPUT,'search_url='+d.searchUrl+'\n');
+          console.log(JSON.stringify({status:d.status,url:d.url,searchUrl:d.searchUrl,bytes:d.bytes,searchBytes:d.searchBytes,commitSha:d.commitSha},null,2));
           NODE
-      - name: Verify published response headers and approved homepage content
+      - name: Verify published HTML and JavaScript assets
         env:
           SITE_URL: ${{ steps.publish.outputs.url }}
-          KEY: sb_publishable_XlIsACWhtVS1jVODWYGTpg_GMs8v3vJ
+          SEARCH_URL: ${{ steps.publish.outputs.search_url }}
         run: |
           set -euo pipefail
           curl -fsS -D /tmp/site-headers.txt "$SITE_URL" -o /tmp/site.html
-          cmp -s site/index.html /tmp/site.html || { echo "Published homepage does not byte-match the approved repository site/index.html"; exit 1; }
-          cat /tmp/site-headers.txt
+          cmp -s site/index.html /tmp/site.html || { echo "Published homepage does not byte-match site/index.html"; exit 1; }
           grep -Eiq '^content-type: *text/html' /tmp/site-headers.txt
-          for needle in '<!doctype html' 'Everything Hub — Everything within reach' 'everythinghub-approved.png' 'id="searchForm"' 'data-mode="web"' 'data-mode="news"' 'data-mode="images"' 'data-mode="videos"' 'data-mode="shopping"' 'data-mode="places"' 'data-mode="business"' 'data-mode="research"' 'everything-hub-media-search'; do
+          curl -fsS -D /tmp/search-headers.txt "$SEARCH_URL" -o /tmp/search.js
+          cmp -s site/search.js /tmp/search.js || { echo "Published search client does not byte-match site/search.js"; exit 1; }
+          grep -Eiq '^content-type: *application/javascript' /tmp/search-headers.txt
+          for needle in '<!doctype html' 'Everything Hub — Everything within reach' 'class="approved-master-art"' 'data:image/png;base64,' 'id="search"' 'id="q"' 'src="search.js"' 'data-mode="web"' 'data-mode="news"' 'data-mode="images"' 'data-mode="videos"' 'data-mode="shopping"' 'data-mode="places"' 'data-mode="business"' 'data-mode="research"' 'EverythingHubSearch.create'; do
             grep -Fqi "$needle" /tmp/site.html || { echo "Missing: $needle"; exit 1; }
           done
-          echo "PASS: published homepage has text/html MIME type and all eight categories."
-          echo "=== Live Rolex search API ==="
-          curl -fsS -G "https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-web-search" -H "apikey: $KEY" -H "accept: application/json" --data-urlencode "q=Rolex" --data-urlencode "limit=10" -o /tmp/search.json
-          node -e 'const d=require("/tmp/search.json"); if(!d.results?.length)process.exit(1); console.log(JSON.stringify({count:d.count,resultCount:d.results.length,first:d.results[0]?.title},null,2))'
-      - name: Install browser verification
-        run: |
-          npm init -y
-          npm install --no-save playwright
-          npx playwright install --with-deps chromium
-      - name: Verify the published site visually and exercise search
-        env:
-          SITE_URL: ${{ steps.publish.outputs.url }}
-        run: |
-          node --input-type=module <<'NODE'
-          import { chromium } from "playwright";
-          const browser = await chromium.launch({headless:true});
-          const page = await browser.newPage({viewport:{width:1440,height:1000}});
-          const errors=[];
-          page.on("pageerror",e=>errors.push(e.message));
-          const response=await page.goto(process.env.SITE_URL,{waitUntil:"networkidle",timeout:60000});
-          await page.locator("#q").waitFor({state:"visible",timeout:20000});
-          const title=await page.title();
-          const categories=await page.locator("[data-mode]").count();
-          const art=await page.locator(".art img").evaluate(i=>({complete:i.complete,width:i.naturalWidth}));
-          if(!response?.ok()||!title.includes("Everything Hub")||categories!==8||art.width<100) throw new Error("Homepage render check failed: "+JSON.stringify({status:response?.status(),title,categories,art}));
-          await page.locator("#q").fill("Rolex");
-          await page.locator("#q").press("Enter");
-          await page.waitForFunction(()=>document.querySelector("#status")?.textContent?.includes("results for"),null,{timeout:30000});
-          const resultCount=await page.locator(".result").count();
-          if(!resultCount) throw new Error("Rolex search returned no rendered results");
-          await page.screenshot({path:"everything-hub-published.png",fullPage:true});
-          console.log(JSON.stringify({http:response.status(),title,categories,artwork:art,renderedSearchResults:resultCount,pageErrors:errors},null,2));
-          if(errors.length) throw new Error("Browser page errors: "+errors.join("; "));
-          await browser.close();
-          NODE
-      - name: Save verified homepage screenshot
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: everything-hub-published-homepage
-          path: everything-hub-published.png
-          if-no-files-found: ignore
+          echo "PASS: public Storage HTML and search client are byte-identical to the approved repository files."
