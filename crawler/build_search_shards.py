@@ -243,17 +243,9 @@ def write_query_index(output_dir, token_shards):
         for stale in query_dir.glob("*.json.gz"):
             stale.unlink()
         return None, reason
-    if total_compressed > MAX_QUERY_INDEX_TOTAL_COMPRESSED_BYTES:
-        reason = f"query index exceeds the {MAX_QUERY_INDEX_TOTAL_COMPRESSED_BYTES:,}-byte aggregate compressed limit"
-        for stale in query_dir.glob("*.json.gz"):
-            stale.unlink()
-        return None, reason
-    if total_uncompressed > MAX_QUERY_INDEX_TOTAL_UNCOMPRESSED_BYTES:
-        reason = f"query index exceeds the {MAX_QUERY_INDEX_TOTAL_UNCOMPRESSED_BYTES:,}-byte aggregate decoded limit"
-        for stale in query_dir.glob("*.json.gz"):
-            stale.unlink()
-        return None, reason
-
+    # Publish independently bounded prefix shards even when their aggregate is
+    # larger than a single Edge Function response budget. Search consumers fetch
+    # only the SHA-256 prefix shards needed for the user's query.
     expected_files = set()
     files = []
     for prefix, payload, raw, compressed in encoded:

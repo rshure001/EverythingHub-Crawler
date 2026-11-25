@@ -40,17 +40,17 @@ type StaticCatalog = {
   pages: any[];
   updatedAt: string | null;
   mode: "gzip" | "shards";
+  queryKey?: string;
   expiresAt: number;
 };
 
 let staticCatalogCache: StaticCatalog | null = null;
-let staticCatalogPromise: Promise<StaticCatalog> | null = null;
 
-async function loadStaticCatalog(): Promise<StaticCatalog> {
-  if (staticCatalogCache && staticCatalogCache.expiresAt > Date.now()) {
+async function loadStaticCatalog(query: string): Promise<StaticCatalog> {
+  if (staticCatalogCache && staticCatalogCache.expiresAt > Date.now() &&
+      (staticCatalogCache.mode === "gzip" || staticCatalogCache.queryKey === String(query || "").trim().toLowerCase())) {
     return staticCatalogCache;
   }
-  if (staticCatalogPromise) return staticCatalogPromise;
 
   const pending = (async () => {
     // Bound the complete first-party catalog load, not just each shard request.
@@ -75,8 +75,96 @@ async function loadStaticCatalog(): Promise<StaticCatalog> {
     const pages: any[] = [];
     let catalogMode: "gzip" | "shards" = "shards";
     const compressed = manifest.catalog_gzip;
+
+    // Large public indexes are searched by fetching only the token-prefix
+    // indexes and page shards that can contain every query term.
     if (!compressed) {
-      throw new Error("Shard-only catalogs are validated for static clients; the Edge Function will use its independent fallback to stay within the CPU budget");
+      const queryIndex = manifest.query_index;
+      if (!queryIndex || queryIndex.version !== 1 || !Array.isArray(queryIndex.shards) ||
+          queryIndex.shards.length < 1 || queryIndex.shards.length > 256) {
+        throw new Error("No bounded query-directed crawler index is published");
+      }
+      const terms = [...new Set(String(query || "").normalize("NFKC").toLowerCase()
+        .match(/[\\p{L}\\p{N}]+/gu) || [])].slice(0, 12);
+      if (!terms.length) throw new Error("Search query has no indexable terms");
+      const prefixByTerm = new Map<string, string>();
+      for (const term of terms) {
+        const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(term));
+        const prefix = Array.from(new Uint8Array(digest)).slice(0, 1)
+          .map((value) => value.toString(16).padStart(2, "0")).join("");
+        prefixByTerm.set(term, prefix);
+      }
+      const indexByPrefix = new Map<string, any>();
+      for (const prefix of new Set(prefixByTerm.values())) {
+        const entry = queryIndex.shards.find((item: any) =>
+          typeof item?.file === "string" && item.file === "query-index/" + prefix + ".json.gz");
+        if (!entry || !Number.isInteger(entry.bytes) || entry.bytes < 2 ||
+            entry.bytes > 2_000_000 || !/^[a-f0-9]{64}$/.test(String(entry.sha256 || ""))) {
+          throw new Error("Query-index prefix metadata is missing or invalid");
+        }
+        const response = await fetch(STATIC_INDEX_BASE + "/" + entry.file, { headers, signal: loadSignal });
+        if (!response.ok) throw new Error("Query-index shard returned HTTP " + response.status);
+        const bytes = new Uint8Array(await response.arrayBuffer());
+        if (bytes.length !== entry.bytes) throw new Error("Query-index shard byte length mismatch");
+        const digest = await crypto.subtle.digest("SHA-256", bytes);
+        const actual = Array.from(new Uint8Array(digest)).map((value) => value.toString(16).padStart(2, "0")).join("");
+        if (actual !== entry.sha256) throw new Error("Query-index shard SHA-256 mismatch");
+        const decoded = await readBoundedText(
+          new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip")), 8_000_000,
+        );
+        const payload: any = JSON.parse(decoded);
+        if (payload?.version !== 1 || payload?.prefix !== prefix || !payload?.tokens ||
+            typeof payload.tokens !== "object" || Array.isArray(payload.tokens)) {
+          throw new Error("Query-index shard schema is invalid");
+        }
+        indexByPrefix.set(prefix, payload.tokens);
+      }
+      let candidateShardIds: Set<number> | null = null;
+      for (const term of terms) {
+        const tokens = indexByPrefix.get(prefixByTerm.get(term)!) || {};
+        const postings = tokens[term];
+        if (!Array.isArray(postings)) { candidateShardIds = new Set(); break; }
+        const ids = new Set<number>();
+        for (const pair of postings) {
+          if (Array.isArray(pair) && Number.isInteger(pair[0]) && pair[0] >= 0 &&
+              pair[0] < manifest.shards.length && Number.isInteger(pair[1]) && pair[1] > 0) ids.add(pair[0]);
+        }
+        candidateShardIds = candidateShardIds === null
+          ? ids : new Set([...candidateShardIds].filter((id) => ids.has(id)));
+        if (!candidateShardIds.size) break;
+      }
+      const selectedIds = [...(candidateShardIds || new Set<number>())].slice(0, 48);
+      for (const shardId of selectedIds) {
+        const entry = manifest.shards[shardId];
+        if (!entry || typeof entry.file !== "string" || !Number.isInteger(entry.bytes) ||
+            entry.bytes < 2 || entry.bytes > 350_000 ||
+            !/^[a-f0-9]{64}$/.test(String(entry.sha256 || ""))) {
+          throw new Error("Page-shard metadata is invalid");
+        }
+        const response = await fetch(STATIC_INDEX_BASE + "/" + entry.file, { headers, signal: loadSignal });
+        if (!response.ok) throw new Error("Page shard returned HTTP " + response.status);
+        const bytes = new Uint8Array(await response.arrayBuffer());
+        if (bytes.length !== entry.bytes) throw new Error("Page-shard byte length mismatch");
+        const digest = await crypto.subtle.digest("SHA-256", bytes);
+        const actual = Array.from(new Uint8Array(digest)).map((value) => value.toString(16).padStart(2, "0")).join("");
+        if (actual !== entry.sha256) throw new Error("Page-shard SHA-256 mismatch");
+        const decoded = await readBoundedText(
+          new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip")), 600_000,
+        );
+        const payload: any = JSON.parse(decoded);
+        if (payload?.version !== 1 || !Array.isArray(payload?.pages) ||
+            payload.pages.length !== entry.pages) throw new Error("Page-shard schema or count mismatch");
+        pages.push(...payload.pages);
+      }
+      const catalog: StaticCatalog = {
+        pages,
+        updatedAt: normalizeManifestTimestamp(manifest.updated_at),
+        mode: "shards",
+        queryKey: String(query || "").trim().toLowerCase(),
+        expiresAt: Date.now() + 15_000,
+      };
+      staticCatalogCache = catalog;
+      return catalog;
     }
 
     if (compressed) {
@@ -149,12 +237,7 @@ async function loadStaticCatalog(): Promise<StaticCatalog> {
     return catalog;
   })();
 
-  staticCatalogPromise = pending;
-  try {
-    return await pending;
-  } finally {
-    if (staticCatalogPromise === pending) staticCatalogPromise = null;
-  }
+  return await pending;
 }
 
 Deno.serve(async (req: Request) => {
@@ -337,7 +420,7 @@ Deno.serve(async (req: Request) => {
     let catalogTransport: "gzip" | "shards" | null = null;
 
     try {
-      const catalog = await loadStaticCatalog();
+      const catalog = await loadStaticCatalog(query);
       catalogLoaded = true;
       catalogTransport = catalog.mode;
       let found = searchStaticPages(catalog.pages, query, validLane, limit, offset);
