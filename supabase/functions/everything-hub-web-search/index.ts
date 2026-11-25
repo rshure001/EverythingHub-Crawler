@@ -40,6 +40,7 @@ type StaticCatalog = {
   pages: any[];
   updatedAt: string | null;
   mode: "gzip" | "shards";
+  queryKey?: string;
   expiresAt: number;
 };
 
@@ -47,7 +48,8 @@ let staticCatalogCache: StaticCatalog | null = null;
 let staticCatalogPromise: Promise<StaticCatalog> | null = null;
 
 async function loadStaticCatalog(query: string): Promise<StaticCatalog> {
-  if (staticCatalogCache && staticCatalogCache.expiresAt > Date.now()) {
+  if (staticCatalogCache && staticCatalogCache.expiresAt > Date.now() &&
+      (staticCatalogCache.mode === "gzip" || staticCatalogCache.queryKey === String(query || "").trim().toLowerCase())) {
     return staticCatalogCache;
   }
   if (staticCatalogPromise) return staticCatalogPromise;
@@ -160,6 +162,7 @@ async function loadStaticCatalog(query: string): Promise<StaticCatalog> {
         pages,
         updatedAt: normalizeManifestTimestamp(manifest.updated_at),
         mode: "shards",
+        queryKey: String(query || "").trim().toLowerCase(),
         expiresAt: Date.now() + 15_000,
       };
       staticCatalogCache = catalog;
