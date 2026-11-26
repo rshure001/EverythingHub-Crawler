@@ -51,7 +51,7 @@ jobs:
       - name: Verify the public search script matches the repository
         run: |
           set -euo pipefail
-          curl --silent --show-error --location --fail --max-time 40 -D /tmp/search.headers "$SEARCH_JS_URL" -o /tmp/search.js
+          curl --silent --show-error --location --fail --max-time 40 -H "Accept: application/vnd.github.raw" -H "X-GitHub-Api-Version: 2022-11-28" -D /tmp/search.headers "$SEARCH_JS_URL" -o /tmp/search.js
           cmp -s site/search.js /tmp/search.js
           grep -Eiq '^content-type: *application/javascript|^content-type: *text/javascript' /tmp/search.headers
       - name: Verify the public crawler manifest and shard inventory
