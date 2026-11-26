@@ -8,7 +8,7 @@ const origin = new URL(base);
 assert.equal(origin.protocol, 'https:', 'first-party API must use HTTPS');
 
 async function getSearch(query) {
-  const url = new URL('/everything-hub-web-search', origin);
+  const url = new URL('everything-hub-web-search', origin.href.endsWith('/') ? origin.href : origin.href + '/');
   url.searchParams.set('q', query);
   url.searchParams.set('limit', '20');
   const response = await fetch(url, {
