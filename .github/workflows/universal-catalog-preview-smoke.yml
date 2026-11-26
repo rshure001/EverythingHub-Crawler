@@ -1,4 +1,4 @@
-name: Universal catalog preview smoke
+name: First-party catalog preview smoke
 on:
   pull_request:
     paths:
@@ -9,6 +9,7 @@ on:
     paths:
       - ".github/workflows/universal-catalog-preview-smoke.yml"
       - "scripts/universal-catalog-preview-smoke.mjs"
+      - "supabase/functions/everything-hub-web-search/**"
   workflow_run:
     workflows:
       - "Retroactive catalog inventory"
@@ -24,19 +25,17 @@ jobs:
   smoke:
     if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 6
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 1
-          filter: blob:none
-          sparse-checkout: scripts/universal-catalog-preview-smoke.mjs
-          sparse-checkout-cone-mode: false
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: Verify the immutable Vercel preview API
+      - name: Verify first-party Supabase catalog search
         run: node scripts/universal-catalog-preview-smoke.mjs
         env:
-          EH_BACKEND_PREVIEW_URL: https://everythinghub-search-backend-5ly8pl5vt-rshure001-8053.vercel.app
+          EH_BACKEND_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1
+          EH_PUBLISHABLE_KEY: sb_publishable_XlIsACWhtVS1jVODWYGTpg_GMs8v3vJ
