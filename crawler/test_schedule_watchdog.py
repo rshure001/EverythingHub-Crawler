@@ -63,6 +63,55 @@ class ScheduleWatchdogTests(unittest.TestCase):
         self.assertIn("types:" + chr(10) + "      - completed", workflow_run)
         self.assertIn("branches: [main]", workflow_run)
 
+    def test_nonempty_frontier_continues_crawling_even_when_manifest_is_fresh(self):
+        result = evaluate(
+            [{
+                "name": "Everything Hub crawler",
+                "status": "completed",
+                "conclusion": "success",
+                "event": "workflow_dispatch",
+                "created_at": "2026-11-16T15:54:00Z",
+            }],
+            now=NOW,
+            manifest_updated_at=manifest_minutes_ago(1),
+            frontier_pending_count=4200,
+        )
+        self.assertEqual(result["action"], "mark")
+        self.assertEqual(result["frontier_pending_count"], 4200)
+        self.assertIn("frontier URLs remain queued", result["reason"])
+
+    def test_recent_crawl_attempt_waits_before_frontier_continuation(self):
+        result = evaluate(
+            [{
+                "name": "Everything Hub crawler",
+                "status": "completed",
+                "conclusion": "success",
+                "event": "workflow_dispatch",
+                "created_at": "2026-11-16T15:59:00Z",
+            }],
+            now=NOW,
+            manifest_updated_at=manifest_minutes_ago(1),
+            frontier_pending_count=4200,
+        )
+        self.assertEqual(result["action"], "wait")
+        self.assertEqual(result["frontier_pending_count"], 4200)
+
+    def test_empty_frontier_does_not_chain_another_crawl(self):
+        result = evaluate(
+            [{
+                "name": "Everything Hub crawler",
+                "status": "completed",
+                "conclusion": "success",
+                "event": "workflow_dispatch",
+                "created_at": "2026-11-16T15:54:00Z",
+            }],
+            now=NOW,
+            manifest_updated_at=manifest_minutes_ago(1),
+            frontier_pending_count=0,
+        )
+        self.assertEqual(result["action"], "healthy")
+        self.assertEqual(result["frontier_pending_count"], 0)
+
     def test_recent_schedule_and_fresh_manifest_are_healthy(self):
         result = evaluate(
             [scheduled("2026-11-16T15:55:00Z")],
@@ -374,7 +423,7 @@ class ScheduleWatchdogTests(unittest.TestCase):
         workflow = (Path(__file__).resolve().parents[1] / ".github" / "workflows" / "crawl-watchdog.yml").read_text(encoding="utf-8")
         self.assertIn("public-search/manifest.json", workflow)
         self.assertIn("base64.b64decode", workflow)
-        self.assertIn("schedule_watchdog.py /tmp/crawl-runs-combined.json /tmp/public-manifest.json", workflow)
+        self.assertIn("schedule_watchdog.py /tmp/crawl-runs-combined.json /tmp/public-manifest.json data/frontier.json", workflow)
         self.assertIn("actions/workflows/crawl.yml/runs?event=schedule&per_page=5", workflow)
         self.assertIn("actions/runs/${latest_scheduled_run_id}/jobs?per_page=100", workflow)
         self.assertIn("crawler/automation-trigger.json", workflow)
