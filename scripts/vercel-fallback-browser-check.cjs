@@ -123,3 +123,4 @@ const fs = require("node:fs");
   }
 })();
 // Trigger a dedicated real-browser run for the already-deployed Vercel fallback.
+// Trigger Vercel fallback browser test after narrowing workflow conditions.
