@@ -98,6 +98,7 @@ const EXPECTED_MODES = ["business", "images", "news", "places", "research", "sho
       title: await page.title(),
       searchFormCount: await page.locator("form#search").count(),
       searchInputCount: await page.locator("#q").count(),
+      resultsContainerCount: await page.locator("#results").count(),
       categoryCount: await page.locator(".eh-modebar .eh-mode[data-mode]").count(),
       categoryModes: await page.locator(".eh-modebar .eh-mode[data-mode]").evaluateAll(nodes => nodes.map(node => node.dataset.mode).sort())
     };
@@ -113,7 +114,7 @@ const EXPECTED_MODES = ["business", "images", "news", "places", "research", "sho
     if (!response?.ok() || !report.checks.homepage.contentType.toLowerCase().startsWith("text/html") ||
         !report.checks.homepage.title.includes("Everything Hub") ||
         report.checks.homepage.searchFormCount !== 1 || report.checks.homepage.searchInputCount !== 1 ||
-        report.checks.homepage.categoryCount !== 8 ||
+        report.checks.homepage.resultsContainerCount !== 1 || report.checks.homepage.categoryCount !== 8 ||
         JSON.stringify(report.checks.homepage.categoryModes) !== JSON.stringify(EXPECTED_MODES)) {
       fail("Homepage structure, branding, or category check failed");
     }
