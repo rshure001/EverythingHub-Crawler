@@ -1,19 +1,19 @@
 {
   "schema_version": 1,
   "status": "source_review_backlog_not_a_fetch_queue",
-  "generated_at": "2026-11-26T03:08:56Z",
+  "generated_at": "2026-11-26T05:16:59Z",
   "analysis_version": 22,
-  "source_index_pages": 223483,
-  "source_index_updated_at": "2026-11-26T02:35:58Z",
-  "source_index_sha256": "8ce2d9e4ca964637d5f05ed20e3bcae1ef648350c796042549c9007ab3097339",
+  "source_index_pages": 223962,
+  "source_index_updated_at": "2026-11-26T03:09:14Z",
+  "source_index_sha256": "de0cffe0df3c0fe6de903df11cbc2a5a7a676c24e2ab359bf204224093789dc6",
   "metrics": {
-    "catalog_definition_candidates": 2703,
+    "catalog_definition_candidates": 2704,
     "unique_source_hosts": 118,
-    "unique_source_urls": 2702,
+    "unique_source_urls": 2703,
     "policy_preapproved_urls_needing_runtime_robots_check": 729,
     "policy_preapproved_api_urls_needing_runtime_robots_check": 0,
     "policy_preapproved_catalog_page_urls_needing_runtime_robots_check": 729,
-    "policy_review_required_urls": 1772,
+    "policy_review_required_urls": 1773,
     "path_not_allowlisted_urls": 201,
     "mixed_policy_status_urls": 0,
     "invalid_catalog_candidates": 0,
@@ -3349,7 +3349,7 @@
       "evidence_strength": "high",
       "catalog_status": "definition_only",
       "record_count": 0,
-      "source_page_count": 10,
+      "source_page_count": 13,
       "source_host": "bucherer.com",
       "source_url": "https://bucherer.com/us/en/watches",
       "review_status": "policy_review_required",
@@ -3445,6 +3445,37 @@
       "source_page_count": 1,
       "source_host": "bucherer.com",
       "source_url": "https://bucherer.com/us/en/rolex/team",
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "reviewed_at": null,
+      "metadata_only": false,
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null,
+      "robots_recheck_required": true,
+      "fetch_authorized": false
+    },
+    {
+      "catalog_id": "catalog:1ad0d88c42fd8f1448c8181e",
+      "title": "Bucherer Places",
+      "catalog_type": "geographic",
+      "record_type": "place",
+      "catalog_origin": "source_declared_collection",
+      "evidence_strength": "medium",
+      "catalog_status": "definition_only",
+      "record_count": 0,
+      "source_page_count": 1,
+      "source_host": "bucherer.com",
+      "source_url": "https://bucherer.com/us/en/locations",
       "review_status": "policy_review_required",
       "source_access_mode": null,
       "terms_url": null,
@@ -77839,8 +77870,8 @@
       "catalog_origin": "source_declared_collection",
       "evidence_strength": "medium",
       "catalog_status": "candidate_needs_source_validation",
-      "record_count": 43,
-      "source_page_count": 44,
+      "record_count": 52,
+      "source_page_count": 53,
       "source_host": "internetsociety.org",
       "source_url": "https://internetsociety.org/fr/blog",
       "review_status": "policy_review_required",
@@ -77870,8 +77901,8 @@
       "catalog_origin": "source_declared_collection",
       "evidence_strength": "medium",
       "catalog_status": "candidate_needs_source_validation",
-      "record_count": 353,
-      "source_page_count": 358,
+      "record_count": 387,
+      "source_page_count": 392,
       "source_host": "internetsociety.org",
       "source_url": "https://internetsociety.org/blog",
       "review_status": "policy_review_required",
@@ -77932,8 +77963,8 @@
       "catalog_origin": "source_declared_collection",
       "evidence_strength": "medium",
       "catalog_status": "candidate_needs_source_validation",
-      "record_count": 129,
-      "source_page_count": 130,
+      "record_count": 136,
+      "source_page_count": 137,
       "source_host": "internetsociety.org",
       "source_url": "https://internetsociety.org/resources",
       "review_status": "policy_review_required",
@@ -77963,8 +77994,8 @@
       "catalog_origin": "source_declared_collection",
       "evidence_strength": "medium",
       "catalog_status": "candidate_needs_source_validation",
-      "record_count": 14,
-      "source_page_count": 15,
+      "record_count": 15,
+      "source_page_count": 16,
       "source_host": "internetsociety.org",
       "source_url": "https://internetsociety.org/fr/resources",
       "review_status": "policy_review_required",
@@ -77994,8 +78025,8 @@
       "catalog_origin": "source_declared_collection",
       "evidence_strength": "medium",
       "catalog_status": "candidate_needs_source_validation",
-      "record_count": 79,
-      "source_page_count": 80,
+      "record_count": 84,
+      "source_page_count": 85,
       "source_host": "internetsociety.org",
       "source_url": "https://internetsociety.org/es/blog",
       "review_status": "policy_review_required",
@@ -104180,6 +104211,32 @@
       "source_host": "bucherer.com",
       "catalog_ids": [
         "catalog:b44b047a2e756bfc043bb477"
+      ],
+      "catalog_count": 1,
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "policy_preapproved": false,
+      "metadata_only": false,
+      "robots_recheck_required": true,
+      "fetch_authorized": false,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null
+    },
+    {
+      "source_url": "https://bucherer.com/us/en/locations",
+      "source_host": "bucherer.com",
+      "catalog_ids": [
+        "catalog:1ad0d88c42fd8f1448c8181e"
       ],
       "catalog_count": 1,
       "review_status": "policy_review_required",
@@ -194545,6 +194602,62 @@
       ]
     },
     {
+      "host": "bucherer.com",
+      "catalog_definition_count": 5,
+      "unique_source_urls": 5,
+      "review_status_counts": {
+        "policy_review_required": 5
+      },
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "reviewed_at": null,
+      "source_access_modes": [],
+      "metadata_only": false,
+      "allowed_catalog_path_patterns": [],
+      "max_response_bytes": 0,
+      "per_dataset_rights_required": true,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null,
+      "sample_catalogs": [
+        {
+          "catalog_id": "catalog:3232dfc192cb9b587c08d891",
+          "title": "Bucherer Models",
+          "catalog_type": "commerce",
+          "source_url": "https://bucherer.com/us/en/watches",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:7f033e90afea6aea14b9f683",
+          "title": "Bucherer Models",
+          "catalog_type": "commerce",
+          "source_url": "https://bucherer.com/us/en/rolex-certified-pre-owned/watches",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:b44b047a2e756bfc043bb477",
+          "title": "Bucherer Models",
+          "catalog_type": "commerce",
+          "source_url": "https://bucherer.com/rolex-certified-pre-owned/watches",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:226a407b728b58c396759794",
+          "title": "Bucherer People",
+          "catalog_type": "people_directory",
+          "source_url": "https://bucherer.com/us/en/rolex/team",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:1ad0d88c42fd8f1448c8181e",
+          "title": "Bucherer Places",
+          "catalog_type": "geographic",
+          "source_url": "https://bucherer.com/us/en/locations",
+          "review_status": "policy_review_required"
+        }
+      ]
+    },
+    {
       "host": "fao.org",
       "catalog_definition_count": 5,
       "unique_source_urls": 5,
@@ -194981,55 +195094,6 @@
           "title": "Foundation Organizations",
           "catalog_type": "organization_directory",
           "source_url": "https://apache.org/foundation",
-          "review_status": "policy_review_required"
-        }
-      ]
-    },
-    {
-      "host": "bucherer.com",
-      "catalog_definition_count": 4,
-      "unique_source_urls": 4,
-      "review_status_counts": {
-        "policy_review_required": 4
-      },
-      "terms_url": null,
-      "terms_status": "unreviewed",
-      "reviewed_at": null,
-      "source_access_modes": [],
-      "metadata_only": false,
-      "allowed_catalog_path_patterns": [],
-      "max_response_bytes": 0,
-      "per_dataset_rights_required": true,
-      "min_interval_seconds": 1.0,
-      "max_requests_per_run": 1,
-      "policy_note": null,
-      "sample_catalogs": [
-        {
-          "catalog_id": "catalog:3232dfc192cb9b587c08d891",
-          "title": "Bucherer Models",
-          "catalog_type": "commerce",
-          "source_url": "https://bucherer.com/us/en/watches",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:7f033e90afea6aea14b9f683",
-          "title": "Bucherer Models",
-          "catalog_type": "commerce",
-          "source_url": "https://bucherer.com/us/en/rolex-certified-pre-owned/watches",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:b44b047a2e756bfc043bb477",
-          "title": "Bucherer Models",
-          "catalog_type": "commerce",
-          "source_url": "https://bucherer.com/rolex-certified-pre-owned/watches",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:226a407b728b58c396759794",
-          "title": "Bucherer People",
-          "catalog_type": "people_directory",
-          "source_url": "https://bucherer.com/us/en/rolex/team",
           "review_status": "policy_review_required"
         }
       ]
