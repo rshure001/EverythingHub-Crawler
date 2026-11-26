@@ -18,6 +18,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -211,7 +212,7 @@ def _current_index_snapshot(root: Path):
 
 def publish_snapshot(
     repo_root=ROOT,
-    attempts: int = 4,
+    attempts: int = 8,
     ledger_command=None,
     env=None,
 ) -> dict:
@@ -330,6 +331,8 @@ def publish_snapshot(
                 raise RuntimeError("main advanced during every bounded catalog publication attempt")
             # Retry only the publish/ledger operation. The validated snapshot is
             # retained in the temporary directory and is never re-analyzed here.
+            # Back off briefly so concurrent crawler commits can settle before retry.
+            time.sleep(min(2 ** (attempt - 1), 4))
 
     raise RuntimeError("catalog snapshot publication exhausted its bounded attempts")
 
@@ -337,7 +340,7 @@ def publish_snapshot(
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--repo-root", type=Path, default=ROOT)
-    parser.add_argument("--attempts", type=int, default=4)
+    parser.add_argument("--attempts", type=int, default=8)
     args = parser.parse_args()
     result = publish_snapshot(args.repo_root, attempts=args.attempts)
     print(json.dumps(result, ensure_ascii=False, sort_keys=True, indent=2))
