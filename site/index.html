@@ -12135,10 +12135,10 @@ async function searchCrawlerIndex(query,offset=0,mode=selectedMode){
  const [engineResult,catalogResult]=await Promise.allSettled([
   getEverythingHubSearchEngine(query),
   local?Promise.resolve({catalogResults:[]}):(async()=>{
-   const u=new URL(functionEndpoint('everything-hub-web-search'));
+   const u=new URL(functionEndpoint('everything-hub-catalog-search'));
    u.searchParams.set('q',query);u.searchParams.set('limit','20');u.searchParams.set('offset',String(offset));
    if(lanes[mode])u.searchParams.set('tentacle',lanes[mode]);
-   const response=await fetch(u,{headers:{apikey:EH_PUBLIC_KEY,accept:'application/json'},signal:AbortSignal.timeout(8000)});
+   const response=await fetch(u,{headers:{apikey:EH_PUBLIC_KEY,accept:'application/json'},signal:AbortSignal.timeout(15000)});
    if(!response.ok)throw Error('Catalog preview route '+response.status);
    return await response.json();
   })()
