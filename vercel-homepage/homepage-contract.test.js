@@ -40,7 +40,7 @@ test("all core search, news and media routes use the independent Vercel backend"
 });
 
 test("homepage keeps one search form and all eight search categories", () => {
-  assert.equal((html.match(/<form\\b[^>]*id=["']search["']/gi) || []).length, 1);
+  assert.equal((html.match(/<form\b[^>]*id=["']search["']/gi) || []).length, 1);
   assert.equal((html.match(/id=["']q["']/gi) || []).length, 1);
   const modes = [...html.matchAll(/data-mode=["'](web|news|images|videos|shopping|places|business|research)["']/g)]
     .map(match => match[1])
