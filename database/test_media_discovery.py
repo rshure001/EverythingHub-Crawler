@@ -49,8 +49,11 @@ class MediaDiscoveryComplianceTests(unittest.TestCase):
 
     def test_homepage_media_queries_remain_configured(self):
         homepage = (SOURCE.parents[3] / "vercel-homepage" / "index.html").read_text(encoding="utf-8")
-        self.assertIn("loadHomepageMedia('image','latest technology science nature','homeLiveImages')", homepage)
-        self.assertIn("loadHomepageMedia('video','latest science technology discoveries','homeLiveVideos')", homepage)
+        self.assertIn("loadHomepageMedia('image','NASA','homeLiveImages')", homepage)
+        self.assertIn("loadHomepageMedia('video','NASA','homeLiveVideos')", homepage)
+        self.assertIn("functionEndpoint('everything-hub-media-search',type)", homepage)
+        self.assertIn("functionEndpoint('everything-hub-media-search',mediaType)", homepage)
+        self.assertIn('source === "Internet Archive"', homepage)
 
 
     def test_bing_and_commons_are_queried_independently_and_merged(self):
