@@ -6,7 +6,7 @@ import { searchStaticPages } from "./static-search.mjs";
 import { normalizeManifestTimestamp } from "./manifest-time.mjs";
 import { isValidStaticManifest } from "./static-manifest.mjs";
 import { readBoundedText } from "./bounded-stream.mjs";
-import { loadPageDerivedCatalogPreview, searchPageDerivedCatalogPreview, resolveRecordRelatedCatalogPreview } from "./page-derived-catalog-preview.mjs";
+import { loadPageDerivedCatalogPreview, resolveRecordRelatedCatalogPreview } from "./page-derived-catalog-preview.mjs";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -85,7 +85,7 @@ async function loadStaticCatalog(query: string): Promise<StaticCatalog> {
         throw new Error("No bounded query-directed crawler index is published");
       }
       const terms = [...new Set(String(query || "").normalize("NFKC").toLowerCase()
-        .match(/[\\p{L}\\p{N}]+/gu) || [])].slice(0, 12);
+        .match(/[\p{L}\p{N}]+/gu) || [])].slice(0, 12);
       if (!terms.length) throw new Error("Search query has no indexable terms");
       const prefixByTerm = new Map<string, string>();
       for (const term of terms) {
@@ -360,57 +360,19 @@ Deno.serve(async (req: Request) => {
   const staticFallback = async (reason: string) => {
     // Load the first-party catalog network directly from one SHA-pinned GitHub snapshot.
     // This path is independent of PostgreSQL and the separately hosted Vercel search project.
-    let pageDerivedCatalogResults: any[] = [];
-    let pageDerivedCatalogMeta: Record<string, any> = {
-      status: "unavailable", previewOnly: true, resultCount: 0, error: "catalog_preview_unavailable",
-    };
-    try {
-      // Candidate-only preview: the loader verifies the manifest and per-catalog indexes before returning records.
-      const pageDerived = await loadPageDerivedCatalogPreview();
-      pageDerivedCatalogResults = await searchPageDerivedCatalogPreview(query, pageDerived, 5);
-      const freshnessMatch = Boolean(pageDerived.freshnessMatch && !pageDerived.stale);
-      pageDerivedCatalogMeta = {
-        status: freshnessMatch ? "candidate-preview" : "stale-candidate-preview",
+    // Keep catalog preview out of the latency-sensitive search path. Catalog
+    // analysis is a separate workload and must not exhaust the Edge worker.
+    const attachCatalogPreview = (payload: Record<string, any>) => ({
+      ...payload,
+      catalogResults: [],
+      catalogPreview: {
+        status: "deferred",
         previewOnly: true,
-        analysisVersion: pageDerived.analysisVersion,
-        generatedAt: pageDerived.generatedAt,
-        sourceIndexPages: pageDerived.sourceIndexPages,
-        sourceIndexUpdatedAt: pageDerived.sourceIndexUpdatedAt,
-        sourceIndexSha256: pageDerived.sourceIndexSha256,
-        pageIndexPages: pageDerived.pageIndexPages,
-        pageIndexUpdatedAt: pageDerived.pageIndexUpdatedAt,
-        catalogCount: pageDerived.catalogCount,
-        recordCount: pageDerived.recordCount,
-        recordsPublished: Number(pageDerived.metrics.records_published) || 0,
-        sourceTermsReviewedRecords: Number(pageDerived.metrics.source_terms_reviewed_records) || 0,
-        resultCount: pageDerivedCatalogResults.length,
-        freshnessMatch,
-        stale: Boolean(pageDerived.stale),
-      };
-      if (!freshnessMatch) {
-        const warning = " Catalog analysis is behind the current page index or freshness could not be verified.";
-        pageDerivedCatalogResults = pageDerivedCatalogResults.map((item) => ({
-          ...item,
-          snippet: String(item.snippet || "") + warning,
-          description: String(item.description || item.snippet || "") + warning,
-        }));
-      }
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : String(error);
-      console.error("Page-derived catalog preview unavailable:", detail.slice(0, 160));
-    }
+        resultCount: 0,
+        error: "catalog_preview_deferred_from_search_path",
+      },
+    });
 
-    const attachCatalogPreview = (payload: Record<string, any>) => {
-      const fallbackResults = Array.isArray(payload.catalogResults) ? payload.catalogResults : [];
-      const useDirect = pageDerivedCatalogResults.length > 0 || fallbackResults.length === 0;
-      return {
-        ...payload,
-        catalogResults: useDirect ? pageDerivedCatalogResults : fallbackResults,
-        catalogPreview: useDirect
-          ? pageDerivedCatalogMeta
-          : (payload.catalogPreview || pageDerivedCatalogMeta),
-      };
-    };
     // Prefer the first-party public crawler index during database outages.
     // The independent Bing RSS source is only a supplement when the owned index
     // has no matching pages or cannot be loaded.
@@ -573,49 +535,6 @@ Deno.serve(async (req: Request) => {
     }));
 
     if (!results.length) return await staticFallback("database_empty");
-
-    // Attach the independently verified page-derived catalog snapshot to normal
-    // database-backed searches too. Previously this metadata appeared only on
-    // outage fallbacks, so healthy searches silently hid the catalog network.
-    let catalogResults: any[] = [];
-    let catalogPreview: Record<string, any> = {
-      status: "unavailable", previewOnly: true, resultCount: 0,
-      error: "catalog_preview_unavailable",
-    };
-    try {
-      const pageDerived = await loadPageDerivedCatalogPreview();
-      catalogResults = await searchPageDerivedCatalogPreview(query, pageDerived, 5);
-      const freshnessMatch = Boolean(pageDerived.freshnessMatch && !pageDerived.stale);
-      catalogPreview = {
-        status: freshnessMatch ? "candidate-preview" : "stale-candidate-preview",
-        previewOnly: true,
-        analysisVersion: pageDerived.analysisVersion,
-        generatedAt: pageDerived.generatedAt,
-        sourceIndexPages: pageDerived.sourceIndexPages,
-        sourceIndexUpdatedAt: pageDerived.sourceIndexUpdatedAt,
-        sourceIndexSha256: pageDerived.sourceIndexSha256,
-        pageIndexPages: pageDerived.pageIndexPages,
-        pageIndexUpdatedAt: pageDerived.pageIndexUpdatedAt,
-        catalogCount: pageDerived.catalogCount,
-        recordCount: pageDerived.recordCount,
-        recordsPublished: Number(pageDerived.metrics.records_published) || 0,
-        sourceTermsReviewedRecords: Number(pageDerived.metrics.source_terms_reviewed_records) || 0,
-        resultCount: catalogResults.length,
-        freshnessMatch,
-        stale: Boolean(pageDerived.stale),
-      };
-      if (!freshnessMatch) {
-        const warning = " Catalog analysis is behind the current page index or freshness could not be verified.";
-        catalogResults = catalogResults.map((item) => ({
-          ...item,
-          snippet: String(item.snippet || "") + warning,
-          description: String(item.description || item.snippet || "") + warning,
-        }));
-      }
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : String(error);
-      console.error("Page-derived catalog preview unavailable on database search:", detail.slice(0, 160));
-    }
 
     const hasMore = offset + results.length < totalCount;
     return json(
