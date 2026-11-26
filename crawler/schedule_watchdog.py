@@ -11,6 +11,7 @@ from typing import Any
 MAX_MANIFEST_AGE_SECONDS = 10 * 60
 MAX_MANIFEST_FUTURE_SKEW_SECONDS = 60
 MAX_SCHEDULE_AGE_SECONDS = 10 * 60
+MIN_FRONTIER_CONTINUE_INTERVAL_SECONDS = 5 * 60
 ACTIVE_STATUSES = {"queued", "in_progress", "pending", "waiting", "requested"}
 CRAWLER_WORKFLOW_NAME = "Everything Hub crawler"
 # Page-derived analysis uses a pinned source-index snapshot and a bounded
@@ -97,10 +98,19 @@ def evaluate(
     manifest_updated_at: Any | None = None,
     max_manifest_age_seconds: int = MAX_MANIFEST_AGE_SECONDS,
     max_schedule_age_seconds: int = MAX_SCHEDULE_AGE_SECONDS,
+    frontier_pending_count: int | None = None,
+    min_frontier_continue_interval_seconds: int = MIN_FRONTIER_CONTINUE_INTERVAL_SECONDS,
 ) -> dict[str, Any]:
-    """Return wait, healthy, or mark using the three explicit recovery gates."""
+    """Return wait, healthy, or mark; continue bounded crawling while frontier work remains."""
+
     now = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
     runs = runs if isinstance(runs, list) else []
+    if frontier_pending_count is not None and (
+        isinstance(frontier_pending_count, bool)
+        or not isinstance(frontier_pending_count, int)
+        or frontier_pending_count < 0
+    ):
+        raise ValueError("frontier pending count must be a non-negative integer")
     schedule = schedule_health(runs, now, max_schedule_age_seconds)
 
     manifest_time = parse_manifest_time(manifest_updated_at)
@@ -145,6 +155,7 @@ def evaluate(
         "age_seconds": attempt_age,
         "last_attempt": last_attempt,
         "manifest_age_seconds": manifest_age,
+        "frontier_pending_count": frontier_pending_count,
         **schedule,
     }
 
@@ -160,6 +171,25 @@ def evaluate(
         return {
             "action": "wait",
             "reason": "the public manifest timestamp is unavailable; do not infer that it is stale",
+            **common,
+        }
+
+    if frontier_pending_count is not None and frontier_pending_count > 0:
+        if attempt_age is not None and attempt_age < min_frontier_continue_interval_seconds:
+            return {
+                "action": "wait",
+                "reason": (
+                    f"{frontier_pending_count} frontier URLs remain queued, but the last crawler "
+                    f"attempt started less than {min_frontier_continue_interval_seconds} seconds ago"
+                ),
+                **common,
+            }
+        return {
+            "action": "mark",
+            "reason": (
+                f"{frontier_pending_count} frontier URLs remain queued; continue bounded crawling "
+                "after the minimum interval, even though the public manifest may be fresh"
+            ),
             **common,
         }
 
@@ -240,8 +270,8 @@ def recovery_dispatch_decision(runs: list[dict[str, Any]], recovery_sha: str) ->
 
 
 def main() -> None:
-    if len(sys.argv) not in (2, 3):
-        raise SystemExit("usage: schedule_watchdog.py <workflow-runs.json> [public-manifest.json]")
+    if len(sys.argv) not in (2, 3, 4):
+        raise SystemExit("usage: schedule_watchdog.py <workflow-runs.json> [public-manifest.json] [frontier.json]")
     payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
     runs = payload.get("workflow_runs")
     if not isinstance(runs, list):
@@ -254,7 +284,20 @@ def main() -> None:
         manifest_updated_at = manifest.get("updated_at")
         if parse_manifest_time(manifest_updated_at) is None:
             raise SystemExit("public search manifest is missing a valid updated_at timestamp")
-    print(json.dumps(evaluate(runs, manifest_updated_at=manifest_updated_at), sort_keys=True))
+    frontier_pending_count = None
+    if len(sys.argv) == 4:
+        frontier = json.loads(Path(sys.argv[3]).read_text(encoding="utf-8"))
+        if not isinstance(frontier, dict) or not isinstance(frontier.get("queue"), list):
+            raise SystemExit("crawler frontier did not contain a queue array")
+        frontier_pending_count = len(frontier["queue"])
+    print(json.dumps(
+        evaluate(
+            runs,
+            manifest_updated_at=manifest_updated_at,
+            frontier_pending_count=frontier_pending_count,
+        ),
+        sort_keys=True,
+    ))
 
 
 if __name__ == "__main__":
