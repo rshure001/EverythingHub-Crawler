@@ -65,6 +65,7 @@ jobs:
           set -euo pipefail
           code="$(curl --silent --show-error --location --max-time 50 -o /tmp/search.json -w '%{http_code}' "$SEARCH_URL")"
           echo "Live search HTTP=$code bytes=$(wc -c < /tmp/search.json)"
+          echo "Required source: Everything Hub public crawler index"
           head -c 1800 /tmp/search.json || true
           echo
           test "$code" = "200"
