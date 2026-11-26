@@ -22,7 +22,7 @@ jobs:
       BRIDGE_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-deploy-bridge
       SEARCH_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-web-search?q=NASA&limit=5
       CATALOG_SEARCH_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-catalog-search?q=NASA&limit=5
-      SEARCH_JS_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/storage/v1/object/public/everythinghub-public-site/search.js
+      SEARCH_JS_URL: https://cdn.statically.io/gh/rshure001/EverythingHub-Crawler@main/site/search.js
       MANIFEST_URL: https://raw.githubusercontent.com/rshure001/EverythingHub-Crawler/main/public-search/manifest.json
     steps:
       - uses: actions/checkout@v4
