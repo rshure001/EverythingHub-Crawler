@@ -18,7 +18,7 @@ const MAX_CATALOG_INDEX_GZIP_BYTES = 4_500_000;
 const MAX_CATALOG_INDEX_JSON_BYTES = 20_000_000;
 // Keep broad queries from loading registry shards for the entire catalog corpus.
 const MAX_CATALOG_METADATA_CANDIDATES = 4;
-const MAX_CATALOG_INDEX_FETCHES = 4;
+const MAX_CATALOG_INDEX_FETCHES = 3;
 const MAX_SEARCH_CACHE_ENTRIES = 64;
 const MAX_CATALOG_CACHE_ENTRIES = 5;
 const MAX_SOURCE_PAGES = 250_000;
