@@ -8,7 +8,7 @@ const origin = new URL(base);
 assert.equal(origin.protocol, 'https:', 'first-party API must use HTTPS');
 
 async function getSearch(query) {
-  const url = new URL('everything-hub-web-search', origin.href.endsWith('/') ? origin.href : origin.href + '/');
+  const url = new URL('everything-hub-catalog-search', origin.href.endsWith('/') ? origin.href : origin.href + '/');
   url.searchParams.set('q', query);
   url.searchParams.set('limit', '20');
   const response = await fetch(url, {
@@ -29,7 +29,6 @@ async function getSearch(query) {
 for (const query of ['NASA', 'Las Vegas', 'Rolex']) {
   const data = await getSearch(query);
   assert.equal(data.query, query);
-  assert.ok(Array.isArray(data.results), 'ordinary page results must be an array');
   assert.ok(Array.isArray(data.catalogResults), 'catalogResults must be an array on normal search responses');
   const preview = data.catalogPreview;
   assert.ok(preview && typeof preview === 'object', 'catalog preview metadata is required on normal search responses');
@@ -45,6 +44,7 @@ for (const query of ['NASA', 'Las Vegas', 'Rolex']) {
   assert.equal(Number(preview.recordsPublished), 0, 'candidate records must remain unpublished');
   assert.equal(Number(preview.sourceTermsReviewedRecords), 0, 'unreviewed source records must not be labeled rights-reviewed');
   assert.equal(preview.resultCount, data.catalogResults.length);
+  assert.ok(data.catalogResults.length > 0, 'each smoke query must return at least one candidate catalog');
   for (const item of data.catalogResults) {
     assert.equal(item.preview_only, true);
     assert.equal(item.commercial_eligible, false);
@@ -57,7 +57,6 @@ for (const query of ['NASA', 'Las Vegas', 'Rolex']) {
   }
   console.log(JSON.stringify({
     query,
-    pageResults: data.results.length,
     catalogResults: data.catalogResults.length,
     catalogCount: preview.catalogCount,
     recordCount: preview.recordCount,
@@ -66,4 +65,4 @@ for (const query of ['NASA', 'Las Vegas', 'Rolex']) {
     recordsPublished: preview.recordsPublished,
   }));
 }
-console.log('PASS: first-party Supabase search exposes integrity-checked candidate catalog previews.');
+console.log('PASS: isolated first-party catalog search exposes integrity-checked candidate catalog previews.');
