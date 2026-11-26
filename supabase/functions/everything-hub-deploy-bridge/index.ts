@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
-const TARGET = "https://cdn.statically.io/gh/rshure001/EverythingHub-Crawler@main/site/index.html";
+const TARGET = "https://cdn.jsdelivr.net/gh/rshure001/EverythingHub-Crawler@main/site/index.html";
 
 Deno.serve((req: Request) => {
   if (req.method !== "GET" && req.method !== "HEAD") {
@@ -18,7 +18,7 @@ Deno.serve((req: Request) => {
       Location: destination.toString(),
       "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
       "Referrer-Policy": "strict-origin-when-cross-origin",
-      "X-EH-Bridge": "statically-html-cdn",
+      "X-EH-Bridge": "jsdelivr-html-cdn",
     },
   });
 });
