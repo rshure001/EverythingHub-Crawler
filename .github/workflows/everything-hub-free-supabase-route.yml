@@ -69,3 +69,111 @@ jobs:
           echo
           test "$code" = "200"
           node -e "const fs=require('fs'); const x=JSON.parse(fs.readFileSync('/tmp/search.json','utf8')); if(!Array.isArray(x.results) || x.results.length < 1 || !String(x.source || '').includes('Everything Hub public crawler index')) { console.error(x); process.exit(1); } console.log(JSON.stringify({query:x.query??'NASA',results:x.results.length,count:x.count??null,source:x.source??null,error:x.error??null}))"
+
+      - name: Install Playwright Chromium
+        run: |
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+      - name: Run desktop and mobile browser acceptance
+        env:
+          LEGACY_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-site/
+        run: |
+          mkdir -p artifacts
+          node <<'NODE'
+          const { chromium } = require('playwright');
+          const assert = require('node:assert/strict');
+
+          (async () => {
+            const browser = await chromium.launch({ headless: true });
+            const errors = [];
+            const report = { desktop: {}, mobile: {}, browserErrors: errors };
+            try {
+              const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+              page.on('pageerror', error => errors.push(String(error)));
+              await page.goto(process.env.LEGACY_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
+              await page.waitForSelector('#q', { timeout: 30000 });
+              assert.match(await page.title(), /Everything Hub/i);
+              assert.ok(await page.locator('img[alt*="octopus" i]').count(), 'approved octopus artwork is missing');
+              const modes = ['web','news','images','videos','shopping','places','business','research'];
+              for (const mode of modes) {
+                const button = page.locator('.eh-mode[data-mode="' + mode + '"]');
+                assert.equal(await button.count(), 1, 'missing search category: ' + mode);
+                await button.click();
+                await page.waitForFunction(value => document.querySelector('.eh-mode.active')?.dataset.mode === value, mode);
+              }
+              report.desktop.categories = modes;
+
+              async function search(mode, query) {
+                await page.locator('.eh-mode[data-mode="' + mode + '"]').click();
+                await page.locator('#q').fill(query);
+                await page.locator('#search button[type="submit"]').click();
+                await page.waitForFunction(() => {
+                  const root = document.querySelector('#results');
+                  return !!root && (root.querySelectorAll('.result').length > 0 || /No .* results found|temporarily unavailable/i.test(root.innerText));
+                }, null, { timeout: 40000 });
+                const count = await page.locator('#results .result').count();
+                const titles = (await page.locator('#results .result a').allTextContents()).slice(0, 5);
+                assert.ok(count > 0, mode + ' search returned no visible results for ' + query);
+                return { mode, query, count, titles };
+              }
+
+              report.desktop.webSearches = [];
+              for (const query of ['Rolex','Las Vegas','NASA']) {
+                report.desktop.webSearches.push(await search('web', query));
+              }
+              report.desktop.news = await search('news', 'NASA');
+              await search('images', 'NASA');
+              const imageCount = await page.locator('#results .result img').count();
+              assert.ok(imageCount > 0, 'Images search returned no visible thumbnails');
+              report.desktop.imageThumbnails = imageCount;
+              await search('videos', 'NASA');
+              const videoCount = await page.locator('#results .result .media-tag, #results .result video, #results .result .play').count();
+              assert.ok(videoCount > 0, 'Videos search returned no visible video cards');
+              report.desktop.videoCards = videoCount;
+
+              await page.waitForFunction(() => document.querySelectorAll('#discoverCards .discover-card').length > 0, null, { timeout: 35000 });
+              report.desktop.topStories = await page.locator('#discoverCards .discover-card').count();
+              for (const topic of ['technology','sports','entertainment','business']) {
+                await page.locator('.discover-topic[data-topic="' + topic + '"]').click();
+                await page.waitForFunction(value => document.querySelector('.discover-topic.active')?.dataset.topic === value && document.querySelectorAll('#discoverCards .discover-card').length > 0, topic, { timeout: 30000 });
+              }
+              await page.locator('#discoverRefresh').click();
+              await page.waitForFunction(() => document.querySelectorAll('#discoverCards .discover-card').length > 0, null, { timeout: 30000 });
+              report.desktop.topicTabsAndRefresh = 'passed';
+              await page.screenshot({ path: 'artifacts/everythinghub-desktop.png', fullPage: true });
+
+              const mobile = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
+              mobile.on('pageerror', error => errors.push('mobile: ' + String(error)));
+              await mobile.goto(process.env.LEGACY_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
+              await mobile.waitForSelector('#q', { timeout: 30000 });
+              const layout = await mobile.evaluate(() => {
+                const input = document.querySelector('#q').getBoundingClientRect();
+                const button = document.querySelector('#search button').getBoundingClientRect();
+                return {
+                  viewport: innerWidth,
+                  documentWidth: document.documentElement.scrollWidth,
+                  input: { left: input.left, right: input.right, top: input.top, bottom: input.bottom },
+                  button: { left: button.left, right: button.right, top: button.top, bottom: button.bottom },
+                };
+              });
+              assert.ok(layout.documentWidth <= layout.viewport + 2, 'mobile page has horizontal overflow: ' + JSON.stringify(layout));
+              assert.ok(layout.input.left >= 0 && layout.input.right <= layout.viewport, 'mobile search input is clipped');
+              assert.ok(layout.button.left >= 0 && layout.button.right <= layout.viewport, 'mobile search button is clipped');
+              assert.ok(layout.input.bottom <= layout.button.top || layout.button.bottom <= layout.input.top || layout.input.right <= layout.button.left || layout.button.right <= layout.input.left, 'mobile search controls overlap');
+              report.mobile.layout = layout;
+              await mobile.screenshot({ path: 'artifacts/everythinghub-mobile.png', fullPage: true });
+              assert.equal(errors.length, 0, 'browser JavaScript errors: ' + errors.join(' | '));
+              require('node:fs').writeFileSync('artifacts/acceptance-report.json', JSON.stringify(report, null, 2));
+              console.log(JSON.stringify(report, null, 2));
+            } finally {
+              await browser.close();
+            }
+          })().catch(error => { console.error(error); process.exit(1); });
+          NODE
+      - name: Upload browser acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: everythinghub-browser-acceptance
+          path: artifacts/
+          if-no-files-found: warn
