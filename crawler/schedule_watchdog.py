@@ -302,3 +302,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+# 2026-11-26: manual recovery trigger; watchdog logic remains unchanged.
