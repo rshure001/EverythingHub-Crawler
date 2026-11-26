@@ -6,6 +6,7 @@ on:
     paths:
       - 'site/**'
       - 'public-search/**'
+      - 'supabase/functions/everything-hub-deploy-bridge/**'
       - '.github/workflows/everything-hub-free-supabase-route.yml'
   schedule:
     - cron: '23 * * * *'
@@ -26,6 +27,12 @@ jobs:
       MANIFEST_URL: https://raw.githubusercontent.com/rshure001/EverythingHub-Crawler/main/public-search/manifest.json
     steps:
       - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            site/index.html
+            site/search.js
+            public-search/manifest.json
+          sparse-checkout-cone-mode: false
       - name: Verify the legacy address redirects to the active bridge
         run: |
           set -euo pipefail
@@ -46,6 +53,7 @@ jobs:
           for needle in 'Everything Hub' 'id="search"' 'id="q"' 'src="search.js"' 'data-mode="web"' 'data-mode="news"' 'data-mode="images"' 'data-mode="videos"' 'data-mode="shopping"' 'data-mode="places"' 'data-mode="business"' 'data-mode="research"'; do
             grep -Fqi "$needle" /tmp/home.html || { echo "Missing homepage feature: $needle"; exit 1; }
           done
+          cmp -s site/index.html /tmp/home.html || { echo "Live bridge homepage differs from the repository's approved homepage"; exit 1; }
           test "$bytes" -gt 10000
       - name: Verify the public search script matches the repository
         run: |
@@ -57,6 +65,7 @@ jobs:
         run: |
           set -euo pipefail
           curl --silent --show-error --location --fail --max-time 40 "$MANIFEST_URL" -o /tmp/manifest.json
+          cmp -s public-search/manifest.json /tmp/manifest.json || { echo "Live crawler manifest differs from the repository"; exit 1; }
           node -e "const m=require('/tmp/manifest.json'); if(!Array.isArray(m.shards)||!m.shards.length) process.exit(1); console.log(JSON.stringify({shards:m.shards.length,totalPages:m.total_pages??m.totalPages??m.pageCount??null}))"
       - name: Verify live search endpoint returns valid results payload
         run: |
