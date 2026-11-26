@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "updated_at": "2026-11-26T16:16:45Z",
-  "reason": "Bounded recovery crawl after explicit five-minute schedule update and watchdog test correction; no crawl currently running; latest canonical public manifest remains at 226,948 pages.",
+  "updated_at": "2026-11-26T16:17:15Z",
+  "reason": "Retry bounded recovery crawl after both crawler and watchdog five-minute schedule tests were aligned with the explicit cron lists; no crawler currently running; latest manifest remains 226,948 pages.",
   "manifest_before_pages": 226948,
   "manifest_before_updated_at": "2026-11-26T15:31:56Z"
 }
