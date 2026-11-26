@@ -186,7 +186,10 @@ function decodeRootShard(entry, compressed, expectedShardId) {
   let decoded;
   try {
     decoded = zlib.gunzipSync(compressed, { maxOutputLength: MAX_ROOT_SHARD_JSON_BYTES });
-  } catch {
+  } catch (error) {
+    if (error && error.code === 'ERR_BUFFER_TOO_LARGE') {
+      throw new Error('universal_catalog_root_shard_uncompressed_limit');
+    }
     throw new Error('universal_catalog_shard_gzip_invalid');
   }
   let payload;
