@@ -13,6 +13,8 @@ on:
       - "supabase/functions/everything-hub-site/index.ts"
       - "supabase/functions/everything-hub-homepage-release/index.ts"
       - "supabase/functions/everything-hub-web-search/**"
+      - "supabase/functions/everything-hub-catalog-search/**"
+      - "supabase/functions/everything-hub-deploy-bridge/index.ts"
   workflow_dispatch:
 
 permissions:
@@ -67,7 +69,8 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-  live-cdn-browser-check:
+  live-storage-browser-check:
+    if: github.event_name == 'workflow_dispatch' || contains(toJSON(github.event.commits), 'supabase/functions/everything-hub-deploy-bridge/index.ts')
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
@@ -80,7 +83,7 @@ jobs:
           npm init -y
           npm install --no-save playwright
           npx playwright install --with-deps chromium
-      - name: Wait for the existing homepage URL to redirect to the free GitHub-backed CDN
+      - name: Wait for the existing homepage URL to redirect to the published Supabase Storage HTML
         env:
           TARGET_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-site/?eh_cache_bust=${{ github.run_id }}
         run: |
@@ -88,10 +91,10 @@ jobs:
             curl --silent --show-error --location --max-time 12 -D /tmp/eh-headers "$TARGET_URL" -o /tmp/eh-homepage.html || true
             content_type=$(awk 'BEGIN{IGNORECASE=1} /^content-type:/ {sub(/^[^:]*:[[:space:]]*/, ""); gsub("\r",""); ct=$0} END{print ct}' /tmp/eh-headers 2>/dev/null)
             if [[ "$content_type" == text/html* ]] && grep -qi 'approved-master-art' /tmp/eh-homepage.html && grep -q 'data:image/png;base64,' /tmp/eh-homepage.html && { grep -q 'src="search.js"' /tmp/eh-homepage.html || grep -q 'Everything Hub browser search client' /tmp/eh-homepage.html; } && grep -q 'Bing RSS independent fallback' /tmp/eh-homepage.html; then
-              echo "Existing homepage URL redirects to Statically HTML CDN with approved artwork and search client ($content_type)"
+              echo "Existing homepage URL redirects to Supabase Storage HTML with approved artwork and search client ($content_type)"
               exit 0
             fi
-            echo "Waiting for redirect and HTML CDN page; observed content type: ${content_type:-unknown}"
+            echo "Waiting for redirect and Supabase Storage HTML page; observed content type: ${content_type:-unknown}"
             sleep 3
           done
           echo "Expected redirected HTML homepage and approved artwork were not confirmed."

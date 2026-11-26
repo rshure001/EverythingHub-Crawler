@@ -4,8 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'site/**'
-      - 'public-search/**'
+      - 'supabase/functions/everything-hub-deploy-bridge/index.ts'
       - '.github/workflows/everything-hub-free-supabase-route.yml'
   schedule:
     - cron: '23 * * * *'
@@ -22,7 +21,8 @@ jobs:
       LEGACY_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-site/
       BRIDGE_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-deploy-bridge
       SEARCH_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-web-search?q=NASA&limit=5
-      SEARCH_JS_URL: https://cdn.jsdelivr.net/gh/rshure001/EverythingHub-Crawler@main/site/search.js
+      CATALOG_SEARCH_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-catalog-search?q=NASA&limit=5
+      SEARCH_JS_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/storage/v1/object/public/everythinghub-public-site/search.js
       MANIFEST_URL: https://raw.githubusercontent.com/rshure001/EverythingHub-Crawler/main/public-search/manifest.json
     steps:
       - uses: actions/checkout@v4
@@ -42,8 +42,7 @@ jobs:
           head -c 240 /tmp/home.html | tr '\\n' ' '
           echo
           test "$code" = "200"
-          # Supabase's edge gateway may label streamed HTML as text/plain; validate
-          # the document signature and actual interface markup instead of MIME metadata.
+          grep -Eiq '^content-type: *text/html' /tmp/home.headers
           grep -Eiq '^<!doctype html|^<!--' /tmp/home.html
           for needle in 'Everything Hub' 'id="search"' 'id="q"' 'EverythingHubSearch' "['web','All']" "['images','Images']" "['videos','Videos']" "['news','News']" "['shopping','Shopping']" "['places','Maps']" "['business','Business']" "['research','Research']"; do
             grep -Fqi "$needle" /tmp/home.html || { echo "Missing homepage feature: $needle"; exit 1; }
@@ -71,6 +70,13 @@ jobs:
           test "$code" = "200"
           node -e "const fs=require('fs'); const x=JSON.parse(fs.readFileSync('/tmp/search.json','utf8')); if(!Array.isArray(x.results) || x.results.length < 1 || !/Everything Hub public crawler index|Bing RSS independent web fallback/i.test(String(x.source || ''))) { console.error(x); process.exit(1); } console.log(JSON.stringify({query:x.query??'NASA',results:x.results.length,count:x.count??null,source:x.source??null,error:x.error??null}))"
 
+      - name: Verify live first-party catalog search endpoint
+        run: |
+          set -euo pipefail
+          code="$(curl --silent --show-error --location --max-time 50 -o /tmp/catalog-search.json -w '%{http_code}' "$CATALOG_SEARCH_URL")"
+          echo "Catalog search HTTP=$code bytes=$(wc -c < /tmp/catalog-search.json)"
+          test "$code" = "200"
+          node -e "const fs=require('fs'); const x=JSON.parse(fs.readFileSync('/tmp/catalog-search.json','utf8')); const p=x.catalogPreview||{}; if(!Array.isArray(x.catalogResults)||x.catalogResults.length<1||p.previewOnly!==true||!['candidate-preview','stale-candidate-preview'].includes(p.status)) { console.error(x); process.exit(1); } console.log(JSON.stringify({query:x.query,results:x.catalogResults.length,status:p.status,catalogs:p.catalogCount,records:p.recordCount}))"
       - name: Install Playwright Chromium
         run: |
           npm install --no-save playwright

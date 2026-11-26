@@ -1,6 +1,12 @@
-name: Optional Supabase Storage publisher — paused during database recovery
+name: Everything Hub Supabase Storage publisher and verifier
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "site/index.html"
+      - "site/search.js"
+      - ".github/workflows/everything-hub-publish-and-verify.yml"
 permissions:
   contents: read
   id-token: write
