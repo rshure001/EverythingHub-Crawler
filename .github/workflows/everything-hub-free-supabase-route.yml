@@ -36,12 +36,17 @@ jobs:
         run: |
           set -euo pipefail
           code="$(curl --silent --show-error --location --max-time 45 -D /tmp/home.headers -o /tmp/home.html -w '%{http_code}' "$BRIDGE_URL")"
+          bytes="$(wc -c < /tmp/home.html)"
+          content_type="$(grep -i '^content-type:' /tmp/home.headers | tail -1 || true)"
+          echo "Bridge HTTP=$code bytes=$bytes $content_type"
+          head -c 240 /tmp/home.html | tr '\\n' ' '
+          echo
           test "$code" = "200"
-          grep -Eiq '^content-type: *text/html' /tmp/home.headers
+          echo "$content_type" | grep -Eiq 'text/html'
           for needle in 'Everything Hub' 'id="search"' 'id="q"' 'src="search.js"' 'data-mode="web"' 'data-mode="news"' 'data-mode="images"' 'data-mode="videos"' 'data-mode="shopping"' 'data-mode="places"' 'data-mode="business"' 'data-mode="research"'; do
             grep -Fqi "$needle" /tmp/home.html || { echo "Missing homepage feature: $needle"; exit 1; }
           done
-          test "$(wc -c < /tmp/home.html)" -gt 10000
+          test "$bytes" -gt 10000
       - name: Verify the public search script matches the repository
         run: |
           set -euo pipefail
