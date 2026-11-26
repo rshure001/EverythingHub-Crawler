@@ -1,14 +1,17 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 const COMMIT = "d0669a202d6b7fe9626bebd4a5cd1d7cc4f50552";
-const BASE = "https://raw.githubusercontent.com/rshure001/EverythingHub-Crawler/" + COMMIT + "/site/";
+const API = "https://api.github.com/repos/rshure001/EverythingHub-Crawler/contents/";
+const HEADERS = {
+  Accept: "application/vnd.github.raw",
+  "X-GitHub-Api-Version": "2022-11-28",
+  "User-Agent": "EverythingHub-Public-Bridge/1.0",
+};
 
-async function fetchPinnedFile(name: string): Promise<string> {
-  const response = await fetch(BASE + name, {
-    headers: { Accept: name.endsWith(".html") ? "text/html" : "application/javascript" },
-    signal: AbortSignal.timeout(18000),
-  });
-  if (!response.ok) throw new Error(name + " returned HTTP " + response.status);
+async function fetchPinnedFile(path: string): Promise<string> {
+  const url = API + path + "?ref=" + COMMIT;
+  const response = await fetch(url, { headers: HEADERS, signal: AbortSignal.timeout(18000) });
+  if (!response.ok) throw new Error(path + " returned HTTP " + response.status);
   return await response.text();
 }
 
@@ -19,8 +22,8 @@ Deno.serve(async (req: Request) => {
 
   try {
     const [htmlSource, searchSource] = await Promise.all([
-      fetchPinnedFile("index.html"),
-      fetchPinnedFile("search.js"),
+      fetchPinnedFile("site/index.html"),
+      fetchPinnedFile("site/search.js"),
     ]);
     const normalized = htmlSource.trimStart().toLowerCase();
     if ((!normalized.startsWith("<!doctype html") && !normalized.startsWith("<!--")) ||
@@ -42,10 +45,11 @@ Deno.serve(async (req: Request) => {
       status: 200,
       headers: {
         "Content-Type": "text/html; charset=UTF-8",
+        "Content-Disposition": "inline",
         "Cache-Control": "public, max-age=60, stale-while-revalidate=300",
         "X-Content-Type-Options": "nosniff",
         "X-EH-Render-Mode": "html-document",
-        "X-EH-Upstream": "raw.githubusercontent.com",
+        "X-EH-Upstream": "api.github.com",
         "X-EH-Commit": COMMIT,
       },
     });
