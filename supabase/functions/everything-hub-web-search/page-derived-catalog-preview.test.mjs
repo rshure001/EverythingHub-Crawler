@@ -504,9 +504,10 @@ test("broad catalog terms load at most four registry metadata shards", async () 
   assert.ok(registryRequests.length > 0);
   assert.ok(registryRequests.length <= allowedPrefixes.size);
   for (const url of registryRequests) {
-    const match = url.match(/registry-shards\\/([a-f0-9]{2})\\.json\\.gz$/);
-    assert.ok(match, "registry shard path must be validated");
-    assert.ok(allowedPrefixes.has(match[1]), "broad search must not fan out beyond the first four candidate IDs");
+    const suffix = url.split("/registry-shards/")[1] || "";
+    const prefix = suffix.split(".")[0];
+    assert.match(prefix, /^[a-f0-9]{2}$/);
+    assert.ok(allowedPrefixes.has(prefix), "broad search must not fan out beyond the first four candidate IDs");
   }
 });
 
