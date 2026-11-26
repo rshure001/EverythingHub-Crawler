@@ -42,8 +42,10 @@ jobs:
           head -c 240 /tmp/home.html | tr '\\n' ' '
           echo
           test "$code" = "200"
-          echo "$content_type" | grep -Eiq 'text/html'
-          for needle in 'Everything Hub' 'id="search"' 'id="q"' 'src="search.js"' 'data-mode="web"' 'data-mode="news"' 'data-mode="images"' 'data-mode="videos"' 'data-mode="shopping"' 'data-mode="places"' 'data-mode="business"' 'data-mode="research"'; do
+          # Supabase's edge gateway may label streamed HTML as text/plain; validate
+          # the document signature and actual interface markup instead of MIME metadata.
+          grep -Eiq '^<!doctype html|^<!--' /tmp/home.html
+          for needle in 'Everything Hub' 'id="search"' 'id="q"' 'search.js' 'data-type="web"' 'data-type="images"' 'data-type="videos"' 'data-type="news"' 'data-type="shopping"' 'data-type="places"' 'data-type="business"' 'data-type="research"'; do
             grep -Fqi "$needle" /tmp/home.html || { echo "Missing homepage feature: $needle"; exit 1; }
           done
           test "$bytes" -gt 10000
