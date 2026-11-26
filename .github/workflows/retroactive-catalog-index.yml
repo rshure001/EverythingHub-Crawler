@@ -1,4 +1,5 @@
 name: Retroactive catalog inventory
+# Rebuild catalog coverage against the current crawler manifest; keep source-rights gates intact.
 
 on:
   push:
