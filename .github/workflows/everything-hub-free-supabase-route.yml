@@ -47,7 +47,7 @@ jobs:
           bytes="$(wc -c < /tmp/home.html)"
           content_type="$(grep -i '^content-type:' /tmp/home.headers | tail -1 || true)"
           echo "Bridge HTTP=$code bytes=$bytes $content_type"
-          head -c 240 /tmp/home.html | tr '\\n' ' '
+          head -c 240 /tmp/home.html | tr '\n' ' '
           echo
           test "$code" = "200"
           # Supabase's edge gateway may label streamed HTML as text/plain; validate
@@ -63,7 +63,7 @@ jobs:
 
           def artwork_hash(path: str) -> str:
               html = Path(path).read_text(encoding="utf-8")
-              match = re.search(r"data:image/png;base64,([A-Za-z0-9+/=\\r\\n]+)", html)
+              match = re.search(r"data:image/png;base64,([A-Za-z0-9+/=\r\n]+)", html)
               if not match:
                   raise SystemExit(f"Approved embedded PNG artwork missing from {path}")
               payload = "".join(match.group(1).split()).encode("ascii")
