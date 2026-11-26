@@ -6,7 +6,7 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Everything Hub — Everything within reach</title>
 <meta name="description" content="Search the web, explore people, places, resources, knowledge, news, videos, images and solutions.">
-<link rel="canonical" href="https://cdn.jsdelivr.net/gh/rshure001/EverythingHub-Crawler@main/site/index.html">
+<link rel="canonical" href="https://everythinghub-homepage-fixed.vercel.app/">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Everything Hub">
 <meta property="og:title" content="Everything Hub — Everything within reach">
@@ -11902,10 +11902,10 @@ XfRInDt6/z9RXKd5la8D2QAAAABJRU5ErkJggg==
 <section class="discover-feed" aria-label="Discover stories">
  <div class="discover-header"><div><span class="discover-kicker">EXPLORE WHAT'S HAPPENING</span><h2>Discover</h2><p>Fresh stories, useful ideas and videos from across the web.</p></div><div class="discover-actions"><span class="discover-live"><i></i> LIVE UPDATES</span><button id="discoverRefresh" class="discover-refresh" type="button" aria-label="Refresh Top Stories">Refresh</button></div></div>
  <nav class="discover-topics" aria-label="Discover topics">
-  <button type="button" class="discover-topic active" data-topic="world">Top Stories</button>
+  <button type="button" class="discover-topic active" data-topic="for-you">Top Stories</button>
   <button type="button" class="discover-topic" data-topic="technology">Technology</button>
-  <button type="button" class="discover-topic" data-topic="sports">Sports</button>
-  <button type="button" class="discover-topic" data-topic="entertainment">Entertainment</button>
+  <button type="button" class="discover-topic" data-topic="science">Science</button>
+  <button type="button" class="discover-topic" data-topic="world">World</button>
   <button type="button" class="discover-topic" data-topic="business">Business</button>
  </nav>
  <div id="discoverCards" class="discover-grid" aria-live="polite"><div class="discover-loading">Loading the latest stories…</div></div>
@@ -11978,7 +11978,7 @@ XfRInDt6/z9RXKd5la8D2QAAAABJRU5ErkJggg==
 
     // Bing results remain discovery links only. Embedded previews require
     // explicit Wikimedia Commons licensing and satisfied attribution.
-    return source === "Wikimedia Commons" && licenseValid && attributionValid;
+    return (source === "Wikimedia Commons" || source === "Internet Archive") && licenseValid && attributionValid;
   }
 
   const api = Object.freeze({ isMediaPreviewAllowed });
@@ -12007,21 +12007,21 @@ document.querySelectorAll('.arm[data-mode]').forEach(arm=>{
 async function loadHomepageMedia(type, query, targetId){
  const target=document.getElementById(targetId);if(!target)return;
  try{
-  const url=new URL(functionEndpoint('everything-hub-media-search'));
-  url.searchParams.set('q',query);url.searchParams.set('type',type);
-  const response=await fetch(url,{headers:{apikey:EH_PUBLIC_KEY,accept:'application/json'}});
+  const url=new URL(functionEndpoint('everything-hub-media-search',type));
+  url.searchParams.set('q',query);
+  const response=await fetch(url,{headers:{accept:'application/json'}});
   if(!response.ok)throw Error('Media feed '+response.status);
   const data=await response.json();
-  const results=(data.results||[]).slice(0,8);
+  const results=(data.items||data.results||[]).slice(0,8);
   if(!results.length){target.innerHTML='<div class="live-loading">No fresh '+(type==='video'?'videos':'pictures')+' returned just now. Search above to explore this topic.</div>';return;}
   target.innerHTML=results.map(item=>{
-   const href=safe(item.pageUrl||item.videoUrl||item.imageUrl);
+   const href=safe(item.url||item.pageUrl||item.videoUrl||item.imageUrl);
    const source=String(item.source||data.provider||'Web source').trim();
    const license=String(item.license||'').trim();
    const creator=String(item.creator||item.credit||'').trim();
    const attributionRequired=item.attributionRequired;
    const previewAllowed=window.EHMediaPreviewPolicy?.isMediaPreviewAllowed(item)===true;
-   const image=previewAllowed?safe(item.imageUrl||item.thumbnailUrl):'#';
+   const image=previewAllowed?safe(item.imageUrl||item.thumbnailUrl||item.thumbnail):'#';
    const title=esc(item.title||'Explore media');
    const mediaLabel=previewAllowed
     ? [source,creator,license].filter(Boolean).map(esc).join(' · ')
@@ -12032,41 +12032,34 @@ async function loadHomepageMedia(type, query, targetId){
  }catch(error){target.innerHTML='<div class="live-loading">Live media is temporarily unavailable. Use the Images or Videos search above.</div>';}
 }
 function loadHomepageDiscovery(){
- loadHomepageMedia('image','latest technology science nature','homeLiveImages');
- loadHomepageMedia('video','latest science technology discoveries','homeLiveVideos');
+ loadHomepageMedia('image','NASA','homeLiveImages');
+ loadHomepageMedia('video','NASA','homeLiveVideos');
 }
 loadHomepageDiscovery();
 
 
-let activeDiscoverTopic='world';
-async function loadDiscoverFeed(topic='world'){
+let activeDiscoverTopic='for-you';
+async function loadDiscoverFeed(topic='for-you'){
  activeDiscoverTopic=topic;
  const target=document.getElementById('discoverCards');if(!target)return;
  target.innerHTML='<div class="discover-loading">Finding fresh stories…</div>';
  target.dataset.error='';
  document.querySelectorAll('.discover-topic').forEach(b=>b.classList.toggle('active',b.dataset.topic===topic));
- const queries={
-  world:'latest world news today',
-  technology:'latest technology news artificial intelligence',
-  sports:'latest sports news',
-  entertainment:'latest entertainment news movies music',
-  business:'latest business news economy markets'
- };
  try{
-  const u=new URL(functionEndpoint('everything-hub-independent-search'));
-  u.searchParams.set('q',queries[topic]||queries.world);
-  const response=await fetch(u.toString(),{headers:{apikey:EH_PUBLIC_KEY,accept:'application/json'}});
-  if(!response.ok)throw Error('Bing RSS discovery '+response.status);
+  const u=new URL('/api/news',location.origin);
+  u.searchParams.set('category',topic);
+  const response=await fetch(u.toString(),{headers:{accept:'application/json'},signal:AbortSignal.timeout(15000)});
+  if(!response.ok)throw Error('Public RSS discovery '+response.status);
   const data=await response.json();
-  const stories=(data.results||[]).filter(a=>a.title&&a.url).slice(0,12);
-  if(!stories.length)throw Error('Bing RSS returned no stories for '+topic);
-  target.dataset.provider=data.provider||'Bing RSS';
+  const stories=(data.items||[]).filter(a=>a.title&&a.url).slice(0,12);
+  if(!stories.length)throw Error('No verified public headlines for '+topic);
+  target.dataset.provider=(data.sources||[]).join(' · ')||'Verified public RSS';
   target.innerHTML=stories.map(a=>{
-   const href=safe(a.url),img=window.EHMediaPreviewPolicy?.isMediaPreviewAllowed(a)===true?safe(a.image||''):'#';
+   const href=safe(a.url);
    const title=esc(a.title),source=esc(a.source||host(a.url));
    const stamp=Date.parse(a.publishedAt||'');
    const date=Number.isFinite(stamp)?new Date(stamp).toLocaleDateString('en-US',{month:'short',day:'numeric'}):'Latest';
-   return '<a class="discover-card" href="'+href+'" target="_blank" rel="noopener noreferrer">'+(img!=='#'?'<img class="discover-image" loading="lazy" src="'+img+'" alt="" referrerpolicy="no-referrer">':'<div class="discover-image" aria-hidden="true"></div>')+'<div class="discover-card-body"><h3>'+title+'</h3><div class="discover-meta"><span class="discover-source">'+source+'</span><span class="discover-dot">·</span><span>'+date+'</span></div></div></a>';
+   return '<a class="discover-card" href="'+href+'" target="_blank" rel="noopener noreferrer"><div class="discover-image" aria-hidden="true"></div><div class="discover-card-body"><h3>'+title+'</h3><div class="discover-meta"><span class="discover-source">'+source+'</span><span class="discover-dot">·</span><span>'+date+'</span></div></div></a>';
   }).join('');
  }catch(error){
   target.dataset.error=String(error).slice(0,180);
@@ -12075,7 +12068,7 @@ async function loadDiscoverFeed(topic='world'){
 }
 document.querySelectorAll('.discover-topic').forEach(button=>button.addEventListener('click',()=>loadDiscoverFeed(button.dataset.topic)));
 document.getElementById('discoverRefresh')?.addEventListener('click',()=>loadDiscoverFeed(activeDiscoverTopic));
-loadDiscoverFeed('world');
+loadDiscoverFeed('for-you');
 
 async function loadDashboard(){
  const weather=document.querySelector('#weatherValue'),weatherDetail=document.querySelector('#weatherDetail');
@@ -12108,11 +12101,11 @@ async function loadDashboard(){
   }
  }
  const dm=document.getElementById('dashboardMarkets'),dmd=document.getElementById('dashboardMarketsDetail');if(dm)dm.textContent='Live market indexes';if(dmd)dmd.textContent=['NASDAQ','S&P 500','DOW'].map((x,i)=>x+' '+document.getElementById(['nasdaqValue','spValue','dowValue'][i]).textContent).join(' · ');
- try{const u=new URL(functionEndpoint('everything-hub-independent-search'));u.searchParams.set('q','latest world news today');const nr=await fetch(u,{headers:{apikey:EH_PUBLIC_KEY,accept:'application/json'},signal:AbortSignal.timeout(12000)});if(!nr.ok)throw Error('news');const nd=await nr.json();const list=document.getElementById('topNewsItems');if(list){const articles=(nd.results||[]).slice(0,5);list.innerHTML=articles.length?articles.map(a=>'<li><a target="_blank" rel="noopener noreferrer" href="'+safe(a.url)+'">'+esc(a.title||'Latest headline')+'</a><small>'+esc(a.source||host(a.url))+'</small></li>').join(''):'<li>Use News search for current headlines.</li>';}}catch{const list=document.getElementById('topNewsItems');if(list)list.innerHTML='<li>News feed temporarily unavailable. Select News to search current coverage.</li>';}
+ try{const u=new URL('/api/news',location.origin);u.searchParams.set('category','for-you');const nr=await fetch(u,{headers:{accept:'application/json'},signal:AbortSignal.timeout(12000)});if(!nr.ok)throw Error('news');const nd=await nr.json();const list=document.getElementById('topNewsItems');if(list){const articles=(nd.items||[]).slice(0,5);list.innerHTML=articles.length?articles.map(a=>'<li><a target="_blank" rel="noopener noreferrer" href="'+safe(a.url)+'">'+esc(a.title||'Latest headline')+'</a><small>'+esc(a.source||host(a.url))+'</small></li>').join(''):'<li>Use News search for current headlines.</li>';}}catch{const list=document.getElementById('topNewsItems');if(list)list.innerHTML='<li>News feed temporarily unavailable. Select News to search current coverage.</li>';}
 }
 loadDashboard();
 
-function functionEndpoint(name){return EH_SUPABASE_URL+'/functions/v1/'+name;}
+function functionEndpoint(name,mediaType){const routes={'everything-hub-web-search':'/api/search-catalog','everything-hub-independent-search':'/api/independent-search','everything-hub-media-search':mediaType==='video'?'/api/videos':'/api/media-search'};return routes[name]?new URL(routes[name],location.origin).toString():EH_SUPABASE_URL+'/functions/v1/'+name;}
 const ehSearchEnginePromises=new Map();
 async function getEverythingHubSearchEngine(query){
  const normalized=String(query||'').normalize('NFKC').trim().toLocaleLowerCase();
@@ -12138,7 +12131,7 @@ async function searchCrawlerIndex(query,offset=0,mode=selectedMode){
    const u=new URL(functionEndpoint('everything-hub-web-search'));
    u.searchParams.set('q',query);u.searchParams.set('limit','20');u.searchParams.set('offset',String(offset));
    if(lanes[mode])u.searchParams.set('tentacle',lanes[mode]);
-   const response=await fetch(u,{headers:{apikey:EH_PUBLIC_KEY,accept:'application/json'},signal:AbortSignal.timeout(8000)});
+   const response=await fetch(u,{headers:{accept:'application/json'},signal:AbortSignal.timeout(8000)});
    if(!response.ok)throw Error('Catalog preview route '+response.status);
    return await response.json();
   })()
@@ -12160,7 +12153,7 @@ async function searchCrawlerIndex(query,offset=0,mode=selectedMode){
    const hints={web:'',shopping:' shopping products',places:' places maps',business:' companies businesses',research:' research studies papers'};
    const u=new URL(functionEndpoint('everything-hub-independent-search'));
    u.searchParams.set('q',query+(hints[mode]||''));
-   const response=await fetch(u,{headers:{apikey:EH_PUBLIC_KEY,accept:'application/json'},signal:AbortSignal.timeout(15000)});
+   const response=await fetch(u,{headers:{accept:'application/json'},signal:AbortSignal.timeout(15000)});
    if(response.ok){
     const data=await response.json();
     results=(data.results||[]).filter(x=>x.title&&x.url).map(x=>({...x,mediaType:mode,source:x.source||data.provider||'Bing RSS',origin:'Bing RSS independent fallback',score:0}));
@@ -12182,24 +12175,24 @@ async function searchCrawlerIndex(query,offset=0,mode=selectedMode){
 async function searchPublicSources(query,mode=selectedMode){
  if(mode==='images'||mode==='videos'){
   const mediaType=mode==='videos'?'video':'image';
-  const u=new URL(functionEndpoint('everything-hub-media-search'));
-  u.searchParams.set('q',query);u.searchParams.set('type',mediaType);
-  const r=await fetch(u,{headers:{apikey:EH_PUBLIC_KEY,accept:'application/json'},signal:AbortSignal.timeout(15000)});
+  const u=new URL(functionEndpoint('everything-hub-media-search',mediaType));
+  u.searchParams.set('q',query);
+  const r=await fetch(u,{headers:{accept:'application/json'},signal:AbortSignal.timeout(15000)});
   if(!r.ok)throw Error('Everything Hub '+mediaType+' search '+r.status);
   const d=await r.json();
-  return (d.results||[]).filter(x=>window.EHMediaPreviewPolicy?.isMediaPreviewAllowed(x)===true)
+  return (d.items||d.results||[]).filter(x=>window.EHMediaPreviewPolicy?.isMediaPreviewAllowed(x)===true)
    .map(x=>({
-    ...x,title:x.title||mediaType+' result',url:x.pageUrl||x.videoUrl||x.imageUrl,
-    snippet:x.description||'',image:x.thumbnailUrl||x.imageUrl||'',video:x.videoUrl||'',
-    source:x.source||d.provider||'Wikimedia Commons',mediaType,license:x.license||'',
+    ...x,title:x.title||mediaType+' result',url:x.url||x.pageUrl||x.videoUrl||x.imageUrl,
+    snippet:x.description||x.summary||'',image:x.thumbnail||x.thumbnailUrl||x.imageUrl||'',video:x.videoUrl||'',
+    source:x.source||d.provider||'Internet Archive',mediaType,license:x.license||'',
     licenseUrl:x.licenseUrl||'',creator:x.creator||x.credit||'',credit:x.credit||'',
     attributionRequired:x.attributionRequired,score:0
    }));
  }
  if(mode==='news'){
-  const u=new URL(functionEndpoint('everything-hub-independent-search'));
-  u.searchParams.set('q',query);
-  const r=await fetch(u,{headers:{apikey:EH_PUBLIC_KEY,accept:'application/json'},signal:AbortSignal.timeout(15000)});
+  const u=new URL('/api/search-fast',location.origin);
+  u.searchParams.set('q',query);u.searchParams.set('lane','news');
+  const r=await fetch(u,{headers:{accept:'application/json'},signal:AbortSignal.timeout(15000)});
   if(!r.ok)throw Error('Everything Hub independent news '+r.status);
   const d=await r.json();
   return (d.results||[]).filter(x=>x.title&&x.url).map(x=>({...x,mediaType:'news',source:x.source||host(x.url),image:'',score:0}));
