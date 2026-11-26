@@ -2,7 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.49.1";
 import { boundedInteger, normalizeLane, normalizeQuery } from "./params.mjs";
 import { createTimedFetch, isTransientDatabaseError } from "./db-fetch.mjs";
-import { loadPageDerivedCatalogPreview, resolveRecordRelatedCatalogPreview, searchPageDerivedCatalogPreview } from "./page-derived-catalog-preview.mjs";
+import { loadPageDerivedCatalogPreview, resolveRecordRelatedCatalogPreview } from "./page-derived-catalog-preview.mjs";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -238,10 +238,10 @@ Deno.serve(async (req: Request) => {
 
     if (!results.length) return await staticFallback("database_empty");
 
-    // Candidate catalog lookup is bounded and independent of PostgreSQL.
-    // These are previews only; source-policy review still gates publication.
-    let catalogResults: any[] = [];
-    let catalogPreview: Record<string, any> = {
+    // Keep the hot search endpoint lightweight during PostgreSQL recovery.
+    // Catalog candidates are served by the dedicated query-directed preview path.
+    const catalogResults: any[] = [];
+    const catalogPreview: Record<string, any> = {
       status: "deferred",
       previewOnly: true,
       resultCount: 0,
@@ -249,31 +249,8 @@ Deno.serve(async (req: Request) => {
       sourceTermsReviewedRecords: 0,
       commercialEligibleRecords: 0,
       rightsReviewRequired: true,
+      error: "catalog_preview_deferred_from_search_path",
     };
-    if (offset === 0) {
-      try {
-        const network = await loadPageDerivedCatalogPreview();
-        catalogResults = await searchPageDerivedCatalogPreview(query, network, Math.min(limit, 5));
-        catalogPreview = {
-          status: "candidate-preview",
-          previewOnly: true,
-          generatedAt: network.generatedAt || null,
-          analysisVersion: network.analysisVersion || null,
-          sourceIndexPages: network.sourceIndexPages || 0,
-          catalogCount: Array.isArray(network.catalogs) ? network.catalogs.length : 0,
-          resultCount: catalogResults.length,
-          recordsPublished: 0,
-          sourceTermsReviewedRecords: 0,
-          commercialEligibleRecords: 0,
-          rightsReviewRequired: true,
-          stale: network.stale === true,
-        };
-      } catch (error) {
-        const detail = error instanceof Error ? error.message : String(error);
-        console.error("Catalog candidate preview unavailable:", detail.slice(0, 160));
-        catalogPreview = { ...catalogPreview, error: "catalog_preview_temporarily_unavailable" };
-      }
-    }
 
     const hasMore = offset + results.length < totalCount;
     return json(
