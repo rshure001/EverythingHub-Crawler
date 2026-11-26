@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/assets/:path*",
-      "destination": "https://raw.githubusercontent.com/rshure001/EverythingHub-Crawler/main/assets/:path*"
+      "destination": "https://raw.githubusercontent.com/rshure001/EverythingHub-Crawler/main/vercel-homepage/assets/:path*"
     },
     {
       "source": "/public-search/:path*",
@@ -10,47 +10,55 @@
     },
     {
       "source": "/api/search-catalog",
-      "destination": "https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-web-search"
+      "destination": "https://everythinghub-search-backend-ne0fd5nys-rshure001-8053.vercel.app/api/search"
     },
     {
       "source": "/api/independent-search",
-      "destination": "https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-independent-search"
+      "destination": "https://everythinghub-search-backend-ne0fd5nys-rshure001-8053.vercel.app/api/search"
     },
     {
       "source": "/api/media-search",
-      "destination": "https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-media-search"
+      "destination": "https://everythinghub-search-backend-ne0fd5nys-rshure001-8053.vercel.app/api/images"
+    },
+    {
+      "source": "/api/videos",
+      "destination": "https://everythinghub-search-backend-ne0fd5nys-rshure001-8053.vercel.app/api/videos"
+    },
+    {
+      "source": "/api/news",
+      "destination": "https://everythinghub-search-backend-ne0fd5nys-rshure001-8053.vercel.app/api/news"
+    },
+    {
+      "source": "/api/search-fast",
+      "destination": "https://everythinghub-search-backend-ne0fd5nys-rshure001-8053.vercel.app/api/search-fast"
+    },
+    {
+      "source": "/api/health",
+      "destination": "https://everythinghub-search-backend-ne0fd5nys-rshure001-8053.vercel.app/api/health"
     },
     {
       "source": "/topics",
-      "destination": "https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-site/topics/"
+      "destination": "/discover/"
     },
     {
       "source": "/topics/",
-      "destination": "https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-site/topics/"
+      "destination": "/discover/"
     },
     {
       "source": "/topics/:topic",
-      "destination": "https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-site/topics/:topic/"
+      "destination": "/discover/:topic/"
     },
     {
       "source": "/topics/:topic/",
-      "destination": "https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-site/topics/:topic/"
+      "destination": "/discover/:topic/"
     },
     {
       "source": "/topics/:topic/:category",
-      "destination": "https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-site/topics/:topic/:category/"
+      "destination": "/discover/:topic/:category/"
     },
     {
       "source": "/topics/:topic/:category/",
-      "destination": "https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-site/topics/:topic/:category/"
-    },
-    {
-      "source": "/sitemap.xml",
-      "destination": "https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-site/sitemap.xml"
-    },
-    {
-      "source": "/robots.txt",
-      "destination": "https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-site/robots.txt"
+      "destination": "/discover/:topic/:category/"
     }
   ],
   "headers": [
