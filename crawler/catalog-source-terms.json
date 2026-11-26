@@ -107,7 +107,8 @@
         "/journals/*/articles",
         "/journals/*/sections/*",
         "/journals/*/sections/*/articles"
-      ]
+      ],
+      "canonical_fetch_host": "www.frontiersin.org"
     },
     "images-api.nasa.gov": {
       "terms_url": "https://www.nasa.gov/nasa-brand-center/images-and-media/",
@@ -166,6 +167,46 @@
       ],
       "commercial_eligible": false,
       "policy_note": "Use the official Wikimedia Commons API for metadata only. Each video item must pass the per-item CC0, public-domain, CC BY or CC BY-SA license policy, including required creator/credit attribution and canonical license URLs where required. Do not download or re-host video files. Thumbnail URLs are returned to the user's browser only; the backend does not fetch media assets. Commercial eligibility remains false until separate per-item review."
+    },
+    "www.frontiersin.org": {
+      "terms_url": "https://www.frontiersin.org/legal/terms-and-conditions",
+      "terms_status": "reviewed_per_dataset",
+      "reviewed_at": "2026-11-26",
+      "discovery_allowed": true,
+      "metadata_only": true,
+      "per_dataset_rights_required": true,
+      "attribution_required": "per_article",
+      "rights_scope": "per_article_license",
+      "allowed_api_paths": [],
+      "allowed_catalog_paths": [],
+      "allowed_probe_paths": [],
+      "allowed_metadata_fields": [
+        "title",
+        "authors",
+        "doi",
+        "journal",
+        "publication_date",
+        "article_url",
+        "license",
+        "publisher"
+      ],
+      "prohibited_content": [
+        "full_text",
+        "images",
+        "supplementary_files",
+        "bulk_assets"
+      ],
+      "min_interval_seconds": 3,
+      "max_requests_per_run": 40,
+      "policy_note": "Frontiers Terms and Conditions section 14 permits text and data mining of public content for the legitimate purpose of enriching external collections of scientific literature. Content remains subject to each article's applicable CC-BY, CC0, or other license and applicable data-protection laws. This policy is limited to bounded landing-page discovery of bibliographic metadata; do not retrieve full text, images, supplementary files, or bulk assets. Exact path shapes only: /articles; /journals/{journal}/articles; /journals/{journal}/sections/{section}; /journals/{journal}/sections/{section}/articles. Individual article paths and deeper descendants are not allowlisted. Runtime robots.txt verification on the exact host is mandatory; honor disallowed paths and any performance restrictions. Canonical www host is separately reviewed under the same published terms; runtime robots.txt must be checked independently on www.frontiersin.org before every bounded fetch.",
+      "max_response_bytes": 1500000,
+      "allowed_catalog_path_patterns": [
+        "/articles",
+        "/journals/*/articles",
+        "/journals/*/sections/*",
+        "/journals/*/sections/*/articles"
+      ],
+      "canonical_fetch_host": "www.frontiersin.org"
     }
   }
 }
