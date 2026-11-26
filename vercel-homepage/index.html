@@ -12144,7 +12144,7 @@ async function searchCrawlerIndex(query,offset=0,mode=selectedMode){
  const remoteResults=(remoteData?.results||[]).filter(x=>x.title&&x.url).map(x=>({...x,mediaType:mode,source:x.source||remoteData.provider||'Independent public search',origin:x.origin||'Independent Vercel search',score:Number(x.relevance??x.score)||0}));
  if(!['images','videos','news'].includes(mode)&&remoteResults.length){
   const seen=new Set();
-  results=[...results,...remoteResults].filter(x=>{const key=safe(x.url).toLowerCase();if(!key||seen.has(key))return false;seen.add(key);return true;}).slice(0,20);
+  results=[...remoteResults,...results].filter(x=>{const key=safe(x.url).toLowerCase();if(!key||seen.has(key))return false;seen.add(key);return true;}).slice(0,20);
   count=Math.max(count,Number(remoteData.count)||remoteResults.length);
   hasMore=hasMore||Boolean(remoteData.hasMore)||count>results.length;
  }
