@@ -1,0 +1,30 @@
+name: Everything Hub Vercel homepage contract tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "vercel-homepage/**"
+      - ".github/workflows/vercel-homepage-contract.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vercel-homepage-contract-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  homepage-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Run homepage and media policy tests
+        run: node --test vercel-homepage/homepage-contract.test.js vercel-homepage/media-preview-policy.test.js
+      - name: Validate Vercel route configuration
+        run: node -e "const c=require('./vercel-homepage/vercel.json'); if(!c.rewrites.some(x=>x.source==='/api/search-catalog'&&x.destination.includes('everythinghub-search-backend'))) process.exit(1); console.log('Vercel routes verified')"
