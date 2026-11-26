@@ -15,6 +15,13 @@ on:
       - "crawler/test_catalog_seed_expansion.py"
       - ".github/workflows/catalog-seed-expansion.yml"
   workflow_dispatch:
+  workflow_run:
+    workflows:
+      - "Retroactive catalog inventory"
+    types:
+      - completed
+    branches:
+      - main
   schedule:
     - cron: "7,27,47 * * * *"
 
@@ -27,12 +34,13 @@ concurrency:
 
 jobs:
   expand:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref == 'refs/heads/main' && 'main' || github.head_ref || github.ref }}
+          ref: main
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -40,7 +48,7 @@ jobs:
         working-directory: crawler
         run: python -m unittest test_catalog_seed_expansion.py test_catalog_source_policy.py -v
       - name: Measure eligible catalog landing pages from current main review queue without fetching
-        if: github.ref != 'refs/heads/main'
+        if: github.event_name == 'pull_request'
         run: |
           set -euo pipefail
           git fetch --depth=1 origin main
@@ -66,10 +74,10 @@ jobs:
           }, indent=2))
           PY
       - name: Expand one bounded batch of ten evidence-backed catalog landing pages
-        if: github.ref == 'refs/heads/main'
+        if: github.event_name != 'pull_request'
         run: python crawler/catalog_seed_expansion.py --limit 10
       - name: Publish metadata-only expansion ledger
-        if: github.ref == 'refs/heads/main'
+        if: github.event_name != 'pull_request'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
