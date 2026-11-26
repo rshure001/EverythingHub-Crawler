@@ -84,9 +84,11 @@ async function loadStaticCatalog(query: string): Promise<StaticCatalog> {
           queryIndex.shards.length < 1 || queryIndex.shards.length > 256) {
         throw new Error("No bounded query-directed crawler index is published");
       }
-      const terms = [...new Set(String(query || "").normalize("NFKC").toLowerCase()
-        .match(/[\p{L}\p{N}]+/gu) || [])].slice(0, 12);
-      if (!terms.length) throw new Error("Search query has no indexable terms");
+      const normalizedQuery = String(query || "").normalize("NFKC").toLowerCase();
+      const unicodeTerms = normalizedQuery.match(/[\p{L}\p{N}]+/gu) || [];
+      const asciiFallbackTerms = normalizedQuery.match(/[a-z0-9]+/g) || [];
+      const terms = [...new Set(unicodeTerms.length ? unicodeTerms : asciiFallbackTerms)].slice(0, 12);
+      if (!terms.length) throw new Error("Search query has no indexable terms (length=" + normalizedQuery.length + ")");
       const prefixByTerm = new Map<string, string>();
       for (const term of terms) {
         const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(term));
