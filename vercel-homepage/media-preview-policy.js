@@ -33,8 +33,8 @@
       : attributionRequired === false || (attributionRequired === true && creator.length > 0);
 
     // Bing results remain discovery links only. Embedded previews require
-    // explicit Wikimedia Commons licensing and satisfied attribution.
-    return source === "Wikimedia Commons" && licenseValid && attributionValid;
+    // explicit Wikimedia Commons or Internet Archive licensing and satisfied attribution.
+    return (source === "Wikimedia Commons" || source === "Internet Archive") && licenseValid && attributionValid;
   }
 
   const api = Object.freeze({ isMediaPreviewAllowed });
