@@ -1,19 +1,19 @@
 {
   "schema_version": 1,
   "status": "source_review_backlog_not_a_fetch_queue",
-  "generated_at": "2026-11-26T10:46:07Z",
+  "generated_at": "2026-11-26T13:16:19Z",
   "analysis_version": 22,
-  "source_index_pages": 223962,
-  "source_index_updated_at": "2026-11-26T03:09:14Z",
-  "source_index_sha256": "de0cffe0df3c0fe6de903df11cbc2a5a7a676c24e2ab359bf204224093789dc6",
+  "source_index_pages": 226522,
+  "source_index_updated_at": "2026-11-26T12:27:14Z",
+  "source_index_sha256": "d30188e8666be0b3682b9923b558c47a538f8043bbd04d9ae656c1133280a8ae",
   "metrics": {
-    "catalog_definition_candidates": 2704,
+    "catalog_definition_candidates": 2710,
     "unique_source_hosts": 118,
-    "unique_source_urls": 2703,
+    "unique_source_urls": 2709,
     "policy_preapproved_urls_needing_runtime_robots_check": 729,
     "policy_preapproved_api_urls_needing_runtime_robots_check": 0,
     "policy_preapproved_catalog_page_urls_needing_runtime_robots_check": 729,
-    "policy_review_required_urls": 1773,
+    "policy_review_required_urls": 1779,
     "path_not_allowlisted_urls": 201,
     "mixed_policy_status_urls": 0,
     "invalid_catalog_candidates": 0,
@@ -3476,6 +3476,37 @@
       "source_page_count": 1,
       "source_host": "bucherer.com",
       "source_url": "https://bucherer.com/us/en/locations",
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "reviewed_at": null,
+      "metadata_only": false,
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null,
+      "robots_recheck_required": true,
+      "fetch_authorized": false
+    },
+    {
+      "catalog_id": "catalog:738baf1812c8283ad3780653",
+      "title": "Bucherer Products",
+      "catalog_type": "commerce",
+      "record_type": "product",
+      "catalog_origin": "source_declared_collection",
+      "evidence_strength": "medium",
+      "catalog_status": "definition_only",
+      "record_count": 0,
+      "source_page_count": 1,
+      "source_host": "bucherer.com",
+      "source_url": "https://bucherer.com/us/en/bucherer-finejewellery/collections",
       "review_status": "policy_review_required",
       "source_access_mode": null,
       "terms_url": null,
@@ -77870,8 +77901,8 @@
       "catalog_origin": "source_declared_collection",
       "evidence_strength": "medium",
       "catalog_status": "candidate_needs_source_validation",
-      "record_count": 52,
-      "source_page_count": 53,
+      "record_count": 128,
+      "source_page_count": 129,
       "source_host": "internetsociety.org",
       "source_url": "https://internetsociety.org/fr/blog",
       "review_status": "policy_review_required",
@@ -77901,8 +77932,8 @@
       "catalog_origin": "source_declared_collection",
       "evidence_strength": "medium",
       "catalog_status": "candidate_needs_source_validation",
-      "record_count": 387,
-      "source_page_count": 392,
+      "record_count": 456,
+      "source_page_count": 461,
       "source_host": "internetsociety.org",
       "source_url": "https://internetsociety.org/blog",
       "review_status": "policy_review_required",
@@ -77932,8 +77963,8 @@
       "catalog_origin": "source_declared_collection",
       "evidence_strength": "medium",
       "catalog_status": "candidate_needs_source_validation",
-      "record_count": 9,
-      "source_page_count": 10,
+      "record_count": 12,
+      "source_page_count": 13,
       "source_host": "internetsociety.org",
       "source_url": "https://internetsociety.org/es/resources",
       "review_status": "policy_review_required",
@@ -77963,8 +77994,8 @@
       "catalog_origin": "source_declared_collection",
       "evidence_strength": "medium",
       "catalog_status": "candidate_needs_source_validation",
-      "record_count": 136,
-      "source_page_count": 137,
+      "record_count": 148,
+      "source_page_count": 153,
       "source_host": "internetsociety.org",
       "source_url": "https://internetsociety.org/resources",
       "review_status": "policy_review_required",
@@ -77994,8 +78025,8 @@
       "catalog_origin": "source_declared_collection",
       "evidence_strength": "medium",
       "catalog_status": "candidate_needs_source_validation",
-      "record_count": 15,
-      "source_page_count": 16,
+      "record_count": 22,
+      "source_page_count": 23,
       "source_host": "internetsociety.org",
       "source_url": "https://internetsociety.org/fr/resources",
       "review_status": "policy_review_required",
@@ -78025,8 +78056,8 @@
       "catalog_origin": "source_declared_collection",
       "evidence_strength": "medium",
       "catalog_status": "candidate_needs_source_validation",
-      "record_count": 84,
-      "source_page_count": 85,
+      "record_count": 141,
+      "source_page_count": 145,
       "source_host": "internetsociety.org",
       "source_url": "https://internetsociety.org/es/blog",
       "review_status": "policy_review_required",
@@ -78215,6 +78246,68 @@
       "source_page_count": 1,
       "source_host": "internetsociety.org",
       "source_url": "https://internetsociety.org/blog/2019/02/good-bgp-neighbours-apricot-2019",
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "reviewed_at": null,
+      "metadata_only": false,
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null,
+      "robots_recheck_required": true,
+      "fetch_authorized": false
+    },
+    {
+      "catalog_id": "catalog:8351156c981956f8acb66869",
+      "title": "Internetsociety Resources",
+      "catalog_type": "resource_library",
+      "record_type": "resource",
+      "catalog_origin": "source_declared_collection",
+      "evidence_strength": "medium",
+      "catalog_status": "definition_only",
+      "record_count": 0,
+      "source_page_count": 1,
+      "source_host": "internetsociety.org",
+      "source_url": "https://internetsociety.org/issues/encryption/resources",
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "reviewed_at": null,
+      "metadata_only": false,
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null,
+      "robots_recheck_required": true,
+      "fetch_authorized": false
+    },
+    {
+      "catalog_id": "catalog:451747391dfe7def102a3dc0",
+      "title": "Internetsociety Software",
+      "catalog_type": "software",
+      "record_type": "software",
+      "catalog_origin": "source_declared_collection",
+      "evidence_strength": "medium",
+      "catalog_status": "definition_only",
+      "record_count": 0,
+      "source_page_count": 1,
+      "source_host": "internetsociety.org",
+      "source_url": "https://internetsociety.org/grants/chapterthon/2017/projects",
       "review_status": "policy_review_required",
       "source_access_mode": null,
       "terms_url": null,
@@ -81718,6 +81811,37 @@
       "source_page_count": 12,
       "source_host": "loc.gov",
       "source_url": "https://loc.gov/about/about-the-librarian/previous-librarians-of-congress/item/n79065337/daniel-j-boorstin-1914-2004",
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "reviewed_at": null,
+      "metadata_only": false,
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null,
+      "robots_recheck_required": true,
+      "fetch_authorized": false
+    },
+    {
+      "catalog_id": "catalog:8a58960bdc2d518017d067a0",
+      "title": "Loc Articles",
+      "catalog_type": "knowledge_base",
+      "record_type": "article",
+      "catalog_origin": "source_declared_collection",
+      "evidence_strength": "medium",
+      "catalog_status": "definition_only",
+      "record_count": 0,
+      "source_page_count": 1,
+      "source_host": "loc.gov",
+      "source_url": "https://loc.gov/exhibits/archives",
       "review_status": "policy_review_required",
       "source_access_mode": null,
       "terms_url": null,
@@ -93866,8 +93990,8 @@
       "catalog_origin": "source_declared_collection",
       "evidence_strength": "high",
       "catalog_status": "candidate_needs_source_validation",
-      "record_count": 7,
-      "source_page_count": 8,
+      "record_count": 8,
+      "source_page_count": 9,
       "source_host": "theguardian.com",
       "source_url": "https://theguardian.com/technology/article/2024/aug/20/conde-nast-open-ai-deal",
       "review_status": "policy_review_required",
@@ -93921,6 +94045,37 @@
       "fetch_authorized": false
     },
     {
+      "catalog_id": "catalog:792a90879160b481333d1782",
+      "title": "Guardian Businesses",
+      "catalog_type": "business_directory",
+      "record_type": "business",
+      "catalog_origin": "content_list_declared_collection",
+      "evidence_strength": "medium",
+      "catalog_status": "candidate_needs_source_validation",
+      "record_count": 35,
+      "source_page_count": 16,
+      "source_host": "theguardian.com",
+      "source_url": "https://theguardian.com/commentisfree/2026/aug/12/openai-anthropic-ai-models",
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "reviewed_at": null,
+      "metadata_only": false,
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null,
+      "robots_recheck_required": true,
+      "fetch_authorized": false
+    },
+    {
       "catalog_id": "catalog:3e7982a3e0968d8fada655f5",
       "title": "Guardian People",
       "catalog_type": "people_directory",
@@ -93928,8 +94083,8 @@
       "catalog_origin": "content_list_declared_collection",
       "evidence_strength": "medium",
       "catalog_status": "candidate_needs_source_validation",
-      "record_count": 26,
-      "source_page_count": 16,
+      "record_count": 28,
+      "source_page_count": 18,
       "source_host": "theguardian.com",
       "source_url": "https://theguardian.com/books/2024/dec/17/white-nights-fyodor-dostoevsky-social-media-instagram-booktok-tiktok",
       "review_status": "policy_review_required",
@@ -95726,8 +95881,8 @@
       "catalog_origin": "source_declared_collection",
       "evidence_strength": "high",
       "catalog_status": "candidate_needs_source_validation",
-      "record_count": 98,
-      "source_page_count": 116,
+      "record_count": 99,
+      "source_page_count": 117,
       "source_host": "vam.ac.uk",
       "source_url": "https://vam.ac.uk/shop/books",
       "review_status": "policy_review_required",
@@ -95788,8 +95943,8 @@
       "catalog_origin": "source_declared_collection",
       "evidence_strength": "high",
       "catalog_status": "candidate_needs_source_validation",
-      "record_count": 653,
-      "source_page_count": 770,
+      "record_count": 690,
+      "source_page_count": 810,
       "source_host": "vam.ac.uk",
       "source_url": "https://vam.ac.uk/shop",
       "review_status": "policy_review_required",
@@ -95854,6 +96009,37 @@
       "source_page_count": 1,
       "source_host": "vam.ac.uk",
       "source_url": "https://vam.ac.uk/info/research",
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "reviewed_at": null,
+      "metadata_only": false,
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null,
+      "robots_recheck_required": true,
+      "fetch_authorized": false
+    },
+    {
+      "catalog_id": "catalog:9de30b46abb96c7d4e3fcceb",
+      "title": "Vam Articles",
+      "catalog_type": "knowledge_base",
+      "record_type": "article",
+      "catalog_origin": "source_declared_collection",
+      "evidence_strength": "high",
+      "catalog_status": "definition_only",
+      "record_count": 0,
+      "source_page_count": 1,
+      "source_host": "vam.ac.uk",
+      "source_url": "https://vam.ac.uk/shop/archive",
       "review_status": "policy_review_required",
       "source_access_mode": null,
       "terms_url": null,
@@ -104211,6 +104397,32 @@
       "source_host": "bucherer.com",
       "catalog_ids": [
         "catalog:b44b047a2e756bfc043bb477"
+      ],
+      "catalog_count": 1,
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "policy_preapproved": false,
+      "metadata_only": false,
+      "robots_recheck_required": true,
+      "fetch_authorized": false,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null
+    },
+    {
+      "source_url": "https://bucherer.com/us/en/bucherer-finejewellery/collections",
+      "source_host": "bucherer.com",
+      "catalog_ids": [
+        "catalog:738baf1812c8283ad3780653"
       ],
       "catalog_count": 1,
       "review_status": "policy_review_required",
@@ -169804,10 +170016,62 @@
       "policy_note": null
     },
     {
+      "source_url": "https://internetsociety.org/grants/chapterthon/2017/projects",
+      "source_host": "internetsociety.org",
+      "catalog_ids": [
+        "catalog:451747391dfe7def102a3dc0"
+      ],
+      "catalog_count": 1,
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "policy_preapproved": false,
+      "metadata_only": false,
+      "robots_recheck_required": true,
+      "fetch_authorized": false,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null
+    },
+    {
       "source_url": "https://internetsociety.org/intercommunity/2017/videos",
       "source_host": "internetsociety.org",
       "catalog_ids": [
         "catalog:49a12b4248302ab7b082385d"
+      ],
+      "catalog_count": 1,
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "policy_preapproved": false,
+      "metadata_only": false,
+      "robots_recheck_required": true,
+      "fetch_authorized": false,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null
+    },
+    {
+      "source_url": "https://internetsociety.org/issues/encryption/resources",
+      "source_host": "internetsociety.org",
+      "catalog_ids": [
+        "catalog:8351156c981956f8acb66869"
       ],
       "catalog_count": 1,
       "review_status": "policy_review_required",
@@ -172824,6 +173088,32 @@
       "source_host": "loc.gov",
       "catalog_ids": [
         "catalog:619dd5413bff209c2f11cad4"
+      ],
+      "catalog_count": 1,
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "policy_preapproved": false,
+      "metadata_only": false,
+      "robots_recheck_required": true,
+      "fetch_authorized": false,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null
+    },
+    {
+      "source_url": "https://loc.gov/exhibits/archives",
+      "source_host": "loc.gov",
+      "catalog_ids": [
+        "catalog:8a58960bdc2d518017d067a0"
       ],
       "catalog_count": 1,
       "review_status": "policy_review_required",
@@ -183012,6 +183302,32 @@
       "policy_note": null
     },
     {
+      "source_url": "https://theguardian.com/commentisfree/2026/aug/12/openai-anthropic-ai-models",
+      "source_host": "theguardian.com",
+      "catalog_ids": [
+        "catalog:792a90879160b481333d1782"
+      ],
+      "catalog_count": 1,
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "policy_preapproved": false,
+      "metadata_only": false,
+      "robots_recheck_required": true,
+      "fetch_authorized": false,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null
+    },
+    {
       "source_url": "https://theguardian.com/commentisfree/2026/nov/07/anti-ai-populism-is-the-future-of-american-politics",
       "source_host": "theguardian.com",
       "catalog_ids": [
@@ -184837,6 +185153,32 @@
       "source_host": "vam.ac.uk",
       "catalog_ids": [
         "catalog:227bd36e6b577dc8666deefb"
+      ],
+      "catalog_count": 1,
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "policy_preapproved": false,
+      "metadata_only": false,
+      "robots_recheck_required": true,
+      "fetch_authorized": false,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null
+    },
+    {
+      "source_url": "https://vam.ac.uk/shop/archive",
+      "source_host": "vam.ac.uk",
+      "catalog_ids": [
+        "catalog:9de30b46abb96c7d4e3fcceb"
       ],
       "catalog_count": 1,
       "review_status": "policy_review_required",
@@ -191018,6 +191360,188 @@
       ]
     },
     {
+      "host": "theguardian.com",
+      "catalog_definition_count": 18,
+      "unique_source_urls": 18,
+      "review_status_counts": {
+        "policy_review_required": 18
+      },
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "reviewed_at": null,
+      "source_access_modes": [],
+      "metadata_only": false,
+      "allowed_catalog_path_patterns": [],
+      "max_response_bytes": 0,
+      "per_dataset_rights_required": true,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null,
+      "sample_catalogs": [
+        {
+          "catalog_id": "catalog:08ddb5eb8edc00f62dbdc8cf",
+          "title": "Guardian Articles",
+          "catalog_type": "knowledge_base",
+          "source_url": "https://theguardian.com/technology/article/2024/aug/20/conde-nast-open-ai-deal",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:40ea1b73ba595b5860b76543",
+          "title": "Guardian Articles",
+          "catalog_type": "knowledge_base",
+          "source_url": "https://theguardian.com/sport/blog",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:792a90879160b481333d1782",
+          "title": "Guardian Businesses",
+          "catalog_type": "business_directory",
+          "source_url": "https://theguardian.com/commentisfree/2026/aug/12/openai-anthropic-ai-models",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:3e7982a3e0968d8fada655f5",
+          "title": "Guardian People",
+          "catalog_type": "people_directory",
+          "source_url": "https://theguardian.com/books/2024/dec/17/white-nights-fyodor-dostoevsky-social-media-instagram-booktok-tiktok",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:7612da26108dfe80609e78a4",
+          "title": "Guardian Places",
+          "catalog_type": "geographic",
+          "source_url": "https://theguardian.com/commentisfree/2026/nov/07/anti-ai-populism-is-the-future-of-american-politics",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:c95f22372a2a49e1b0ccdca2",
+          "title": "Guardian Subjects",
+          "catalog_type": "knowledge_base",
+          "source_url": "https://theguardian.com/us-news/2026/feb/10/national-monuments-trump-rewrite-history-racism-indigenous-people",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:8cd6d57a9a90a6fa473c43ef",
+          "title": "Research development Guardian Articles",
+          "catalog_type": "knowledge_base",
+          "source_url": "https://theguardian.com/technology/research",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:aa5dcb9b23515ea5903a045a",
+          "title": "Theguardian Articles",
+          "catalog_type": "knowledge_base",
+          "source_url": "https://theguardian.com/tone/news",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:ef04c56e5a717758ac43491d",
+          "title": "Theguardian Articles",
+          "catalog_type": "knowledge_base",
+          "source_url": "https://theguardian.com/tone/blog",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:fd1773221d6bcc35c1e46e91",
+          "title": "Theguardian Articles",
+          "catalog_type": "knowledge_base",
+          "source_url": "https://theguardian.com/news/blog",
+          "review_status": "policy_review_required"
+        }
+      ]
+    },
+    {
+      "host": "vam.ac.uk",
+      "catalog_definition_count": 18,
+      "unique_source_urls": 18,
+      "review_status_counts": {
+        "policy_review_required": 18
+      },
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "reviewed_at": null,
+      "source_access_modes": [],
+      "metadata_only": false,
+      "allowed_catalog_path_patterns": [],
+      "max_response_bytes": 0,
+      "per_dataset_rights_required": true,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null,
+      "sample_catalogs": [
+        {
+          "catalog_id": "catalog:c00c72a4bdbeebb42191f715",
+          "title": "Blog Articles",
+          "catalog_type": "knowledge_base",
+          "source_url": "https://vam.ac.uk/blog/news",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:cb649840bc210aa9fc6ea456",
+          "title": "Blog Products",
+          "catalog_type": "commerce",
+          "source_url": "https://vam.ac.uk/blog/shop",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:e24ec7d7057d19af16a06f76",
+          "title": "Dolls' Houses | A catalogue of the V&A Museum's extensive collection of miniature houses by Halina Pasierbska | V&A Shop",
+          "catalog_type": "commerce",
+          "source_url": "https://vam.ac.uk/shop/books",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:e5e8c61a2fccef4a00b9d29c",
+          "title": "Explore Collections Products",
+          "catalog_type": "commerce",
+          "source_url": "https://vam.ac.uk/collections",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:227bd36e6b577dc8666deefb",
+          "title": "Shop Shop Products",
+          "catalog_type": "commerce",
+          "source_url": "https://vam.ac.uk/shop",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:54f97f8181d5531b63696ee2",
+          "title": "Vam Articles",
+          "catalog_type": "knowledge_base",
+          "source_url": "https://vam.ac.uk/dundee/stories/archive",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:6582df2b475d41ef8277dbb6",
+          "title": "Vam Articles",
+          "catalog_type": "knowledge_base",
+          "source_url": "https://vam.ac.uk/info/research",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:9de30b46abb96c7d4e3fcceb",
+          "title": "Vam Articles",
+          "catalog_type": "knowledge_base",
+          "source_url": "https://vam.ac.uk/shop/archive",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:c2c7a571a2beff379684ecd4",
+          "title": "Vam Articles",
+          "catalog_type": "knowledge_base",
+          "source_url": "https://vam.ac.uk/blog",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:e7d9ec10483e431ef0ec8624",
+          "title": "Vam Articles",
+          "catalog_type": "knowledge_base",
+          "source_url": "https://vam.ac.uk/info/archives",
+          "review_status": "policy_review_required"
+        }
+      ]
+    },
+    {
       "host": "archives.gov",
       "catalog_definition_count": 17,
       "unique_source_urls": 17,
@@ -191195,188 +191719,6 @@
           "title": "Nationalgeographic Media",
           "catalog_type": "media",
           "source_url": "https://nationalgeographic.com/pages/topic/audio",
-          "review_status": "policy_review_required"
-        }
-      ]
-    },
-    {
-      "host": "theguardian.com",
-      "catalog_definition_count": 17,
-      "unique_source_urls": 17,
-      "review_status_counts": {
-        "policy_review_required": 17
-      },
-      "terms_url": null,
-      "terms_status": "unreviewed",
-      "reviewed_at": null,
-      "source_access_modes": [],
-      "metadata_only": false,
-      "allowed_catalog_path_patterns": [],
-      "max_response_bytes": 0,
-      "per_dataset_rights_required": true,
-      "min_interval_seconds": 1.0,
-      "max_requests_per_run": 1,
-      "policy_note": null,
-      "sample_catalogs": [
-        {
-          "catalog_id": "catalog:08ddb5eb8edc00f62dbdc8cf",
-          "title": "Guardian Articles",
-          "catalog_type": "knowledge_base",
-          "source_url": "https://theguardian.com/technology/article/2024/aug/20/conde-nast-open-ai-deal",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:40ea1b73ba595b5860b76543",
-          "title": "Guardian Articles",
-          "catalog_type": "knowledge_base",
-          "source_url": "https://theguardian.com/sport/blog",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:3e7982a3e0968d8fada655f5",
-          "title": "Guardian People",
-          "catalog_type": "people_directory",
-          "source_url": "https://theguardian.com/books/2024/dec/17/white-nights-fyodor-dostoevsky-social-media-instagram-booktok-tiktok",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:7612da26108dfe80609e78a4",
-          "title": "Guardian Places",
-          "catalog_type": "geographic",
-          "source_url": "https://theguardian.com/commentisfree/2026/nov/07/anti-ai-populism-is-the-future-of-american-politics",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:c95f22372a2a49e1b0ccdca2",
-          "title": "Guardian Subjects",
-          "catalog_type": "knowledge_base",
-          "source_url": "https://theguardian.com/us-news/2026/feb/10/national-monuments-trump-rewrite-history-racism-indigenous-people",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:8cd6d57a9a90a6fa473c43ef",
-          "title": "Research development Guardian Articles",
-          "catalog_type": "knowledge_base",
-          "source_url": "https://theguardian.com/technology/research",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:aa5dcb9b23515ea5903a045a",
-          "title": "Theguardian Articles",
-          "catalog_type": "knowledge_base",
-          "source_url": "https://theguardian.com/tone/news",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:ef04c56e5a717758ac43491d",
-          "title": "Theguardian Articles",
-          "catalog_type": "knowledge_base",
-          "source_url": "https://theguardian.com/tone/blog",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:fd1773221d6bcc35c1e46e91",
-          "title": "Theguardian Articles",
-          "catalog_type": "knowledge_base",
-          "source_url": "https://theguardian.com/news/blog",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:0501ba8b0b51c355b51d156a",
-          "title": "Theguardian Businesses",
-          "catalog_type": "business_directory",
-          "source_url": "https://theguardian.com/us/business",
-          "review_status": "policy_review_required"
-        }
-      ]
-    },
-    {
-      "host": "vam.ac.uk",
-      "catalog_definition_count": 17,
-      "unique_source_urls": 17,
-      "review_status_counts": {
-        "policy_review_required": 17
-      },
-      "terms_url": null,
-      "terms_status": "unreviewed",
-      "reviewed_at": null,
-      "source_access_modes": [],
-      "metadata_only": false,
-      "allowed_catalog_path_patterns": [],
-      "max_response_bytes": 0,
-      "per_dataset_rights_required": true,
-      "min_interval_seconds": 1.0,
-      "max_requests_per_run": 1,
-      "policy_note": null,
-      "sample_catalogs": [
-        {
-          "catalog_id": "catalog:c00c72a4bdbeebb42191f715",
-          "title": "Blog Articles",
-          "catalog_type": "knowledge_base",
-          "source_url": "https://vam.ac.uk/blog/news",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:cb649840bc210aa9fc6ea456",
-          "title": "Blog Products",
-          "catalog_type": "commerce",
-          "source_url": "https://vam.ac.uk/blog/shop",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:e24ec7d7057d19af16a06f76",
-          "title": "Dolls' Houses | A catalogue of the V&A Museum's extensive collection of miniature houses by Halina Pasierbska | V&A Shop",
-          "catalog_type": "commerce",
-          "source_url": "https://vam.ac.uk/shop/books",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:e5e8c61a2fccef4a00b9d29c",
-          "title": "Explore Collections Products",
-          "catalog_type": "commerce",
-          "source_url": "https://vam.ac.uk/collections",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:227bd36e6b577dc8666deefb",
-          "title": "Shop Shop Products",
-          "catalog_type": "commerce",
-          "source_url": "https://vam.ac.uk/shop",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:54f97f8181d5531b63696ee2",
-          "title": "Vam Articles",
-          "catalog_type": "knowledge_base",
-          "source_url": "https://vam.ac.uk/dundee/stories/archive",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:6582df2b475d41ef8277dbb6",
-          "title": "Vam Articles",
-          "catalog_type": "knowledge_base",
-          "source_url": "https://vam.ac.uk/info/research",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:c2c7a571a2beff379684ecd4",
-          "title": "Vam Articles",
-          "catalog_type": "knowledge_base",
-          "source_url": "https://vam.ac.uk/blog",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:e7d9ec10483e431ef0ec8624",
-          "title": "Vam Articles",
-          "catalog_type": "knowledge_base",
-          "source_url": "https://vam.ac.uk/info/archives",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:f03cd7e4948d13e273aa8ec0",
-          "title": "Vam Articles",
-          "catalog_type": "knowledge_base",
-          "source_url": "https://vam.ac.uk/mused/articles",
           "review_status": "policy_review_required"
         }
       ]
@@ -191741,6 +192083,97 @@
           "title": "Energy Resources",
           "catalog_type": "resource_library",
           "source_url": "https://energy.gov/cmei/manufacturing/resources",
+          "review_status": "policy_review_required"
+        }
+      ]
+    },
+    {
+      "host": "internetsociety.org",
+      "catalog_definition_count": 14,
+      "unique_source_urls": 14,
+      "review_status_counts": {
+        "policy_review_required": 14
+      },
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "reviewed_at": null,
+      "source_access_modes": [],
+      "metadata_only": false,
+      "allowed_catalog_path_patterns": [],
+      "max_response_bytes": 0,
+      "per_dataset_rights_required": true,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null,
+      "sample_catalogs": [
+        {
+          "catalog_id": "catalog:e60413c8ad0ceb7110e687f0",
+          "title": "Internet Articles",
+          "catalog_type": "knowledge_base",
+          "source_url": "https://internetsociety.org/fr/blog",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:b6c2316878ff2f2b09045e3f",
+          "title": "Internet Internet Articles",
+          "catalog_type": "knowledge_base",
+          "source_url": "https://internetsociety.org/blog",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:058bb72cee58e7579a8c8e1c",
+          "title": "Internet Society Resources",
+          "catalog_type": "resource_library",
+          "source_url": "https://internetsociety.org/es/resources",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:0ebfd908a039e74d1e4aefe1",
+          "title": "Internet Society Resources",
+          "catalog_type": "resource_library",
+          "source_url": "https://internetsociety.org/resources",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:7c91e6bf52e64886a4b67df7",
+          "title": "Internet Society Resources",
+          "catalog_type": "resource_library",
+          "source_url": "https://internetsociety.org/fr/resources",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:0669d162789241d715b1dc6b",
+          "title": "Internetsociety Articles",
+          "catalog_type": "knowledge_base",
+          "source_url": "https://internetsociety.org/es/blog",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:49a12b4248302ab7b082385d",
+          "title": "Internetsociety Media",
+          "catalog_type": "media",
+          "source_url": "https://internetsociety.org/intercommunity/2017/videos",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:599229c1c2d1cca836cab5cb",
+          "title": "Internetsociety Organizations",
+          "catalog_type": "organization_directory",
+          "source_url": "https://internetsociety.org/foundation",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:64dcdbf2e2838d706b450492",
+          "title": "Internetsociety People",
+          "catalog_type": "people_directory",
+          "source_url": "https://internetsociety.org/es/about-internet-society/team",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:c5afd9210dd8f1198ad1d35b",
+          "title": "Internetsociety People",
+          "catalog_type": "people_directory",
+          "source_url": "https://internetsociety.org/about-internet-society/team",
           "review_status": "policy_review_required"
         }
       ]
@@ -192469,97 +192902,6 @@
           "title": "FDIC Resources",
           "catalog_type": "resource_library",
           "source_url": "https://fdic.gov/resources",
-          "review_status": "policy_review_required"
-        }
-      ]
-    },
-    {
-      "host": "internetsociety.org",
-      "catalog_definition_count": 12,
-      "unique_source_urls": 12,
-      "review_status_counts": {
-        "policy_review_required": 12
-      },
-      "terms_url": null,
-      "terms_status": "unreviewed",
-      "reviewed_at": null,
-      "source_access_modes": [],
-      "metadata_only": false,
-      "allowed_catalog_path_patterns": [],
-      "max_response_bytes": 0,
-      "per_dataset_rights_required": true,
-      "min_interval_seconds": 1.0,
-      "max_requests_per_run": 1,
-      "policy_note": null,
-      "sample_catalogs": [
-        {
-          "catalog_id": "catalog:e60413c8ad0ceb7110e687f0",
-          "title": "Internet Articles",
-          "catalog_type": "knowledge_base",
-          "source_url": "https://internetsociety.org/fr/blog",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:b6c2316878ff2f2b09045e3f",
-          "title": "Internet Internet Articles",
-          "catalog_type": "knowledge_base",
-          "source_url": "https://internetsociety.org/blog",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:058bb72cee58e7579a8c8e1c",
-          "title": "Internet Society Resources",
-          "catalog_type": "resource_library",
-          "source_url": "https://internetsociety.org/es/resources",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:0ebfd908a039e74d1e4aefe1",
-          "title": "Internet Society Resources",
-          "catalog_type": "resource_library",
-          "source_url": "https://internetsociety.org/resources",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:7c91e6bf52e64886a4b67df7",
-          "title": "Internet Society Resources",
-          "catalog_type": "resource_library",
-          "source_url": "https://internetsociety.org/fr/resources",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:0669d162789241d715b1dc6b",
-          "title": "Internetsociety Articles",
-          "catalog_type": "knowledge_base",
-          "source_url": "https://internetsociety.org/es/blog",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:49a12b4248302ab7b082385d",
-          "title": "Internetsociety Media",
-          "catalog_type": "media",
-          "source_url": "https://internetsociety.org/intercommunity/2017/videos",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:599229c1c2d1cca836cab5cb",
-          "title": "Internetsociety Organizations",
-          "catalog_type": "organization_directory",
-          "source_url": "https://internetsociety.org/foundation",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:64dcdbf2e2838d706b450492",
-          "title": "Internetsociety People",
-          "catalog_type": "people_directory",
-          "source_url": "https://internetsociety.org/es/about-internet-society/team",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:c5afd9210dd8f1198ad1d35b",
-          "title": "Internetsociety People",
-          "catalog_type": "people_directory",
-          "source_url": "https://internetsociety.org/about-internet-society/team",
           "review_status": "policy_review_required"
         }
       ]
@@ -194287,6 +194629,69 @@
       ]
     },
     {
+      "host": "bucherer.com",
+      "catalog_definition_count": 6,
+      "unique_source_urls": 6,
+      "review_status_counts": {
+        "policy_review_required": 6
+      },
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "reviewed_at": null,
+      "source_access_modes": [],
+      "metadata_only": false,
+      "allowed_catalog_path_patterns": [],
+      "max_response_bytes": 0,
+      "per_dataset_rights_required": true,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null,
+      "sample_catalogs": [
+        {
+          "catalog_id": "catalog:3232dfc192cb9b587c08d891",
+          "title": "Bucherer Models",
+          "catalog_type": "commerce",
+          "source_url": "https://bucherer.com/us/en/watches",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:7f033e90afea6aea14b9f683",
+          "title": "Bucherer Models",
+          "catalog_type": "commerce",
+          "source_url": "https://bucherer.com/us/en/rolex-certified-pre-owned/watches",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:b44b047a2e756bfc043bb477",
+          "title": "Bucherer Models",
+          "catalog_type": "commerce",
+          "source_url": "https://bucherer.com/rolex-certified-pre-owned/watches",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:226a407b728b58c396759794",
+          "title": "Bucherer People",
+          "catalog_type": "people_directory",
+          "source_url": "https://bucherer.com/us/en/rolex/team",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:1ad0d88c42fd8f1448c8181e",
+          "title": "Bucherer Places",
+          "catalog_type": "geographic",
+          "source_url": "https://bucherer.com/us/en/locations",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:738baf1812c8283ad3780653",
+          "title": "Bucherer Products",
+          "catalog_type": "commerce",
+          "source_url": "https://bucherer.com/us/en/bucherer-finejewellery/collections",
+          "review_status": "policy_review_required"
+        }
+      ]
+    },
+    {
       "host": "go.dev",
       "catalog_definition_count": 6,
       "unique_source_urls": 6,
@@ -194408,6 +194813,69 @@
           "title": "Monthly Catalog of U.S. Government Publications | GovInfo",
           "catalog_type": "commerce",
           "source_url": "https://govinfo.gov/collection/FDLP",
+          "review_status": "policy_review_required"
+        }
+      ]
+    },
+    {
+      "host": "loc.gov",
+      "catalog_definition_count": 6,
+      "unique_source_urls": 6,
+      "review_status_counts": {
+        "policy_review_required": 6
+      },
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "reviewed_at": null,
+      "source_access_modes": [],
+      "metadata_only": false,
+      "allowed_catalog_path_patterns": [],
+      "max_response_bytes": 0,
+      "per_dataset_rights_required": true,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null,
+      "sample_catalogs": [
+        {
+          "catalog_id": "catalog:ffc70d753d136009fa6525b9",
+          "title": "Library Congress Products",
+          "catalog_type": "commerce",
+          "source_url": "https://loc.gov/about/about-the-librarian/previous-librarians-of-congress/item/n79065337/daniel-j-boorstin-1914-2004",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:8a58960bdc2d518017d067a0",
+          "title": "Loc Articles",
+          "catalog_type": "knowledge_base",
+          "source_url": "https://loc.gov/exhibits/archives",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:0c5509043a8d581d34839442",
+          "title": "Loc Events",
+          "catalog_type": "events",
+          "source_url": "https://loc.gov/about/library-of-congress-alumni-network/events",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:fb2cb6894f7a710d512c3d72",
+          "title": "Loc Organizations",
+          "catalog_type": "organization_directory",
+          "source_url": "https://loc.gov/nls/who-we-are/organization",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:619dd5413bff209c2f11cad4",
+          "title": "Reports Office Inspector Articles",
+          "catalog_type": "knowledge_base",
+          "source_url": "https://loc.gov/about/office-of-the-inspector-general/reports",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:0ec2503ff9bf5155148d10d5",
+          "title": "Topics Library Congress Subjects",
+          "catalog_type": "knowledge_base",
+          "source_url": "https://loc.gov/topics",
           "review_status": "policy_review_required"
         }
       ]
@@ -194602,62 +195070,6 @@
       ]
     },
     {
-      "host": "bucherer.com",
-      "catalog_definition_count": 5,
-      "unique_source_urls": 5,
-      "review_status_counts": {
-        "policy_review_required": 5
-      },
-      "terms_url": null,
-      "terms_status": "unreviewed",
-      "reviewed_at": null,
-      "source_access_modes": [],
-      "metadata_only": false,
-      "allowed_catalog_path_patterns": [],
-      "max_response_bytes": 0,
-      "per_dataset_rights_required": true,
-      "min_interval_seconds": 1.0,
-      "max_requests_per_run": 1,
-      "policy_note": null,
-      "sample_catalogs": [
-        {
-          "catalog_id": "catalog:3232dfc192cb9b587c08d891",
-          "title": "Bucherer Models",
-          "catalog_type": "commerce",
-          "source_url": "https://bucherer.com/us/en/watches",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:7f033e90afea6aea14b9f683",
-          "title": "Bucherer Models",
-          "catalog_type": "commerce",
-          "source_url": "https://bucherer.com/us/en/rolex-certified-pre-owned/watches",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:b44b047a2e756bfc043bb477",
-          "title": "Bucherer Models",
-          "catalog_type": "commerce",
-          "source_url": "https://bucherer.com/rolex-certified-pre-owned/watches",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:226a407b728b58c396759794",
-          "title": "Bucherer People",
-          "catalog_type": "people_directory",
-          "source_url": "https://bucherer.com/us/en/rolex/team",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:1ad0d88c42fd8f1448c8181e",
-          "title": "Bucherer Places",
-          "catalog_type": "geographic",
-          "source_url": "https://bucherer.com/us/en/locations",
-          "review_status": "policy_review_required"
-        }
-      ]
-    },
-    {
       "host": "fao.org",
       "catalog_definition_count": 5,
       "unique_source_urls": 5,
@@ -194821,62 +195233,6 @@
           "title": "Tools Microsoft Learn Software",
           "catalog_type": "software",
           "source_url": "https://learn.microsoft.com/en-us/agent-framework/agents/tools",
-          "review_status": "policy_review_required"
-        }
-      ]
-    },
-    {
-      "host": "loc.gov",
-      "catalog_definition_count": 5,
-      "unique_source_urls": 5,
-      "review_status_counts": {
-        "policy_review_required": 5
-      },
-      "terms_url": null,
-      "terms_status": "unreviewed",
-      "reviewed_at": null,
-      "source_access_modes": [],
-      "metadata_only": false,
-      "allowed_catalog_path_patterns": [],
-      "max_response_bytes": 0,
-      "per_dataset_rights_required": true,
-      "min_interval_seconds": 1.0,
-      "max_requests_per_run": 1,
-      "policy_note": null,
-      "sample_catalogs": [
-        {
-          "catalog_id": "catalog:ffc70d753d136009fa6525b9",
-          "title": "Library Congress Products",
-          "catalog_type": "commerce",
-          "source_url": "https://loc.gov/about/about-the-librarian/previous-librarians-of-congress/item/n79065337/daniel-j-boorstin-1914-2004",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:0c5509043a8d581d34839442",
-          "title": "Loc Events",
-          "catalog_type": "events",
-          "source_url": "https://loc.gov/about/library-of-congress-alumni-network/events",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:fb2cb6894f7a710d512c3d72",
-          "title": "Loc Organizations",
-          "catalog_type": "organization_directory",
-          "source_url": "https://loc.gov/nls/who-we-are/organization",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:619dd5413bff209c2f11cad4",
-          "title": "Reports Office Inspector Articles",
-          "catalog_type": "knowledge_base",
-          "source_url": "https://loc.gov/about/office-of-the-inspector-general/reports",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:0ec2503ff9bf5155148d10d5",
-          "title": "Topics Library Congress Subjects",
-          "catalog_type": "knowledge_base",
-          "source_url": "https://loc.gov/topics",
           "review_status": "policy_review_required"
         }
       ]
