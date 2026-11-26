@@ -64,5 +64,8 @@ jobs:
         run: |
           set -euo pipefail
           code="$(curl --silent --show-error --location --max-time 50 -o /tmp/search.json -w '%{http_code}' "$SEARCH_URL")"
+          echo "Live search HTTP=$code bytes=$(wc -c < /tmp/search.json)"
+          head -c 1800 /tmp/search.json || true
+          echo
           test "$code" = "200"
           node -e "const fs=require('fs'); const x=JSON.parse(fs.readFileSync('/tmp/search.json','utf8')); if(!Array.isArray(x.results)) { console.error(x); process.exit(1); } console.log(JSON.stringify({query:x.query??'NASA',results:x.results.length,count:x.count??null,source:x.source??null,error:x.error??null}))"
