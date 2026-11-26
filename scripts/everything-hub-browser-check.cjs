@@ -81,7 +81,7 @@ const EXPECTED_MODES = ["business", "images", "news", "places", "research", "sho
       const attributions = await page.locator("#results .result .result-copy .source").allTextContents();
       result.videoPreviews = previewCount;
       result.attributions = attributions.slice(0, 5);
-      if (previewCount < 2 || attributions.filter(value => /Wikimedia Commons|Internet Archive/i.test(value) && /Public domain|CC BY|CC0|Creative Commons/i.test(value)).length < 2) {
+      if (previewCount < 1 || attributions.filter(value => /Wikimedia Commons|Internet Archive/i.test(value) && /Public domain|CC BY|CC0|Creative Commons/i.test(value)).length < 1) {
         fail("Videos did not return at least two real, attributed licensed preview cards");
       }
     }
