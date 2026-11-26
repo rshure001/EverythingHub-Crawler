@@ -1,4 +1,5 @@
 name: Everything Hub desktop and mobile browser acceptance
+# Re-run live desktop/mobile checks against the pinned public bridge and isolated catalog worker.
 
 on:
   push:
