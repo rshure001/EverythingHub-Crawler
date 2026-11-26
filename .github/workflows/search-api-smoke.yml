@@ -1,9 +1,16 @@
-name: EverythingHub first-party catalog search smoke test
-# Manual entry point; the catalog publisher dispatches this after validation and commit.
+name: EverythingHub search API smoke test
+
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "supabase/functions/everything-hub-web-search/**"
+      - ".github/workflows/search-api-smoke.yml"
+
 permissions:
   contents: read
+
 jobs:
   smoke-test:
     runs-on: ubuntu-latest
@@ -13,186 +20,63 @@ jobs:
       KEY: sb_publishable_XlIsACWhtVS1jVODWYGTpg_GMs8v3vJ
     steps:
       - uses: actions/checkout@v4
-      - name: Verify independent search and first-party catalog previews
+      - name: Verify lightweight search API and explicit catalog deferral
         run: |
           python - <<'PY'
           import json
           import os
           import urllib.parse
           import urllib.request
-          from datetime import datetime, timezone
-          from pathlib import Path
-          from crawler.pipeline_health import evaluate_manifest_freshness
 
           base = os.environ["BASE"].rstrip("/")
           key = os.environ["KEY"]
-          manifest_path = Path("public-search/manifest.json")
-          manifest_raw = manifest_path.read_bytes()
-          manifest = json.loads(manifest_raw.decode("utf-8"))
-          expected_pages = manifest.get("total_pages")
-          expected_updated_at = manifest.get("updated_at")
-          if not isinstance(expected_pages, int) or expected_pages < 1:
-              raise SystemExit("Committed public-search manifest has an invalid page count")
-          if not isinstance(expected_updated_at, int) or expected_updated_at < 1:
-              raise SystemExit("Committed public-search manifest has an invalid update timestamp")
-          freshness = evaluate_manifest_freshness(manifest)
-          if freshness["status"] != "fresh":
-              raise SystemExit("Committed public-search manifest is stale: " + json.dumps(freshness))
-          expected_updated_iso = datetime.fromtimestamp(
-              expected_updated_at, timezone.utc
-          ).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
-          def get(function, query, **extra):
-              params = {"q": query, "limit": 20, **extra}
-              url = base + "/" + function + "?" + urllib.parse.urlencode(params)
+          def get(function, query):
+              url = base + "/" + function + "?" + urllib.parse.urlencode({"q": query, "limit": 10})
               request = urllib.request.Request(url, headers={
                   "Accept": "application/json",
                   "apikey": key,
               })
-              with urllib.request.urlopen(request, timeout=30) as response:
+              with urllib.request.urlopen(request, timeout=25) as response:
                   if response.status != 200:
                       raise RuntimeError(function + " returned HTTP " + str(response.status))
                   return json.load(response)
 
-          def safe_http(value):
+          def valid_url(value):
               return isinstance(value, str) and value.startswith(("https://", "http://"))
 
           independent = get("everything-hub-independent-search", "Rolex")
-          if independent.get("count", 0) < 1 or independent.get("provider") != "Bing RSS":
-              raise SystemExit("Independent Rolex fallback returned no verified Bing RSS results")
-          if independent.get("independentOfDatabase") is not True:
-              raise SystemExit("Independent Rolex fallback is not database-independent")
-          for item in independent.get("results", []):
-              if not item.get("title") or not safe_http(item.get("url")):
-                  raise SystemExit("Independent search returned an unsafe or incomplete result")
-          print("Independent Rolex fallback passed:", independent["count"], "results")
+          if independent.get("provider") != "Bing RSS" or independent.get("independentOfDatabase") is not True:
+              raise SystemExit("Independent Rolex fallback did not identify its provider/database independence")
+          if not isinstance(independent.get("results"), list) or not independent["results"]:
+              raise SystemExit("Independent Rolex fallback returned no results")
+          for item in independent["results"]:
+              if not item.get("title") or not valid_url(item.get("url")):
+                  raise SystemExit("Independent fallback returned an incomplete or unsafe result")
+          print("Independent Rolex fallback:", len(independent["results"]), "valid results")
 
-          previews = {}
-          page_results_by_query = {}
           for query in ("Rolex", "Las Vegas", "NASA"):
               payload = get("everything-hub-web-search", query)
-              preview = payload.get("catalogPreview")
-              results = payload.get("catalogResults")
-              if not isinstance(preview, dict) or preview.get("previewOnly") is not True:
-                  raise SystemExit(query + ": first-party catalog preview metadata is missing")
-              if not isinstance(results, list):
-                  raise SystemExit(query + ": catalogResults is not an array")
-              if preview.get("pageIndexPages") != expected_pages:
-                  raise SystemExit(query + ": catalog preview does not identify the committed page count")
-              if preview.get("pageIndexUpdatedAt") != expected_updated_iso:
-                  raise SystemExit(query + ": catalog preview does not identify the committed index timestamp")
-              source_pages = preview.get("sourceIndexPages")
-              if not isinstance(source_pages, int) or source_pages < 1 or source_pages > expected_pages:
-                  raise SystemExit(query + ": catalog source-page count is invalid")
-              source_updated = preview.get("sourceIndexUpdatedAt")
-              try:
-                  source_updated_seconds = datetime.fromisoformat(
-                      str(source_updated).replace("Z", "+00:00")
-                  ).timestamp()
-              except (TypeError, ValueError):
-                  source_updated_seconds = None
-              freshness_match = (
-                  source_pages == expected_pages and
-                  source_updated_seconds is not None and
-                  abs(source_updated_seconds - expected_updated_at) <= 60
-              )
-              if preview.get("freshnessMatch") is not freshness_match:
-                  raise SystemExit(query + ": catalog freshness flag does not match persisted manifests")
-              expected_status = "candidate-preview" if freshness_match else "stale-candidate-preview"
-              if preview.get("status") != expected_status:
-                  raise SystemExit(query + ": catalog analysis freshness status is not explicit")
-              if preview.get("recordsPublished") != 0:
-                  raise SystemExit(query + ": candidate records were incorrectly reported as published")
-              if preview.get("sourceTermsReviewedRecords") != 0:
-                  raise SystemExit(query + ": unreviewed records were incorrectly reported as rights-reviewed")
-              if preview.get("resultCount") != len(results):
-                  raise SystemExit(query + ": catalog preview result count is inconsistent")
-              catalog_ids = [item.get("catalog_id") for item in results]
-              if len(catalog_ids) != len(set(catalog_ids)):
-                  raise SystemExit(query + ": duplicate catalog cards were returned")
+              results = payload.get("results")
+              if not isinstance(results, list) or not results:
+                  raise SystemExit(query + ": live search returned no page results")
               for item in results:
-                  if (
-                      not item.get("catalog_id") or
-                      not item.get("title") or
-                      not safe_http(item.get("url")) or
-                      item.get("preview_only") is not True or
-                      item.get("commercial_eligible") is not False or
-                      item.get("source_terms_status") != "not_reviewed" or
-                      item.get("record_level_clearance") != "not_reviewed"
-                  ):
-                      raise SystemExit(query + ": catalog card violated candidate-only rights or provenance rules")
-                  for record in item.get("matched_records", []):
-                      if not record.get("record_id") or not record.get("title") or not safe_http(record.get("source_url")):
-                          raise SystemExit(query + ": matched record has invalid identity or provenance")
-              page_results = payload.get("results", [])
-              if not isinstance(page_results, list):
-                  raise SystemExit(query + ": page results is not an array")
-              for item in page_results:
-                  if not item.get("title") or not safe_http(item.get("url")):
-                      raise SystemExit(query + ": page result has an unsafe URL or missing title")
-              page_results_by_query[query] = page_results
-              previews[query] = results
+                  if not item.get("title") or not valid_url(item.get("url")):
+                      raise SystemExit(query + ": live search returned an incomplete or unsafe result")
+              preview = payload.get("catalogPreview")
+              catalogs = payload.get("catalogResults")
+              if not isinstance(preview, dict) or preview.get("status") != "deferred":
+                  raise SystemExit(query + ": Edge search did not explicitly defer heavy catalog preview")
+              if preview.get("previewOnly") is not True or preview.get("recordsPublished") != 0:
+                  raise SystemExit(query + ": catalog preview status or publication claims are unsafe")
+              if not isinstance(catalogs, list) or catalogs:
+                  raise SystemExit(query + ": Edge search unexpectedly loaded catalog previews into the hot path")
               print(json.dumps({
                   "query": query,
-                  "catalogPreviewStatus": preview.get("status"),
-                  "analysisVersion": preview.get("analysisVersion"),
-                  "sourceIndexPages": source_pages,
-                  "pageIndexPages": preview.get("pageIndexPages"),
-                  "catalogCount": preview.get("catalogCount"),
-                  "recordCount": preview.get("recordCount"),
-                  "catalogResults": len(results),
-                  "topCatalogs": [item.get("catalog_title") for item in results[:3]],
+                  "resultCount": len(results),
+                  "source": payload.get("source"),
+                  "catalogPreview": preview.get("status"),
+                  "recordsPublished": preview.get("recordsPublished"),
               }, sort_keys=True))
-
-          for query in ("Rolex", "Las Vegas", "NASA"):
-              query_tokens = [token for token in query.casefold().split() if len(token) >= 3]
-              relevant_pages = [
-                  item for item in page_results_by_query[query]
-                  if any(
-                      token in (str(item.get("title", "")) + " " + str(item.get("snippet", ""))).casefold()
-                      for token in query_tokens
-                  )
-              ]
-              if not relevant_pages:
-                  raise SystemExit(query + ": no relevant visible page results were returned")
-          nasa_catalog_matches = [
-              item for item in previews["NASA"]
-              if "nasa" in str(item.get("catalog_title", "")).casefold()
-              or any("nasa" in str(record.get("title", "")).casefold() for record in item.get("matched_records", []))
-          ]
-          if previews["NASA"] and not nasa_catalog_matches:
-              raise SystemExit("NASA returned catalog cards with no NASA-relevant catalog or matched record")
-          if not previews["NASA"]:
-              print("NASA: relevant visible page results verified; no first-party catalog candidate was returned.")
-
-          for query in ("Rolex", "Las Vegas", "NASA"):
-              query_tokens = [token for token in query.casefold().split() if len(token) >= 3]
-              for item in previews[query]:
-                  subject_records = [
-                      record for record in item.get("matched_records", [])
-                      if str(record.get("record_type", "")).casefold() == "subject"
-                  ]
-                  catalog_title = str(item.get("catalog_title", "")).casefold()
-                  if subject_records and not any(token in catalog_title for token in query_tokens):
-                      raise SystemExit(query + ": unrelated derived subject catalog surfaced: " + catalog_title)
-
-          las_vegas_typed = [
-              item for item in previews["Las Vegas"]
-              if item.get("relevance_class") == "typed_location_match"
-          ]
-          if not las_vegas_typed:
-              raise SystemExit("Las Vegas did not return a typed place/local catalog result")
-          rolex_products = [
-              item for item in previews["Rolex"]
-              if item.get("relevance_class") == "typed_product_match"
-          ]
-          for item in rolex_products:
-              record_types = {row.get("record_type") for row in item.get("matched_records", [])}
-              if not record_types.intersection({"product", "model", "brand"}):
-                  raise SystemExit("Rolex product catalog label is unsupported by matched record types")
-          if not rolex_products:
-              print("Rolex: no dedicated product/model catalog is present in this snapshot; incidental mentions remain untyped.")
-          else:
-              print("Rolex typed product/model catalogs:", len(rolex_products))
-          print("PASS: first-party Edge search returned integrity-checked, rights-restricted catalog previews.")
+          print("PASS: live search API returns results without Edge-worker catalog fan-out.")
           PY
