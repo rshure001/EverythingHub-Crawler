@@ -122,3 +122,4 @@ const fs = require("node:fs");
     if (!report.passed) process.exitCode = 1;
   }
 })();
+// Trigger a dedicated real-browser run for the already-deployed Vercel fallback.
