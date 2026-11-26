@@ -17,7 +17,38 @@ const fs = require("node:fs");
   const shot = name => page.screenshot({ path: "everything-hub-vercel-" + name + ".png", fullPage: true });
   const fail = message => { throw new Error(message); };
   try {
-    const response = await page.goto(report.url, { waitUntil: "domcontentloaded", timeout: 45000 });
+    report.checks.backendHealth = [];
+    for (const base of [
+      "https://everythinghub-search-backend.vercel.app",
+      "https://everythinghub-search-backend-e1v07wp4q-rshure001-8053.vercel.app"
+    ]) {
+      try {
+        const health = await page.request.get(base + "/api/health", { timeout: 12000 });
+        const body = await health.json().catch(() => ({}));
+        report.checks.backendHealth.push({ url: base, status: health.status(), body });
+      } catch (e) {
+        report.checks.backendHealth.push({ url: base, error: e.message });
+      }
+    }
+    let response = null;
+    let loadedUrl = null;
+    report.checks.entrypointAttempts = [];
+    for (const candidate of candidateUrls) {
+      try {
+        const candidateResponse = await page.goto(candidate, { waitUntil: "domcontentloaded", timeout: 20000 });
+        const hasSearch = await page.locator("#query").count();
+        report.checks.entrypointAttempts.push({ url: candidate, status: candidateResponse?.status(), hasSearch });
+        if (candidateResponse?.ok() && hasSearch) {
+          response = candidateResponse;
+          loadedUrl = candidate;
+          break;
+        }
+      } catch (e) {
+        report.checks.entrypointAttempts.push({ url: candidate, error: e.message });
+      }
+    }
+    if (!loadedUrl) fail("Neither the custom domain nor the existing Vercel deployment URL served the homepage");
+    report.url = loadedUrl;
     await page.locator("#query").waitFor({ state: "visible", timeout: 20000 });
     const art = page.locator(".art img").first();
     await art.waitFor({ state: "visible", timeout: 20000 });
