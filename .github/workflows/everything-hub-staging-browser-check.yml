@@ -13,8 +13,6 @@ on:
       - "supabase/functions/everything-hub-static-publisher/index.ts"
       - "supabase/functions/everything-hub-site/index.ts"
       - "supabase/functions/everything-hub-homepage-release/index.ts"
-      - "supabase/functions/everything-hub-web-search/**"
-      - "supabase/functions/everything-hub-catalog-search/**"
       - "supabase/functions/everything-hub-deploy-bridge/index.ts"
   workflow_dispatch:
 
@@ -23,7 +21,7 @@ permissions:
 
 concurrency:
   group: everything-hub-browser-acceptance
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   local-staging-browser-check:
@@ -71,7 +69,7 @@ jobs:
           retention-days: 14
 
   live-bridge-browser-check:
-    if: github.event_name == 'workflow_dispatch' || contains(toJSON(github.event.commits), 'supabase/functions/everything-hub-deploy-bridge/index.ts')
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, 'Switch Everything Hub bridge')
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
@@ -119,7 +117,7 @@ jobs:
           retention-days: 30
 
   vercel-fallback-browser-check:
-    if: github.event_name == 'workflow_dispatch' || contains(toJSON(github.event.commits), 'scripts/vercel-fallback-browser-check.cjs')
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, 'Trigger Vercel fallback browser test')
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
