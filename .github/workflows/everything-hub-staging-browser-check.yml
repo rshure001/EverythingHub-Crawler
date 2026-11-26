@@ -69,7 +69,6 @@ jobs:
           retention-days: 14
 
   live-bridge-browser-check:
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, 'Switch Everything Hub bridge')
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
