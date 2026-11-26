@@ -50,7 +50,7 @@ jobs:
             page.on("pageerror", e => report.pageErrors.push(e.message));
             page.on("requestfailed", r => report.failedRequests.push({url:r.url(), error:r.failure()?.errorText}));
             try {
-              const response = await page.goto(report.target, {waitUntil:"networkidle", timeout:60000});
+              const response = await page.goto(report.target, {waitUntil:"domcontentloaded", timeout:60000});
               report.httpStatus = response?.status();
               report.title = await page.title();
               if (!response?.ok()) throw new Error("Homepage HTTP status " + report.httpStatus);
