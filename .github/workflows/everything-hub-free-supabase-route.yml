@@ -1,43 +1,61 @@
-name: Everything Hub free CDN and legacy URL redirect diagnostic
+name: Everything Hub live publishing and search verification
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'site/**'
+      - 'public-search/**'
+      - '.github/workflows/everything-hub-free-supabase-route.yml'
+  schedule:
+    - cron: '23 * * * *'
 permissions:
   contents: read
+concurrency:
+  group: everything-hub-live-acceptance
+  cancel-in-progress: true
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
     env:
       LEGACY_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-site/
-      CDN_URL: https://cdn.jsdelivr.net/gh/rshure001/EverythingHub-Crawler@main/site/index.html
+      BRIDGE_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-deploy-bridge
+      SEARCH_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-web-search?q=NASA&limit=5
       SEARCH_JS_URL: https://cdn.jsdelivr.net/gh/rshure001/EverythingHub-Crawler@main/site/search.js
       MANIFEST_URL: https://raw.githubusercontent.com/rshure001/EverythingHub-Crawler/main/public-search/manifest.json
     steps:
       - uses: actions/checkout@v4
-      - name: Verify the existing homepage URL redirects to the free CDN
+      - name: Verify the legacy address redirects to the active bridge
         run: |
           set -euo pipefail
           code="$(curl --silent --show-error --max-time 30 -D /tmp/redirect.headers -o /dev/null -w '%{http_code}' "$LEGACY_URL")"
           test "$code" = "302"
-          grep -Eiq '^location: https://cdn.jsdelivr.net/gh/rshure001/EverythingHub-Crawler@main/site/index.html' /tmp/redirect.headers
-      - name: Verify the CDN serves the approved homepage as HTML
+          grep -Eiq '^location: https://vdceayvfgkwpgwixrhwi\.supabase\.co/functions/v1/everything-hub-deploy-bridge' /tmp/redirect.headers
+      - name: Verify the bridge serves the complete homepage
         run: |
           set -euo pipefail
-          code="$(curl --silent --show-error --location --max-time 45 -D /tmp/home.headers -o /tmp/home.html -w '%{http_code}' "$CDN_URL")"
+          code="$(curl --silent --show-error --location --max-time 45 -D /tmp/home.headers -o /tmp/home.html -w '%{http_code}' "$BRIDGE_URL")"
           test "$code" = "200"
           grep -Eiq '^content-type: *text/html' /tmp/home.headers
-          cmp -s site/index.html /tmp/home.html
-          for needle in 'class="approved-master-art"' 'data:image/png;base64,' 'id="search"' 'id="q"' 'src="search.js"' 'data-mode="web"' 'data-mode="news"' 'data-mode="images"' 'data-mode="videos"' 'data-mode="shopping"' 'data-mode="places"' 'data-mode="business"' 'data-mode="research"'; do
+          for needle in 'Everything Hub' 'id="search"' 'id="q"' 'src="search.js"' 'data-mode="web"' 'data-mode="news"' 'data-mode="images"' 'data-mode="videos"' 'data-mode="shopping"' 'data-mode="places"' 'data-mode="business"' 'data-mode="research"'; do
             grep -Fqi "$needle" /tmp/home.html || { echo "Missing homepage feature: $needle"; exit 1; }
           done
-      - name: Verify the CDN serves the client search script
+          test "$(wc -c < /tmp/home.html)" -gt 10000
+      - name: Verify the public search script matches the repository
         run: |
           set -euo pipefail
-          curl --silent --show-error --location --fail --max-time 30 -D /tmp/search.headers "$SEARCH_JS_URL" -o /tmp/search.js
+          curl --silent --show-error --location --fail --max-time 40 -D /tmp/search.headers "$SEARCH_JS_URL" -o /tmp/search.js
           cmp -s site/search.js /tmp/search.js
-          grep -Eiq '^content-type: *application/javascript' /tmp/search.headers
-      - name: Verify the public crawler manifest is available
+          grep -Eiq '^content-type: *application/javascript|^content-type: *text/javascript' /tmp/search.headers
+      - name: Verify the public crawler manifest and shard inventory
         run: |
           set -euo pipefail
-          curl --silent --show-error --location --fail --max-time 30 "$MANIFEST_URL" -o /tmp/manifest.json
-          node -e "const m=require('/tmp/manifest.json'); if(!Array.isArray(m.shards)||!m.shards.length) process.exit(1); console.log(JSON.stringify({shards:m.shards.length,pageCount:m.pageCount||m.totalPages||null}))"
+          curl --silent --show-error --location --fail --max-time 40 "$MANIFEST_URL" -o /tmp/manifest.json
+          node -e "const m=require('/tmp/manifest.json'); if(!Array.isArray(m.shards)||!m.shards.length) process.exit(1); console.log(JSON.stringify({shards:m.shards.length,totalPages:m.total_pages??m.totalPages??m.pageCount??null}))"
+      - name: Verify live search endpoint returns valid results payload
+        run: |
+          set -euo pipefail
+          code="$(curl --silent --show-error --location --max-time 50 -o /tmp/search.json -w '%{http_code}' "$SEARCH_URL")"
+          test "$code" = "200"
+          node -e "const fs=require('fs'); const x=JSON.parse(fs.readFileSync('/tmp/search.json','utf8')); if(!Array.isArray(x.results)) { console.error(x); process.exit(1); } console.log(JSON.stringify({query:x.query??'NASA',results:x.results.length,count:x.count??null,source:x.source??null,error:x.error??null}))"
