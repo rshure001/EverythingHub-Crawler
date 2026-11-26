@@ -31,6 +31,8 @@ test("all core search, news and media routes use the independent Vercel backend"
   assert.ok(!html.includes("functions/v1/everything-hub-web-search"));
   assert.ok(!html.includes("functions/v1/everything-hub-independent-search"));
   assert.ok(!html.includes("functions/v1/everything-hub-media-search"));
+  assert.ok(html.includes("const remoteResults="), "homepage must merge independent Vercel search results");
+  assert.ok(html.includes("results=[...remoteResults,...results]"), "independent results must remain visible ahead of page snippets");
   const destinations = config.rewrites.map(rule => rule.destination || "");
   assert.ok(destinations.some(url => url.includes(backend) && url.endsWith("/api/search")));
   assert.ok(destinations.some(url => url.includes(backend) && url.endsWith("/api/images")));
