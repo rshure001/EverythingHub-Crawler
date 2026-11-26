@@ -33,9 +33,10 @@ const EXPECTED_MODES = ["business", "images", "news", "places", "research", "sho
     const modeButton = page.locator('.eh-modebar .eh-mode[data-mode="' + mode + '"]');
     await page.locator("#q").fill(query);
     await modeButton.click();
+    await page.locator("#q").press("Enter");
     await page.waitForFunction(() => {
       const node = document.querySelector("#results");
-      return !!node && !/Searching\.\.\./i.test(node.textContent || "");
+      return !!node && (!!node.querySelector(".search-tabs") || /temporarily unavailable/i.test(node.textContent || ""));
     }, null, { timeout: 180000 });
     const count = await page.locator("#results .result").count();
     const titles = await page.locator("#results .result .result-copy a").allTextContents().catch(() => []);
