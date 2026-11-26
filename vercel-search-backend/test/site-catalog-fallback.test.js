@@ -68,12 +68,10 @@ test("Vercel homepage crawler search preserves typed catalog previews and sends 
   assert.ok(!api.includes("everythinghub-search-backend.vercel.app"));
 });
 
-test("free Edge site serves the homepage, discovery directory and catalog directory from its own route", () => {
-  assert.ok(edgeSiteFunction.includes('const ROOT = "https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-site";'));
-  assert.ok(edgeSiteFunction.includes("function discoverIndexPage()"));
-  assert.ok(edgeSiteFunction.includes("function discoverCategoryPage(slug: string)"));
-  assert.ok(edgeSiteFunction.includes("function catalogIndexPage()"));
-  assert.ok(edgeSiteFunction.includes('const di=parts.indexOf("discover")'));
-  assert.ok(edgeSiteFunction.includes('const ci=parts.indexOf("catalogs")'));
-  assert.ok(edgeSiteFunction.includes("edge-homepage-v3-supabase"));
+test("legacy Edge homepage route redirects to the active free publishing bridge", () => {
+  assert.ok(edgeSiteFunction.includes('const TARGET = "https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-deploy-bridge";'));
+  assert.ok(edgeSiteFunction.includes("Location: destination.toString()"));
+  assert.ok(edgeSiteFunction.includes('"X-EH-Legacy-Route": "redirect-to-publishing-bridge"'));
+  assert.ok(edgeSiteFunction.includes("incoming.searchParams.entries()"), "legacy route must preserve search query parameters");
+  assert.ok(edgeSiteFunction.includes('status: 302'));
 });
