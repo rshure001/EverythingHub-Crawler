@@ -87,7 +87,7 @@ jobs:
             curl --silent --show-error --location --max-time 12 -D /tmp/eh-headers "$TARGET_URL" -o /tmp/eh-homepage.html || true
             content_type=$(awk 'BEGIN{IGNORECASE=1} /^content-type:/ {sub(/^[^:]*:[[:space:]]*/, ""); gsub("\r",""); ct=$0} END{print ct}' /tmp/eh-headers 2>/dev/null)
             if [[ "$content_type" == text/html* ]] && grep -qi 'approved-master-art' /tmp/eh-homepage.html && grep -q 'data:image/png;base64,' /tmp/eh-homepage.html && grep -q 'src="search.js"' /tmp/eh-homepage.html && grep -q 'Bing RSS independent fallback' /tmp/eh-homepage.html; then
-              echo "Existing homepage URL redirects to HTML CDN page with approved artwork and search client ($content_type)"
+              echo "Existing homepage URL redirects to GitHub rawcdn HTML with approved artwork and search client ($content_type)"
               exit 0
             fi
             echo "Waiting for redirect and HTML CDN page; observed content type: ${content_type:-unknown}"
