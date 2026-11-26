@@ -243,6 +243,97 @@ class CatalogSeedExpansionTests(unittest.TestCase):
             self.assertEqual(third["last_batch_size"], 0)
             self.assertEqual(request.call_count, 13)
 
+    def test_recent_failed_sources_are_cooldown_skipped_and_cursor_advances(self):
+        from datetime import datetime, timezone
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            queue_path = root / "queue.json"
+            state_path = root / "state.json.gz"
+            index_path = root / "manifest.json"
+            index_raw = self._write_payload(index_path, {"total_pages": 3, "updated_at": 1795429785})
+            seeds = [self._queue_row(i) for i in range(3)]
+            queue = {
+                "status": "source_review_backlog_not_a_fetch_queue",
+                "source_index_pages": 3,
+                "source_index_updated_at": "2026-11-23T10:29:45Z",
+                "source_index_sha256": hashlib.sha256(index_raw).hexdigest(),
+                "candidate_urls": seeds,
+            }
+            self._write_payload(queue_path, queue)
+            state = {
+                "next_source_offset": 0,
+                "records": [],
+                "source_outcomes": {
+                    expansion._source_key(seeds[0]): {
+                        "status": "retryable_error",
+                        "reason": "HTTPError",
+                        "checked_at": datetime.now(timezone.utc).isoformat(),
+                    }
+                },
+            }
+            self._write_payload(state_path, state)
+            policy = self._policy()
+            called = []
+
+            def fake_request(url, **kwargs):
+                called.append(url)
+                path = urlsplit(url).path
+                html = f'<html><a href="{path}/article">Article</a></html>'.encode()
+                return html, 200, {"Content-Type": "text/html; charset=utf-8"}, policy
+
+            with patch.object(expansion, "policy_for_host", return_value=policy), patch.object(
+                expansion, "_purpose_path_allowed", return_value=True
+            ), patch.object(expansion, "request_source_bytes", side_effect=fake_request):
+                first = expansion.run_batch(queue_path, state_path, 2, index_path)
+                self.assertEqual(first["last_batch_size"], 2)
+                self.assertEqual(first["last_batch_processed"], 2)
+                self.assertEqual(called, [seeds[1]["source_url"], seeds[2]["source_url"]])
+                second = expansion.run_batch(queue_path, state_path, 2, index_path)
+
+            self.assertEqual(second["last_batch_size"], 0)
+            self.assertEqual(len(called), 2)
+
+    def test_batch_round_robins_across_reviewed_source_hosts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            queue_path = root / "queue.json"
+            state_path = root / "state.json.gz"
+            index_path = root / "manifest.json"
+            index_raw = self._write_payload(index_path, {"total_pages": 4, "updated_at": 1795429785})
+            seeds = [self._queue_row(i) for i in range(2)]
+            for i in range(2):
+                seeds.append(dict(
+                    self._queue_row(i + 2),
+                    source_url=f"https://nature.com/journals/demo{i}/articles",
+                    terms_url="https://www.nature.com/info/terms-of-use",
+                ))
+            queue = {
+                "status": "source_review_backlog_not_a_fetch_queue",
+                "source_index_pages": 4,
+                "source_index_updated_at": "2026-11-23T10:29:45Z",
+                "source_index_sha256": hashlib.sha256(index_raw).hexdigest(),
+                "candidate_urls": seeds,
+            }
+            self._write_payload(queue_path, queue)
+            policy = self._policy()
+            called = []
+
+            def fake_request(url, **kwargs):
+                called.append(url)
+                path = urlsplit(url).path
+                html = f'<html><a href="{path}/article">Article</a></html>'.encode()
+                return html, 200, {"Content-Type": "text/html; charset=utf-8"}, policy
+
+            with patch.object(expansion, "policy_for_host", return_value=policy), patch.object(
+                expansion, "_purpose_path_allowed", return_value=True
+            ), patch.object(expansion, "request_source_bytes", side_effect=fake_request):
+                result = expansion.run_batch(queue_path, state_path, 2, index_path)
+
+            self.assertEqual(result["last_batch_size"], 2)
+            self.assertEqual(len(called), 2)
+            self.assertEqual({urlsplit(url).hostname for url in called}, {"frontiersin.org", "nature.com"})
+
     def test_merges_canonical_record_memberships_and_provenance(self):
         html = '<a href="/journals/demo/articles/one">Article One</a>'
         first = expansion.extract_child_records(
@@ -273,6 +364,9 @@ class CatalogSeedExpansionTests(unittest.TestCase):
         self.assertIn("public-search/manifest.json", workflow)
         self.assertIn("_queue_snapshot_compatible_with_current_index", workflow)
         self.assertNotIn("page-catalog-seeds.json.gz", workflow)
+        retry_block = workflow.split("for attempt in 1 2 3", 1)[1]
+        self.assertIn("git rebase origin/main", retry_block)
+        self.assertNotIn("python crawler/catalog_seed_expansion.py --limit 10", retry_block)
 
     def test_batch_limit_cannot_exceed_ten(self):
         with self.assertRaisesRegex(ValueError, "between 1 and 10"):
