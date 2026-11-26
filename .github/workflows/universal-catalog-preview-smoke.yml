@@ -10,6 +10,7 @@ on:
       - ".github/workflows/universal-catalog-preview-smoke.yml"
       - "scripts/universal-catalog-preview-smoke.mjs"
       - "supabase/functions/everything-hub-web-search/**"
+      - "supabase/functions/everything-hub-catalog-search/**"
   workflow_run:
     workflows:
       - "Retroactive catalog inventory"
