@@ -73,6 +73,26 @@ class CatalogSeedExpansionTests(unittest.TestCase):
         self.assertFalse(rows[0]["content_fetched"])
         self.assertEqual(rows[0]["source_provenance"][0]["terms_status"], "reviewed_per_dataset")
 
+    def test_canonical_fetch_url_uses_only_independently_reviewed_host(self):
+        apex = self._policy()
+        apex["canonical_fetch_host"] = "www.frontiersin.org"
+        www = dict(apex)
+        with patch.object(expansion, "policy_for_host", side_effect=lambda host: apex if host == "frontiersin.org" else www if host == "www.frontiersin.org" else None), patch.object(
+            expansion, "_purpose_path_allowed", return_value=True
+        ):
+            self.assertEqual(
+                expansion._canonical_fetch_url("https://frontiersin.org/journals/demo/articles", apex),
+                "https://www.frontiersin.org/journals/demo/articles",
+            )
+            self.assertEqual(
+                expansion._canonical_fetch_url("https://www.frontiersin.org/journals/demo/articles", www),
+                "https://www.frontiersin.org/journals/demo/articles",
+            )
+            with self.assertRaises(expansion.SourcePolicyError):
+                expansion._canonical_fetch_url("https://frontiersin.org:8443/journals/demo/articles", apex)
+            with self.assertRaises(expansion.SourcePolicyError):
+                expansion._canonical_fetch_url("https://frontiersin.org/journals/demo/articles", {**apex, "canonical_fetch_host": "unreviewed.example"})
+
     def test_rejects_alternate_ports_and_credentials(self):
         parent = "https://frontiersin.org/journals/demo/articles"
         self.assertIsNone(expansion._canonical_child(parent, "https://frontiersin.org:8443/journals/demo/articles/one"))
