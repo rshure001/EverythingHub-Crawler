@@ -34,12 +34,12 @@ jobs:
           const fs = require("node:fs");
           const vm = require("node:vm");
           const html = fs.readFileSync("vercel-homepage/index.html", "utf8");
-          const scripts = [...html.matchAll(/<script\\b([^>]*)>([\\s\\S]*?)<\\/script>/gi)];
+          const scripts = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)];
           let checked = 0;
           for (const match of scripts) {
             const attrs = match[1] || "";
             const body = match[2] || "";
-            if (/\\bsrc\\s*=/.test(attrs) || /type\\s*=\\s*["']application\\/ld\\+json/i.test(attrs) || !body.trim()) continue;
+            if (/\bsrc\s*=/.test(attrs) || /type\s*=\s*["']application\/ld\+json/i.test(attrs) || !body.trim()) continue;
             new vm.Script(body, { filename: "vercel-homepage-inline-" + checked + ".js" });
             checked++;
           }
