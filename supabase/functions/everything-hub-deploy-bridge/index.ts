@@ -39,7 +39,7 @@ Deno.serve(async (req: Request) => {
     const safeScript = searchSource.replace(/<\/script/gi, "<\\/script");
     const html = htmlSource.replace(
       '<script src="search.js"></script>',
-      "<script>\n" + safeScript + "\n</script>",
+      "<script>/* Everything Hub browser search client */\n" + safeScript + "\n</script>",
     );
     return new Response(req.method === "HEAD" ? null : html, {
       status: 200,
