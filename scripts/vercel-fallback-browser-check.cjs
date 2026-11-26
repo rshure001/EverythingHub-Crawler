@@ -12,7 +12,8 @@ const fs = require("node:fs");
   page.on("pageerror", e => errors.push(e.message));
   page.on("console", m => { if (m.type() === "error") consoleErrors.push(m.text()); });
   page.on("requestfailed", r => failedRequests.push({ url: r.url(), error: r.failure()?.errorText || "failed" }));
-  const report = { url: process.env.TARGET_URL || "https://everythinghub.ink/", startedAt: new Date().toISOString(), checks: {}, pageErrors: errors, consoleErrors, failedRequests };
+  const candidateUrls = [process.env.TARGET_URL || "https://everythinghub.ink/", process.env.FALLBACK_URL || "https://everythinghub-homepage-fixed-3vk1kcauu-rshure001-8053.vercel.app/"];
+  const report = { url: candidateUrls[0], candidateUrls, startedAt: new Date().toISOString(), checks: {}, pageErrors: errors, consoleErrors, failedRequests };
   const shot = name => page.screenshot({ path: "everything-hub-vercel-" + name + ".png", fullPage: true });
   const fail = message => { throw new Error(message); };
   try {
@@ -124,3 +125,4 @@ const fs = require("node:fs");
 })();
 // Trigger a dedicated real-browser run for the already-deployed Vercel fallback.
 // Trigger Vercel fallback browser test after narrowing workflow conditions.
+\n// Fallback to the immutable Vercel deployment URL and compare backend health endpoints.\n
