@@ -198,6 +198,39 @@ def _eligible_seed(seed: object) -> bool:
     return _purpose_path_allowed(parsed.path, policy, "landing_page")
 
 
+def _canonical_fetch_url(url: str, policy: dict) -> str:
+    """Normalize only to the separately reviewed canonical host for this source."""
+    parsed = urlsplit(url)
+    canonical_host = policy.get("canonical_fetch_host")
+    try:
+        port = parsed.port
+    except ValueError as exc:
+        raise SourcePolicyError("invalid catalog landing-page URL port") from exc
+    if (
+        parsed.scheme != "https"
+        or not parsed.hostname
+        or parsed.username is not None
+        or parsed.password is not None
+        or port not in (None, 443)
+        or not isinstance(canonical_host, str)
+        or not canonical_host
+    ):
+        raise SourcePolicyError("catalog canonical-host configuration or source URL is invalid")
+    source_policy = policy_for_host(parsed.hostname)
+    canonical_policy = policy_for_host(canonical_host)
+    if (
+        not source_policy
+        or not canonical_policy
+        or canonical_policy.get("terms_status") not in REVIEWED_STATUSES
+        or canonical_policy.get("discovery_allowed") is not True
+        or canonical_policy.get("metadata_only") is not True
+        or canonical_policy.get("canonical_fetch_host") not in (None, canonical_host)
+        or not _purpose_path_allowed(parsed.path, canonical_policy, "landing_page")
+    ):
+        raise SourcePolicyError("canonical fetch host is not independently reviewed for this catalog path")
+    return urlunsplit(("https", canonical_host, parsed.path, parsed.query, ""))
+
+
 def _source_key(seed: dict) -> str:
     url = str(seed.get("source_url") or "")
     return "catalog-source:" + hashlib.sha256(url.encode("utf-8")).hexdigest()[:24]
@@ -481,9 +514,13 @@ def run_batch(
     discovered = 0
     for seed in batch:
         source_id = _source_key(seed)
-        url = seed["source_url"]
+        source_url = seed["source_url"]
         catalog_ids = seed["catalog_ids"]
         try:
+            source_policy = policy_for_host(urlsplit(source_url).hostname or "")
+            if not source_policy:
+                raise SourcePolicyError("catalog source policy is unavailable")
+            url = _canonical_fetch_url(source_url, source_policy)
             raw, status, headers, policy = request_source_bytes(
                 url,
                 purpose="landing_page",
@@ -505,7 +542,7 @@ def run_batch(
                 charset = content_type.lower().split("charset=", 1)[1].split(";", 1)[0].strip() or "utf-8"
             html = raw.decode(charset, errors="replace")
             checked_at = datetime.now(timezone.utc).isoformat()
-            children = extract_child_records(html, url, catalog_ids, seed, checked_at)
+            children = extract_child_records(html, url, catalog_ids, {**seed, "source_url": url}, checked_at)
             before = len(records_by_id)
             for record in children:
                 record_id = record["record_id"]
