@@ -145,7 +145,7 @@ jobs:
           Path("/tmp/crawl-runs-combined.json").write_text(json.dumps(combined), encoding="utf-8")
           print("Latest scheduled crawl-step conclusion:", execution_conclusion)
           PY
-          python crawler/schedule_watchdog.py /tmp/crawl-runs-combined.json /tmp/public-manifest.json > /tmp/decision.json
+          python crawler/schedule_watchdog.py /tmp/crawl-runs-combined.json /tmp/public-manifest.json data/frontier.json > /tmp/decision.json
           cat /tmp/decision.json
 
           action="$(python -c 'import json; print(json.load(open("/tmp/decision.json"))["action"])')"
