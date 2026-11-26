@@ -37,6 +37,7 @@ MAX_CATALOG_SEEDS_PER_RUN = 20000
 WORKERS = 250
 QUEUE_LIMIT = 100000
 MAX_DEPTH = 3
+MAX_PAGE_TEXT_CHARS = 2000
 MAX_FETCH_PER_RUN = 12000
 MAX_SITEMAP_HOSTS_PER_RUN = 174
 SITEMAP_DISCOVERY_VERSION = 2
@@ -251,7 +252,7 @@ def build_page_record(url, title, description, text, depth, directives, publishe
         "title": display_title,
         "lane": classify_lane(url),
         "description": normalize_text(description, 500),
-        "text": normalize_text(text, 4000),
+        "text": normalize_text(text, MAX_PAGE_TEXT_CHARS),
         "depth": depth,
         "fetched_at": int(time.time()),
         "robots_allowed": True,
@@ -1120,6 +1121,15 @@ def main():
     # permanently failed must not disappear from coverage forever.
     old_index = load_index(OUTPUT, {"version": 1, "pages": []})
     old_pages = old_index.get("pages", []) if isinstance(old_index, dict) else []
+    # Compact historical body text before the next canonical checkpoint.
+    # Titles/descriptions remain intact; 2,000 body characters preserve ample
+    # search context while keeping the 800 MB shard envelope sustainable.
+    for page in old_pages:
+        if not isinstance(page, dict):
+            continue
+        existing_text = page.get("text")
+        if isinstance(existing_text, str) and len(existing_text) > MAX_PAGE_TEXT_CHARS:
+            page["text"] = existing_text[:MAX_PAGE_TEXT_CHARS]
     indexed_urls = {
         page.get("url")
         for page in old_pages
