@@ -7,6 +7,7 @@ on:
     paths:
       - ".github/workflows/everything-hub-staging-browser-check.yml"
       - "scripts/everything-hub-browser-check.cjs"
+      - "scripts/vercel-fallback-browser-check.cjs"
       - "site/index.html"
       - "site/search.js"
       - "supabase/functions/everything-hub-static-publisher/index.ts"
@@ -70,6 +71,7 @@ jobs:
           retention-days: 14
 
   live-bridge-browser-check:
+    if: github.event_name == 'workflow_dispatch' || contains(toJSON(github.event.commits), 'supabase/functions/everything-hub-deploy-bridge/index.ts')
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
@@ -113,5 +115,34 @@ jobs:
           path: |
             everything-hub-browser-report.json
             everything-hub-*.png
+          if-no-files-found: warn
+          retention-days: 30
+
+  vercel-fallback-browser-check:
+    if: github.event_name == 'workflow_dispatch' || contains(toJSON(github.event.commits), 'scripts/vercel-fallback-browser-check.cjs')
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install browser test dependencies
+        run: |
+          npm init -y
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+      - name: Test the existing Vercel fallback deployment at desktop and mobile widths
+        env:
+          TARGET_URL: https://everythinghub.ink/
+        run: node scripts/vercel-fallback-browser-check.cjs
+      - name: Upload Vercel fallback screenshots and report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: everything-hub-vercel-fallback-browser-evidence
+          path: |
+            everything-hub-vercel-browser-report.json
+            everything-hub-vercel-*.png
           if-no-files-found: warn
           retention-days: 30
