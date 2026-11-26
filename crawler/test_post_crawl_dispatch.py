@@ -21,6 +21,15 @@ class PostCrawlDispatchTests(unittest.TestCase):
         self.assertLess(catalog.index("Validate registry and every per-catalog index before candidate publication"), catalog.index("Publish candidate catalog snapshot only after integrity and dedup validation"))
 
 
+    def test_catalog_expansion_is_chained_after_successful_retroactive_inventory(self):
+        workflow = (ROOT / ".github" / "workflows" / "catalog-seed-expansion.yml").read_text(encoding="utf-8")
+        self.assertIn('  workflow_run:', workflow)
+        self.assertIn('      - "Retroactive catalog inventory"', workflow)
+        self.assertIn('      - completed', workflow)
+        self.assertIn("github.event.workflow_run.conclusion == 'success'", workflow)
+        self.assertIn("python crawler/catalog_seed_expansion.py --limit 10", workflow)
+        self.assertIn("cancel-in-progress: false", workflow)
+
     def test_crawler_job_has_time_for_bounded_crawl_and_commit(self):
         workflow = (ROOT / ".github" / "workflows" / "crawl.yml").read_text(encoding="utf-8")
         match = re.search(r"^    timeout-minutes:\s*(\d+)\s*$", workflow, re.MULTILINE)
