@@ -26,5 +26,25 @@ jobs:
           node-version: "22"
       - name: Run homepage and media policy tests
         run: node --test vercel-homepage/homepage-contract.test.js vercel-homepage/media-preview-policy.test.js
+      - name: Check homepage JavaScript syntax
+        run: |
+          node --check vercel-homepage/search.js
+          node --check vercel-homepage/media-preview-policy.js
+          node <<'NODE'
+          const fs = require("node:fs");
+          const vm = require("node:vm");
+          const html = fs.readFileSync("vercel-homepage/index.html", "utf8");
+          const scripts = [...html.matchAll(/<script\\b([^>]*)>([\\s\\S]*?)<\\/script>/gi)];
+          let checked = 0;
+          for (const match of scripts) {
+            const attrs = match[1] || "";
+            const body = match[2] || "";
+            if (/\\bsrc\\s*=/.test(attrs) || /type\\s*=\\s*["']application\\/ld\\+json/i.test(attrs) || !body.trim()) continue;
+            new vm.Script(body, { filename: "vercel-homepage-inline-" + checked + ".js" });
+            checked++;
+          }
+          if (!checked) throw new Error("No inline JavaScript blocks were syntax-checked");
+          console.log("Checked " + checked + " inline JavaScript blocks");
+          NODE
       - name: Validate Vercel route configuration
         run: node -e "const c=require('./vercel-homepage/vercel.json'); if(!c.rewrites.some(x=>x.source==='/api/search-catalog'&&x.destination.includes('everythinghub-search-backend'))) process.exit(1); console.log('Vercel routes verified')"
