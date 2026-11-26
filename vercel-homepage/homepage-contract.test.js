@@ -6,7 +6,7 @@ const test = require("node:test");
 const root = __dirname;
 const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
 const config = JSON.parse(fs.readFileSync(path.join(root, "vercel.json"), "utf8"));
-const backend = "everythinghub-search-backend-ne0fd5nys-rshure001-8053.vercel.app";
+const backend = "everythinghub-search-backend.vercel.app";
 
 test("homepage preserves the approved octopus artwork", () => {
   assert.ok(html.includes('src="data:image/png;base64,'));
