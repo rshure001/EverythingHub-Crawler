@@ -22,7 +22,7 @@ async function getSearch(query) {
   } catch {
     throw new Error(`Expected JSON for ${query}; HTTP ${response.status}; body: ${text.slice(0, 300)}`);
   }
-  assert.equal(response.status, 200, `${query} returned HTTP ${response.status}`);
+  assert.equal(response.status, 200, `${query} returned HTTP ${response.status}: ${text.slice(0, 500)}`);
   return data;
 }
 
