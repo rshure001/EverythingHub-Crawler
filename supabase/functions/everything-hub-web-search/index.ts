@@ -154,6 +154,10 @@ Deno.serve(async (req: Request) => {
         status: "deferred",
         previewOnly: true,
         resultCount: 0,
+        recordsPublished: 0,
+        sourceTermsReviewedRecords: 0,
+        commercialEligibleRecords: 0,
+        rightsReviewRequired: true,
         error: "catalog_preview_deferred_from_search_path",
       },
     });
