@@ -500,9 +500,25 @@ def run_batch(
                 "catalog_ids": catalog_ids,
             }
 
+    batch_outcome_counts: dict[str, int] = {}
+    batch_failure_samples = []
+    for seed in batch:
+        outcome = outcomes.get(_source_key(seed), {})
+        status = str(outcome.get("status") or "missing_outcome")
+        batch_outcome_counts[status] = batch_outcome_counts.get(status, 0) + 1
+        if status != "metadata_listing_processed" and len(batch_failure_samples) < 5:
+            batch_failure_samples.append({
+                "source_url": seed.get("source_url"),
+                "status": status,
+                "reason": outcome.get("reason"),
+                "http_status": outcome.get("http_status"),
+            })
+
     result = {
         "schema_version": 2,
         "status": "metadata_only_staging_not_production",
+        "last_batch_outcome_counts": batch_outcome_counts,
+        "last_batch_failure_samples": batch_failure_samples,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "queue_matches_current_index": queue_status["exact_match"],
         "queue_snapshot_compatible_with_current_index": True,
@@ -569,6 +585,8 @@ def main() -> None:
                     "last_batch_size",
                     "last_batch_processed",
                     "last_batch_new_unique_child_records",
+                    "last_batch_outcome_counts",
+                    "last_batch_failure_samples",
                     "metrics",
                 )
             },
