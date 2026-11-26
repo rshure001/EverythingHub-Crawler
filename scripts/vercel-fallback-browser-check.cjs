@@ -82,7 +82,7 @@ const fs = require("node:fs");
       await page.waitForFunction(() => {
         const r=document.querySelector("#results"), s=document.querySelector("#status")?.textContent || "";
         return !!r && r.textContent.trim().length > 0 && !/searching/i.test(s);
-      }, null, { timeout: 120000 });
+      }, null, { timeout: 30000 });
       const results = page.locator("#results");
       const text = (await results.innerText()).toLowerCase();
       const cards = await results.locator("article, a[href], video, img, .catalog-preview-list > *, .result, .result-card, .search-result").count();
@@ -156,4 +156,3 @@ const fs = require("node:fs");
 })();
 // Trigger a dedicated real-browser run for the already-deployed Vercel fallback.
 // Trigger Vercel fallback browser test after narrowing workflow conditions.
-\n// Fallback to the immutable Vercel deployment URL and compare backend health endpoints.\n
