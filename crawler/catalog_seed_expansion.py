@@ -201,7 +201,7 @@ def _eligible_seed(seed: object) -> bool:
 def _canonical_fetch_url(url: str, policy: dict) -> str:
     """Normalize only to the separately reviewed canonical host for this source."""
     parsed = urlsplit(url)
-    canonical_host = policy.get("canonical_fetch_host")
+    canonical_host = policy.get("canonical_fetch_host") or parsed.hostname
     try:
         port = parsed.port
     except ValueError as exc:
