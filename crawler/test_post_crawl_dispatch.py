@@ -48,7 +48,7 @@ class PostCrawlDispatchTests(unittest.TestCase):
         self.assertIn("gh workflow run search-api-smoke.yml --ref main", catalog)
         self.assertNotIn("EverythingHub Publisher", search)
 
-    def test_search_smoke_runs_after_validated_catalog_publication(self):
+    def test_search_smoke_runs_on_search_code_changes_and_after_catalog_publication(self):
         publisher = (ROOT / ".github" / "workflows" / "publish-site.yml").read_text(encoding="utf-8")
         search = (ROOT / ".github" / "workflows" / "search-api-smoke.yml").read_text(encoding="utf-8")
         catalog = (ROOT / ".github" / "workflows" / "retroactive-catalog-index.yml").read_text(encoding="utf-8")
@@ -60,7 +60,8 @@ class PostCrawlDispatchTests(unittest.TestCase):
         search_triggers = search.split("permissions:", 1)[0]
         self.assertNotIn("  workflow_run:", search_triggers)
         self.assertIn("  workflow_dispatch:", search_triggers)
-        self.assertNotIn("  push:", search_triggers)
+        self.assertIn("  push:", search_triggers)
+        self.assertIn('      - "supabase/functions/everything-hub-web-search/**"', search_triggers)
         self.assertIn("gh workflow run search-api-smoke.yml --ref main", catalog)
         publish_block = catalog.split("- name: Publish candidate catalog snapshot only after integrity and dedup validation", 1)[1]
         publish_position = publish_block.index("python crawler/publish_catalog_snapshot.py --attempts 8")
