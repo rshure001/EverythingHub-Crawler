@@ -1577,7 +1577,7 @@ class CatalogInventoryTriggerTests(unittest.TestCase):
         self.assertIn("python crawler/catalog_page_analysis.py --validate-only", validation)
         self.assertIn("python crawler/catalog_host_review_queue.py --validate-only", validation)
         self.assertIn("--skip-output-validation", workflow)
-        self.assertIn("python crawler/publish_catalog_snapshot.py --attempts 4", publish)
+        self.assertIn("python crawler/publish_catalog_snapshot.py --attempts 8", publish)
         publish_step = publish.split("- name: Run catalog search smoke test after successful validation", 1)[0]
         self.assertNotIn("python crawler/catalog_page_analysis.py", publish_step)
         self.assertNotIn("python crawler/catalog_retro_discovery.py", publish)
