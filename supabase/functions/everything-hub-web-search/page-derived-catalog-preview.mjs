@@ -17,7 +17,9 @@ const MAX_SEARCH_INDEX_JSON_BYTES = 16_000_000;
 // larger indexes bounded while respecting the 256 MB Edge Function memory ceiling.
 const MAX_CATALOG_INDEX_GZIP_BYTES = 4_500_000;
 const MAX_CATALOG_INDEX_JSON_BYTES = 20_000_000;
-const MAX_CATALOG_INDEX_FETCHES = 5;
+// Keep broad queries from loading registry shards for the entire catalog corpus.
+const MAX_CATALOG_METADATA_CANDIDATES = 4;
+const MAX_CATALOG_INDEX_FETCHES = 4;
 const MAX_SEARCH_CACHE_ENTRIES = 64;
 const MAX_CATALOG_CACHE_ENTRIES = 5;
 const MAX_SOURCE_PAGES = 250_000;
@@ -840,7 +842,8 @@ async function searchPageDerivedCatalogPreviewIndexed(query, network, limit = 5,
   if (postings.some((set) => set.size === 0)) return [];
   const candidateIds = Array.from(postings[0]).filter((id) => postings.every((set) => set.has(id)));
   if (!candidateIds.length) return [];
-  await ensureCatalogsLoaded(network, candidateIds, fetchImpl);
+  const boundedCandidateIds = candidateIds.slice(0, MAX_CATALOG_METADATA_CANDIDATES);
+  await ensureCatalogsLoaded(network, boundedCandidateIds, fetchImpl);
 
   const contentIntent = terms.some((term) => CONTENT_INTENT.has(term));
   const productTerms = new Set(["product", "products", "model", "models", "watch", "watches", "buy", "retailer", "retailers", "price", "prices", "reference", "references"]);
@@ -849,7 +852,7 @@ async function searchPageDerivedCatalogPreviewIndexed(query, network, limit = 5,
   const productTermIntent = terms.some((term) => productTerms.has(term));
   const businessIntent = terms.some((term) => businessTerms.has(term));
   const eventIntent = terms.some((term) => eventTerms.has(term));
-  const candidateCatalogs = candidateIds
+  const candidateCatalogs = boundedCandidateIds
     .map((id) => network.catalogsById.get(id))
     .filter((catalog) => catalog && catalog.record_count > 0);
   const hasProductCatalog = candidateCatalogs.some((catalog) =>
