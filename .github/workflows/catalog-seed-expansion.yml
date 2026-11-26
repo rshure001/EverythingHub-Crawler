@@ -92,14 +92,11 @@ jobs:
               exit 0
             fi
             git fetch origin main
-            git reset --hard origin/main
-            python crawler/catalog_seed_expansion.py --limit 10
-            git add -f data/page-catalog-expansion.json.gz
-            if git diff --cached --quiet; then
-              echo "Latest main already contains this expansion batch."
-              exit 0
+            if ! git rebase origin/main; then
+              git rebase --abort || true
+              echo "Concurrent ledger conflict; leaving the staged checkpoint untouched."
+              exit 1
             fi
-            git commit -m "Expand ten evidence-backed catalog landing pages"
           done
-          echo "Unable to publish expansion ledger after three bounded attempts."
+          echo "Unable to publish expansion ledger after three safe rebase attempts."
           exit 1
