@@ -27,7 +27,7 @@ def manifest_minutes_ago(minutes):
 class ScheduleWatchdogTests(unittest.TestCase):
     def test_watchdog_schedule_is_staggered_away_from_peak_minutes(self):
         workflow = (Path(__file__).resolve().parents[1] / ".github" / "workflows" / "crawl-watchdog.yml").read_text(encoding="utf-8")
-        self.assertIn('    - cron: "4-59/5 * * * *"', workflow)
+        self.assertIn('    - cron: "4,9,14,19,24,29,34,39,44,49,54,59 * * * *"', workflow)
         self.assertNotIn('    - cron: "*/5 * * * *"', workflow)
 
     def test_crawler_push_watches_hourly_automation_fallback_marker(self):
@@ -37,7 +37,7 @@ class ScheduleWatchdogTests(unittest.TestCase):
 
     def test_crawler_schedule_uses_five_minute_cadence(self):
         workflow = (Path(__file__).resolve().parents[1] / ".github" / "workflows" / "crawl.yml").read_text(encoding="utf-8")
-        self.assertIn('    - cron: "2-57/5 * * * *"', workflow)
+        self.assertIn('    - cron: "2,7,12,17,22,27,32,37,42,47,52,57 * * * *"', workflow)
         self.assertNotIn('    - cron: "*/5 * * * *"', workflow)
         self.assertIn("every five minutes", workflow)
 
