@@ -14,6 +14,12 @@ jobs:
       MANIFEST_URL: https://raw.githubusercontent.com/rshure001/EverythingHub-Crawler/main/public-search/manifest.json
     steps:
       - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            site/index.html
+            site/search.js
+            public-search/manifest.json
+          sparse-checkout-cone-mode: false
       - name: Verify the existing homepage URL redirects to the free CDN
         run: |
           set -euo pipefail
