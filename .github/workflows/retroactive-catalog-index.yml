@@ -6,6 +6,10 @@ on:
       - main
     paths:
       - ".github/workflows/retroactive-catalog-index.yml"
+      - "data/index.json"
+      - "data/index-shards/**"
+      - "public-search/manifest.json"
+      - "public-search/shard-*.json.gz"
       - "crawler/catalog_retro_discovery.py"
       - "crawler/catalog_page_analysis.py"
       - "crawler/test_catalog_page_analysis.py"
