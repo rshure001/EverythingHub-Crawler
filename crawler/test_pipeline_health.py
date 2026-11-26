@@ -132,14 +132,19 @@ class PipelineHealthTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     evaluate_manifest_freshness({"updated_at": updated_at}, now=NOW)
 
-    def test_search_api_smoke_enforces_manifest_freshness(self):
+    def test_search_api_smoke_checks_independent_fallback_and_defers_catalogs(self):
         workflow = (
             Path(__file__).resolve().parents[1]
             / ".github" / "workflows" / "search-api-smoke.yml"
         ).read_text(encoding="utf-8")
-        self.assertIn("from crawler.pipeline_health import evaluate_manifest_freshness", workflow)
-        self.assertIn("freshness = evaluate_manifest_freshness(manifest)", workflow)
-        self.assertIn('if freshness["status"] != "fresh":', workflow)
+        self.assertIn('independent = get("everything-hub-independent-search", "Rolex")', workflow)
+        self.assertIn('independent.get("provider") != "Bing RSS"', workflow)
+        self.assertIn('independent.get("independentOfDatabase") is not True', workflow)
+        self.assertIn('payload.get("catalogPreview")', workflow)
+        self.assertIn('preview.get("status") != "deferred"', workflow)
+        self.assertIn('preview.get("previewOnly") is not True', workflow)
+        self.assertIn('preview.get("recordsPublished") != 0', workflow)
+        self.assertIn('not isinstance(catalogs, list) or catalogs', workflow)
 
 
 if __name__ == "__main__":
