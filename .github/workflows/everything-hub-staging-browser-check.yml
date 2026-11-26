@@ -19,7 +19,7 @@ permissions:
 
 concurrency:
   group: everything-hub-browser-acceptance
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   local-staging-browser-check:
