@@ -34,6 +34,9 @@ MAX_CHILDREN_PER_PAGE = 200
 MAX_HTML_BYTES = 1_500_000
 MAX_QUEUE_AGE_SECONDS = 6 * 60 * 60
 MAX_QUEUE_PAGE_LAG = 10_000
+RETRYABLE_ERROR_COOLDOWN_SECONDS = 2 * 60 * 60
+HTTP_ERROR_COOLDOWN_SECONDS = 6 * 60 * 60
+POLICY_BLOCK_COOLDOWN_SECONDS = 24 * 60 * 60
 REVIEWED_STATUSES = {"reviewed", "reviewed_per_dataset"}
 
 
@@ -198,6 +201,27 @@ def _eligible_seed(seed: object) -> bool:
 def _source_key(seed: dict) -> str:
     url = str(seed.get("source_url") or "")
     return "catalog-source:" + hashlib.sha256(url.encode("utf-8")).hexdigest()[:24]
+
+
+def _should_attempt_seed(prior: object, now: datetime | None = None) -> bool:
+    if not isinstance(prior, dict):
+        return True
+    status = prior.get("status")
+    if status == "metadata_listing_processed":
+        return False
+    cooldowns = {
+        "retryable_error": RETRYABLE_ERROR_COOLDOWN_SECONDS,
+        "http_error": HTTP_ERROR_COOLDOWN_SECONDS,
+        "policy_or_robots_blocked": POLICY_BLOCK_COOLDOWN_SECONDS,
+    }
+    cooldown = cooldowns.get(status)
+    if cooldown is None:
+        return True
+    checked_at = _parse_utc_timestamp(prior.get("checked_at"))
+    if checked_at is None:
+        return True
+    now = now or datetime.now(timezone.utc)
+    return (now - checked_at).total_seconds() >= cooldown
 
 
 class _ListingParser(HTMLParser):
@@ -424,18 +448,32 @@ def run_batch(
     cursor = int(state.get("next_source_offset", 0) or 0)
     if eligible:
         cursor %= len(eligible)
-        batch = []
-        scanned = 0
-        while scanned < len(eligible) and len(batch) < limit:
-            seed = eligible[(cursor + scanned) % len(eligible)]
+        now = datetime.now(timezone.utc)
+        pending_by_host: dict[str, list[tuple[int, dict]]] = {}
+        for offset in range(len(eligible)):
+            seed = eligible[(cursor + offset) % len(eligible)]
             source_id = _source_key(seed)
-            prior = outcomes.get(source_id)
-            # Successful listing pages are immutable inputs to this staging run;
-            # don't re-request them on every scheduled cycle. Failed attempts remain retryable.
-            if not isinstance(prior, dict) or prior.get("status") != "metadata_listing_processed":
-                batch.append(seed)
-            scanned += 1
-        next_cursor = (cursor + scanned) % len(eligible)
+            if not _should_attempt_seed(outcomes.get(source_id), now):
+                continue
+            host = (urlsplit(seed["source_url"]).hostname or "").lower()
+            pending_by_host.setdefault(host, []).append((offset, seed))
+
+        # Round-robin across approved source hosts so one large publisher cannot
+        # monopolize every bounded batch when other reviewed hosts are available.
+        batch = []
+        selected_offsets = []
+        while pending_by_host and len(batch) < limit:
+            for host in list(pending_by_host):
+                rows = pending_by_host[host]
+                if rows:
+                    offset, seed = rows.pop(0)
+                    batch.append(seed)
+                    selected_offsets.append(offset)
+                if not rows:
+                    del pending_by_host[host]
+                if len(batch) >= limit:
+                    break
+        next_cursor = (cursor + max(selected_offsets) + 1) % len(eligible) if selected_offsets else cursor
     else:
         batch, next_cursor = [], 0
 
@@ -491,12 +529,18 @@ def run_batch(
             outcomes[source_id] = {
                 "status": "policy_or_robots_blocked",
                 "reason": str(exc)[:240],
+                "checked_at": datetime.now(timezone.utc).isoformat(),
                 "catalog_ids": catalog_ids,
             }
         except (OSError, UnicodeError, ValueError, TimeoutError) as exc:
+            response = getattr(exc, "response", None)
+            http_status = getattr(response, "status_code", None) or getattr(exc, "code", None)
+            terminal_http_statuses = {403, 404, 410, 451}
             outcomes[source_id] = {
-                "status": "retryable_error",
+                "status": "http_error" if http_status in terminal_http_statuses else "retryable_error",
                 "reason": type(exc).__name__,
+                "http_status": http_status,
+                "checked_at": datetime.now(timezone.utc).isoformat(),
                 "catalog_ids": catalog_ids,
             }
 
