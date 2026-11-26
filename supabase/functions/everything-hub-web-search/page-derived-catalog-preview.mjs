@@ -13,8 +13,7 @@ const MAX_REGISTRY_SHARD_JSON_BYTES = 12_000_000;
 const MAX_RECORDS_JSON_BYTES = 96_000_000;
 const MAX_SEARCH_INDEX_SHARD_BYTES = 4_000_000;
 const MAX_SEARCH_INDEX_JSON_BYTES = 16_000_000;
-// The current validated corpus contains five catalog indexes above 2 MB; keep
-// larger indexes bounded while respecting the 256 MB Edge Function memory ceiling.
+// The corpus contains multi-megabyte indexes; keep each request's fan-out bounded.
 const MAX_CATALOG_INDEX_GZIP_BYTES = 4_500_000;
 const MAX_CATALOG_INDEX_JSON_BYTES = 20_000_000;
 // Keep broad queries from loading registry shards for the entire catalog corpus.
