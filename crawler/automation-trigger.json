@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "updated_at": "2026-11-26T00:16:00Z",
-  "reason": "Refresh the page-derived catalog inventory against the current 220889-page public corpus; previous full inventory snapshot is stale. Run bounded, resumable host-cache analysis and integrity gates; publish only after validation.",
-  "manifest_before_pages": 220889,
-  "manifest_before_updated_at": "2026-11-26T00:08:21Z"
+  "updated_at": "2026-11-26T00:49:02.829Z",
+  "reason": "Explicit workflow_dispatch fallback after scheduled crawl delivery was 2737s old (>10 minutes); no queued or running crawler; public manifest was 788s old (>10 minutes). One bounded recovery crawl; normal schedule unchanged.",
+  "manifest_before_pages": 221686,
+  "manifest_before_updated_at": "2026-11-26T00:35:54Z"
 }
