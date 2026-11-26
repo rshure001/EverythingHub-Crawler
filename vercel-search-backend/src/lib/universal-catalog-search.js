@@ -246,15 +246,24 @@ async function loadUniversalCatalogFromManifest(manifest, commitSha, manifestRaw
   }
   const checked = validateUniversalCatalogManifest(manifest);
   const base = RAW + commitSha + '/data/universal-catalog-indexes/';
-  const rootShardResults = await Promise.all(checked.rootFiles.map(async file => {
+  const rootShardOutcomes = await Promise.all(checked.rootFiles.map(async file => {
     const entry = checked.shardByFile.get(file);
-    const compressed = await fetchBuffer(base + file.split('/').map(encodeURIComponent).join('/'), entry.bytes, 20000);
-    const decoded = decodeRootShard(entry, compressed, file.slice('shards/'.length, -'.json.gz'.length));
-    if (decoded.decodedBytes > MAX_ROOT_SHARD_JSON_BYTES) {
-      throw new Error('universal_catalog_root_shard_uncompressed_limit');
+    try {
+      const compressed = await fetchBuffer(base + file.split('/').map(encodeURIComponent).join('/'), entry.bytes, 20000);
+      const decoded = decodeRootShard(entry, compressed, file.slice('shards/'.length, -'.json.gz'.length));
+      if (decoded.decodedBytes > MAX_ROOT_SHARD_JSON_BYTES) {
+        throw new Error('universal_catalog_root_shard_uncompressed_limit');
+      }
+      return { ok: true, value: { file, entry, payload: decoded.payload, decodedBytes: decoded.decodedBytes } };
+    } catch (error) {
+      return { ok: false, file, message: String(error && error.message || error) };
     }
-    return { file, entry, payload: decoded.payload, decodedBytes: decoded.decodedBytes };
   }));
+  const invalidRootShards = rootShardOutcomes.filter(result => !result.ok);
+  if (invalidRootShards.length) {
+    throw new Error(invalidRootShards[0].message + ':' + invalidRootShards.map(result => result.file).join(','));
+  }
+  const rootShardResults = rootShardOutcomes.map(result => result.value);
 
   let totalDecodedBytes = 0;
   let documentOccurrences = 0;
