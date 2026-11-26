@@ -6,6 +6,8 @@ on:
     paths:
       - 'site/**'
       - 'public-search/**'
+      - 'supabase/functions/everything-hub-deploy-bridge/**'
+      - 'supabase/functions/everything-hub-web-search/**'
       - '.github/workflows/everything-hub-free-supabase-route.yml'
   schedule:
     - cron: '23 * * * *'
@@ -26,6 +28,12 @@ jobs:
       MANIFEST_URL: https://raw.githubusercontent.com/rshure001/EverythingHub-Crawler/main/public-search/manifest.json
     steps:
       - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            site/index.html
+            site/search.js
+            public-search/manifest.json
+          sparse-checkout-cone-mode: false
       - name: Verify the legacy address redirects to the active bridge
         run: |
           set -euo pipefail
@@ -48,6 +56,25 @@ jobs:
           for needle in 'Everything Hub' 'id="search"' 'id="q"' 'src="search.js"' "['web','All']" "['images','Images']" "['videos','Videos']" "['news','News']" "['shopping','Shopping']" "['places','Maps']" "['business','Business']" "['research','Research']"; do
             grep -Fqi "$needle" /tmp/home.html || { echo "Missing homepage feature: $needle"; exit 1; }
           done
+          python - <<'PY'
+          import hashlib
+          import re
+          from pathlib import Path
+
+          def artwork_hash(path: str) -> str:
+              html = Path(path).read_text(encoding="utf-8")
+              match = re.search(r"data:image/png;base64,([A-Za-z0-9+/=\\r\\n]+)", html)
+              if not match:
+                  raise SystemExit(f"Approved embedded PNG artwork missing from {path}")
+              payload = "".join(match.group(1).split()).encode("ascii")
+              return hashlib.sha256(payload).hexdigest()
+
+          expected = artwork_hash("site/index.html")
+          actual = artwork_hash("/tmp/home.html")
+          if expected != actual:
+              raise SystemExit("Live homepage artwork does not match the approved repository artwork")
+          print("Approved artwork SHA-256:", expected)
+          PY
           test "$bytes" -gt 10000
       - name: Verify the public search script matches the repository
         run: |
@@ -59,6 +86,7 @@ jobs:
         run: |
           set -euo pipefail
           curl --silent --show-error --location --fail --max-time 40 "$MANIFEST_URL" -o /tmp/manifest.json
+          cmp -s public-search/manifest.json /tmp/manifest.json || { echo "Live crawler manifest differs from the repository"; exit 1; }
           node -e "const m=require('/tmp/manifest.json'); if(!Array.isArray(m.shards)||!m.shards.length) process.exit(1); console.log(JSON.stringify({shards:m.shards.length,totalPages:m.total_pages??m.totalPages??m.pageCount??null}))"
       - name: Verify live search endpoint returns valid results payload
         run: |
