@@ -5228,6 +5228,32 @@
         "repository": "rshure001/EverythingHub-Crawler",
         "source_index_sha256": "de0cffe0df3c0fe6de903df11cbc2a5a7a676c24e2ab359bf204224093789dc6"
       }
+    },
+    {
+      "id": "catalog-discovery-45805558432",
+      "timestamp": "2026-11-26T11:07:29Z",
+      "type": "catalog_discovery",
+      "status": "success",
+      "summary": "Catalog-first discovery completed across policy-approved sources; restricted Open Library snapshots were excluded from current public artifacts.",
+      "metrics": {
+        "catalogs": 2,
+        "catalog_records": 58455,
+        "unique_entities": 58455,
+        "ckan_datasets": 58455,
+        "ckan_resources": 273532,
+        "openlibrary_records": 0,
+        "openlibrary_snapshot_records_excluded": 0,
+        "openlibrary_snapshot_catalogs_excluded": 0,
+        "restricted_source_records_excluded": 0,
+        "restricted_source_catalogs_excluded": 0,
+        "source_page_references": 58455,
+        "source_pages_fetched": 0,
+        "indexed_records": 0
+      },
+      "source": {
+        "workflow_run_id": "45805558432",
+        "repository": "rshure001/EverythingHub-Crawler"
+      }
     }
   ]
 }
