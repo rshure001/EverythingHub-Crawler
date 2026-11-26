@@ -30,8 +30,8 @@ permissions:
 
 concurrency:
   group: catalog-data-publish-v9-${{ github.ref }}
-  # Newer catalog runs supersede stale snapshots; the checkpoint step saves resumable host state on cancellation.
-  cancel-in-progress: true
+  # Let the active bounded catalog analysis finish; newer runs wait rather than canceling useful work.
+  cancel-in-progress: false
 
 jobs:
   inventory:
