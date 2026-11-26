@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
-const TARGET = "https://rawcdn.githack.com/rshure001/EverythingHub-Crawler/cdbe07d530a992c482e46f60946d6d4c961061fc/site/index.html";
+const TARGET = "https://cdn.statically.io/gh/rshure001/EverythingHub-Crawler@cdbe07d530a992c482e46f60946d6d4c961061fc/site/index.html";
 
 Deno.serve((req: Request) => {
   if (req.method !== "GET" && req.method !== "HEAD") {
