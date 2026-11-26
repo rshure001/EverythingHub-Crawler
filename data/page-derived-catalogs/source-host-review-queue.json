@@ -1,19 +1,19 @@
 {
   "schema_version": 1,
   "status": "source_review_backlog_not_a_fetch_queue",
-  "generated_at": "2026-11-26T19:51:33Z",
+  "generated_at": "2026-11-26T22:44:04Z",
   "analysis_version": 22,
-  "source_index_pages": 227857,
-  "source_index_updated_at": "2026-11-26T17:33:32Z",
-  "source_index_sha256": "a5c940176effe38192e906198033e4d7550e6719b94c77e1c477da63924993ec",
+  "source_index_pages": 230108,
+  "source_index_updated_at": "2026-11-26T22:21:24Z",
+  "source_index_sha256": "22c8e3d98df5e192e6f6b5a326bbd90dcc86df0bc30b17d04adbb68c6c08ffcd",
   "metrics": {
-    "catalog_definition_candidates": 2710,
+    "catalog_definition_candidates": 2713,
     "unique_source_hosts": 118,
-    "unique_source_urls": 2709,
+    "unique_source_urls": 2712,
     "policy_preapproved_urls_needing_runtime_robots_check": 729,
     "policy_preapproved_api_urls_needing_runtime_robots_check": 0,
     "policy_preapproved_catalog_page_urls_needing_runtime_robots_check": 729,
-    "policy_review_required_urls": 1779,
+    "policy_review_required_urls": 1782,
     "path_not_allowlisted_urls": 201,
     "mixed_policy_status_urls": 0,
     "invalid_catalog_candidates": 0,
@@ -3347,9 +3347,9 @@
       "record_type": "model",
       "catalog_origin": "source_declared_collection",
       "evidence_strength": "high",
-      "catalog_status": "definition_only",
-      "record_count": 0,
-      "source_page_count": 29,
+      "catalog_status": "candidate_needs_source_validation",
+      "record_count": 3,
+      "source_page_count": 46,
       "source_host": "bucherer.com",
       "source_url": "https://bucherer.com/us/en/watches",
       "review_status": "policy_review_required",
@@ -77901,41 +77901,10 @@
       "catalog_origin": "source_declared_collection",
       "evidence_strength": "medium",
       "catalog_status": "candidate_needs_source_validation",
-      "record_count": 159,
-      "source_page_count": 160,
+      "record_count": 209,
+      "source_page_count": 210,
       "source_host": "internetsociety.org",
       "source_url": "https://internetsociety.org/fr/blog",
-      "review_status": "policy_review_required",
-      "source_access_mode": null,
-      "terms_url": null,
-      "terms_status": "unreviewed",
-      "reviewed_at": null,
-      "metadata_only": false,
-      "per_dataset_rights_required": true,
-      "attribution_required": null,
-      "rights_scope": null,
-      "allowed_metadata_fields": [],
-      "allowed_catalog_path_patterns": [],
-      "prohibited_content": [],
-      "max_response_bytes": 0,
-      "min_interval_seconds": 1.0,
-      "max_requests_per_run": 1,
-      "policy_note": null,
-      "robots_recheck_required": true,
-      "fetch_authorized": false
-    },
-    {
-      "catalog_id": "catalog:b6c2316878ff2f2b09045e3f",
-      "title": "Internet Internet Articles",
-      "catalog_type": "knowledge_base",
-      "record_type": "article",
-      "catalog_origin": "source_declared_collection",
-      "evidence_strength": "medium",
-      "catalog_status": "candidate_needs_source_validation",
-      "record_count": 513,
-      "source_page_count": 518,
-      "source_host": "internetsociety.org",
-      "source_url": "https://internetsociety.org/blog",
       "review_status": "policy_review_required",
       "source_access_mode": null,
       "terms_url": null,
@@ -77963,8 +77932,8 @@
       "catalog_origin": "source_declared_collection",
       "evidence_strength": "medium",
       "catalog_status": "candidate_needs_source_validation",
-      "record_count": 17,
-      "source_page_count": 18,
+      "record_count": 24,
+      "source_page_count": 25,
       "source_host": "internetsociety.org",
       "source_url": "https://internetsociety.org/es/resources",
       "review_status": "policy_review_required",
@@ -77994,8 +77963,8 @@
       "catalog_origin": "source_declared_collection",
       "evidence_strength": "medium",
       "catalog_status": "candidate_needs_source_validation",
-      "record_count": 159,
-      "source_page_count": 164,
+      "record_count": 170,
+      "source_page_count": 175,
       "source_host": "internetsociety.org",
       "source_url": "https://internetsociety.org/resources",
       "review_status": "policy_review_required",
@@ -78025,8 +77994,8 @@
       "catalog_origin": "source_declared_collection",
       "evidence_strength": "medium",
       "catalog_status": "candidate_needs_source_validation",
-      "record_count": 24,
-      "source_page_count": 25,
+      "record_count": 32,
+      "source_page_count": 33,
       "source_host": "internetsociety.org",
       "source_url": "https://internetsociety.org/fr/resources",
       "review_status": "policy_review_required",
@@ -78056,10 +78025,41 @@
       "catalog_origin": "source_declared_collection",
       "evidence_strength": "medium",
       "catalog_status": "candidate_needs_source_validation",
-      "record_count": 185,
-      "source_page_count": 189,
+      "record_count": 232,
+      "source_page_count": 237,
       "source_host": "internetsociety.org",
       "source_url": "https://internetsociety.org/es/blog",
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "reviewed_at": null,
+      "metadata_only": false,
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null,
+      "robots_recheck_required": true,
+      "fetch_authorized": false
+    },
+    {
+      "catalog_id": "catalog:b6c2316878ff2f2b09045e3f",
+      "title": "Internetsociety Articles",
+      "catalog_type": "knowledge_base",
+      "record_type": "article",
+      "catalog_origin": "source_declared_collection",
+      "evidence_strength": "medium",
+      "catalog_status": "candidate_needs_source_validation",
+      "record_count": 593,
+      "source_page_count": 598,
+      "source_host": "internetsociety.org",
+      "source_url": "https://internetsociety.org/blog",
       "review_status": "policy_review_required",
       "source_access_mode": null,
       "terms_url": null,
@@ -78266,6 +78266,37 @@
       "fetch_authorized": false
     },
     {
+      "catalog_id": "catalog:1e37fa2b47f7737f161c7a9a",
+      "title": "Internetsociety Resources",
+      "catalog_type": "resource_library",
+      "record_type": "resource",
+      "catalog_origin": "source_declared_collection",
+      "evidence_strength": "medium",
+      "catalog_status": "definition_only",
+      "record_count": 0,
+      "source_page_count": 1,
+      "source_host": "internetsociety.org",
+      "source_url": "https://internetsociety.org/es/issues/encryption/resources",
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "reviewed_at": null,
+      "metadata_only": false,
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null,
+      "robots_recheck_required": true,
+      "fetch_authorized": false
+    },
+    {
       "catalog_id": "catalog:8351156c981956f8acb66869",
       "title": "Internetsociety Resources",
       "catalog_type": "resource_library",
@@ -78277,6 +78308,37 @@
       "source_page_count": 1,
       "source_host": "internetsociety.org",
       "source_url": "https://internetsociety.org/issues/encryption/resources",
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "reviewed_at": null,
+      "metadata_only": false,
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null,
+      "robots_recheck_required": true,
+      "fetch_authorized": false
+    },
+    {
+      "catalog_id": "catalog:d363fdce80ffa47e93a6b640",
+      "title": "Internetsociety Resources",
+      "catalog_type": "resource_library",
+      "record_type": "resource",
+      "catalog_origin": "source_declared_collection",
+      "evidence_strength": "medium",
+      "catalog_status": "definition_only",
+      "record_count": 0,
+      "source_page_count": 1,
+      "source_host": "internetsociety.org",
+      "source_url": "https://internetsociety.org/events/un/wtsa-2020/resources",
       "review_status": "policy_review_required",
       "source_access_mode": null,
       "terms_url": null,
@@ -94052,10 +94114,10 @@
       "catalog_origin": "content_list_declared_collection",
       "evidence_strength": "medium",
       "catalog_status": "candidate_needs_source_validation",
-      "record_count": 35,
-      "source_page_count": 16,
+      "record_count": 43,
+      "source_page_count": 19,
       "source_host": "theguardian.com",
-      "source_url": "https://theguardian.com/commentisfree/2026/aug/12/openai-anthropic-ai-models",
+      "source_url": "https://theguardian.com/artanddesign/gallery/2026/feb/04/she-thought-it-was-too-sexy-portraits-of-kate-moss-grace-jones-and-a-tea-drinking-chimp-in-pictures",
       "review_status": "policy_review_required",
       "source_access_mode": null,
       "terms_url": null,
@@ -94083,8 +94145,8 @@
       "catalog_origin": "content_list_declared_collection",
       "evidence_strength": "medium",
       "catalog_status": "candidate_needs_source_validation",
-      "record_count": 28,
-      "source_page_count": 18,
+      "record_count": 40,
+      "source_page_count": 22,
       "source_host": "theguardian.com",
       "source_url": "https://theguardian.com/books/2024/dec/17/white-nights-fyodor-dostoevsky-social-media-instagram-booktok-tiktok",
       "review_status": "policy_review_required",
@@ -94114,10 +94176,41 @@
       "catalog_origin": "content_list_declared_collection",
       "evidence_strength": "medium",
       "catalog_status": "candidate_needs_source_validation",
-      "record_count": 12,
-      "source_page_count": 6,
+      "record_count": 15,
+      "source_page_count": 8,
       "source_host": "theguardian.com",
       "source_url": "https://theguardian.com/commentisfree/2026/nov/07/anti-ai-populism-is-the-future-of-american-politics",
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "reviewed_at": null,
+      "metadata_only": false,
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null,
+      "robots_recheck_required": true,
+      "fetch_authorized": false
+    },
+    {
+      "catalog_id": "catalog:2412b771342e0bff05e3ec52",
+      "title": "Guardian Software",
+      "catalog_type": "software",
+      "record_type": "software",
+      "catalog_origin": "content_list_declared_collection",
+      "evidence_strength": "medium",
+      "catalog_status": "candidate_needs_source_validation",
+      "record_count": 5,
+      "source_page_count": 4,
+      "source_host": "theguardian.com",
+      "source_url": "https://theguardian.com/technology/2025/feb/25/why-are-creatives-fighting-uk-government-ai-proposals-on-copyright",
       "review_status": "policy_review_required",
       "source_access_mode": null,
       "terms_url": null,
@@ -169886,10 +169979,62 @@
       "policy_note": null
     },
     {
+      "source_url": "https://internetsociety.org/es/issues/encryption/resources",
+      "source_host": "internetsociety.org",
+      "catalog_ids": [
+        "catalog:1e37fa2b47f7737f161c7a9a"
+      ],
+      "catalog_count": 1,
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "policy_preapproved": false,
+      "metadata_only": false,
+      "robots_recheck_required": true,
+      "fetch_authorized": false,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null
+    },
+    {
       "source_url": "https://internetsociety.org/es/resources",
       "source_host": "internetsociety.org",
       "catalog_ids": [
         "catalog:058bb72cee58e7579a8c8e1c"
+      ],
+      "catalog_count": 1,
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "policy_preapproved": false,
+      "metadata_only": false,
+      "robots_recheck_required": true,
+      "fetch_authorized": false,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null
+    },
+    {
+      "source_url": "https://internetsociety.org/events/un/wtsa-2020/resources",
+      "source_host": "internetsociety.org",
+      "catalog_ids": [
+        "catalog:d363fdce80ffa47e93a6b640"
       ],
       "catalog_count": 1,
       "review_status": "policy_review_required",
@@ -183250,6 +183395,32 @@
       "policy_note": null
     },
     {
+      "source_url": "https://theguardian.com/artanddesign/gallery/2026/feb/04/she-thought-it-was-too-sexy-portraits-of-kate-moss-grace-jones-and-a-tea-drinking-chimp-in-pictures",
+      "source_host": "theguardian.com",
+      "catalog_ids": [
+        "catalog:792a90879160b481333d1782"
+      ],
+      "catalog_count": 1,
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "policy_preapproved": false,
+      "metadata_only": false,
+      "robots_recheck_required": true,
+      "fetch_authorized": false,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null
+    },
+    {
       "source_url": "https://theguardian.com/books/2024/dec/17/white-nights-fyodor-dostoevsky-social-media-instagram-booktok-tiktok",
       "source_host": "theguardian.com",
       "catalog_ids": [
@@ -183280,32 +183451,6 @@
       "source_host": "theguardian.com",
       "catalog_ids": [
         "catalog:57ef0b4ca4c33cfdb1bf70c7"
-      ],
-      "catalog_count": 1,
-      "review_status": "policy_review_required",
-      "source_access_mode": null,
-      "policy_preapproved": false,
-      "metadata_only": false,
-      "robots_recheck_required": true,
-      "fetch_authorized": false,
-      "terms_url": null,
-      "terms_status": "unreviewed",
-      "per_dataset_rights_required": true,
-      "attribution_required": null,
-      "rights_scope": null,
-      "allowed_metadata_fields": [],
-      "allowed_catalog_path_patterns": [],
-      "prohibited_content": [],
-      "max_response_bytes": 0,
-      "min_interval_seconds": 1.0,
-      "max_requests_per_run": 1,
-      "policy_note": null
-    },
-    {
-      "source_url": "https://theguardian.com/commentisfree/2026/aug/12/openai-anthropic-ai-models",
-      "source_host": "theguardian.com",
-      "catalog_ids": [
-        "catalog:792a90879160b481333d1782"
       ],
       "catalog_count": 1,
       "review_status": "policy_review_required",
@@ -183436,6 +183581,32 @@
       "source_host": "theguardian.com",
       "catalog_ids": [
         "catalog:40ea1b73ba595b5860b76543"
+      ],
+      "catalog_count": 1,
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "policy_preapproved": false,
+      "metadata_only": false,
+      "robots_recheck_required": true,
+      "fetch_authorized": false,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null
+    },
+    {
+      "source_url": "https://theguardian.com/technology/2025/feb/25/why-are-creatives-fighting-uk-government-ai-proposals-on-copyright",
+      "source_host": "theguardian.com",
+      "catalog_ids": [
+        "catalog:2412b771342e0bff05e3ec52"
       ],
       "catalog_count": 1,
       "review_status": "policy_review_required",
@@ -191269,6 +191440,97 @@
       ]
     },
     {
+      "host": "theguardian.com",
+      "catalog_definition_count": 19,
+      "unique_source_urls": 19,
+      "review_status_counts": {
+        "policy_review_required": 19
+      },
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "reviewed_at": null,
+      "source_access_modes": [],
+      "metadata_only": false,
+      "allowed_catalog_path_patterns": [],
+      "max_response_bytes": 0,
+      "per_dataset_rights_required": true,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null,
+      "sample_catalogs": [
+        {
+          "catalog_id": "catalog:08ddb5eb8edc00f62dbdc8cf",
+          "title": "Guardian Articles",
+          "catalog_type": "knowledge_base",
+          "source_url": "https://theguardian.com/technology/article/2024/aug/20/conde-nast-open-ai-deal",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:40ea1b73ba595b5860b76543",
+          "title": "Guardian Articles",
+          "catalog_type": "knowledge_base",
+          "source_url": "https://theguardian.com/sport/blog",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:792a90879160b481333d1782",
+          "title": "Guardian Businesses",
+          "catalog_type": "business_directory",
+          "source_url": "https://theguardian.com/artanddesign/gallery/2026/feb/04/she-thought-it-was-too-sexy-portraits-of-kate-moss-grace-jones-and-a-tea-drinking-chimp-in-pictures",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:3e7982a3e0968d8fada655f5",
+          "title": "Guardian People",
+          "catalog_type": "people_directory",
+          "source_url": "https://theguardian.com/books/2024/dec/17/white-nights-fyodor-dostoevsky-social-media-instagram-booktok-tiktok",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:7612da26108dfe80609e78a4",
+          "title": "Guardian Places",
+          "catalog_type": "geographic",
+          "source_url": "https://theguardian.com/commentisfree/2026/nov/07/anti-ai-populism-is-the-future-of-american-politics",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:2412b771342e0bff05e3ec52",
+          "title": "Guardian Software",
+          "catalog_type": "software",
+          "source_url": "https://theguardian.com/technology/2025/feb/25/why-are-creatives-fighting-uk-government-ai-proposals-on-copyright",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:c95f22372a2a49e1b0ccdca2",
+          "title": "Guardian Subjects",
+          "catalog_type": "knowledge_base",
+          "source_url": "https://theguardian.com/us-news/2026/feb/10/national-monuments-trump-rewrite-history-racism-indigenous-people",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:8cd6d57a9a90a6fa473c43ef",
+          "title": "Research development Guardian Articles",
+          "catalog_type": "knowledge_base",
+          "source_url": "https://theguardian.com/technology/research",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:aa5dcb9b23515ea5903a045a",
+          "title": "Theguardian Articles",
+          "catalog_type": "knowledge_base",
+          "source_url": "https://theguardian.com/tone/news",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:ef04c56e5a717758ac43491d",
+          "title": "Theguardian Articles",
+          "catalog_type": "knowledge_base",
+          "source_url": "https://theguardian.com/tone/blog",
+          "review_status": "policy_review_required"
+        }
+      ]
+    },
+    {
       "host": "irs.gov",
       "catalog_definition_count": 18,
       "unique_source_urls": 18,
@@ -191355,97 +191617,6 @@
           "title": "Irs Businesses",
           "catalog_type": "business_directory",
           "source_url": "https://irs.gov/zh-hant/credits-deductions/businesses",
-          "review_status": "policy_review_required"
-        }
-      ]
-    },
-    {
-      "host": "theguardian.com",
-      "catalog_definition_count": 18,
-      "unique_source_urls": 18,
-      "review_status_counts": {
-        "policy_review_required": 18
-      },
-      "terms_url": null,
-      "terms_status": "unreviewed",
-      "reviewed_at": null,
-      "source_access_modes": [],
-      "metadata_only": false,
-      "allowed_catalog_path_patterns": [],
-      "max_response_bytes": 0,
-      "per_dataset_rights_required": true,
-      "min_interval_seconds": 1.0,
-      "max_requests_per_run": 1,
-      "policy_note": null,
-      "sample_catalogs": [
-        {
-          "catalog_id": "catalog:08ddb5eb8edc00f62dbdc8cf",
-          "title": "Guardian Articles",
-          "catalog_type": "knowledge_base",
-          "source_url": "https://theguardian.com/technology/article/2024/aug/20/conde-nast-open-ai-deal",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:40ea1b73ba595b5860b76543",
-          "title": "Guardian Articles",
-          "catalog_type": "knowledge_base",
-          "source_url": "https://theguardian.com/sport/blog",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:792a90879160b481333d1782",
-          "title": "Guardian Businesses",
-          "catalog_type": "business_directory",
-          "source_url": "https://theguardian.com/commentisfree/2026/aug/12/openai-anthropic-ai-models",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:3e7982a3e0968d8fada655f5",
-          "title": "Guardian People",
-          "catalog_type": "people_directory",
-          "source_url": "https://theguardian.com/books/2024/dec/17/white-nights-fyodor-dostoevsky-social-media-instagram-booktok-tiktok",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:7612da26108dfe80609e78a4",
-          "title": "Guardian Places",
-          "catalog_type": "geographic",
-          "source_url": "https://theguardian.com/commentisfree/2026/nov/07/anti-ai-populism-is-the-future-of-american-politics",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:c95f22372a2a49e1b0ccdca2",
-          "title": "Guardian Subjects",
-          "catalog_type": "knowledge_base",
-          "source_url": "https://theguardian.com/us-news/2026/feb/10/national-monuments-trump-rewrite-history-racism-indigenous-people",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:8cd6d57a9a90a6fa473c43ef",
-          "title": "Research development Guardian Articles",
-          "catalog_type": "knowledge_base",
-          "source_url": "https://theguardian.com/technology/research",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:aa5dcb9b23515ea5903a045a",
-          "title": "Theguardian Articles",
-          "catalog_type": "knowledge_base",
-          "source_url": "https://theguardian.com/tone/news",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:ef04c56e5a717758ac43491d",
-          "title": "Theguardian Articles",
-          "catalog_type": "knowledge_base",
-          "source_url": "https://theguardian.com/tone/blog",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:fd1773221d6bcc35c1e46e91",
-          "title": "Theguardian Articles",
-          "catalog_type": "knowledge_base",
-          "source_url": "https://theguardian.com/news/blog",
           "review_status": "policy_review_required"
         }
       ]
@@ -191815,6 +191986,97 @@
       ]
     },
     {
+      "host": "internetsociety.org",
+      "catalog_definition_count": 16,
+      "unique_source_urls": 16,
+      "review_status_counts": {
+        "policy_review_required": 16
+      },
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "reviewed_at": null,
+      "source_access_modes": [],
+      "metadata_only": false,
+      "allowed_catalog_path_patterns": [],
+      "max_response_bytes": 0,
+      "per_dataset_rights_required": true,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null,
+      "sample_catalogs": [
+        {
+          "catalog_id": "catalog:e60413c8ad0ceb7110e687f0",
+          "title": "Internet Articles",
+          "catalog_type": "knowledge_base",
+          "source_url": "https://internetsociety.org/fr/blog",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:058bb72cee58e7579a8c8e1c",
+          "title": "Internet Resources",
+          "catalog_type": "resource_library",
+          "source_url": "https://internetsociety.org/es/resources",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:0ebfd908a039e74d1e4aefe1",
+          "title": "Internet Resources",
+          "catalog_type": "resource_library",
+          "source_url": "https://internetsociety.org/resources",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:7c91e6bf52e64886a4b67df7",
+          "title": "Internet Society Resources",
+          "catalog_type": "resource_library",
+          "source_url": "https://internetsociety.org/fr/resources",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:0669d162789241d715b1dc6b",
+          "title": "Internetsociety Articles",
+          "catalog_type": "knowledge_base",
+          "source_url": "https://internetsociety.org/es/blog",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:b6c2316878ff2f2b09045e3f",
+          "title": "Internetsociety Articles",
+          "catalog_type": "knowledge_base",
+          "source_url": "https://internetsociety.org/blog",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:49a12b4248302ab7b082385d",
+          "title": "Internetsociety Media",
+          "catalog_type": "media",
+          "source_url": "https://internetsociety.org/intercommunity/2017/videos",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:599229c1c2d1cca836cab5cb",
+          "title": "Internetsociety Organizations",
+          "catalog_type": "organization_directory",
+          "source_url": "https://internetsociety.org/foundation",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:64dcdbf2e2838d706b450492",
+          "title": "Internetsociety People",
+          "catalog_type": "people_directory",
+          "source_url": "https://internetsociety.org/es/about-internet-society/team",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:c5afd9210dd8f1198ad1d35b",
+          "title": "Internetsociety People",
+          "catalog_type": "people_directory",
+          "source_url": "https://internetsociety.org/about-internet-society/team",
+          "review_status": "policy_review_required"
+        }
+      ]
+    },
+    {
       "host": "usgs.gov",
       "catalog_definition_count": 15,
       "unique_source_urls": 14,
@@ -192083,97 +192345,6 @@
           "title": "Energy Resources",
           "catalog_type": "resource_library",
           "source_url": "https://energy.gov/cmei/manufacturing/resources",
-          "review_status": "policy_review_required"
-        }
-      ]
-    },
-    {
-      "host": "internetsociety.org",
-      "catalog_definition_count": 14,
-      "unique_source_urls": 14,
-      "review_status_counts": {
-        "policy_review_required": 14
-      },
-      "terms_url": null,
-      "terms_status": "unreviewed",
-      "reviewed_at": null,
-      "source_access_modes": [],
-      "metadata_only": false,
-      "allowed_catalog_path_patterns": [],
-      "max_response_bytes": 0,
-      "per_dataset_rights_required": true,
-      "min_interval_seconds": 1.0,
-      "max_requests_per_run": 1,
-      "policy_note": null,
-      "sample_catalogs": [
-        {
-          "catalog_id": "catalog:e60413c8ad0ceb7110e687f0",
-          "title": "Internet Articles",
-          "catalog_type": "knowledge_base",
-          "source_url": "https://internetsociety.org/fr/blog",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:b6c2316878ff2f2b09045e3f",
-          "title": "Internet Internet Articles",
-          "catalog_type": "knowledge_base",
-          "source_url": "https://internetsociety.org/blog",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:058bb72cee58e7579a8c8e1c",
-          "title": "Internet Resources",
-          "catalog_type": "resource_library",
-          "source_url": "https://internetsociety.org/es/resources",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:0ebfd908a039e74d1e4aefe1",
-          "title": "Internet Resources",
-          "catalog_type": "resource_library",
-          "source_url": "https://internetsociety.org/resources",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:7c91e6bf52e64886a4b67df7",
-          "title": "Internet Society Resources",
-          "catalog_type": "resource_library",
-          "source_url": "https://internetsociety.org/fr/resources",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:0669d162789241d715b1dc6b",
-          "title": "Internetsociety Articles",
-          "catalog_type": "knowledge_base",
-          "source_url": "https://internetsociety.org/es/blog",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:49a12b4248302ab7b082385d",
-          "title": "Internetsociety Media",
-          "catalog_type": "media",
-          "source_url": "https://internetsociety.org/intercommunity/2017/videos",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:599229c1c2d1cca836cab5cb",
-          "title": "Internetsociety Organizations",
-          "catalog_type": "organization_directory",
-          "source_url": "https://internetsociety.org/foundation",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:64dcdbf2e2838d706b450492",
-          "title": "Internetsociety People",
-          "catalog_type": "people_directory",
-          "source_url": "https://internetsociety.org/es/about-internet-society/team",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:c5afd9210dd8f1198ad1d35b",
-          "title": "Internetsociety People",
-          "catalog_type": "people_directory",
-          "source_url": "https://internetsociety.org/about-internet-society/team",
           "review_status": "policy_review_required"
         }
       ]
