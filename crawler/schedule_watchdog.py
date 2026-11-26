@@ -277,7 +277,7 @@ def main() -> None:
     if not isinstance(runs, list):
         raise SystemExit("GitHub workflow response did not contain a workflow_runs array")
     manifest_updated_at = None
-    if len(sys.argv) == 3:
+    if len(sys.argv) >= 3:
         manifest = json.loads(Path(sys.argv[2]).read_text(encoding="utf-8"))
         if not isinstance(manifest, dict):
             raise SystemExit("public search manifest did not contain a JSON object")
