@@ -574,9 +574,52 @@ Deno.serve(async (req: Request) => {
 
     if (!results.length) return await staticFallback("database_empty");
 
+    // Attach the independently verified page-derived catalog snapshot to normal
+    // database-backed searches too. Previously this metadata appeared only on
+    // outage fallbacks, so healthy searches silently hid the catalog network.
+    let catalogResults: any[] = [];
+    let catalogPreview: Record<string, any> = {
+      status: "unavailable", previewOnly: true, resultCount: 0,
+      error: "catalog_preview_unavailable",
+    };
+    try {
+      const pageDerived = await loadPageDerivedCatalogPreview();
+      catalogResults = await searchPageDerivedCatalogPreview(query, pageDerived, 5);
+      const freshnessMatch = Boolean(pageDerived.freshnessMatch && !pageDerived.stale);
+      catalogPreview = {
+        status: freshnessMatch ? "candidate-preview" : "stale-candidate-preview",
+        previewOnly: true,
+        analysisVersion: pageDerived.analysisVersion,
+        generatedAt: pageDerived.generatedAt,
+        sourceIndexPages: pageDerived.sourceIndexPages,
+        sourceIndexUpdatedAt: pageDerived.sourceIndexUpdatedAt,
+        sourceIndexSha256: pageDerived.sourceIndexSha256,
+        pageIndexPages: pageDerived.pageIndexPages,
+        pageIndexUpdatedAt: pageDerived.pageIndexUpdatedAt,
+        catalogCount: pageDerived.catalogCount,
+        recordCount: pageDerived.recordCount,
+        recordsPublished: Number(pageDerived.metrics.records_published) || 0,
+        sourceTermsReviewedRecords: Number(pageDerived.metrics.source_terms_reviewed_records) || 0,
+        resultCount: catalogResults.length,
+        freshnessMatch,
+        stale: Boolean(pageDerived.stale),
+      };
+      if (!freshnessMatch) {
+        const warning = " Catalog analysis is behind the current page index or freshness could not be verified.";
+        catalogResults = catalogResults.map((item) => ({
+          ...item,
+          snippet: String(item.snippet || "") + warning,
+          description: String(item.description || item.snippet || "") + warning,
+        }));
+      }
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      console.error("Page-derived catalog preview unavailable on database search:", detail.slice(0, 160));
+    }
+
     const hasMore = offset + results.length < totalCount;
     return json(
-      { results, count: totalCount, query, tentacle: laneFallback ? null : validLane, requestedTentacle: validLane, laneFallback, source, offset, limit, hasMore },
+      { results, count: totalCount, query, tentacle: laneFallback ? null : validLane, requestedTentacle: validLane, laneFallback, source, offset, limit, hasMore, catalogResults, catalogPreview },
       200, "public, max-age=15, stale-while-revalidate=30",
     );
   } catch (error) {
