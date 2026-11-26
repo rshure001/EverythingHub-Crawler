@@ -10,7 +10,7 @@ const vercelHomepage = fs.readFileSync(path.join(root, "vercel-homepage/index.ht
 const edgeSiteFunction = fs.readFileSync(path.join(root, "supabase/functions/everything-hub-site/index.ts"), "utf8");
 
 test("public homepages preserve approved branding while using separate free search routes", () => {
-  const artwork = (source) => source.match(/<img[^>]*class=["'][^"']*approved-master-art[^"']*["'][^>]*src=["'](data:image\\/png;base64,[^"']+)["']/i)?.[1];
+  const artwork = (source) => source.match(/<img[^>]*class=["'][^"']*approved-master-art[^"']*["'][^>]*src=["'](data:image[/]png;base64,[^"']+)["']/i)?.[1];
   assert.ok(artwork(site), "Edge homepage must retain the approved octopus artwork");
   assert.equal(artwork(site), artwork(vercelHomepage), "Vercel fallback must preserve the exact approved artwork");
 
