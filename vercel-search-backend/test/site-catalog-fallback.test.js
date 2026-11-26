@@ -28,7 +28,7 @@ test("public homepages preserve approved branding while using separate free sear
   }
 
   assert.ok(site.includes("vdceayvfgkwpgwixrhwi.supabase.co"));
-  for (const endpoint of ["everything-hub-web-search", "everything-hub-media-search", "everything-hub-independent-search"]) {
+  for (const endpoint of ["everything-hub-catalog-search", "everything-hub-media-search", "everything-hub-independent-search"]) {
     assert.ok(site.includes(endpoint), "original Edge site must retain " + endpoint);
   }
 
