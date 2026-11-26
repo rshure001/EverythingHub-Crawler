@@ -13,16 +13,25 @@ const MAX_REGISTRY_SHARD_JSON_BYTES = 12_000_000;
 const MAX_RECORDS_JSON_BYTES = 96_000_000;
 const MAX_SEARCH_INDEX_SHARD_BYTES = 4_000_000;
 const MAX_SEARCH_INDEX_JSON_BYTES = 16_000_000;
-const MAX_CATALOG_INDEX_GZIP_BYTES = 2_000_000;
-const MAX_CATALOG_INDEX_JSON_BYTES = 8_000_000;
-const MAX_CATALOG_INDEX_FETCHES = 12;
+// The current validated corpus contains five catalog indexes above 2 MB; keep
+// larger indexes bounded while respecting the 256 MB Edge Function memory ceiling.
+const MAX_CATALOG_INDEX_GZIP_BYTES = 4_500_000;
+const MAX_CATALOG_INDEX_JSON_BYTES = 20_000_000;
+const MAX_CATALOG_INDEX_FETCHES = 5;
 const MAX_SEARCH_CACHE_ENTRIES = 64;
-const MAX_CATALOG_CACHE_ENTRIES = 64;
+const MAX_CATALOG_CACHE_ENTRIES = 5;
 const MAX_SOURCE_PAGES = 250_000;
 const MAX_CATALOGS = 30_000;
 // A catalog snapshot contains one index per catalog, up to 256 search shards, and six shared artifacts.
 const MAX_MANIFEST_FILES = MAX_CATALOGS + 1024;
 const MAX_RECORDS = 2_000_000;
+
+export function isValidCatalogIndexManifestEntry(entry, recordCount) {
+  return Boolean(entry &&
+    Number.isSafeInteger(entry.bytes) && entry.bytes >= 1 &&
+    entry.bytes <= MAX_CATALOG_INDEX_GZIP_BYTES &&
+    Number.isSafeInteger(entry.items) && entry.items === recordCount);
+}
 const CACHE_MS = 600_000;
 const STALE_MS = 3_600_000;
 const FETCH_TIMEOUT_MS = 12_000;
@@ -299,8 +308,7 @@ async function loadRegistryShard(network, prefix, fetchImpl) {
       throw new Error("page_catalog_registry_shard_identity_invalid");
     }
     const indexEntry = network.filesByPath.get(catalog.index_file);
-    if (!indexEntry || indexEntry.items !== catalog.record_count ||
-        indexEntry.bytes > MAX_CATALOG_INDEX_GZIP_BYTES) {
+    if (!isValidCatalogIndexManifestEntry(indexEntry, catalog.record_count)) {
       throw new Error("page_catalog_index_manifest_entry_invalid");
     }
     if (catalog.source_url && !safeUrl(catalog.source_url)) {
@@ -378,8 +386,7 @@ function validateRegistry(manifest, registry, metadata) {
       throw new Error("page_catalog_identity_or_membership_invalid");
     }
     const indexEntry = filesByPath.get(catalog.index_file);
-    if (!indexEntry || indexEntry.items !== catalog.record_count ||
-        indexEntry.bytes > MAX_CATALOG_INDEX_GZIP_BYTES) {
+    if (!isValidCatalogIndexManifestEntry(indexEntry, catalog.record_count)) {
       throw new Error("page_catalog_index_manifest_entry_invalid");
     }
     if (catalog.source_url && !safeUrl(catalog.source_url)) {
@@ -677,7 +684,7 @@ export async function resolveRecordRelatedCatalogPreview(
   }
   const catalogs = ids.map((id) => network.catalogsById.get(id));
   const batches = [];
-  for (let i = 0; i < catalogs.length; i += 4) batches.push(catalogs.slice(i, i + 4));
+  for (let i = 0; i < catalogs.length; i += 1) batches.push(catalogs.slice(i, i + 1));
   const indexGroups = await Promise.all(batches.map((batch) =>
     Promise.all(batch.map((catalog) => loadCatalogIndex(network, catalog, fetchImpl)))
   ));
@@ -886,8 +893,8 @@ async function searchPageDerivedCatalogPreviewIndexed(query, network, limit = 5,
     String(a.title || "").localeCompare(String(b.title || "")));
   const selectedCatalogs = candidateCatalogs.slice(0, MAX_CATALOG_INDEX_FETCHES);
   const recordsById = new Map();
-  for (let offset = 0; offset < selectedCatalogs.length; offset += 4) {
-    const batch = selectedCatalogs.slice(offset, offset + 4);
+  for (let offset = 0; offset < selectedCatalogs.length; offset += 1) {
+    const batch = selectedCatalogs.slice(offset, offset + 1);
     const payloads = await Promise.all(batch.map((catalog) => loadCatalogIndex(network, catalog, fetchImpl)));
     for (const records of payloads) {
       for (const record of records) recordsById.set(record.record_id, record);
