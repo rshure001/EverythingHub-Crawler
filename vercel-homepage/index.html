@@ -12140,6 +12140,14 @@ async function searchCrawlerIndex(query,offset=0,mode=selectedMode){
  const engine=engineResult.status==='fulfilled'?engineResult.value:null;
  const all=engine?engine.search(query,{limit:50,lane:lanes[mode]||null}):[];
  let results=all.slice(offset,offset+20),count=all.length,indexedPages=engine?.candidatePageCount||0,hasMore=offset+20<all.length;
+ const remoteData=catalogResult.status==='fulfilled'?catalogResult.value:null;
+ const remoteResults=(remoteData?.results||[]).filter(x=>x.title&&x.url).map(x=>({...x,mediaType:mode,source:x.source||remoteData.provider||'Independent public search',origin:x.origin||'Independent Vercel search',score:Number(x.relevance??x.score)||0}));
+ if(!['images','videos','news'].includes(mode)&&remoteResults.length){
+  const seen=new Set();
+  results=[...results,...remoteResults].filter(x=>{const key=safe(x.url).toLowerCase();if(!key||seen.has(key))return false;seen.add(key);return true;}).slice(0,20);
+  count=Math.max(count,Number(remoteData.count)||remoteResults.length);
+  hasMore=hasMore||Boolean(remoteData.hasMore)||count>results.length;
+ }
  const indexScan=engine?{
   candidateShardCount:engine.selectedShardCount||0,
   totalCandidateShardCount:engine.totalCandidateShardCount||0,
@@ -12147,8 +12155,8 @@ async function searchCrawlerIndex(query,offset=0,mode=selectedMode){
   totalCandidatePageCount:engine.totalCandidatePageCount||0,
   candidateTruncated:Boolean(engine.candidateTruncated)
  }:null;
- let source='Everything Hub verified public crawler index';
- if(!all.length&&offset===0&&!['images','videos','news'].includes(mode)){
+ let source=remoteResults.length?(engine?'Everything Hub verified public index + independent search':'Independent Vercel search'):'Everything Hub verified public crawler index';
+ if(!local&&!remoteResults.length&&offset===0&&!['images','videos','news'].includes(mode)){
   try{
    const hints={web:'',shopping:' shopping products',places:' places maps',business:' companies businesses',research:' research studies papers'};
    const u=new URL(functionEndpoint('everything-hub-independent-search'));
@@ -12156,11 +12164,12 @@ async function searchCrawlerIndex(query,offset=0,mode=selectedMode){
    const response=await fetch(u,{headers:{accept:'application/json'},signal:AbortSignal.timeout(15000)});
    if(response.ok){
     const data=await response.json();
-    results=(data.results||[]).filter(x=>x.title&&x.url).map(x=>({...x,mediaType:mode,source:x.source||data.provider||'Bing RSS',origin:'Bing RSS independent fallback',score:0}));
-    count=Number(data.count)||results.length;
-    indexedPages=0;
-    hasMore=false;
-    if(results.length)source='Bing RSS independent fallback';
+    const fallback=(data.results||[]).filter(x=>x.title&&x.url).map(x=>({...x,mediaType:mode,source:x.source||data.provider||'Bing RSS',origin:x.origin||'Bing RSS independent fallback',score:Number(x.relevance??x.score)||0}));
+    const seen=new Set(results.map(x=>safe(x.url).toLowerCase()));
+    results=[...results,...fallback.filter(x=>!seen.has(safe(x.url).toLowerCase()))].slice(0,20);
+    count=Math.max(count,Number(data.count)||fallback.length);
+    hasMore=hasMore||Boolean(data.hasMore)||count>results.length;
+    if(fallback.length)source=engine?'Everything Hub verified public index + independent search':'Independent Vercel search';
    }
   }catch(_){}
  }
