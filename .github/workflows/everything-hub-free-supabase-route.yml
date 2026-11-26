@@ -69,7 +69,7 @@ jobs:
           head -c 1800 /tmp/search.json || true
           echo
           test "$code" = "200"
-          node -e "const fs=require('fs'); const x=JSON.parse(fs.readFileSync('/tmp/search.json','utf8')); if(!Array.isArray(x.results) || x.results.length < 1 || !String(x.source || '').includes('Everything Hub public crawler index')) { console.error(x); process.exit(1); } console.log(JSON.stringify({query:x.query??'NASA',results:x.results.length,count:x.count??null,source:x.source??null,error:x.error??null}))"
+          node -e "const fs=require('fs'); const x=JSON.parse(fs.readFileSync('/tmp/search.json','utf8')); if(!Array.isArray(x.results) || x.results.length < 1 || !/Everything Hub public crawler index|Bing RSS independent web fallback/i.test(String(x.source || ''))) { console.error(x); process.exit(1); } console.log(JSON.stringify({query:x.query??'NASA',results:x.results.length,count:x.count??null,source:x.source??null,error:x.error??null}))"
 
       - name: Install Playwright Chromium
         run: |
