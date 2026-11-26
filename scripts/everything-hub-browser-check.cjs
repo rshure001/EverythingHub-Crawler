@@ -129,7 +129,7 @@ const EXPECTED_MODES = ["business", "images", "news", "places", "research", "sho
     // Exercise every remaining search category.
     await runSearch("news", "NASA Artemis", "nasa");
     await runSearch("images", "NASA", null);
-    await runSearch("videos", "animation");
+    await runSearch("videos", "space");
     await runSearch("shopping", "Rolex", "rolex");
     await runSearch("places", "Las Vegas", "las vegas");
     await runSearch("business", "Las Vegas hotels", "las vegas");
