@@ -359,6 +359,7 @@ async function makeFixture() {
     watch: [vegasProductId],
     product: [vegasProductId],
     nasa: [nasaSubjectId],
+    shared: [rolexId, vegasId, vegasProductId, genericSubjectId, nasaSubjectId, vegasSubjectId],
     artemis: [nasaSubjectId],
   };
   const grouped = new Map();
@@ -482,6 +483,34 @@ test("query-scoped catalog search fetches only matching per-catalog indexes", as
   assert.equal(fixture.requested.some((url) => url.endsWith("/" + fixture.vegasSubjectPath)), true);
   clearPageDerivedCatalogPreviewCache();
 });
+test("broad catalog terms load at most four registry metadata shards", async () => {
+  clearPageDerivedCatalogPreviewCache();
+  const fixture = await makeFixture();
+  const network = await loadPageDerivedCatalogPreview({ fetchImpl: fixture.fetchImpl });
+  fixture.requested.length = 0;
+
+  await searchPageDerivedCatalogPreview("shared", network, 5, fixture.fetchImpl);
+
+  const firstFourIds = [
+    "catalog:rolex-models",
+    "catalog:las-vegas-places",
+    "catalog:las-vegas-watch-products",
+    "catalog:global-geographic-subject",
+  ];
+  const allowedPrefixes = new Set();
+  for (const id of firstFourIds) allowedPrefixes.add((await digest(encoder.encode(id))).slice(0, 2));
+
+  const registryRequests = fixture.requested.filter((url) => url.includes("/registry-shards/"));
+  assert.ok(registryRequests.length > 0);
+  assert.ok(registryRequests.length <= allowedPrefixes.size);
+  for (const url of registryRequests) {
+    const suffix = url.split("/registry-shards/")[1] || "";
+    const prefix = suffix.split(".")[0];
+    assert.match(prefix, /^[a-f0-9]{2}$/);
+    assert.ok(allowedPrefixes.has(prefix), "broad search must not fan out beyond the first four candidate IDs");
+  }
+});
+
 test("per-record related catalogs deduplicate shared records and exclude their owner", async () => {
   clearPageDerivedCatalogPreviewCache();
   const catalogId = "catalog:shared-products";
