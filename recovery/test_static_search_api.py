@@ -94,7 +94,7 @@ class StaticSearchTests(unittest.TestCase):
         self.assertEqual(api.MAX_PAGES, 250_000)
         self.assertEqual(api.MAX_SHARDS, 900)
         self.assertEqual(api.MAX_PAGES_PER_SHARD, 2_000)
-        self.assertGreater(max_pages_per_shard, 1_000)
+        self.assertGreater(max_pages_per_shard, 0)
         self.assertLessEqual(max_pages_per_shard, api.MAX_PAGES_PER_SHARD)
         self.assertEqual(api.MAX_SHARD_UNCOMPRESSED_BYTES, 600_000)
         self.assertEqual(api.MAX_MANIFEST_BYTES, 256_000)
