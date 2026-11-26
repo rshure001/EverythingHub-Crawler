@@ -141,7 +141,7 @@ jobs:
           set -euo pipefail
           # The full integrity and deduplication gates above must pass before publication.
           # Candidate status and commercial-ineligible flags remain enforced by the publisher.
-          python crawler/publish_catalog_snapshot.py --attempts 4
+          python crawler/publish_catalog_snapshot.py --attempts 8
       - name: Run catalog search smoke test after successful validation
         if: github.ref == 'refs/heads/main'
         env:
