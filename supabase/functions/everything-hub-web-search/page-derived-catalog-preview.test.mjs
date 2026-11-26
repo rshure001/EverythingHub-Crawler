@@ -6,6 +6,7 @@ import {
   searchPageDerivedCatalogPreview,
   resolveRecordRelatedCatalogPreview,
   validateManifest,
+  isValidCatalogIndexManifestEntry,
 } from "./page-derived-catalog-preview.mjs";
 
 const encoder = new TextEncoder();
@@ -20,6 +21,13 @@ const policyReview = {
   commercial_eligibility: false,
   republication: "not_cleared",
 };
+
+test("accepts current 3.72 MB catalog indexes within the bounded fetch limit", () => {
+  assert.equal(isValidCatalogIndexManifestEntry({ bytes: 3_718_832, items: 23_108 }, 23_108), true);
+  assert.equal(isValidCatalogIndexManifestEntry({ bytes: 4_500_001, items: 23_108 }, 23_108), false);
+  assert.equal(isValidCatalogIndexManifestEntry({ bytes: 3_718_832, items: 23_107 }, 23_108), false);
+  assert.equal(isValidCatalogIndexManifestEntry({ bytes: 0, items: 23_108 }, 23_108), false);
+});
 
 async function digest(bytes) {
   const result = await crypto.subtle.digest("SHA-256", bytes);
