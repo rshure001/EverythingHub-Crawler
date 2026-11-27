@@ -21,8 +21,14 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Check out approved site
+      - name: Check out only the approved site files
         uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            site/index.html
+            site/search.js
+          sparse-checkout-cone-mode: false
+          fetch-depth: 1
       - name: Configure free GitHub Pages hosting
         uses: actions/configure-pages@v5
         with:
