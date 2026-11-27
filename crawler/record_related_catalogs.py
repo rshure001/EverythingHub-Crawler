@@ -69,6 +69,21 @@ def iter_related_records(
     records_by_id: Mapping[str, Mapping[str, Any]],
 ) -> Iterator[Mapping[str, Any]]:
     """Stream a deduplicated union of shared catalog members, excluding owner."""
+    # New ingestion snapshots can carry a bounded, precomputed list of
+    # rights-eligible related record IDs directly on the owner catalog.
+    # Resolve those IDs against the canonical record map. Older snapshots
+    # retain lazy shared-catalog references and continue through the fallback.
+    direct_record_ids = related_catalog.get("record_ids")
+    if isinstance(direct_record_ids, (list, tuple)):
+        related_ids = _sorted_member_iter(direct_record_ids)
+        for related_id in related_ids:
+            if related_id == owner_record_id:
+                continue
+            record = records_by_id.get(related_id)
+            if isinstance(record, Mapping):
+                yield record
+        return
+
     catalog_ids = related_catalog.get("shared_catalog_ids", [])
     if not isinstance(catalog_ids, (list, tuple, set)):
         return
@@ -129,7 +144,11 @@ def resolve_related_records(
         "offset": offset,
         "limit": limit,
         "has_more": has_more,
-        "membership_mode": "virtual_shared_catalog_references",
+        "membership_mode": (
+            "populated_shared_record_index"
+            if isinstance(related_catalog.get("record_ids"), (list, tuple))
+            else "virtual_shared_catalog_references"
+        ),
     }
 
 
