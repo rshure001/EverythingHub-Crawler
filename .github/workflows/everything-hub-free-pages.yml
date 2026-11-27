@@ -5,6 +5,7 @@ on:
     paths:
       - "site/index.html"
       - "site/search.js"
+      - "site/catalog-navigation.js"
       - "site/release-manifest.json"
       - ".github/workflows/everything-hub-free-pages.yml"
   workflow_dispatch:
@@ -28,6 +29,7 @@ jobs:
           sparse-checkout: |
             site/index.html
             site/search.js
+            site/catalog-navigation.js
             site/release-manifest.json
             site/hosting-deployment-trigger.txt
           sparse-checkout-cone-mode: false
@@ -60,10 +62,13 @@ jobs:
           mkdir -p _site
           cp site/index.html _site/index.html
           cp site/search.js _site/search.js
+          cp site/catalog-navigation.js _site/catalog-navigation.js
           test -s _site/index.html
           test -s _site/search.js
+          test -s _site/catalog-navigation.js
           echo "Homepage bytes: $(wc -c < _site/index.html)"
           echo "Search client bytes: $(wc -c < _site/search.js)"
+          echo "Catalog navigation bytes: $(wc -c < _site/catalog-navigation.js)"
       - name: Upload static site artifact
         uses: actions/upload-pages-artifact@v3
         with:
@@ -79,7 +84,9 @@ jobs:
           test -n "$PAGE_URL"
           curl --fail --silent --show-error --retry 8 --retry-all-errors --retry-delay 5 "$PAGE_URL" -o /tmp/live-index.html
           curl --fail --silent --show-error --retry 8 --retry-all-errors --retry-delay 5 "${PAGE_URL%/}/search.js" -o /tmp/live-search.js
+          curl --fail --silent --show-error --retry 8 --retry-all-errors --retry-delay 5 "${PAGE_URL%/}/catalog-navigation.js" -o /tmp/live-catalog-navigation.js
           cmp -s site/index.html /tmp/live-index.html
           cmp -s site/search.js /tmp/live-search.js
-          echo "PASS: live homepage and search client exactly match the approved repository files."
+          cmp -s site/catalog-navigation.js /tmp/live-catalog-navigation.js
+          echo "PASS: live homepage, search client, and catalog navigation exactly match the approved repository files."
           echo "Published URL: $PAGE_URL"
