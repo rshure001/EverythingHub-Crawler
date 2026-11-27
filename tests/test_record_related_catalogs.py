@@ -43,6 +43,13 @@ class RecordRelatedCatalogTests(unittest.TestCase):
         self.assertEqual([item["record_id"] for item in result["items"]], ["r2", "r3", "r4"])
         self.assertNotIn("r1", [item["record_id"] for item in result["items"]])
 
+    def test_populated_owner_catalog_resolves_direct_record_ids(self):
+        definition = build_related_catalog_definition({"record_id": "r1", "catalog_ids": []})
+        definition["record_ids"] = ["r4", "r2", "r2", "r1", "missing"]
+        result = resolve_related_records("r1", definition, self.catalogs, self.records)
+        self.assertEqual([item["record_id"] for item in result["items"]], ["r2", "r4"])
+        self.assertEqual(result["membership_mode"], "populated_shared_record_index")
+
     def test_pagination_is_stable(self):
         definition = build_related_catalog_definition({"record_id": "r1", "catalog_ids": ["c1", "c2"]})
         first = resolve_related_records("r1", definition, self.catalogs, self.records, limit=2)
