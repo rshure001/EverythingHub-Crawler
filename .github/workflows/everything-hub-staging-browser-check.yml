@@ -81,9 +81,9 @@ jobs:
           npm init -y
           npm install --no-save playwright
           npx playwright install --with-deps chromium
-      - name: Wait for the existing homepage URL to serve the pinned public bridge HTML
+      - name: Wait for the approved deployment bridge to serve the pinned public homepage HTML
         env:
-          TARGET_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-site/?eh_cache_bust=${{ github.run_id }}
+          TARGET_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-deploy-bridge/?eh_cache_bust=${{ github.run_id }}
         run: |
           for attempt in $(seq 1 8); do
             curl --silent --show-error --location --max-time 12 -D /tmp/eh-headers "$TARGET_URL" -o /tmp/eh-homepage.html || true
@@ -100,7 +100,7 @@ jobs:
           exit 1
       - name: Test the actual public website at desktop and mobile widths
         env:
-          TARGET_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-site/?eh_cache_bust=${{ github.run_id }}
+          TARGET_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-deploy-bridge/?eh_cache_bust=${{ github.run_id }}
           LIVE_EDGE: "0"
           EH_PUBLIC_KEY: sb_publishable_XlIsACWhtVS1jVODWYGTpg_GMs8v3vJ
         run: node scripts/everything-hub-browser-check.cjs
