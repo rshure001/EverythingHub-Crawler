@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
-const TARGET = "https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-deploy-bridge";
+const TARGET = "https://vdceayvfgkwpgwixrhwi.supabase.co/storage/v1/object/public/everythinghub-public-site/index.html";
 
 Deno.serve((req: Request) => {
   if (req.method !== "GET" && req.method !== "HEAD") {
@@ -17,7 +17,7 @@ Deno.serve((req: Request) => {
       Location: destination.toString(),
       "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
       "Referrer-Policy": "strict-origin-when-cross-origin",
-      "X-EH-Legacy-Route": "redirect-to-publishing-bridge",
+      "X-EH-Legacy-Route": "direct-to-native-storage-release",
     },
   });
 });
