@@ -1,5 +1,6 @@
 name: Everything Hub — free GitHub Pages publishing
 # Release trigger: publish the approved full site and run browser acceptance.
+# 2026-11-27: explicit free-host failover retry; validate live HTML MIME and browser behavior.
 on:
   push:
     branches: [main]
