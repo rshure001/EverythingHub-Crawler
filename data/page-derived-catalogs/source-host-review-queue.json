@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
   "status": "source_review_backlog_not_a_fetch_queue",
-  "generated_at": "2026-11-27T19:56:08Z",
+  "generated_at": "2026-11-27T21:28:27Z",
   "analysis_version": 22,
-  "source_index_pages": 234569,
-  "source_index_updated_at": "2026-11-27T18:19:39Z",
-  "source_index_sha256": "afc210de3333c35def8bdc345014ee0022e5f6446edff6769f1e3f4b13c0e4d9",
+  "source_index_pages": 236119,
+  "source_index_updated_at": "2026-11-27T19:08:40Z",
+  "source_index_sha256": "5a050af6dbfd9a147843854a84853c450e209263d7a971dfbb1c4a3a7694a346",
   "metrics": {
     "catalog_definition_candidates": 2726,
     "unique_source_hosts": 118,
@@ -94393,8 +94393,8 @@
       "catalog_origin": "content_list_declared_collection",
       "evidence_strength": "medium",
       "catalog_status": "candidate_needs_source_validation",
-      "record_count": 41,
-      "source_page_count": 23,
+      "record_count": 44,
+      "source_page_count": 24,
       "source_host": "theguardian.com",
       "source_url": "https://theguardian.com/books/2024/dec/17/white-nights-fyodor-dostoevsky-social-media-instagram-booktok-tiktok",
       "review_status": "policy_review_required",
@@ -94455,10 +94455,10 @@
       "catalog_origin": "content_list_declared_collection",
       "evidence_strength": "medium",
       "catalog_status": "candidate_needs_source_validation",
-      "record_count": 6,
-      "source_page_count": 5,
+      "record_count": 8,
+      "source_page_count": 6,
       "source_host": "theguardian.com",
-      "source_url": "https://theguardian.com/technology/2025/feb/25/why-are-creatives-fighting-uk-government-ai-proposals-on-copyright",
+      "source_url": "https://theguardian.com/food/2026/nov/03/bakers-and-cake-lovers-have-you-used-ai-for-inspiration",
       "review_status": "policy_review_required",
       "source_access_mode": null,
       "terms_url": null,
@@ -184136,6 +184136,32 @@
       "policy_note": null
     },
     {
+      "source_url": "https://theguardian.com/food/2026/nov/03/bakers-and-cake-lovers-have-you-used-ai-for-inspiration",
+      "source_host": "theguardian.com",
+      "catalog_ids": [
+        "catalog:2412b771342e0bff05e3ec52"
+      ],
+      "catalog_count": 1,
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "policy_preapproved": false,
+      "metadata_only": false,
+      "robots_recheck_required": true,
+      "fetch_authorized": false,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null
+    },
+    {
       "source_url": "https://theguardian.com/food/restaurants",
       "source_host": "theguardian.com",
       "catalog_ids": [
@@ -184218,32 +184244,6 @@
       "source_host": "theguardian.com",
       "catalog_ids": [
         "catalog:40ea1b73ba595b5860b76543"
-      ],
-      "catalog_count": 1,
-      "review_status": "policy_review_required",
-      "source_access_mode": null,
-      "policy_preapproved": false,
-      "metadata_only": false,
-      "robots_recheck_required": true,
-      "fetch_authorized": false,
-      "terms_url": null,
-      "terms_status": "unreviewed",
-      "per_dataset_rights_required": true,
-      "attribution_required": null,
-      "rights_scope": null,
-      "allowed_metadata_fields": [],
-      "allowed_catalog_path_patterns": [],
-      "prohibited_content": [],
-      "max_response_bytes": 0,
-      "min_interval_seconds": 1.0,
-      "max_requests_per_run": 1,
-      "policy_note": null
-    },
-    {
-      "source_url": "https://theguardian.com/technology/2025/feb/25/why-are-creatives-fighting-uk-government-ai-proposals-on-copyright",
-      "source_host": "theguardian.com",
-      "catalog_ids": [
-        "catalog:2412b771342e0bff05e3ec52"
       ],
       "catalog_count": 1,
       "review_status": "policy_review_required",
@@ -192245,7 +192245,7 @@
           "catalog_id": "catalog:2412b771342e0bff05e3ec52",
           "title": "Guardian Software",
           "catalog_type": "software",
-          "source_url": "https://theguardian.com/technology/2025/feb/25/why-are-creatives-fighting-uk-government-ai-proposals-on-copyright",
+          "source_url": "https://theguardian.com/food/2026/nov/03/bakers-and-cake-lovers-have-you-used-ai-for-inspiration",
           "review_status": "policy_review_required"
         },
         {
