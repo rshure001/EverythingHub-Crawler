@@ -27,25 +27,25 @@ jobs:
       MANIFEST_URL: https://raw.githubusercontent.com/rshure001/EverythingHub-Crawler/main/public-search/manifest.json
     steps:
       - uses: actions/checkout@v4
-      - name: Verify the legacy address redirects to the active bridge
+      - name: Verify the legacy public address goes directly to native Storage
         run: |
           set -euo pipefail
           code="$(curl --silent --show-error --max-time 30 -D /tmp/redirect.headers -o /dev/null -w '%{http_code}' "$LEGACY_URL")"
           test "$code" = "302"
-          grep -Eiq '^location: https://vdceayvfgkwpgwixrhwi\.supabase\.co/functions/v1/everything-hub-deploy-bridge' /tmp/redirect.headers
-      - name: Verify the bridge serves the complete homepage
+          grep -Eiq '^location: https://vdceayvfgkwpgwixrhwi\\.supabase\\.co/storage/v1/object/public/everythinghub-public-site/index\\.html' /tmp/redirect.headers
+      - name: Verify the public address serves the complete published homepage
         run: |
           set -euo pipefail
-          code="$(curl --silent --show-error --location --max-time 45 -D /tmp/home.headers -o /tmp/home.html -w '%{http_code}' "$BRIDGE_URL")"
+          code="$(curl --silent --show-error --location --max-time 45 -D /tmp/home.headers -o /tmp/home.html -w '%{http_code}' "$LEGACY_URL")"
           bytes="$(wc -c < /tmp/home.html)"
           content_type="$(grep -i '^content-type:' /tmp/home.headers | tail -1 || true)"
-          echo "Bridge HTTP=$code bytes=$bytes $content_type"
+          echo "Public route HTTP=$code bytes=$bytes $content_type"
           head -c 240 /tmp/home.html | tr '\\n' ' '
           echo
           test "$code" = "200"
           grep -Eiq '^content-type: *text/html' /tmp/home.headers
           grep -Eiq '^<!doctype html|^<!--' /tmp/home.html
-          for needle in 'Everything Hub' 'id="search"' 'id="q"' 'src="search.js"' "['web','All']" "['images','Images']" "['videos','Videos']" "['news','News']" "['shopping','Shopping']" "['places','Maps']" "['business','Business']" "['research','Research']"; do
+          for needle in 'Everything Hub' 'id="search"' 'id="q"' 'src="search.js"' 'data-mode="web"' 'data-mode="news"' 'data-mode="images"' 'data-mode="videos"' 'data-mode="shopping"' 'data-mode="places"' 'data-mode="business"' 'data-mode="research"'; do
             grep -Fqi "$needle" /tmp/home.html || { echo "Missing homepage feature: $needle"; exit 1; }
           done
           test "$bytes" -gt 10000
