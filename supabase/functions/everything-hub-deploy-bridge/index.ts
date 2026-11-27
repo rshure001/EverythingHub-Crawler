@@ -1,9 +1,9 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
-// Serve the last verified public release produced by the native Supabase Storage publisher.
-// Keep the bridge stable while releases are replaced atomically in the public bucket.
+// Keep the public homepage as a lightweight redirect. Do not proxy HTML through
+// the Edge gateway: it has previously rewritten proxied HTML to text/plain.
 const PUBLISHED_INDEX =
-  "https://vdceayvfgkwpgwixrhwi.supabase.co/storage/v1/object/public/everythinghub-public-site/index.html";
+  "https://cdn.jsdelivr.net/gh/rshure001/EverythingHub-Crawler@main/site/index.html";
 
 Deno.serve((req: Request) => {
   if (req.method !== "GET" && req.method !== "HEAD") {
@@ -25,8 +25,8 @@ Deno.serve((req: Request) => {
       location: destination.toString(),
       "cache-control": "no-store, no-cache, must-revalidate, max-age=0",
       "referrer-policy": "strict-origin-when-cross-origin",
-      "x-eh-bridge": "supabase-storage-publisher-v2",
-      "x-eh-publish-target": "everythinghub-public-site",
+      "x-eh-bridge": "jsdelivr-static-v1",
+      "x-eh-publish-target": "github-main-site-index",
     },
   });
 });
