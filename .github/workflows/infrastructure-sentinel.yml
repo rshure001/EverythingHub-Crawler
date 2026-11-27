@@ -1,0 +1,139 @@
+name: Everything Hub infrastructure sentinel
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/15 * * * *"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/infrastructure-sentinel.yml"
+      - "docs/INFRASTRUCTURE-OPERATIONS-RUNBOOK.md"
+      - "public-search/manifest.json"
+      - "site/release-manifest.json"
+      - "site/index.html"
+      - "site/search.js"
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: everything-hub-infrastructure-sentinel
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out monitoring definitions and release files
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Collect latest workflow outcomes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/eh-sentinel"
+          for workflow in crawl.yml retroactive-catalog-index.yml catalog-seed-expansion.yml catalog-first-discovery.yml everything-hub-free-pages.yml everythinghub-self-host.yml validate-crawler.yml; do
+            gh api "repos/$GH_REPO/actions/workflows/$workflow/runs?per_page=1" > "$RUNNER_TEMP/eh-sentinel/$workflow.json"
+          done
+          python - <<'PY'
+          import json, os
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          root = Path(os.environ["RUNNER_TEMP"]) / "eh-sentinel"
+          summary = Path(os.environ["GITHUB_STEP_SUMMARY"])
+          now = datetime.now(timezone.utc)
+          lines = [
+              "## Everything Hub infrastructure sentinel",
+              "",
+              "Read-only audit: this monitor does not deploy, modify the database, or change crawler state.",
+              "",
+              "| Service | Latest run | Result | Age (UTC) |",
+              "|---|---:|---|---:|",
+          ]
+          labels = {
+              "crawl.yml": "Crawler",
+              "retroactive-catalog-index.yml": "Catalog inventory",
+              "catalog-seed-expansion.yml": "Catalog entry expansion",
+              "catalog-first-discovery.yml": "Catalog-first discovery",
+              "everything-hub-free-pages.yml": "Free static publisher",
+              "everythinghub-self-host.yml": "Independent hosting",
+              "validate-crawler.yml": "Crawler validation",
+          }
+          for filename, label in labels.items():
+              payload = json.loads((root / (filename + ".json")).read_text())
+              runs = payload.get("workflow_runs", [])
+              if not runs:
+                  lines.append(f"| {label} | — | UNOBSERVED | — |")
+                  continue
+              run = runs[0]
+              created = datetime.fromisoformat(run["created_at"].replace("Z", "+00:00"))
+              age_minutes = max(0, int((now - created).total_seconds() // 60))
+              status = run.get("conclusion") or run.get("status") or "unknown"
+              lines.append(f"| {label} | [#{run.get('run_number', '?')}]({run.get('html_url', '')}) | {status.upper()} | {age_minutes} min |")
+          summary.write_text("\n".join(lines) + "\n", encoding="utf-8")
+          print("\n".join(lines))
+          PY
+
+      - name: Validate public index and static release contract
+        run: |
+          python - <<'PY'
+          import hashlib, json
+          from pathlib import Path
+          from datetime import datetime, timezone
+
+          summary = Path(__import__("os").environ["GITHUB_STEP_SUMMARY"])
+          lines = ["", "### Data and release integrity", ""]
+          index_path = Path("public-search/manifest.json")
+          if index_path.is_file():
+              manifest = json.loads(index_path.read_text(encoding="utf-8"))
+              updated = datetime.fromtimestamp(manifest["updated_at"], timezone.utc)
+              age_minutes = int((datetime.now(timezone.utc) - updated).total_seconds() // 60)
+              lines.append(f"- Public index: **{manifest.get('total_pages', 'unknown'):,} pages**, {manifest.get('shard_count', 'unknown')} shards; last update {updated.isoformat()} ({age_minutes} minutes old).")
+          else:
+              lines.append("- Public index: **MISSING**.")
+
+          release_path = Path("site/release-manifest.json")
+          if not release_path.is_file():
+              lines.append("- Static release manifest: **MISSING**.")
+          else:
+              release = json.loads(release_path.read_text(encoding="utf-8"))
+              errors = []
+              listed = set()
+              for item in release.get("files", []):
+                  rel = item.get("path")
+                  if not isinstance(rel, str) or rel in listed or rel.startswith("/") or ".." in Path(rel).parts:
+                      errors.append(f"unsafe or duplicate path: {rel!r}")
+                      continue
+                  listed.add(rel)
+                  path = Path("site") / rel
+                  if not path.is_file():
+                      errors.append(f"missing file: {rel}")
+                      continue
+                  raw = path.read_bytes()
+                  if len(raw) != item.get("size"):
+                      errors.append(f"size mismatch: {rel}")
+                  if hashlib.sha256(raw).hexdigest() != item.get("sha256"):
+                      errors.append(f"SHA-256 mismatch: {rel}")
+              actual = {str(p.relative_to("site")) for p in Path("site").rglob("*") if p.is_file() and str(p.relative_to("site")) != "release-manifest.json"}
+              if actual != listed:
+                  errors.append(f"file set mismatch: unlisted={sorted(actual-listed)}, missing={sorted(listed-actual)}")
+              if errors:
+                  lines.append("- Static release contract: **MISMATCH** — " + "; ".join(errors))
+              else:
+                  lines.append("- Static release contract: **PASS** — all listed files, sizes, hashes, and file membership match.")
+          summary.write_text(summary.read_text(encoding="utf-8") + "\n".join(lines) + "\n", encoding="utf-8")
+          print("\n".join(lines))
+          PY
+
+      - name: Record monitoring completion
+        run: |
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Sentinel execution: completed. A successful sentinel means the audit ran; it does not mean every monitored service is healthy." >> "$GITHUB_STEP_SUMMARY"
