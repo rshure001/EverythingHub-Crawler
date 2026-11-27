@@ -1,8 +1,8 @@
 {
   "version": 1,
-  "updated_at": "2026-11-27T21:14:54.570Z",
-  "reason": "Explicit recovery trigger: 27,300 frontier URLs remain queued; the last crawler completed at 2026-11-27T19:12:44Z and the public index has not advanced since 2026-11-27T19:08:40Z; no crawler run is queued or running. Start one bounded recovery crawl; leave the normal five-minute schedule unchanged.",
-  "manifest_before_pages": 236119,
-  "manifest_before_updated_at": "2026-11-27T19:08:40Z",
-  "frontier_pending_count": 27300
+  "updated_at": "2026-11-27T21:27:55.809Z",
+  "reason": "Explicit workflow_dispatch fallback because 27337 frontier URLs remain queued; the last crawler attempt started 778 seconds ago (five-minute minimum interval satisfied); manifest age is 293s; no queued or running crawler; one bounded recovery crawl; normal schedule unchanged.",
+  "manifest_before_pages": 236658,
+  "manifest_before_updated_at": "2026-11-27T21:23:02Z",
+  "frontier_pending_count": 27337
 }
