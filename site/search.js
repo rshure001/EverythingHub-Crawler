@@ -607,9 +607,10 @@
     let pages = null;
     let transport = "shards";
     let selectedShardCount = manifest.shard_count;
+    let selected = null;
 
     if (opts.query && manifest.query_index && !manifest.catalog_gzip) {
-      const selected = await loadQueryDirectedCatalog(manifest, manifestUrl, fetcher, opts);
+      selected = await loadQueryDirectedCatalog(manifest, manifestUrl, fetcher, opts);
       pages = selected.pages;
       selectedShardCount = selected.selectedShardCount;
       transport = "query-shards";
