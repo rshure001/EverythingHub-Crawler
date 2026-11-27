@@ -10,11 +10,14 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&l
 function externalLinks(q){
  const e=encodeURIComponent(q);
  const urls={
+  Web:"https://www.bing.com/search?q="+e,
+  News:"https://www.bing.com/news/search?q="+e,
   Images:"https://www.bing.com/images/search?q="+e,
   Videos:"https://www.bing.com/videos/search?q="+e,
   Shopping:"https://www.bing.com/shop?q="+e,
   Places:"https://www.bing.com/maps?q="+e,
-  News:"https://www.bing.com/news/search?q="+e
+  Business:"https://www.bing.com/search?q="+encodeURIComponent(q+" business"),
+  Research:"https://www.bing.com/search?q="+encodeURIComponent(q+" research")
  };
  tools.innerHTML="";
  if(urls[mode]){
