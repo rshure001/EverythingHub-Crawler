@@ -1,4 +1,5 @@
 name: Everything Hub — free GitHub Pages publishing
+# Release trigger: publish the approved full site and run browser acceptance.
 on:
   push:
     branches: [main]
