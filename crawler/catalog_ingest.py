@@ -512,6 +512,23 @@ def build_public_catalog_indexes(result):
             if catalog_by_id[catalog_id].get("public_search_allowed") is True:
                 memberships_by_catalog[catalog_id].add(record_id)
 
+    # Build bounded, populated entry-owned catalogs from records that share
+    # an approved catalog membership. Every candidate is rights-cleared above;
+    # the owner itself is excluded and ordering is deterministic.
+    MAX_ENTRY_CATALOG_RECORDS = 50
+    related_record_ids_by_owner = {}
+    for owner_id in sorted(eligible_record_ids):
+        owner = record_by_id[owner_id]
+        owner_memberships = sorted({
+            value for value in (owner.get("catalog_ids") or [owner.get("catalog_id")])
+            if isinstance(value, str) and value and value in memberships_by_catalog
+        })
+        candidates = set()
+        for shared_catalog_id in owner_memberships:
+            candidates.update(memberships_by_catalog[shared_catalog_id])
+        candidates.discard(owner_id)
+        related_record_ids_by_owner[owner_id] = sorted(candidates)[:MAX_ENTRY_CATALOG_RECORDS]
+
     shard_rows = defaultdict(list)
     catalog_index_manifest = []
     indexed_record_ids = set()
@@ -574,7 +591,9 @@ def build_public_catalog_indexes(result):
                     "record_catalog_id": record_catalog_id,
                     "owner_record_id": record_id,
                     "catalog_kind": "record_related_items",
-                    "membership_mode": "virtual_shared_catalog_references",
+                    "membership_mode": "populated_shared_record_index",
+                    "record_ids": related_record_ids_by_owner.get(record_id, []),
+                    "record_count": len(related_record_ids_by_owner.get(record_id, [])),
                     "shared_catalog_ids": memberships,
                     "source_urls": source_urls[:5],
                     "rights_status": str(attributes.get("rights_status") or "review_required")[:100],
@@ -698,7 +717,8 @@ def build_public_catalog_indexes(result):
         "eligible_records_without_public_index": len(eligible_without_index),
         "catalog_index_shards": len(shard_payloads),
         "record_owned_catalogs": len(root_record_search_document_ids),
-        "record_owned_catalog_membership_mode": "virtual_shared_catalog_references",
+        "record_owned_catalog_membership_mode": "populated_shared_record_index",
+        "record_owned_catalog_related_record_memberships": sum(len(ids) for ids in related_record_ids_by_owner.values()),
     })
 
     manifest = {
@@ -722,7 +742,8 @@ def build_public_catalog_indexes(result):
         "root_record_search_document_occurrences": root_record_search_document_occurrences,
         "unique_root_record_search_documents": len(root_record_search_document_ids),
         "record_owned_catalog_count": len(root_record_search_document_ids),
-        "record_owned_catalog_membership_mode": "virtual_shared_catalog_references",
+        "record_owned_catalog_membership_mode": "populated_shared_record_index",
+        "record_owned_catalog_related_record_memberships": sum(len(ids) for ids in related_record_ids_by_owner.values()),
         "catalog_indexes": catalog_index_manifest,
         "shards": shard_manifest,
     }
