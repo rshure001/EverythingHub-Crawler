@@ -1,19 +1,19 @@
 {
   "schema_version": 1,
   "status": "source_review_backlog_not_a_fetch_queue",
-  "generated_at": "2026-11-27T11:11:36Z",
+  "generated_at": "2026-11-27T15:40:37Z",
   "analysis_version": 22,
-  "source_index_pages": 231555,
-  "source_index_updated_at": "2026-11-27T04:40:07Z",
-  "source_index_sha256": "48078fa97d05b2bd4c8ca71a384cabafed48b8230a3b49e0beabcaf9dfdbc505",
+  "source_index_pages": 233266,
+  "source_index_updated_at": "2026-11-27T14:13:51Z",
+  "source_index_sha256": "6696f690f1fcd5b6b72e657481f936f5e7db367409146a0b9e4c320fc9049920",
   "metrics": {
-    "catalog_definition_candidates": 2714,
+    "catalog_definition_candidates": 2724,
     "unique_source_hosts": 118,
-    "unique_source_urls": 2713,
+    "unique_source_urls": 2723,
     "policy_preapproved_urls_needing_runtime_robots_check": 729,
     "policy_preapproved_api_urls_needing_runtime_robots_check": 0,
     "policy_preapproved_catalog_page_urls_needing_runtime_robots_check": 729,
-    "policy_review_required_urls": 1783,
+    "policy_review_required_urls": 1793,
     "path_not_allowlisted_urls": 201,
     "mixed_policy_status_urls": 0,
     "invalid_catalog_candidates": 0,
@@ -1581,8 +1581,8 @@
       "catalog_origin": "source_declared_collection",
       "evidence_strength": "medium",
       "catalog_status": "candidate_needs_source_validation",
-      "record_count": 4,
-      "source_page_count": 8,
+      "record_count": 16,
+      "source_page_count": 20,
       "source_host": "bl.uk",
       "source_url": "https://bl.uk/stories/explore/nuclear-test-veterans/people",
       "review_status": "policy_review_required",
@@ -1767,8 +1767,8 @@
       "catalog_origin": "source_declared_collection",
       "evidence_strength": "medium",
       "catalog_status": "candidate_needs_source_validation",
-      "record_count": 257,
-      "source_page_count": 276,
+      "record_count": 261,
+      "source_page_count": 280,
       "source_host": "bl.uk",
       "source_url": "https://bl.uk/stories/blogs/posts",
       "review_status": "policy_review_required",
@@ -2481,7 +2481,7 @@
       "evidence_strength": "high",
       "catalog_status": "candidate_needs_source_validation",
       "record_count": 2,
-      "source_page_count": 68,
+      "source_page_count": 71,
       "source_host": "bpl.org",
       "source_url": "https://bpl.org/blogs/post/10-unique-crafting-events-at-the-boston-public-library-this-november",
       "review_status": "policy_review_required",
@@ -6448,8 +6448,8 @@
       "catalog_origin": "source_declared_collection",
       "evidence_strength": "high",
       "catalog_status": "candidate_needs_source_validation",
-      "record_count": 281,
-      "source_page_count": 293,
+      "record_count": 283,
+      "source_page_count": 295,
       "source_host": "crossref.org",
       "source_url": "https://crossref.org/blog",
       "review_status": "policy_review_required",
@@ -78057,7 +78057,7 @@
       "evidence_strength": "medium",
       "catalog_status": "candidate_needs_source_validation",
       "record_count": 593,
-      "source_page_count": 598,
+      "source_page_count": 599,
       "source_host": "internetsociety.org",
       "source_url": "https://internetsociety.org/blog",
       "review_status": "policy_review_required",
@@ -86481,6 +86481,37 @@
       "fetch_authorized": false
     },
     {
+      "catalog_id": "catalog:ae0b2a3e875f7e7d962b9154",
+      "title": "National Archives Open Articles",
+      "catalog_type": "knowledge_base",
+      "record_type": "article",
+      "catalog_origin": "source_declared_collection",
+      "evidence_strength": "high",
+      "catalog_status": "candidate_needs_source_validation",
+      "record_count": 4,
+      "source_page_count": 8,
+      "source_host": "nationalarchives.gov.uk",
+      "source_url": "https://nationalarchives.gov.uk/professional-guidance-and-services/archive-sector/blog",
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "reviewed_at": null,
+      "metadata_only": false,
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null,
+      "robots_recheck_required": true,
+      "fetch_authorized": false
+    },
+    {
       "catalog_id": "catalog:2abe34910b6e4f183beaebbe",
       "title": "National Archives Open Events",
       "catalog_type": "events",
@@ -86520,7 +86551,7 @@
       "evidence_strength": "medium",
       "catalog_status": "candidate_needs_source_validation",
       "record_count": 101,
-      "source_page_count": 128,
+      "source_page_count": 136,
       "source_host": "nationalarchives.gov.uk",
       "source_url": "https://nationalarchives.gov.uk/people",
       "review_status": "policy_review_required",
@@ -91348,6 +91379,37 @@
       "fetch_authorized": false
     },
     {
+      "catalog_id": "catalog:da2da4ec121b66eb53dc19d3",
+      "title": "Opensource Events",
+      "catalog_type": "events",
+      "record_type": "event",
+      "catalog_origin": "source_declared_collection",
+      "evidence_strength": "medium",
+      "catalog_status": "definition_only",
+      "record_count": 0,
+      "source_page_count": 1,
+      "source_host": "opensource.org",
+      "source_url": "https://opensource.org/blog/category/events",
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "reviewed_at": null,
+      "metadata_only": false,
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null,
+      "robots_recheck_required": true,
+      "fetch_authorized": false
+    },
+    {
       "catalog_id": "catalog:53540bf2217ad2df232f8785",
       "title": "Opensource People",
       "catalog_type": "people_directory",
@@ -92131,7 +92193,7 @@
       "evidence_strength": "high",
       "catalog_status": "candidate_needs_source_validation",
       "record_count": 542,
-      "source_page_count": 579,
+      "source_page_count": 580,
       "source_host": "pytorch.org",
       "source_url": "https://pytorch.org/blog",
       "review_status": "policy_review_required",
@@ -93425,6 +93487,37 @@
       "fetch_authorized": false
     },
     {
+      "catalog_id": "catalog:7d694937691663972ec56d5d",
+      "title": "Smithsonianmag Articles",
+      "catalog_type": "knowledge_base",
+      "record_type": "article",
+      "catalog_origin": "source_declared_collection",
+      "evidence_strength": "medium",
+      "catalog_status": "definition_only",
+      "record_count": 0,
+      "source_page_count": 1,
+      "source_host": "smithsonianmag.com",
+      "source_url": "https://smithsonianmag.com/blogs/air-space-museum/category/archives",
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "reviewed_at": null,
+      "metadata_only": false,
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null,
+      "robots_recheck_required": true,
+      "fetch_authorized": false
+    },
+    {
       "catalog_id": "catalog:ddf9a4979d67ccec67a036f8",
       "title": "Smithsonianmag Articles",
       "catalog_type": "knowledge_base",
@@ -93549,6 +93642,37 @@
       "fetch_authorized": false
     },
     {
+      "catalog_id": "catalog:287f383f2c9672a471057c19",
+      "title": "Smithsonianmag Places",
+      "catalog_type": "geographic",
+      "record_type": "place",
+      "catalog_origin": "content_list_declared_collection",
+      "evidence_strength": "medium",
+      "catalog_status": "candidate_needs_source_validation",
+      "record_count": 12,
+      "source_page_count": 4,
+      "source_host": "smithsonianmag.com",
+      "source_url": "https://smithsonianmag.com/smart-news/heres-secret-behind-bioluminescent-mushrooms-magic-glow-180963065?itm_medium=parsely-api&itm_source=related-content",
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "reviewed_at": null,
+      "metadata_only": false,
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null,
+      "robots_recheck_required": true,
+      "fetch_authorized": false
+    },
+    {
       "catalog_id": "catalog:b948068ac653172e42d46016",
       "title": "Smithsonianmag Places",
       "catalog_type": "geographic",
@@ -93622,6 +93746,37 @@
       "source_page_count": 1,
       "source_host": "smithsonianmag.com",
       "source_url": "https://smithsonianmag.com/tag/museums",
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "reviewed_at": null,
+      "metadata_only": false,
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null,
+      "robots_recheck_required": true,
+      "fetch_authorized": false
+    },
+    {
+      "catalog_id": "catalog:3c9e851b6be34a465b051234",
+      "title": "Smithsonianmag Products",
+      "catalog_type": "commerce",
+      "record_type": "product",
+      "catalog_origin": "source_declared_collection",
+      "evidence_strength": "medium",
+      "catalog_status": "definition_only",
+      "record_count": 0,
+      "source_page_count": 1,
+      "source_host": "smithsonianmag.com",
+      "source_url": "https://smithsonianmag.com/blogs/national-museum-american-indian/tag/collections",
       "review_status": "policy_review_required",
       "source_access_mode": null,
       "terms_url": null,
@@ -94083,8 +94238,8 @@
       "catalog_origin": "source_declared_collection",
       "evidence_strength": "medium",
       "catalog_status": "candidate_needs_source_validation",
-      "record_count": 5,
-      "source_page_count": 6,
+      "record_count": 8,
+      "source_page_count": 9,
       "source_host": "theguardian.com",
       "source_url": "https://theguardian.com/sport/blog",
       "review_status": "policy_review_required",
@@ -94176,8 +94331,8 @@
       "catalog_origin": "content_list_declared_collection",
       "evidence_strength": "medium",
       "catalog_status": "candidate_needs_source_validation",
-      "record_count": 40,
-      "source_page_count": 22,
+      "record_count": 41,
+      "source_page_count": 23,
       "source_host": "theguardian.com",
       "source_url": "https://theguardian.com/books/2024/dec/17/white-nights-fyodor-dostoevsky-social-media-instagram-booktok-tiktok",
       "review_status": "policy_review_required",
@@ -98602,6 +98757,37 @@
       "fetch_authorized": false
     },
     {
+      "catalog_id": "catalog:dfa287728e9fe81f13ddb267",
+      "title": "Wikidata Articles",
+      "catalog_type": "knowledge_base",
+      "record_type": "article",
+      "catalog_origin": "source_declared_collection",
+      "evidence_strength": "medium",
+      "catalog_status": "definition_only",
+      "record_count": 0,
+      "source_page_count": 1,
+      "source_host": "wikidata.org",
+      "source_url": "https://wikidata.org/wiki/Wikidata:InteGraality/News",
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "reviewed_at": null,
+      "metadata_only": false,
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null,
+      "robots_recheck_required": true,
+      "fetch_authorized": false
+    },
+    {
       "catalog_id": "catalog:e95e3abb14b27fc752008389",
       "title": "Wikidata Articles",
       "catalog_type": "knowledge_base",
@@ -98757,6 +98943,37 @@
       "fetch_authorized": false
     },
     {
+      "catalog_id": "catalog:277fc3b42cf8112c2c26ed60",
+      "title": "Wikidata Events",
+      "catalog_type": "events",
+      "record_type": "event",
+      "catalog_origin": "source_declared_collection",
+      "evidence_strength": "medium",
+      "catalog_status": "definition_only",
+      "record_count": 0,
+      "source_page_count": 1,
+      "source_host": "wikidata.org",
+      "source_url": "https://wikidata.org/wiki/Wikidata:Fourteenth_Birthday/Calendar",
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "reviewed_at": null,
+      "metadata_only": false,
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null,
+      "robots_recheck_required": true,
+      "fetch_authorized": false
+    },
+    {
       "catalog_id": "catalog:2ffd040f192cfe356046c047",
       "title": "Wikidata Events",
       "catalog_type": "events",
@@ -98764,10 +98981,10 @@
       "catalog_origin": "content_list_declared_collection",
       "evidence_strength": "medium",
       "catalog_status": "candidate_needs_source_validation",
-      "record_count": 2,
-      "source_page_count": 1,
+      "record_count": 3,
+      "source_page_count": 2,
       "source_host": "wikidata.org",
-      "source_url": "https://wikidata.org/wiki/Wikidata:Status_updates/Next",
+      "source_url": "https://wikidata.org/wiki/Event:Wikidata_Fourteenth_Birthday/Presents_%26_messages_call",
       "review_status": "policy_review_required",
       "source_access_mode": null,
       "terms_url": null,
@@ -98819,6 +99036,37 @@
       "fetch_authorized": false
     },
     {
+      "catalog_id": "catalog:f10b50ed85c2d779abf1fbed",
+      "title": "Wikidata Events",
+      "catalog_type": "events",
+      "record_type": "event",
+      "catalog_origin": "source_declared_collection",
+      "evidence_strength": "medium",
+      "catalog_status": "definition_only",
+      "record_count": 0,
+      "source_page_count": 1,
+      "source_host": "wikidata.org",
+      "source_url": "https://wikidata.org/wiki/Wikidata:Fourteenth_Birthday/Event",
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "reviewed_at": null,
+      "metadata_only": false,
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null,
+      "robots_recheck_required": true,
+      "fetch_authorized": false
+    },
+    {
       "catalog_id": "catalog:7857d60fb860a4fb7551413e",
       "title": "Wikidata Media",
       "catalog_type": "media",
@@ -98850,6 +99098,37 @@
       "fetch_authorized": false
     },
     {
+      "catalog_id": "catalog:4c0e2de087c25220fd4505cc",
+      "title": "Wikidata Models",
+      "catalog_type": "commerce",
+      "record_type": "model",
+      "catalog_origin": "source_declared_collection",
+      "evidence_strength": "medium",
+      "catalog_status": "definition_only",
+      "record_count": 0,
+      "source_page_count": 1,
+      "source_host": "wikidata.org",
+      "source_url": "https://wikidata.org/wiki/Wikidata:WikiProject_Clinical_Trials/Model",
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "reviewed_at": null,
+      "metadata_only": false,
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null,
+      "robots_recheck_required": true,
+      "fetch_authorized": false
+    },
+    {
       "catalog_id": "catalog:828e097e962f52a58984757d",
       "title": "Wikidata Models",
       "catalog_type": "commerce",
@@ -98861,6 +99140,37 @@
       "source_page_count": 1,
       "source_host": "wikidata.org",
       "source_url": "https://wikidata.org/wiki/Wikidata:WikiProject_Broadcasting/Model",
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "reviewed_at": null,
+      "metadata_only": false,
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null,
+      "robots_recheck_required": true,
+      "fetch_authorized": false
+    },
+    {
+      "catalog_id": "catalog:c1e91d97f9eaa25a63331af0",
+      "title": "Wikidata Models",
+      "catalog_type": "commerce",
+      "record_type": "model",
+      "catalog_origin": "source_declared_collection",
+      "evidence_strength": "medium",
+      "catalog_status": "definition_only",
+      "record_count": 0,
+      "source_page_count": 1,
+      "source_host": "wikidata.org",
+      "source_url": "https://wikidata.org/wiki/Wikidata:WikiProject_Climate_Change/Models",
       "review_status": "policy_review_required",
       "source_access_mode": null,
       "terms_url": null,
@@ -98950,8 +99260,8 @@
       "catalog_origin": "content_list_declared_collection",
       "evidence_strength": "medium",
       "catalog_status": "candidate_needs_source_validation",
-      "record_count": 39,
-      "source_page_count": 12,
+      "record_count": 47,
+      "source_page_count": 16,
       "source_host": "wikidata.org",
       "source_url": "https://wikidata.org/wiki/Help:Conflation",
       "review_status": "policy_review_required",
@@ -177108,6 +177418,32 @@
       "policy_note": null
     },
     {
+      "source_url": "https://nationalarchives.gov.uk/professional-guidance-and-services/archive-sector/blog",
+      "source_host": "nationalarchives.gov.uk",
+      "catalog_ids": [
+        "catalog:ae0b2a3e875f7e7d962b9154"
+      ],
+      "catalog_count": 1,
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "policy_preapproved": false,
+      "metadata_only": false,
+      "robots_recheck_required": true,
+      "fetch_authorized": false,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null
+    },
+    {
       "source_url": "https://nationalarchives.gov.uk/whats-on/events",
       "source_host": "nationalarchives.gov.uk",
       "catalog_ids": [
@@ -181190,6 +181526,32 @@
       "policy_note": null
     },
     {
+      "source_url": "https://opensource.org/blog/category/events",
+      "source_host": "opensource.org",
+      "catalog_ids": [
+        "catalog:da2da4ec121b66eb53dc19d3"
+      ],
+      "catalog_count": 1,
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "policy_preapproved": false,
+      "metadata_only": false,
+      "robots_recheck_required": true,
+      "fetch_authorized": false,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null
+    },
+    {
       "source_url": "https://openstreetmap.org/user/simon04/diary/409596",
       "source_host": "openstreetmap.org",
       "catalog_ids": [
@@ -182906,10 +183268,62 @@
       "policy_note": null
     },
     {
+      "source_url": "https://smithsonianmag.com/blogs/air-space-museum/category/archives",
+      "source_host": "smithsonianmag.com",
+      "catalog_ids": [
+        "catalog:7d694937691663972ec56d5d"
+      ],
+      "catalog_count": 1,
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "policy_preapproved": false,
+      "metadata_only": false,
+      "robots_recheck_required": true,
+      "fetch_authorized": false,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null
+    },
+    {
       "source_url": "https://smithsonianmag.com/blogs/national-museum-american-indian/category/collections",
       "source_host": "smithsonianmag.com",
       "catalog_ids": [
         "catalog:a0387f3ad4e6e22a8186b8ee"
+      ],
+      "catalog_count": 1,
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "policy_preapproved": false,
+      "metadata_only": false,
+      "robots_recheck_required": true,
+      "fetch_authorized": false,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null
+    },
+    {
+      "source_url": "https://smithsonianmag.com/blogs/national-museum-american-indian/tag/collections",
+      "source_host": "smithsonianmag.com",
+      "catalog_ids": [
+        "catalog:3c9e851b6be34a465b051234"
       ],
       "catalog_count": 1,
       "review_status": "policy_review_required",
@@ -183040,6 +183454,32 @@
       "source_host": "smithsonianmag.com",
       "catalog_ids": [
         "catalog:5d1ae11cb45c888e32afec09"
+      ],
+      "catalog_count": 1,
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "policy_preapproved": false,
+      "metadata_only": false,
+      "robots_recheck_required": true,
+      "fetch_authorized": false,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null
+    },
+    {
+      "source_url": "https://smithsonianmag.com/smart-news/heres-secret-behind-bioluminescent-mushrooms-magic-glow-180963065?itm_medium=parsely-api&itm_source=related-content",
+      "source_host": "smithsonianmag.com",
+      "catalog_ids": [
+        "catalog:287f383f2c9672a471057c19"
       ],
       "catalog_count": 1,
       "review_status": "policy_review_required",
@@ -186677,6 +187117,32 @@
       "policy_note": null
     },
     {
+      "source_url": "https://wikidata.org/wiki/Event:Wikidata_Fourteenth_Birthday/Presents_%26_messages_call",
+      "source_host": "wikidata.org",
+      "catalog_ids": [
+        "catalog:2ffd040f192cfe356046c047"
+      ],
+      "catalog_count": 1,
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "policy_preapproved": false,
+      "metadata_only": false,
+      "robots_recheck_required": true,
+      "fetch_authorized": false,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null
+    },
+    {
       "source_url": "https://wikidata.org/wiki/Help:Conflation",
       "source_host": "wikidata.org",
       "catalog_ids": [
@@ -186941,6 +187407,84 @@
       "source_host": "wikidata.org",
       "catalog_ids": [
         "catalog:6b5055860b3dfaaee8daf229"
+      ],
+      "catalog_count": 1,
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "policy_preapproved": false,
+      "metadata_only": false,
+      "robots_recheck_required": true,
+      "fetch_authorized": false,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null
+    },
+    {
+      "source_url": "https://wikidata.org/wiki/Wikidata:Fourteenth_Birthday/Calendar",
+      "source_host": "wikidata.org",
+      "catalog_ids": [
+        "catalog:277fc3b42cf8112c2c26ed60"
+      ],
+      "catalog_count": 1,
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "policy_preapproved": false,
+      "metadata_only": false,
+      "robots_recheck_required": true,
+      "fetch_authorized": false,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null
+    },
+    {
+      "source_url": "https://wikidata.org/wiki/Wikidata:Fourteenth_Birthday/Event",
+      "source_host": "wikidata.org",
+      "catalog_ids": [
+        "catalog:f10b50ed85c2d779abf1fbed"
+      ],
+      "catalog_count": 1,
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "policy_preapproved": false,
+      "metadata_only": false,
+      "robots_recheck_required": true,
+      "fetch_authorized": false,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null
+    },
+    {
+      "source_url": "https://wikidata.org/wiki/Wikidata:InteGraality/News",
+      "source_host": "wikidata.org",
+      "catalog_ids": [
+        "catalog:dfa287728e9fe81f13ddb267"
       ],
       "catalog_count": 1,
       "review_status": "policy_review_required",
@@ -187275,32 +187819,6 @@
       "policy_note": null
     },
     {
-      "source_url": "https://wikidata.org/wiki/Wikidata:Status_updates/Next",
-      "source_host": "wikidata.org",
-      "catalog_ids": [
-        "catalog:2ffd040f192cfe356046c047"
-      ],
-      "catalog_count": 1,
-      "review_status": "policy_review_required",
-      "source_access_mode": null,
-      "policy_preapproved": false,
-      "metadata_only": false,
-      "robots_recheck_required": true,
-      "fetch_authorized": false,
-      "terms_url": null,
-      "terms_status": "unreviewed",
-      "per_dataset_rights_required": true,
-      "attribution_required": null,
-      "rights_scope": null,
-      "allowed_metadata_fields": [],
-      "allowed_catalog_path_patterns": [],
-      "prohibited_content": [],
-      "max_response_bytes": 0,
-      "min_interval_seconds": 1.0,
-      "max_requests_per_run": 1,
-      "policy_note": null
-    },
-    {
       "source_url": "https://wikidata.org/wiki/Wikidata:Tours/Images",
       "source_host": "wikidata.org",
       "catalog_ids": [
@@ -187383,6 +187901,58 @@
       "source_host": "wikidata.org",
       "catalog_ids": [
         "catalog:828e097e962f52a58984757d"
+      ],
+      "catalog_count": 1,
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "policy_preapproved": false,
+      "metadata_only": false,
+      "robots_recheck_required": true,
+      "fetch_authorized": false,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null
+    },
+    {
+      "source_url": "https://wikidata.org/wiki/Wikidata:WikiProject_Climate_Change/Models",
+      "source_host": "wikidata.org",
+      "catalog_ids": [
+        "catalog:c1e91d97f9eaa25a63331af0"
+      ],
+      "catalog_count": 1,
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "policy_preapproved": false,
+      "metadata_only": false,
+      "robots_recheck_required": true,
+      "fetch_authorized": false,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null
+    },
+    {
+      "source_url": "https://wikidata.org/wiki/Wikidata:WikiProject_Clinical_Trials/Model",
+      "source_host": "wikidata.org",
+      "catalog_ids": [
+        "catalog:4c0e2de087c25220fd4505cc"
       ],
       "catalog_count": 1,
       "review_status": "policy_review_required",
@@ -190769,6 +191339,97 @@
       ]
     },
     {
+      "host": "wikidata.org",
+      "catalog_definition_count": 38,
+      "unique_source_urls": 38,
+      "review_status_counts": {
+        "policy_review_required": 38
+      },
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "reviewed_at": null,
+      "source_access_modes": [],
+      "metadata_only": false,
+      "allowed_catalog_path_patterns": [],
+      "max_response_bytes": 0,
+      "per_dataset_rights_required": true,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null,
+      "sample_catalogs": [
+        {
+          "catalog_id": "catalog:5456fe51c4e56c490965a362",
+          "title": "task Wikidata Resources",
+          "catalog_type": "resource_library",
+          "source_url": "https://wikidata.org/wiki/Wikidata:WikiProject_India/COVID-19_task_force/Resources",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:6378437647410936b67b6ccc",
+          "title": "technical Wikidata Articles",
+          "catalog_type": "knowledge_base",
+          "source_url": "https://wikidata.org/wiki/Wikidata:Report_a_technical_problem/Archive",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:1bff801ca8846a0536203607",
+          "title": "Wikidata Articles",
+          "catalog_type": "knowledge_base",
+          "source_url": "https://wikidata.org/wiki/Wikidata:Bar/Archive",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:3c962c7a9046d49dc4cff235",
+          "title": "Wikidata Articles",
+          "catalog_type": "knowledge_base",
+          "source_url": "https://wikidata.org/wiki/Wikidata:Bureaucrats%27_noticeboard/Archive",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:45a7581ba12f82a8aaf84302",
+          "title": "Wikidata Articles",
+          "catalog_type": "knowledge_base",
+          "source_url": "https://wikidata.org/wiki/Wikidata:Bistro/Archive",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:4f2f5c1dd07214c996bfbab8",
+          "title": "Wikidata Articles",
+          "catalog_type": "knowledge_base",
+          "source_url": "https://wikidata.org/wiki/Wikidata:Project_chat/zh/Archive",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:516b5eb066d735ead12867db",
+          "title": "Wikidata Articles",
+          "catalog_type": "knowledge_base",
+          "source_url": "https://wikidata.org/wiki/Wikidata:Requests_for_checkuser/Archives",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:587b5fadd077ea0c84432afd",
+          "title": "Wikidata Articles",
+          "catalog_type": "knowledge_base",
+          "source_url": "https://wikidata.org/wiki/Wikidata:Bot_requests/Archive",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:6043740d89a8f653c315fd9b",
+          "title": "Wikidata Articles",
+          "catalog_type": "knowledge_base",
+          "source_url": "https://wikidata.org/wiki/Wikidata:Requests_for_new_items/Archive",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:68d33001cc2ce349502ee673",
+          "title": "Wikidata Articles",
+          "catalog_type": "knowledge_base",
+          "source_url": "https://wikidata.org/wiki/Wikidata:De_kroeg/Archive",
+          "review_status": "policy_review_required"
+        }
+      ]
+    },
+    {
       "host": "dol.gov",
       "catalog_definition_count": 33,
       "unique_source_urls": 33,
@@ -190855,97 +191516,6 @@
           "title": "Dol Articles",
           "catalog_type": "knowledge_base",
           "source_url": "https://dol.gov/agencies/vets/resources/reports",
-          "review_status": "policy_review_required"
-        }
-      ]
-    },
-    {
-      "host": "wikidata.org",
-      "catalog_definition_count": 33,
-      "unique_source_urls": 33,
-      "review_status_counts": {
-        "policy_review_required": 33
-      },
-      "terms_url": null,
-      "terms_status": "unreviewed",
-      "reviewed_at": null,
-      "source_access_modes": [],
-      "metadata_only": false,
-      "allowed_catalog_path_patterns": [],
-      "max_response_bytes": 0,
-      "per_dataset_rights_required": true,
-      "min_interval_seconds": 1.0,
-      "max_requests_per_run": 1,
-      "policy_note": null,
-      "sample_catalogs": [
-        {
-          "catalog_id": "catalog:5456fe51c4e56c490965a362",
-          "title": "task Wikidata Resources",
-          "catalog_type": "resource_library",
-          "source_url": "https://wikidata.org/wiki/Wikidata:WikiProject_India/COVID-19_task_force/Resources",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:6378437647410936b67b6ccc",
-          "title": "technical Wikidata Articles",
-          "catalog_type": "knowledge_base",
-          "source_url": "https://wikidata.org/wiki/Wikidata:Report_a_technical_problem/Archive",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:1bff801ca8846a0536203607",
-          "title": "Wikidata Articles",
-          "catalog_type": "knowledge_base",
-          "source_url": "https://wikidata.org/wiki/Wikidata:Bar/Archive",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:3c962c7a9046d49dc4cff235",
-          "title": "Wikidata Articles",
-          "catalog_type": "knowledge_base",
-          "source_url": "https://wikidata.org/wiki/Wikidata:Bureaucrats%27_noticeboard/Archive",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:45a7581ba12f82a8aaf84302",
-          "title": "Wikidata Articles",
-          "catalog_type": "knowledge_base",
-          "source_url": "https://wikidata.org/wiki/Wikidata:Bistro/Archive",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:4f2f5c1dd07214c996bfbab8",
-          "title": "Wikidata Articles",
-          "catalog_type": "knowledge_base",
-          "source_url": "https://wikidata.org/wiki/Wikidata:Project_chat/zh/Archive",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:516b5eb066d735ead12867db",
-          "title": "Wikidata Articles",
-          "catalog_type": "knowledge_base",
-          "source_url": "https://wikidata.org/wiki/Wikidata:Requests_for_checkuser/Archives",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:587b5fadd077ea0c84432afd",
-          "title": "Wikidata Articles",
-          "catalog_type": "knowledge_base",
-          "source_url": "https://wikidata.org/wiki/Wikidata:Bot_requests/Archive",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:6043740d89a8f653c315fd9b",
-          "title": "Wikidata Articles",
-          "catalog_type": "knowledge_base",
-          "source_url": "https://wikidata.org/wiki/Wikidata:Requests_for_new_items/Archive",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:68d33001cc2ce349502ee673",
-          "title": "Wikidata Articles",
-          "catalog_type": "knowledge_base",
-          "source_url": "https://wikidata.org/wiki/Wikidata:De_kroeg/Archive",
           "review_status": "policy_review_required"
         }
       ]
@@ -193317,6 +193887,97 @@
       ]
     },
     {
+      "host": "smithsonianmag.com",
+      "catalog_definition_count": 11,
+      "unique_source_urls": 11,
+      "review_status_counts": {
+        "policy_review_required": 11
+      },
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "reviewed_at": null,
+      "source_access_modes": [],
+      "metadata_only": false,
+      "allowed_catalog_path_patterns": [],
+      "max_response_bytes": 0,
+      "per_dataset_rights_required": true,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null,
+      "sample_catalogs": [
+        {
+          "catalog_id": "catalog:7d694937691663972ec56d5d",
+          "title": "Smithsonianmag Articles",
+          "catalog_type": "knowledge_base",
+          "source_url": "https://smithsonianmag.com/blogs/air-space-museum/category/archives",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:ddf9a4979d67ccec67a036f8",
+          "title": "Smithsonianmag Articles",
+          "catalog_type": "knowledge_base",
+          "source_url": "https://smithsonianmag.com/blogs/national-museum-of-natural-history/tag/research",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:ca73599fb649b5c3298cf264",
+          "title": "Smithsonianmag Events",
+          "catalog_type": "events",
+          "source_url": "https://smithsonianmag.com/blogs/office-of-the-secretary-of-the-smithsonian/category/events",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:5f734930936f574fd26eb378",
+          "title": "Smithsonianmag Media",
+          "catalog_type": "media",
+          "source_url": "https://smithsonianmag.com/tag/media",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:5d1ae11cb45c888e32afec09",
+          "title": "Smithsonianmag People",
+          "catalog_type": "people_directory",
+          "source_url": "https://smithsonianmag.com/history/massive-new-database-connect-billions-historic-records-tell-full-story-american-slavery-180973721?itm_medium=parsely-api&itm_source=related-content",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:287f383f2c9672a471057c19",
+          "title": "Smithsonianmag Places",
+          "catalog_type": "geographic",
+          "source_url": "https://smithsonianmag.com/smart-news/heres-secret-behind-bioluminescent-mushrooms-magic-glow-180963065?itm_medium=parsely-api&itm_source=related-content",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:b948068ac653172e42d46016",
+          "title": "Smithsonianmag Places",
+          "catalog_type": "geographic",
+          "source_url": "https://smithsonianmag.com/blogs/smithsonian-books/category/museums",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:be25b596d871704608e00ef0",
+          "title": "Smithsonianmag Places",
+          "catalog_type": "geographic",
+          "source_url": "https://smithsonianmag.com/blogs/office-of-the-secretary-of-the-smithsonian/tag/museums",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:f2a2695725da503ae8b0e7f3",
+          "title": "Smithsonianmag Places",
+          "catalog_type": "geographic",
+          "source_url": "https://smithsonianmag.com/tag/museums",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:3c9e851b6be34a465b051234",
+          "title": "Smithsonianmag Products",
+          "catalog_type": "commerce",
+          "source_url": "https://smithsonianmag.com/blogs/national-museum-american-indian/tag/collections",
+          "review_status": "policy_review_required"
+        }
+      ]
+    },
+    {
       "host": "bbc.com",
       "catalog_definition_count": 10,
       "unique_source_urls": 10,
@@ -194710,83 +195371,6 @@
       ]
     },
     {
-      "host": "smithsonianmag.com",
-      "catalog_definition_count": 8,
-      "unique_source_urls": 8,
-      "review_status_counts": {
-        "policy_review_required": 8
-      },
-      "terms_url": null,
-      "terms_status": "unreviewed",
-      "reviewed_at": null,
-      "source_access_modes": [],
-      "metadata_only": false,
-      "allowed_catalog_path_patterns": [],
-      "max_response_bytes": 0,
-      "per_dataset_rights_required": true,
-      "min_interval_seconds": 1.0,
-      "max_requests_per_run": 1,
-      "policy_note": null,
-      "sample_catalogs": [
-        {
-          "catalog_id": "catalog:ddf9a4979d67ccec67a036f8",
-          "title": "Smithsonianmag Articles",
-          "catalog_type": "knowledge_base",
-          "source_url": "https://smithsonianmag.com/blogs/national-museum-of-natural-history/tag/research",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:ca73599fb649b5c3298cf264",
-          "title": "Smithsonianmag Events",
-          "catalog_type": "events",
-          "source_url": "https://smithsonianmag.com/blogs/office-of-the-secretary-of-the-smithsonian/category/events",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:5f734930936f574fd26eb378",
-          "title": "Smithsonianmag Media",
-          "catalog_type": "media",
-          "source_url": "https://smithsonianmag.com/tag/media",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:5d1ae11cb45c888e32afec09",
-          "title": "Smithsonianmag People",
-          "catalog_type": "people_directory",
-          "source_url": "https://smithsonianmag.com/history/massive-new-database-connect-billions-historic-records-tell-full-story-american-slavery-180973721?itm_medium=parsely-api&itm_source=related-content",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:b948068ac653172e42d46016",
-          "title": "Smithsonianmag Places",
-          "catalog_type": "geographic",
-          "source_url": "https://smithsonianmag.com/blogs/smithsonian-books/category/museums",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:be25b596d871704608e00ef0",
-          "title": "Smithsonianmag Places",
-          "catalog_type": "geographic",
-          "source_url": "https://smithsonianmag.com/blogs/office-of-the-secretary-of-the-smithsonian/tag/museums",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:f2a2695725da503ae8b0e7f3",
-          "title": "Smithsonianmag Places",
-          "catalog_type": "geographic",
-          "source_url": "https://smithsonianmag.com/tag/museums",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:a0387f3ad4e6e22a8186b8ee",
-          "title": "Smithsonianmag Products",
-          "catalog_type": "commerce",
-          "source_url": "https://smithsonianmag.com/blogs/national-museum-american-indian/category/collections",
-          "review_status": "policy_review_required"
-        }
-      ]
-    },
-    {
       "host": "lasvegasnevada.gov",
       "catalog_definition_count": 7,
       "unique_source_urls": 7,
@@ -195879,6 +196463,55 @@
       ]
     },
     {
+      "host": "nationalarchives.gov.uk",
+      "catalog_definition_count": 4,
+      "unique_source_urls": 4,
+      "review_status_counts": {
+        "policy_review_required": 4
+      },
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "reviewed_at": null,
+      "source_access_modes": [],
+      "metadata_only": false,
+      "allowed_catalog_path_patterns": [],
+      "max_response_bytes": 0,
+      "per_dataset_rights_required": true,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null,
+      "sample_catalogs": [
+        {
+          "catalog_id": "catalog:1ec049d7ec1eb79c8b93f396",
+          "title": "National Archives Open Articles",
+          "catalog_type": "knowledge_base",
+          "source_url": "https://nationalarchives.gov.uk/news",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:ae0b2a3e875f7e7d962b9154",
+          "title": "National Archives Open Articles",
+          "catalog_type": "knowledge_base",
+          "source_url": "https://nationalarchives.gov.uk/professional-guidance-and-services/archive-sector/blog",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:2abe34910b6e4f183beaebbe",
+          "title": "National Archives Open Events",
+          "catalog_type": "events",
+          "source_url": "https://nationalarchives.gov.uk/whats-on/events",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:86db7ac8af197bb1ed61f34d",
+          "title": "National Archives Open People",
+          "catalog_type": "people_directory",
+          "source_url": "https://nationalarchives.gov.uk/people",
+          "review_status": "policy_review_required"
+        }
+      ]
+    },
+    {
       "host": "numpy.org",
       "catalog_definition_count": 4,
       "unique_source_urls": 4,
@@ -196327,48 +196960,6 @@
       ]
     },
     {
-      "host": "nationalarchives.gov.uk",
-      "catalog_definition_count": 3,
-      "unique_source_urls": 3,
-      "review_status_counts": {
-        "policy_review_required": 3
-      },
-      "terms_url": null,
-      "terms_status": "unreviewed",
-      "reviewed_at": null,
-      "source_access_modes": [],
-      "metadata_only": false,
-      "allowed_catalog_path_patterns": [],
-      "max_response_bytes": 0,
-      "per_dataset_rights_required": true,
-      "min_interval_seconds": 1.0,
-      "max_requests_per_run": 1,
-      "policy_note": null,
-      "sample_catalogs": [
-        {
-          "catalog_id": "catalog:1ec049d7ec1eb79c8b93f396",
-          "title": "National Archives Open Articles",
-          "catalog_type": "knowledge_base",
-          "source_url": "https://nationalarchives.gov.uk/news",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:2abe34910b6e4f183beaebbe",
-          "title": "National Archives Open Events",
-          "catalog_type": "events",
-          "source_url": "https://nationalarchives.gov.uk/whats-on/events",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:86db7ac8af197bb1ed61f34d",
-          "title": "National Archives Open People",
-          "catalog_type": "people_directory",
-          "source_url": "https://nationalarchives.gov.uk/people",
-          "review_status": "policy_review_required"
-        }
-      ]
-    },
-    {
       "host": "openlibrary.org",
       "catalog_definition_count": 3,
       "unique_source_urls": 3,
@@ -196679,6 +197270,41 @@
           "title": "Trains National Rail Places",
           "catalog_type": "geographic",
           "source_url": "https://nationalrail.co.uk/destinations",
+          "review_status": "policy_review_required"
+        }
+      ]
+    },
+    {
+      "host": "opensource.org",
+      "catalog_definition_count": 2,
+      "unique_source_urls": 2,
+      "review_status_counts": {
+        "policy_review_required": 2
+      },
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "reviewed_at": null,
+      "source_access_modes": [],
+      "metadata_only": false,
+      "allowed_catalog_path_patterns": [],
+      "max_response_bytes": 0,
+      "per_dataset_rights_required": true,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null,
+      "sample_catalogs": [
+        {
+          "catalog_id": "catalog:da2da4ec121b66eb53dc19d3",
+          "title": "Opensource Events",
+          "catalog_type": "events",
+          "source_url": "https://opensource.org/blog/category/events",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:53540bf2217ad2df232f8785",
+          "title": "Opensource People",
+          "catalog_type": "people_directory",
+          "source_url": "https://opensource.org/about/team",
           "review_status": "policy_review_required"
         }
       ]
@@ -197253,34 +197879,6 @@
           "title": "Opendata Geospatialdenver Datasets",
           "catalog_type": "open_data",
           "source_url": "https://opendata-geospatialdenver.hub.arcgis.com/datasets",
-          "review_status": "policy_review_required"
-        }
-      ]
-    },
-    {
-      "host": "opensource.org",
-      "catalog_definition_count": 1,
-      "unique_source_urls": 1,
-      "review_status_counts": {
-        "policy_review_required": 1
-      },
-      "terms_url": null,
-      "terms_status": "unreviewed",
-      "reviewed_at": null,
-      "source_access_modes": [],
-      "metadata_only": false,
-      "allowed_catalog_path_patterns": [],
-      "max_response_bytes": 0,
-      "per_dataset_rights_required": true,
-      "min_interval_seconds": 1.0,
-      "max_requests_per_run": 1,
-      "policy_note": null,
-      "sample_catalogs": [
-        {
-          "catalog_id": "catalog:53540bf2217ad2df232f8785",
-          "title": "Opensource People",
-          "catalog_type": "people_directory",
-          "source_url": "https://opensource.org/about/team",
           "review_status": "policy_review_required"
         }
       ]
