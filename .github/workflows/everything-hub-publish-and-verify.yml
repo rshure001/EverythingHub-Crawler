@@ -8,6 +8,8 @@ on:
       - "site/search.js"
       - "site/catalog-navigation.js"
       - "site/release-manifest.json"
+      - "supabase/functions/everything-hub-deploy-bridge/index.ts"
+      - "supabase/functions/everything-hub-site/index.ts"
       - "supabase/functions/everything-hub-static-publisher/index.ts"
       - ".github/workflows/everything-hub-publish-and-verify.yml"
   workflow_dispatch:
