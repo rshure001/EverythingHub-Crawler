@@ -375,11 +375,9 @@ jobs:
               if scheduled_at.tzinfo is None:
                   scheduled_at = scheduled_at.replace(tzinfo=timezone.utc)
               schedule_age = max(0, int((now - scheduled_at.astimezone(timezone.utc)).total_seconds()))
-              if schedule_age <= 10 * 60:
-                  print("Scheduled crawl delivery is no longer more than 10 minutes stale; aborting marker commit.")
-                  raise SystemExit(0)
           else:
-              print("No scheduled crawl event is observable at final push check; using manifest age as a conservative fallback.")
+              print("No scheduled crawl event is observable at final push check; using manifest age when the frontier is empty.")
+
           envelope = json.loads(Path("/tmp/public-manifest-prepush-envelope.json").read_text(encoding="utf-8"))
           encoded = envelope.get("content")
           if not isinstance(encoded, str):
@@ -388,15 +386,52 @@ jobs:
           updated_at = manifest.get("updated_at")
           if type(updated_at) is not int or updated_at <= 0:
               raise SystemExit("Latest public manifest updated_at is invalid at final push check")
-          manifest_age = (now - datetime.fromtimestamp(updated_at, timezone.utc)).total_seconds()
+          manifest_time = datetime.fromtimestamp(updated_at, timezone.utc)
+          manifest_age = (now - manifest_time).total_seconds()
           if manifest_age < -60:
               raise SystemExit("Latest public manifest timestamp is too far in the future")
-          if manifest_age <= 10 * 60:
-              print("Public manifest became fresh before push; aborting marker commit.")
+          manifest_age = max(0, int(manifest_age))
+
+          frontier = json.loads(Path("data/frontier.json").read_text(encoding="utf-8"))
+          queue = frontier.get("queue") if isinstance(frontier, dict) else None
+          if not isinstance(queue, list):
+              raise SystemExit("Latest frontier snapshot does not contain a queue array at final push check")
+          frontier_pending_count = len(queue)
+
+          attempts = [
+              run for run in runs
+              if isinstance(run, dict)
+              and run.get("name") == "Everything Hub crawler"
+              and isinstance(run.get("created_at"), str)
+          ]
+          latest_attempt = max(attempts, key=lambda row: row.get("created_at") or "", default=None)
+          attempt_age = None
+          if latest_attempt is not None:
+              attempt_time = datetime.fromisoformat(latest_attempt["created_at"].replace("Z", "+00:00"))
+              if attempt_time.tzinfo is None:
+                  attempt_time = attempt_time.replace(tzinfo=timezone.utc)
+              attempt_age = max(0, int((now - attempt_time.astimezone(timezone.utc)).total_seconds()))
+
+          frontier_continue = frontier_pending_count > 0
+          if frontier_continue and attempt_age is not None and attempt_age < 5 * 60:
+              print(
+                  f"{frontier_pending_count} frontier URLs remain queued, but the last crawler attempt "
+                  f"started only {attempt_age}s ago; the five-minute minimum interval has not elapsed."
+              )
               raise SystemExit(0)
-          if schedule_age is None and manifest_age <= 10 * 60:
-              print("No scheduled crawl is observable, but the manifest is not beyond the 10-minute recovery window; aborting marker commit.")
-              raise SystemExit(0)
+
+          if frontier_continue:
+              print(
+                  f"Frontier continuation recheck passed: {frontier_pending_count} URLs remain queued; "
+                  f"the minimum interval is satisfied; manifest age is {manifest_age}s."
+              )
+          else:
+              if schedule_age is not None and schedule_age <= 10 * 60:
+                  print("Scheduled crawl delivery is within 10 minutes and the frontier is empty; aborting marker commit.")
+                  raise SystemExit(0)
+              if manifest_age <= 10 * 60:
+                  print("Public manifest is fresh and the frontier is empty; aborting marker commit.")
+                  raise SystemExit(0)
           Path("/tmp/prepush-eligible").write_text("yes", encoding="utf-8")
           print("Final no-overlap and freshness recheck passed.")
           PY
