@@ -109,20 +109,32 @@ async function verifyGitHubActionsToken(token: string, expectedSha: string) {
       if (!create.ok && create.status!==409) return Response.json({error:"Storage bucket creation failed",status:create.status,detail:(await create.text()).slice(0,800)},{status:502});
     }
     const rawBase = "https://raw.githubusercontent.com/rshure001/EverythingHub-Crawler/" + sha + "/site/";
-    const [htmlResponse, searchResponse] = await Promise.all([fetch(rawBase + "index.html"), fetch(rawBase + "search.js")]);
-    if (!htmlResponse.ok || !searchResponse.ok) return Response.json({error:"Release source fetch failed",htmlStatus:htmlResponse.status,searchStatus:searchResponse.status,sha},{status:502});
+    const [htmlResponse, searchResponse, catalogResponse] = await Promise.all([
+      fetch(rawBase + "index.html"), fetch(rawBase + "search.js"), fetch(rawBase + "catalog-navigation.js"),
+    ]);
+    if (!htmlResponse.ok || !searchResponse.ok || !catalogResponse.ok) return Response.json({
+      error:"Release source fetch failed",htmlStatus:htmlResponse.status,searchStatus:searchResponse.status,
+      catalogStatus:catalogResponse.status,sha,
+    },{status:502});
     const html = await htmlResponse.text();
     const searchJs = await searchResponse.text();
-    if (!html.includes('<script src="search.js"></script>') || !html.includes('data:image/png;base64,') || !searchJs.includes("EverythingHubSearch")) {
-      return Response.json({error:"Release source failed homepage/search preflight",sha},{status:422});
+    const catalogJs = await catalogResponse.text();
+    if (!html.includes('<script src="search.js"></script>') ||
+        !html.includes('<script src="catalog-navigation.js" defer></script>') ||
+        !html.includes('data:image/png;base64,') || !searchJs.includes("EverythingHubSearch") ||
+        !catalogJs.includes("eh-open-record-catalog")) {
+      return Response.json({error:"Release source failed homepage/search/catalog preflight",sha},{status:422});
     }
     const searchUpload = await fetch(projectUrl+"/storage/v1/object/"+bucket+"/search.js",{method:"POST",headers:{...headers,"content-type":"application/javascript; charset=utf-8","x-upsert":"true","cache-control":"0"},body:searchJs});
     if (!searchUpload.ok) return Response.json({error:"Search client upload failed",status:searchUpload.status,detail:(await searchUpload.text()).slice(0,800)},{status:502});
+    const catalogUpload = await fetch(projectUrl+"/storage/v1/object/"+bucket+"/catalog-navigation.js",{method:"POST",headers:{...headers,"content-type":"application/javascript; charset=utf-8","x-upsert":"true","cache-control":"0"},body:catalogJs});
+    if (!catalogUpload.ok) return Response.json({error:"Catalog navigation upload failed",status:catalogUpload.status,detail:(await catalogUpload.text()).slice(0,800)},{status:502});
     const upload = await fetch(projectUrl+"/storage/v1/object/"+bucket+"/index.html",{method:"POST",headers:{...headers,"content-type":"text/html; charset=utf-8","x-upsert":"true","cache-control":"0"},body:html});
     if (!upload.ok) return Response.json({error:"Homepage upload failed",status:upload.status,detail:(await upload.text()).slice(0,800)},{status:502});
     const publicUrl=projectUrl+"/storage/v1/object/public/"+bucket+"/index.html";
     const searchUrl=projectUrl+"/storage/v1/object/public/"+bucket+"/search.js";
-    return Response.json({status:"published",url:publicUrl,searchUrl,bytes:new TextEncoder().encode(html).length,searchBytes:new TextEncoder().encode(searchJs).length,contentType:"text/html; charset=utf-8",searchContentType:"application/javascript; charset=utf-8",commitSha:sha,publisher:{repository:publisherClaims.repository,event:publisherClaims.event_name,workflow:publisherClaims.workflow_ref}});
+    const catalogUrl=projectUrl+"/storage/v1/object/public/"+bucket+"/catalog-navigation.js";
+    return Response.json({status:"published",url:publicUrl,searchUrl,catalogUrl,bytes:new TextEncoder().encode(html).length,searchBytes:new TextEncoder().encode(searchJs).length,catalogBytes:new TextEncoder().encode(catalogJs).length,contentType:"text/html; charset=utf-8",searchContentType:"application/javascript; charset=utf-8",catalogContentType:"application/javascript; charset=utf-8",commitSha:sha,publisher:{repository:publisherClaims.repository,event:publisherClaims.event_name,workflow:publisherClaims.workflow_ref}});
   } catch (e) {
     return Response.json({error:"Publisher request failed",detail:e instanceof Error?e.message:String(e)},{status:502});
   }
