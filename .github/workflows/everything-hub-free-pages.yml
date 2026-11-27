@@ -28,8 +28,28 @@ jobs:
           sparse-checkout: |
             site/index.html
             site/search.js
+            site/release-manifest.json
+            site/hosting-deployment-trigger.txt
           sparse-checkout-cone-mode: false
           fetch-depth: 1
+      - name: Verify release manifest sizes and SHA-256 digests
+        run: |
+          python - <<'PY'
+          import hashlib, json, pathlib
+          root = pathlib.Path('site')
+          manifest = json.loads((root / 'release-manifest.json').read_text())
+          entries = {item['path']: item for item in manifest['files']}
+          actual = {p.relative_to(root).as_posix() for p in root.rglob('*') if p.is_file() and p.name != 'release-manifest.json'}
+          if actual != set(entries):
+              raise SystemExit(f'manifest file-set mismatch: unlisted={sorted(actual-set(entries))}, missing={sorted(set(entries)-actual)}')
+          for rel, item in entries.items():
+              raw = (root / rel).read_bytes()
+              digest = hashlib.sha256(raw).hexdigest()
+              if item.get('size') != len(raw) or item.get('sha256') != digest:
+                  raise SystemExit(f'manifest mismatch: {rel}')
+              print(f'PASS {rel}: {len(raw)} bytes SHA-256 {digest}')
+          print(f'PASS: {len(entries)} release files match the manifest exactly.')
+          PY
       - name: Configure free GitHub Pages hosting
         uses: actions/configure-pages@v5
         with:
