@@ -10,6 +10,7 @@ on:
       - "crawler/test_pipeline_health.py"
   schedule:
     # Run lightweight checks every five minutes, two minutes after each staggered crawl slot, away from the top-of-hour Actions load peak.
+    # Keep the watchdog as the bounded recovery path when scheduled crawl delivery goes stale.
     - cron: "4,9,14,19,24,29,34,39,44,49,54,59 * * * *"
   workflow_run:
     # Recheck freshness after catalog publishers too. Scheduled crawl events can
