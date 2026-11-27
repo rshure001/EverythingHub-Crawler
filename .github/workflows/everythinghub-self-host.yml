@@ -6,6 +6,7 @@ on:
     paths:
       - "site/**"
       - ".github/workflows/everythinghub-self-host.yml"
+      - "hosting-deployment-trigger.txt"
 
 permissions:
   contents: read
