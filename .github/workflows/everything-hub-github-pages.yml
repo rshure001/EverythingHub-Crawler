@@ -1,0 +1,85 @@
+name: Everything Hub — free GitHub Pages publishing
+on:
+  push:
+    branches: [main]
+    paths:
+      - "site/**"
+      - ".github/workflows/everything-hub-github-pages.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: everything-hub-github-pages
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    outputs:
+      page_url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+      - name: Validate static homepage
+        run: |
+          set -euo pipefail
+          test -s site/index.html
+          test -s site/search.js
+          grep -Fqi '<title>Everything Hub' site/index.html
+          grep -Fq 'src="search.js"' site/index.html
+          grep -Fq 'data:image/png;base64,' site/index.html
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+      - name: Upload only the site folder
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+      - name: Deploy Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+  browser-acceptance:
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install Playwright
+        run: |
+          npm init -y
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+      - name: Verify HTML and JavaScript MIME types
+        env:
+          TARGET_URL: ${{ needs.publish.outputs.page_url }}
+        run: |
+          set -euo pipefail
+          curl --silent --show-error --location --fail --max-time 30 -D /tmp/home.headers "$TARGET_URL" -o /tmp/home.html
+          grep -Eiq '^content-type: *text/html' /tmp/home.headers
+          grep -Fqi '<title>Everything Hub' /tmp/home.html
+          curl --silent --show-error --location --fail --max-time 30 "${TARGET_URL%/}/search.js" -o /tmp/search.js
+          grep -Fq 'EverythingHubSearch' /tmp/search.js
+      - name: Test the actual published site
+        env:
+          TARGET_URL: ${{ needs.publish.outputs.page_url }}
+          LIVE_EDGE: "0"
+        run: node scripts/everything-hub-browser-check.cjs
+      - name: Save browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: everything-hub-github-pages-browser-evidence
+          path: |
+            everything-hub-browser-report.json
+            everything-hub-*.png
+          if-no-files-found: warn
+          retention-days: 14
