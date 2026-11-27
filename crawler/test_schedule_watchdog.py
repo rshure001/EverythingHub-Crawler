@@ -465,11 +465,13 @@ class ScheduleWatchdogTests(unittest.TestCase):
 
 
 
-    def test_workflow_uses_manifest_age_when_schedule_history_is_unobserved(self):
+    def test_workflow_uses_frontier_backlog_for_bounded_continuation(self):
         workflow = (Path(__file__).resolve().parents[1] / ".github" / "workflows" / "crawl-watchdog.yml").read_text(encoding="utf-8")
         self.assertIn("No scheduled crawl event is observable; using manifest age as a conservative fallback.", workflow)
-        self.assertIn("created_at = None", workflow)
-        self.assertIn("schedule_age is None and manifest_age <= 10 * 60", workflow)
+        self.assertIn("frontier_pending_count > 0", workflow)
+        self.assertGreaterEqual(workflow.count("attempt_age < 5 * 60"), 2)
+        self.assertIn("Frontier continuation recheck passed:", workflow)
+        self.assertIn("manifest_age <= 10 * 60", workflow)
         self.assertNotIn("No scheduled crawl event is observable; no recovery marker will be written.", workflow)
 
 
