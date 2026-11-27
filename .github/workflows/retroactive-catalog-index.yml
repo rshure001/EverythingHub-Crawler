@@ -1,5 +1,6 @@
 name: Retroactive catalog inventory
 # Rebuild catalog coverage against the current crawler manifest; keep source-rights gates intact.
+# A reviewed workflow-file update also serves as a safe wake-up when scheduled delivery is stale.
 
 on:
   push:
