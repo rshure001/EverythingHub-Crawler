@@ -1,0 +1,58 @@
+name: Everything Hub free static publisher
+on:
+  push:
+    branches: [main]
+    paths:
+      - "site/index.html"
+      - "site/search.js"
+      - ".github/workflows/everything-hub-free-pages.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: everything-hub-free-pages
+  cancel-in-progress: true
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Check out approved site
+        uses: actions/checkout@v4
+      - name: Configure free GitHub Pages hosting
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - name: Assemble only the approved homepage and search client
+        run: |
+          set -euo pipefail
+          mkdir -p _site
+          cp site/index.html _site/index.html
+          cp site/search.js _site/search.js
+          test -s _site/index.html
+          test -s _site/search.js
+          echo "Homepage bytes: $(wc -c < _site/index.html)"
+          echo "Search client bytes: $(wc -c < _site/search.js)"
+      - name: Upload static site artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - name: Publish to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+      - name: Verify published homepage and search client
+        env:
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          set -euo pipefail
+          test -n "$PAGE_URL"
+          curl --fail --silent --show-error --retry 8 --retry-all-errors --retry-delay 5 "$PAGE_URL" -o /tmp/live-index.html
+          curl --fail --silent --show-error --retry 8 --retry-all-errors --retry-delay 5 "${PAGE_URL%/}/search.js" -o /tmp/live-search.js
+          cmp -s site/index.html /tmp/live-index.html
+          cmp -s site/search.js /tmp/live-search.js
+          echo "PASS: live homepage and search client exactly match the approved repository files."
+          echo "Published URL: $PAGE_URL"
