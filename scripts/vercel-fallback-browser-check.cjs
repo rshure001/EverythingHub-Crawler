@@ -13,7 +13,7 @@ const fs = require("node:fs");
   page.on("console", m => { if (m.type() === "error") consoleErrors.push(m.text()); });
   page.on("requestfailed", r => failedRequests.push({ url: r.url(), error: r.failure()?.errorText || "failed" }));
   // Test the free immutable Vercel deployment first; report the custom domain separately if it resolves to an older release.
-  const candidateUrls = [process.env.FALLBACK_URL || "https://everythinghub-homepage-fixed-3vk1kcauu-rshure001-8053.vercel.app/", process.env.TARGET_URL || "https://everythinghub.ink/"];
+  const candidateUrls = [process.env.STABLE_FALLBACK_URL || "https://everythinghub-homepage-fixed.vercel.app/", process.env.FALLBACK_URL || "https://everythinghub-homepage-fixed-3vk1kcauu-rshure001-8053.vercel.app/", process.env.TARGET_URL || "https://everythinghub.ink/"];
   const report = { url: candidateUrls[0], candidateUrls, startedAt: new Date().toISOString(), checks: {}, pageErrors: errors, consoleErrors, failedRequests };
   const shot = name => page.screenshot({ path: "everything-hub-vercel-" + name + ".png", fullPage: true });
   const fail = message => { throw new Error(message); };
