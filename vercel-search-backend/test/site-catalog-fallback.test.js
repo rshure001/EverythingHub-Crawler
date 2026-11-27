@@ -71,7 +71,7 @@ test("Vercel homepage crawler search preserves typed catalog previews and sends 
 test("legacy Edge homepage route redirects to the active free publishing bridge", () => {
   assert.ok(edgeSiteFunction.includes('const TARGET = "https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-deploy-bridge";'));
   assert.ok(edgeSiteFunction.includes("Location: destination.toString()"));
-  assert.ok(edgeSiteFunction.includes('"X-EH-Legacy-Route": "redirect-to-publishing-bridge"'));
+  assert.ok(edgeSiteFunction.includes('"X-EH-Legacy-Route": "redirect-to-deploy-bridge"'));
   assert.ok(edgeSiteFunction.includes("incoming.searchParams.entries()"), "legacy route must preserve search query parameters");
   assert.ok(edgeSiteFunction.includes('status: 302'));
 });
