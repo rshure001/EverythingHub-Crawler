@@ -11987,6 +11987,7 @@ XfRInDt6/z9RXKd5la8D2QAAAABJRU5ErkJggg==
   else root.EHMediaPreviewPolicy = api;
 })(typeof globalThis === "object" ? globalThis : this);</script>
 <script src="search.js"></script>
+<script src="catalog-navigation.js" defer></script>
 <script>
 const form=document.querySelector('#search'),input=document.querySelector('#q'),out=document.querySelector('#results');
 const EH_SUPABASE_URL='https://vdceayvfgkwpgwixrhwi.supabase.co';
@@ -12281,7 +12282,8 @@ form.addEventListener('submit',async e=>{
      ?'<a class="preview" target="_blank" rel="noopener noreferrer" href="'+link+'"><img loading="lazy" src="'+image+'" alt="" referrerpolicy="no-referrer">'+(isVideo(x)?'<span class="play">▶</span>':'')+'</a>'
      :isVideo(x)?'<a class="preview video-link" target="_blank" rel="noopener noreferrer" href="'+link+'"><span class="play">▶</span><span>WATCH VIDEO</span></a>':'';
    const sourceLabel=isMedia?[x.source||host(x.url),x.creator||x.credit,x.license].filter(Boolean).join(' · '):(x.crawlerIndexRecord?(x.origin+' · '+(x.sourceHost||host(x.url))):(x.source||host(x.url)));
-   return '<article class="result">'+preview+'<div class="result-copy"><a target="_blank" rel="noopener noreferrer" href="'+link+'">'+esc(x.title||'Public source result')+'</a>'+(isVideo(x)?'<span class="media-tag">VIDEO</span>':'')+'<p>'+esc(x.snippet||'')+'</p><div class="source">'+esc(sourceLabel)+'</div></div></article>';
+   const recordActions=(Array.isArray(x.matched_records)?x.matched_records:[]).filter(r=>r&&r.record_catalog_id&&Array.isArray(r.shared_catalog_ids)&&r.shared_catalog_ids.length).map(r=>'<button type="button" class="eh-open-record-catalog" data-record-catalog-id="'+encodeURIComponent(r.record_catalog_id)+'" data-shared-catalog-ids="'+encodeURIComponent(r.shared_catalog_ids.join(','))+'">Open '+esc(r.title||'record')+' catalog</button>').join('');
+    return '<article class="result">'+preview+'<div class="result-copy"><a target="_blank" rel="noopener noreferrer" href="'+link+'">'+esc(x.title||'Public source result')+'</a>'+(isVideo(x)?'<span class="media-tag">VIDEO</span>':'')+'<p>'+esc(x.snippet||'')+'</p><div class="source">'+esc(sourceLabel)+'</div>'+(recordActions?'<div class="eh-record-catalog-actions">'+recordActions+'</div>':'')+'<div class="eh-record-catalog-panel" hidden></div></div></article>';
   }).join('');
   const moreAvailable=shown<matches.length||(shown>=matches.length&&apiHasMore);
   const resultLabel=activeType==='web'&&totalIndexed?'Showing '+matches.length.toLocaleString()+' results · '+totalIndexed.toLocaleString()+' matching candidate pages scanned':matches.length.toLocaleString()+' '+activeType+' results';
