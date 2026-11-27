@@ -255,10 +255,10 @@ jobs:
           {
             echo "## Everything Hub live diagnostics"
             case "${publisher_status:-unknown}" in
-    200) echo "- Supabase Storage homepage: PASS (HTTP 200, text/html, approved artwork, eight categories)." ;;
-    404) echo "- Supabase Storage homepage: BLOCKED — no public homepage release (HTTP 404)." ;;
-    *) echo "- Supabase Storage homepage: BLOCKED — HTTP ${publisher_status:-unknown}; no homepage acceptance claim." ;;
-  esac
+              200) echo "- Supabase Storage homepage: PASS (HTTP 200, text/html, approved artwork, eight categories)." ;;
+              404) echo "- Supabase Storage homepage: BLOCKED — no public homepage release (HTTP 404)." ;;
+              *) echo "- Supabase Storage homepage: BLOCKED — HTTP ${publisher_status:-unknown}; no homepage acceptance claim." ;;
+            esac
             echo "- Custom domain: $custom_domain_status"
             echo "- Custom browser endpoint: PASS"
             echo "- Database-backed search: $db_search_status"
