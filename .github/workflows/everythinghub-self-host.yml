@@ -1,0 +1,57 @@
+name: Everything Hub — independent hosting
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "site/**"
+      - ".github/workflows/everythinghub-self-host.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: everythinghub-independent-host
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check hosting credentials
+        env:
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$CF_API_TOKEN" ] || [ -z "$CF_ACCOUNT_ID" ]; then
+            echo "::error::Independent host is built, but CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID are not configured as repository Actions secrets."
+            exit 1
+          fi
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install deployment client
+        run: npm install --global wrangler
+      - name: Create hosting site if needed
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if ! wrangler pages project list --json | grep -q '"name"[[:space:]]*:[[:space:]]*"everythinghub"'; then
+            wrangler pages project create everythinghub --production-branch main
+          fi
+      - name: Publish approved homepage and search client
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          test -s site/index.html
+          test -s site/search.js
+          wrangler pages deploy site --project-name everythinghub --branch main
+      - name: Attach EverythingHub.ink
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        continue-on-error: true
+        run: wrangler pages domain add everythinghub.ink --project-name everythinghub
