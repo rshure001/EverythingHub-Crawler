@@ -1,6 +1,15 @@
 name: Everything Hub Supabase Storage publisher and verifier
-# Manual-only until Supabase Storage bucket operations recover from database timeouts.
+# Publish only the approved static release assets through the native Everything Hub publisher.
 on:
+  push:
+    branches: [main]
+    paths:
+      - "site/index.html"
+      - "site/search.js"
+      - "site/catalog-navigation.js"
+      - "site/release-manifest.json"
+      - "supabase/functions/everything-hub-static-publisher/index.ts"
+      - ".github/workflows/everything-hub-publish-and-verify.yml"
   workflow_dispatch:
 permissions:
   contents: read
@@ -60,15 +69,16 @@ jobs:
           node --input-type=module <<'NODE'
           import fs from "node:fs";
           const d=JSON.parse(fs.readFileSync("/tmp/publish.json","utf8"));
-          if(d.status!=="published"||!d.url||!d.searchUrl||!Number.isInteger(d.bytes)||!Number.isInteger(d.searchBytes))throw new Error("Publisher did not confirm both assets: "+JSON.stringify(d));
+          if(d.status!=="published"||!d.url||!d.searchUrl||!d.catalogUrl||!Number.isInteger(d.bytes)||!Number.isInteger(d.searchBytes)||!Number.isInteger(d.catalogBytes))throw new Error("Publisher did not confirm all release assets: "+JSON.stringify(d));
           fs.appendFileSync(process.env.GITHUB_OUTPUT,'url='+d.url+'\n');
           fs.appendFileSync(process.env.GITHUB_OUTPUT,'search_url='+d.searchUrl+'\n');
-          console.log(JSON.stringify({status:d.status,url:d.url,searchUrl:d.searchUrl,bytes:d.bytes,searchBytes:d.searchBytes,commitSha:d.commitSha,publisher:d.publisher},null,2));
+          console.log(JSON.stringify({status:d.status,url:d.url,searchUrl:d.searchUrl,catalogUrl:d.catalogUrl,bytes:d.bytes,searchBytes:d.searchBytes,catalogBytes:d.catalogBytes,commitSha:d.commitSha,publisher:d.publisher},null,2));
           NODE
       - name: Verify published HTML and JavaScript assets
         env:
           SITE_URL: ${{ steps.publish.outputs.url }}
           SEARCH_URL: ${{ steps.publish.outputs.search_url }}
+          CATALOG_URL: ${{ steps.publish.outputs.catalog_url }}
         run: |
           set -euo pipefail
           curl -fsS -D /tmp/site-headers.txt "$SITE_URL" -o /tmp/site.html
@@ -77,6 +87,9 @@ jobs:
           curl -fsS -D /tmp/search-headers.txt "$SEARCH_URL" -o /tmp/search.js
           cmp -s site/search.js /tmp/search.js || { echo "Published search client does not byte-match site/search.js"; exit 1; }
           grep -Eiq '^content-type: *application/javascript' /tmp/search-headers.txt
+          curl -fsS -D /tmp/catalog-headers.txt "$CATALOG_URL" -o /tmp/catalog-navigation.js
+          cmp -s site/catalog-navigation.js /tmp/catalog-navigation.js || { echo "Published catalog navigation does not byte-match site/catalog-navigation.js"; exit 1; }
+          grep -Eiq '^content-type: *application/javascript' /tmp/catalog-headers.txt
           for needle in '<!doctype html' 'Everything Hub — Everything within reach' 'class="approved-master-art"' 'data:image/png;base64,' 'id="search"' 'id="q"' 'src="search.js"' 'data-mode="web"' 'data-mode="news"' 'data-mode="images"' 'data-mode="videos"' 'data-mode="shopping"' 'data-mode="places"' 'data-mode="business"' 'data-mode="research"' 'EverythingHubSearch.create'; do
             grep -Fqi "$needle" /tmp/site.html || { echo "Missing: $needle"; exit 1; }
           done
