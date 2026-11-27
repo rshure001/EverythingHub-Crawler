@@ -1,9 +1,9 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
-// Keep the public homepage as a lightweight redirect. Do not proxy HTML through
-// the Edge gateway: it has previously rewritten proxied HTML to text/plain.
+// Free first-party publishing route: serve the already-built, versioned homepage
+// from this Supabase project's own Edge Function instead of a third-party CDN.
 const PUBLISHED_INDEX =
-  "https://cdn.jsdelivr.net/gh/rshure001/EverythingHub-Crawler@main/site/index.html";
+  "https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-homepage-release";
 
 Deno.serve((req: Request) => {
   if (req.method !== "GET" && req.method !== "HEAD") {
@@ -25,8 +25,8 @@ Deno.serve((req: Request) => {
       location: destination.toString(),
       "cache-control": "no-store, no-cache, must-revalidate, max-age=0",
       "referrer-policy": "strict-origin-when-cross-origin",
-      "x-eh-bridge": "jsdelivr-static-v1",
-      "x-eh-publish-target": "github-main-site-index",
+      "x-eh-bridge": "supabase-first-party-html-v1",
+      "x-eh-publish-target": "everything-hub-homepage-release",
     },
   });
 });
