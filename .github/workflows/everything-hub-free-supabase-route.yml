@@ -31,14 +31,18 @@ jobs:
         run: |
           set -euo pipefail
           code="$(curl --silent --show-error --max-time 30 -D /tmp/legacy.headers -o /dev/null -w '%{http_code}' "$LEGACY_URL")"
+          echo "Legacy response HTTP=$code"
+          cat /tmp/legacy.headers
           test "$code" = "302"
-          grep -Eiq '^location: https://vdceayvfgkwpgwixrhwi\\.supabase\\.co/functions/v1/everything-hub-deploy-bridge' /tmp/legacy.headers
+          grep -Fqi 'location: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-deploy-bridge' /tmp/legacy.headers
       - name: Verify bridge redirects directly to the approved jsDelivr homepage
         run: |
           set -euo pipefail
           code="$(curl --silent --show-error --max-time 30 -D /tmp/bridge.headers -o /dev/null -w '%{http_code}' "$BRIDGE_URL")"
+          echo "Bridge response HTTP=$code"
+          cat /tmp/bridge.headers
           test "$code" = "302"
-          grep -Eiq '^location: https://cdn\\.jsdelivr\\.net/gh/rshure001/EverythingHub-Crawler@main/site/index\\.html' /tmp/bridge.headers
+          grep -Fqi 'location: https://cdn.jsdelivr.net/gh/rshure001/EverythingHub-Crawler@main/site/index.html' /tmp/bridge.headers
       - name: Verify the public address serves the complete published homepage
         run: |
           set -euo pipefail
