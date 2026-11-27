@@ -1,19 +1,19 @@
 {
   "schema_version": 1,
   "status": "source_review_backlog_not_a_fetch_queue",
-  "generated_at": "2026-11-27T15:40:37Z",
+  "generated_at": "2026-11-27T18:40:01Z",
   "analysis_version": 22,
-  "source_index_pages": 233266,
-  "source_index_updated_at": "2026-11-27T14:13:51Z",
-  "source_index_sha256": "6696f690f1fcd5b6b72e657481f936f5e7db367409146a0b9e4c320fc9049920",
+  "source_index_pages": 234569,
+  "source_index_updated_at": "2026-11-27T18:19:39Z",
+  "source_index_sha256": "afc210de3333c35def8bdc345014ee0022e5f6446edff6769f1e3f4b13c0e4d9",
   "metrics": {
-    "catalog_definition_candidates": 2724,
+    "catalog_definition_candidates": 2726,
     "unique_source_hosts": 118,
-    "unique_source_urls": 2723,
+    "unique_source_urls": 2725,
     "policy_preapproved_urls_needing_runtime_robots_check": 729,
     "policy_preapproved_api_urls_needing_runtime_robots_check": 0,
     "policy_preapproved_catalog_page_urls_needing_runtime_robots_check": 729,
-    "policy_review_required_urls": 1793,
+    "policy_review_required_urls": 1795,
     "path_not_allowlisted_urls": 201,
     "mixed_policy_status_urls": 0,
     "invalid_catalog_candidates": 0,
@@ -77374,8 +77374,8 @@
       "catalog_origin": "source_declared_collection",
       "evidence_strength": "high",
       "catalog_status": "candidate_needs_source_validation",
-      "record_count": 172,
-      "source_page_count": 175,
+      "record_count": 174,
+      "source_page_count": 177,
       "source_host": "icrc.org",
       "source_url": "https://icrc.org/en/article/BrusselsGCIVLaunchEvent",
       "review_status": "policy_review_required",
@@ -93549,6 +93549,37 @@
       "fetch_authorized": false
     },
     {
+      "catalog_id": "catalog:bfc5aba364daef235f89243f",
+      "title": "Smithsonianmag Businesses",
+      "catalog_type": "business_directory",
+      "record_type": "business",
+      "catalog_origin": "source_declared_collection",
+      "evidence_strength": "medium",
+      "catalog_status": "definition_only",
+      "record_count": 0,
+      "source_page_count": 1,
+      "source_host": "smithsonianmag.com",
+      "source_url": "https://smithsonianmag.com/tag/business",
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "reviewed_at": null,
+      "metadata_only": false,
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null,
+      "robots_recheck_required": true,
+      "fetch_authorized": false
+    },
+    {
       "catalog_id": "catalog:ca73599fb649b5c3298cf264",
       "title": "Smithsonianmag Events",
       "catalog_type": "events",
@@ -93649,10 +93680,10 @@
       "catalog_origin": "content_list_declared_collection",
       "evidence_strength": "medium",
       "catalog_status": "candidate_needs_source_validation",
-      "record_count": 12,
-      "source_page_count": 4,
+      "record_count": 17,
+      "source_page_count": 7,
       "source_host": "smithsonianmag.com",
-      "source_url": "https://smithsonianmag.com/smart-news/heres-secret-behind-bioluminescent-mushrooms-magic-glow-180963065?itm_medium=parsely-api&itm_source=related-content",
+      "source_url": "https://smithsonianmag.com/smart-news/are-these-the-earliest-known-dice-in-the-world-native-americans-may-have-used-them-to-play-games-of-chance-more-than-12000-years-ago-180988479",
       "review_status": "policy_review_required",
       "source_access_mode": null,
       "terms_url": null,
@@ -93808,6 +93839,37 @@
       "source_page_count": 1,
       "source_host": "smithsonianmag.com",
       "source_url": "https://smithsonianmag.com/blogs/national-museum-american-indian/category/collections",
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "reviewed_at": null,
+      "metadata_only": false,
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null,
+      "robots_recheck_required": true,
+      "fetch_authorized": false
+    },
+    {
+      "catalog_id": "catalog:ee9bd0b7e0d1dc2ce861c2a6",
+      "title": "Smithsonianmag Software",
+      "catalog_type": "software",
+      "record_type": "software",
+      "catalog_origin": "source_declared_collection",
+      "evidence_strength": "medium",
+      "catalog_status": "definition_only",
+      "record_count": 0,
+      "source_page_count": 1,
+      "source_host": "smithsonianmag.com",
+      "source_url": "https://smithsonianmag.com/tag/libraries",
       "review_status": "policy_review_required",
       "source_access_mode": null,
       "terms_url": null,
@@ -94238,8 +94300,8 @@
       "catalog_origin": "source_declared_collection",
       "evidence_strength": "medium",
       "catalog_status": "candidate_needs_source_validation",
-      "record_count": 8,
-      "source_page_count": 9,
+      "record_count": 9,
+      "source_page_count": 10,
       "source_host": "theguardian.com",
       "source_url": "https://theguardian.com/sport/blog",
       "review_status": "policy_review_required",
@@ -183476,10 +183538,62 @@
       "policy_note": null
     },
     {
-      "source_url": "https://smithsonianmag.com/smart-news/heres-secret-behind-bioluminescent-mushrooms-magic-glow-180963065?itm_medium=parsely-api&itm_source=related-content",
+      "source_url": "https://smithsonianmag.com/smart-news/are-these-the-earliest-known-dice-in-the-world-native-americans-may-have-used-them-to-play-games-of-chance-more-than-12000-years-ago-180988479",
       "source_host": "smithsonianmag.com",
       "catalog_ids": [
         "catalog:287f383f2c9672a471057c19"
+      ],
+      "catalog_count": 1,
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "policy_preapproved": false,
+      "metadata_only": false,
+      "robots_recheck_required": true,
+      "fetch_authorized": false,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null
+    },
+    {
+      "source_url": "https://smithsonianmag.com/tag/business",
+      "source_host": "smithsonianmag.com",
+      "catalog_ids": [
+        "catalog:bfc5aba364daef235f89243f"
+      ],
+      "catalog_count": 1,
+      "review_status": "policy_review_required",
+      "source_access_mode": null,
+      "policy_preapproved": false,
+      "metadata_only": false,
+      "robots_recheck_required": true,
+      "fetch_authorized": false,
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "per_dataset_rights_required": true,
+      "attribution_required": null,
+      "rights_scope": null,
+      "allowed_metadata_fields": [],
+      "allowed_catalog_path_patterns": [],
+      "prohibited_content": [],
+      "max_response_bytes": 0,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null
+    },
+    {
+      "source_url": "https://smithsonianmag.com/tag/libraries",
+      "source_host": "smithsonianmag.com",
+      "catalog_ids": [
+        "catalog:ee9bd0b7e0d1dc2ce861c2a6"
       ],
       "catalog_count": 1,
       "review_status": "policy_review_required",
@@ -193432,6 +193546,97 @@
       ]
     },
     {
+      "host": "smithsonianmag.com",
+      "catalog_definition_count": 13,
+      "unique_source_urls": 13,
+      "review_status_counts": {
+        "policy_review_required": 13
+      },
+      "terms_url": null,
+      "terms_status": "unreviewed",
+      "reviewed_at": null,
+      "source_access_modes": [],
+      "metadata_only": false,
+      "allowed_catalog_path_patterns": [],
+      "max_response_bytes": 0,
+      "per_dataset_rights_required": true,
+      "min_interval_seconds": 1.0,
+      "max_requests_per_run": 1,
+      "policy_note": null,
+      "sample_catalogs": [
+        {
+          "catalog_id": "catalog:7d694937691663972ec56d5d",
+          "title": "Smithsonianmag Articles",
+          "catalog_type": "knowledge_base",
+          "source_url": "https://smithsonianmag.com/blogs/air-space-museum/category/archives",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:ddf9a4979d67ccec67a036f8",
+          "title": "Smithsonianmag Articles",
+          "catalog_type": "knowledge_base",
+          "source_url": "https://smithsonianmag.com/blogs/national-museum-of-natural-history/tag/research",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:bfc5aba364daef235f89243f",
+          "title": "Smithsonianmag Businesses",
+          "catalog_type": "business_directory",
+          "source_url": "https://smithsonianmag.com/tag/business",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:ca73599fb649b5c3298cf264",
+          "title": "Smithsonianmag Events",
+          "catalog_type": "events",
+          "source_url": "https://smithsonianmag.com/blogs/office-of-the-secretary-of-the-smithsonian/category/events",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:5f734930936f574fd26eb378",
+          "title": "Smithsonianmag Media",
+          "catalog_type": "media",
+          "source_url": "https://smithsonianmag.com/tag/media",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:5d1ae11cb45c888e32afec09",
+          "title": "Smithsonianmag People",
+          "catalog_type": "people_directory",
+          "source_url": "https://smithsonianmag.com/history/massive-new-database-connect-billions-historic-records-tell-full-story-american-slavery-180973721?itm_medium=parsely-api&itm_source=related-content",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:287f383f2c9672a471057c19",
+          "title": "Smithsonianmag Places",
+          "catalog_type": "geographic",
+          "source_url": "https://smithsonianmag.com/smart-news/are-these-the-earliest-known-dice-in-the-world-native-americans-may-have-used-them-to-play-games-of-chance-more-than-12000-years-ago-180988479",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:b948068ac653172e42d46016",
+          "title": "Smithsonianmag Places",
+          "catalog_type": "geographic",
+          "source_url": "https://smithsonianmag.com/blogs/smithsonian-books/category/museums",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:be25b596d871704608e00ef0",
+          "title": "Smithsonianmag Places",
+          "catalog_type": "geographic",
+          "source_url": "https://smithsonianmag.com/blogs/office-of-the-secretary-of-the-smithsonian/tag/museums",
+          "review_status": "policy_review_required"
+        },
+        {
+          "catalog_id": "catalog:f2a2695725da503ae8b0e7f3",
+          "title": "Smithsonianmag Places",
+          "catalog_type": "geographic",
+          "source_url": "https://smithsonianmag.com/tag/museums",
+          "review_status": "policy_review_required"
+        }
+      ]
+    },
+    {
       "host": "bl.uk",
       "catalog_definition_count": 12,
       "unique_source_urls": 12,
@@ -193882,97 +194087,6 @@
           "title": "Rijksmuseum Rijksmuseum Services",
           "catalog_type": "service_directory",
           "source_url": "https://rijksmuseum.nl/en/support",
-          "review_status": "policy_review_required"
-        }
-      ]
-    },
-    {
-      "host": "smithsonianmag.com",
-      "catalog_definition_count": 11,
-      "unique_source_urls": 11,
-      "review_status_counts": {
-        "policy_review_required": 11
-      },
-      "terms_url": null,
-      "terms_status": "unreviewed",
-      "reviewed_at": null,
-      "source_access_modes": [],
-      "metadata_only": false,
-      "allowed_catalog_path_patterns": [],
-      "max_response_bytes": 0,
-      "per_dataset_rights_required": true,
-      "min_interval_seconds": 1.0,
-      "max_requests_per_run": 1,
-      "policy_note": null,
-      "sample_catalogs": [
-        {
-          "catalog_id": "catalog:7d694937691663972ec56d5d",
-          "title": "Smithsonianmag Articles",
-          "catalog_type": "knowledge_base",
-          "source_url": "https://smithsonianmag.com/blogs/air-space-museum/category/archives",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:ddf9a4979d67ccec67a036f8",
-          "title": "Smithsonianmag Articles",
-          "catalog_type": "knowledge_base",
-          "source_url": "https://smithsonianmag.com/blogs/national-museum-of-natural-history/tag/research",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:ca73599fb649b5c3298cf264",
-          "title": "Smithsonianmag Events",
-          "catalog_type": "events",
-          "source_url": "https://smithsonianmag.com/blogs/office-of-the-secretary-of-the-smithsonian/category/events",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:5f734930936f574fd26eb378",
-          "title": "Smithsonianmag Media",
-          "catalog_type": "media",
-          "source_url": "https://smithsonianmag.com/tag/media",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:5d1ae11cb45c888e32afec09",
-          "title": "Smithsonianmag People",
-          "catalog_type": "people_directory",
-          "source_url": "https://smithsonianmag.com/history/massive-new-database-connect-billions-historic-records-tell-full-story-american-slavery-180973721?itm_medium=parsely-api&itm_source=related-content",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:287f383f2c9672a471057c19",
-          "title": "Smithsonianmag Places",
-          "catalog_type": "geographic",
-          "source_url": "https://smithsonianmag.com/smart-news/heres-secret-behind-bioluminescent-mushrooms-magic-glow-180963065?itm_medium=parsely-api&itm_source=related-content",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:b948068ac653172e42d46016",
-          "title": "Smithsonianmag Places",
-          "catalog_type": "geographic",
-          "source_url": "https://smithsonianmag.com/blogs/smithsonian-books/category/museums",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:be25b596d871704608e00ef0",
-          "title": "Smithsonianmag Places",
-          "catalog_type": "geographic",
-          "source_url": "https://smithsonianmag.com/blogs/office-of-the-secretary-of-the-smithsonian/tag/museums",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:f2a2695725da503ae8b0e7f3",
-          "title": "Smithsonianmag Places",
-          "catalog_type": "geographic",
-          "source_url": "https://smithsonianmag.com/tag/museums",
-          "review_status": "policy_review_required"
-        },
-        {
-          "catalog_id": "catalog:3c9e851b6be34a465b051234",
-          "title": "Smithsonianmag Products",
-          "catalog_type": "commerce",
-          "source_url": "https://smithsonianmag.com/blogs/national-museum-american-indian/tag/collections",
           "review_status": "policy_review_required"
         }
       ]
