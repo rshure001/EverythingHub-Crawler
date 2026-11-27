@@ -1,4 +1,5 @@
 name: Everything Hub free static publisher
+# Final free-hosting activation: publish approved manifest-verified release through GitHub Pages.
 on:
   push:
     branches: [main]
