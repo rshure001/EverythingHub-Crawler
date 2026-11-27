@@ -654,7 +654,7 @@ class UniversalCatalogIngestTests(unittest.TestCase):
             self.assertEqual(related_catalog["catalog_id"], expected_record_catalog_id)
             self.assertEqual(related_catalog["owner_record_id"], document["record_id"])
             self.assertEqual(related_catalog["catalog_kind"], "record_related_items")
-            self.assertEqual(related_catalog["membership_mode"], "virtual_shared_catalog_references")
+            self.assertEqual(related_catalog["membership_mode"], "populated_shared_record_index")
             self.assertEqual(related_catalog["shared_catalog_ids"], document["catalog_ids"])
             self.assertTrue(related_catalog["public_search_allowed"])
             self.assertIn(document["record_id"], public_ids)
