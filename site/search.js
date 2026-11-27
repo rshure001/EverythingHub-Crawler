@@ -248,13 +248,13 @@
       throw new Error("Search manifest page totals do not match its shard descriptors.");
     }
     if (shardFormat === "gzip" && totalBytes > MAX_TOTAL_COMPRESSED_BYTES) {
-      throw new Error("Compressed search shards exceed the 100 MB transfer safety limit.");
+      throw new Error("Compressed search shards exceed the 150 MB transfer safety limit.");
     }
     if (shardFormat === "legacy" && totalBytes > MAX_TOTAL_BYTES) {
-      throw new Error("Legacy search shards exceed the 100 MB transition safety limit.");
+      throw new Error("Legacy search shards exceed the 150 MB transition safety limit.");
     }
     if (totalUncompressedBytes > MAX_TOTAL_UNCOMPRESSED_BYTES) {
-      throw new Error("Search shards exceed the 400 MB decoded safety limit.");
+      throw new Error("Search shards exceed the 540 MB decoded safety limit.");
     }
     return { totalBytes, totalUncompressedBytes, shardFormat };
   }
