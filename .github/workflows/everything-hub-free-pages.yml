@@ -5,6 +5,7 @@ on:
     paths:
       - "site/index.html"
       - "site/search.js"
+      - "site/release-manifest.json"
       - ".github/workflows/everything-hub-free-pages.yml"
   workflow_dispatch:
 permissions:
