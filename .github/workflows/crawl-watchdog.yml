@@ -234,9 +234,6 @@ jobs:
               if schedule_time.tzinfo is None:
                   schedule_time = schedule_time.replace(tzinfo=timezone.utc)
               schedule_age = max(0, int((now - schedule_time.astimezone(timezone.utc)).total_seconds()))
-              if schedule_age <= 10 * 60:
-                  print(f"Scheduled delivery is only {schedule_age}s old; no recovery marker will be written.")
-                  raise SystemExit(0)
           else:
               print("No scheduled crawl event is observable; using manifest age as a conservative fallback.")
 
@@ -254,27 +251,63 @@ jobs:
           if manifest_age < -60:
               raise SystemExit("Final public manifest timestamp is too far in the future")
           manifest_age = max(0, int(manifest_age))
-          if manifest_age <= 10 * 60:
-              print(f"Public manifest is only {manifest_age}s old; no recovery marker will be written.")
-              raise SystemExit(0)
-          if schedule_age is None and manifest_age <= 10 * 60:
-              print(f"No scheduled crawl is observable, but manifest age is only {manifest_age}s; no recovery marker will be written.")
-              raise SystemExit(0)
 
-          schedule_reason = (
-              f"scheduled crawl delivery was {schedule_age}s old (>10 minutes)"
-              if schedule_age is not None
-              else f"no scheduled crawl event was observable and the manifest was {manifest_age}s old (>10 minutes)"
-          )
+          frontier = json.loads(Path("data/frontier.json").read_text(encoding="utf-8"))
+          queue = frontier.get("queue") if isinstance(frontier, dict) else None
+          if not isinstance(queue, list):
+              raise SystemExit("Final frontier snapshot does not contain a queue array")
+          frontier_pending_count = len(queue)
+
+          attempts = [
+              run for run in runs
+              if isinstance(run, dict)
+              and run.get("name") == "Everything Hub crawler"
+              and isinstance(run.get("created_at"), str)
+          ]
+          latest_attempt = max(attempts, key=lambda row: row.get("created_at") or "", default=None)
+          attempt_age = None
+          if latest_attempt is not None:
+              attempt_time = datetime.fromisoformat(latest_attempt["created_at"].replace("Z", "+00:00"))
+              if attempt_time.tzinfo is None:
+                  attempt_time = attempt_time.replace(tzinfo=timezone.utc)
+              attempt_age = max(0, int((now - attempt_time.astimezone(timezone.utc)).total_seconds()))
+
+          if frontier_pending_count > 0:
+              if attempt_age is not None and attempt_age < 5 * 60:
+                  print(
+                      f"{frontier_pending_count} frontier URLs remain queued, but the last crawler attempt "
+                      f"started only {attempt_age}s ago; the five-minute minimum interval has not elapsed."
+                  )
+                  raise SystemExit(0)
+              recovery_reason = (
+                  f"{frontier_pending_count} frontier URLs remain queued; "
+                  f"the last crawler attempt started {attempt_age if attempt_age is not None else 'an unknown number of'} seconds ago "
+                  f"(five-minute minimum interval satisfied); manifest age is {manifest_age}s"
+              )
+          else:
+              if schedule_age is not None and schedule_age <= 10 * 60:
+                  print(f"Scheduled delivery is only {schedule_age}s old and the frontier is empty; no recovery marker will be written.")
+                  raise SystemExit(0)
+              if manifest_age <= 10 * 60:
+                  print(f"Public manifest is only {manifest_age}s old and the frontier is empty; no recovery marker will be written.")
+                  raise SystemExit(0)
+              schedule_reason = (
+                  f"scheduled crawl delivery was {schedule_age}s old (>10 minutes)"
+                  if schedule_age is not None
+                  else f"no scheduled crawl event was observable and the manifest was {manifest_age}s old (>10 minutes)"
+              )
+              recovery_reason = f"{schedule_reason}; frontier is empty and manifest age is {manifest_age}s"
+
           marker = {
               "version": 1,
               "updated_at": now.isoformat(timespec="milliseconds").replace("+00:00", "Z"),
               "reason": (
-                  f"Explicit workflow_dispatch fallback after {schedule_reason}; no queued or running crawler; "
-                  f"public manifest was {manifest_age}s old (>10 minutes). One bounded recovery crawl; normal schedule unchanged."
+                  f"Explicit workflow_dispatch fallback because {recovery_reason}; no queued or running crawler; "
+                  "one bounded recovery crawl; normal schedule unchanged."
               ),
               "manifest_before_pages": total_pages,
               "manifest_before_updated_at": manifest_time.isoformat(timespec="seconds").replace("+00:00", "Z"),
+              "frontier_pending_count": frontier_pending_count,
           }
           Path("/tmp/marker-ready.json").write_text(json.dumps(marker, indent=2) + "\n", encoding="utf-8")
           print("Recovery marker recheck passed:", json.dumps({
