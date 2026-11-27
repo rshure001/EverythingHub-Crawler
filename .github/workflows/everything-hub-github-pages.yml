@@ -36,8 +36,10 @@ jobs:
           grep -Fqi '<title>Everything Hub' site/index.html
           grep -Fq 'src="search.js"' site/index.html
           grep -Fq 'data:image/png;base64,' site/index.html
-      - name: Configure GitHub Pages
+      - name: Enable and configure GitHub Pages
         uses: actions/configure-pages@v5
+        with:
+          enablement: true
       - name: Upload only the site folder
         uses: actions/upload-pages-artifact@v4
         with:
