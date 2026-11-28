@@ -851,6 +851,8 @@ async function searchPageDerivedCatalogPreviewIndexed(query, network, limit = 5,
   const productTermIntent = terms.some((term) => productTerms.has(term));
   const businessIntent = terms.some((term) => businessTerms.has(term));
   const eventIntent = terms.some((term) => eventTerms.has(term));
+  // Plain topic searches must resolve to catalogs explicitly named for that topic.
+  const genericTopicIntent = !contentIntent && !productTermIntent && !businessIntent && !eventIntent;
   const candidateCatalogs = boundedCandidateIds
     .map((id) => network.catalogsById.get(id))
     .filter((catalog) => catalog && catalog.record_count > 0);
@@ -871,6 +873,11 @@ async function searchPageDerivedCatalogPreviewIndexed(query, network, limit = 5,
     let score = terms.filter((term) => catalogTokens.has(term)).length * 12;
     if (allTermsPresent(terms, titleTokens)) score += 100;
     else if (allTermsPresent(terms, catalogTokens)) score += 70;
+    if (genericTopicIntent) {
+      if (allTermsPresent(terms, titleTokens)) score += 320;
+      else if (allTermsPresent(terms, catalogTokens)) score += 260;
+      else score -= 120;
+    }
     if (productIntent) {
       if (catalog.catalog_type === "commerce" || PRODUCT_TYPES.has(String(catalog.record_type || "").toLowerCase())) score += 240;
       else if (CONTENT_TYPES.has(String(catalog.record_type || "").toLowerCase())) score -= 100;
@@ -923,6 +930,7 @@ function searchCatalogRecords(query, network, limit = 5) {
   const businessIntent = terms.some((term) => businessTerms.has(term));
   const eventIntent = terms.some((term) => eventTerms.has(term));
   const productTermIntent = terms.some((term) => productTerms.has(term));
+  const genericTopicIntent = !contentIntent && !productTermIntent && !businessIntent && !eventIntent;
 
   // Determine typed intent in a lightweight pass without retaining token sets
   // for the entire record corpus in the Edge isolate.
@@ -967,6 +975,8 @@ function searchCatalogRecords(query, network, limit = 5) {
       }
       const catalogTokens = new Set(tokenize([catalog.title, catalog.subject, catalog.source_host].join(" ")));
       const catalogMatch = allTermsPresent(terms, catalogTokens);
+      // Reject incidental mentions in broad global directories for plain topics.
+      if (genericTopicIntent && !catalogMatch) continue;
       const searchable = new Set([...item.titleTokens, ...item.attributeTokens, ...catalogTokens]);
       if (!contentRecord || contentIntent) {
         for (const token of item.descriptionTokens) searchable.add(token);
