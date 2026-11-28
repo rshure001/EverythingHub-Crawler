@@ -253,14 +253,24 @@ Deno.serve(async (req: Request) => {
         }
       }
 
-      const indexedResults = (indexed.results || []).map((item: any) => ({
-        ...item,
-        snippet: String(item.snippet || item.description || item.text || "").replace(/\s+/g, " ").slice(0, 320),
-        source: String(item.hostname || item.source || "Everything Hub index"),
-        origin: "Everything Hub public crawler index",
-        tentacle: item.lane || "general",
-        relevance: Number(item.rankScore || 0),
-      }));
+      const indexedResults = (indexed.results || []).map((item: any) => {
+        const title = cleanPageTitle(item.title || item.url);
+        const entryQuery = title.trim().slice(0, 120) || query.slice(0, 120);
+        const entryId = "query:" + encodeURIComponent(entryQuery);
+        return {
+          ...item,
+          title,
+          record_id: "page:" + encodeURIComponent(String(item.url || "")).slice(0, 120),
+          record_catalog_id: entryId,
+          shared_catalog_ids: [entryId],
+          record_type: "page",
+          snippet: String(item.snippet || item.description || item.text || "").replace(/\s+/g, " ").slice(0, 320),
+          source: String(item.hostname || item.source || "Everything Hub index"),
+          origin: "Everything Hub public crawler index",
+          tentacle: item.lane || "general",
+          relevance: Number(item.rankScore || 0),
+        };
+      });
 
       let externalPayload: any = null;
       if (indexedResults.length < limit) {
@@ -408,16 +418,25 @@ Deno.serve(async (req: Request) => {
       totalCount = Number(fallback.count ?? data.length);
     }
 
-    const results = data.map((row: any) => ({
-      title: row.title || row.url,
-      url: row.url,
-      snippet: String(row.description || "").replace(/\s+/g, " ").slice(0, 320),
-      source: (() => { try { return new URL(row.url).hostname; } catch { return "Everything Hub index"; } })(),
-      origin: "Everything Hub eh_quad index",
-      tentacle: row.tentacle || "general",
-      fetched_at: row.fetched_at,
-      relevance: row.relevance ?? 0,
-    }));
+    const results = data.map((row: any) => {
+      const title = cleanPageTitle(row.title || row.url);
+      const entryQuery = title.trim().slice(0, 120) || query.slice(0, 120);
+      const entryId = "query:" + encodeURIComponent(entryQuery);
+      return {
+        title,
+        url: row.url,
+        record_id: "page:" + encodeURIComponent(String(row.url || "")).slice(0, 120),
+        record_catalog_id: entryId,
+        shared_catalog_ids: [entryId],
+        record_type: "page",
+        snippet: String(row.description || "").replace(/\s+/g, " ").slice(0, 320),
+        source: (() => { try { return new URL(row.url).hostname; } catch { return "Everything Hub index"; } })(),
+        origin: "Everything Hub eh_quad index",
+        tentacle: row.tentacle || "general",
+        fetched_at: row.fetched_at,
+        relevance: row.relevance ?? 0,
+      };
+    });
 
     if (!results.length) return await staticFallback("database_empty");
 
