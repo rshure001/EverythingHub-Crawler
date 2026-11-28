@@ -36,7 +36,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: page-catalog-seed-expansion
+  group: everythinghub-main-writers-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:

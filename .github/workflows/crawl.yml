@@ -40,7 +40,7 @@ permissions:
   actions: write
   contents: write
 concurrency:
-  group: everythinghub-crawler
+  group: everythinghub-main-writers-${{ github.ref }}
   cancel-in-progress: false
 jobs:
   crawl:

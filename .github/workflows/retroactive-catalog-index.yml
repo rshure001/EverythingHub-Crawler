@@ -34,7 +34,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: catalog-data-publish-v9-${{ github.ref }}
+  group: everythinghub-main-writers-${{ github.ref }}
   # Let the active bounded catalog analysis finish; newer runs wait rather than canceling useful work.
   cancel-in-progress: false
 
