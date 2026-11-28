@@ -3641,7 +3641,7 @@ def write_outputs(
         **snapshot_fields,
     }
     emit("catalog_snapshot_report_write_start")
-    (output_dir / "report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    _write_json_atomic(output_dir / "report.json", report)
     manifest = {
         "version": 1, "analysis_version": analysis.get("analysis_version", ANALYZER_VERSION),
         "integrity": "sha256",
@@ -3663,7 +3663,7 @@ def write_outputs(
         **snapshot_fields,
         "files": sorted(files, key=lambda x: x["file"]),
     }
-    (output_dir / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    _write_json_atomic(output_dir / "manifest.json", manifest)
     emit("catalog_snapshot_manifest_written", files=len(files), catalogs=len(analysis["catalogs"]))
     validation = validate_outputs(output_dir, progress=progress) if validate_output else None
     emit(
