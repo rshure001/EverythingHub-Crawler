@@ -48,7 +48,7 @@ Deno.serve(async (req: Request) => {
 
   if (!catalogResults.length) {
     try {
-      const pageSearch = await searchPublicCrawlerIndex(query, null, limit, 0);
+      const pageSearch: any = await searchPublicCrawlerIndex(query, null, limit, 0);
       const pages = Array.isArray(pageSearch.results) ? pageSearch.results : [];
       const queryTerms = query.toLowerCase().split(/\s+/).filter(Boolean);
       const titleUrlMatches = pages.filter((page: any) => {
