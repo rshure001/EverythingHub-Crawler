@@ -690,7 +690,7 @@ export async function resolveRecordRelatedCatalogPreview(
     Promise.all(batch.map((catalog) => loadCatalogIndex(network, catalog, fetchImpl)))
   ));
   const indexedRecords = indexGroups.flat().flat();
-  const owners = indexedRecords.filter((record) => record.record_catalog_id === key);
+  const owners = indexedRecords.filter((record) => record.record_catalog_id === key || record.record_id === key);
   const ownerIds = new Set(owners.map((record) => record.record_id));
   if (ownerIds.size > 1) throw new Error("record_catalog_identity_collision");
   const owner = owners[0] || null;
@@ -713,7 +713,7 @@ export async function resolveRecordRelatedCatalogPreview(
     record_catalog_id: key,
     owner_record: {
       record_id: owner.record_id,
-      record_catalog_id: owner.record_catalog_id,
+      record_catalog_id: String(owner.record_catalog_id || owner.record_id || ""),
       title: owner.title,
       record_type: owner.record_type,
       description: String(owner.description || "").slice(0, 700),
@@ -727,7 +727,7 @@ export async function resolveRecordRelatedCatalogPreview(
     has_more: safeOffset + safeLimit < ordered.length,
     related_records: ordered.slice(safeOffset, safeOffset + safeLimit).map((record) => ({
       record_id: record.record_id,
-      record_catalog_id: String(record.record_catalog_id || ""),
+      record_catalog_id: String(record.record_catalog_id || record.record_id || ""),
       title: String(record.title || "Untitled record").slice(0, 240),
       record_type: String(record.record_type || "record"),
       description: String(record.description || "").slice(0, 700),
@@ -993,7 +993,7 @@ function searchCatalogRecords(query, network, limit = 5) {
     if (!matched.length) continue;
     const matchedRecords = matched.slice(0, 5).map(({ record }) => ({
       record_id: record.record_id,
-      record_catalog_id: String(record.record_catalog_id || ""),
+      record_catalog_id: String(record.record_catalog_id || record.record_id || ""),
       shared_catalog_ids: Array.isArray(record.catalog_ids) ? record.catalog_ids.slice(0, MAX_CATALOG_INDEX_FETCHES) : [],
       title: String(record.title || "Untitled record").slice(0, 240),
       record_type: String(record.record_type || "record"),
@@ -1002,7 +1002,7 @@ function searchCatalogRecords(query, network, limit = 5) {
       source_policy_review_status: record.source_policy_review_status || "not_reviewed",
       record_level_clearance: record.record_level_clearance || "not_reviewed",
     }));
-    const url = safeUrl(catalog.source_url) || matchedRecords.map((record) => record.source_url).find(Boolean) || "";
+    const url = matchedRecords.map((record) => record.source_url).find(Boolean) || safeUrl(catalog.source_url) || "";
     if (!url) continue;
     const types = new Set(matched.map((item) => String(item.record.record_type || "").toLowerCase()));
     const recordScores = matched.slice(0, 5).map((item) => item.score);
