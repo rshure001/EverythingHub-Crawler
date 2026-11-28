@@ -47,6 +47,5 @@ alter table eh_quad.eh_page_catalog_candidate_memberships enable row level secur
 grant usage on schema eh_quad to service_role;
 grant select, insert, update on eh_quad.eh_page_catalog_candidates to service_role;
 grant select, insert, update on eh_quad.eh_page_catalog_candidate_memberships to service_role;
-grant usage, select on all sequences in schema eh_quad to service_role;
 
 commit;
