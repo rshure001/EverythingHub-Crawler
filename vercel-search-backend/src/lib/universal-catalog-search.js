@@ -14,8 +14,8 @@ const MAX_INDEX_SHARDS = 256;
 const MAX_ROOT_SHARDS = 16;
 const MAX_ROOT_SHARD_BYTES = 12000000;
 const MAX_ROOT_TOTAL_BYTES = 16000000;
-const MAX_ROOT_SHARD_JSON_BYTES = 160000000; // bounded below the 128 MB aggregate root-index cap
-const MAX_ROOT_TOTAL_JSON_BYTES = 256000000;
+const MAX_ROOT_SHARD_JSON_BYTES = 320000000; // bounded per shard; aggregate decoding is capped below
+const MAX_ROOT_TOTAL_JSON_BYTES = 384000000;
 const MAX_PUBLIC_RECORDS = 250000;
 const MAX_DOCUMENT_TEXT = 1200;
 const agent = new https.Agent({ keepAlive: true, maxSockets: 4 });
@@ -249,7 +249,9 @@ async function loadUniversalCatalogFromManifest(manifest, commitSha, manifestRaw
   }
   const checked = validateUniversalCatalogManifest(manifest);
   const base = RAW + commitSha + '/data/universal-catalog-indexes/';
-  const rootShardOutcomes = await Promise.all(checked.rootFiles.map(async file => {
+  const rootShardOutcomes = [];
+  let totalDecodedBytes = 0;
+  for (const file of checked.rootFiles) {
     const entry = checked.shardByFile.get(file);
     try {
       const compressed = await fetchBuffer(base + file.split('/').map(encodeURIComponent).join('/'), entry.bytes, 20000);
@@ -257,27 +259,27 @@ async function loadUniversalCatalogFromManifest(manifest, commitSha, manifestRaw
       if (decoded.decodedBytes > MAX_ROOT_SHARD_JSON_BYTES) {
         throw new Error('universal_catalog_root_shard_uncompressed_limit');
       }
-      return { ok: true, value: { file, entry, payload: decoded.payload, decodedBytes: decoded.decodedBytes } };
+      totalDecodedBytes += decoded.decodedBytes;
+      if (totalDecodedBytes > MAX_ROOT_TOTAL_JSON_BYTES) {
+        throw new Error('universal_catalog_root_total_uncompressed_limit');
+      }
+      rootShardOutcomes.push({ ok: true, value: { file, entry, payload: decoded.payload, decodedBytes: decoded.decodedBytes } });
     } catch (error) {
-      return { ok: false, file, message: String(error && error.message || error) };
+      rootShardOutcomes.push({ ok: false, file, message: String(error && error.message || error) });
+      break;
     }
-  }));
+  }
   const invalidRootShards = rootShardOutcomes.filter(result => !result.ok);
   if (invalidRootShards.length) {
     throw new Error(invalidRootShards[0].message + ':' + invalidRootShards.map(result => result.file).join(','));
   }
   const rootShardResults = rootShardOutcomes.map(result => result.value);
 
-  let totalDecodedBytes = 0;
   let documentOccurrences = 0;
   const documentsById = new Map();
   const indexedRecordIds = new Set();
   const seenCatalogRows = new Set();
   for (const shard of rootShardResults) {
-    totalDecodedBytes += shard.decodedBytes;
-    if (totalDecodedBytes > MAX_ROOT_TOTAL_JSON_BYTES) {
-      throw new Error('universal_catalog_root_total_uncompressed_limit');
-    }
     let shardOccurrences = 0;
     for (const row of shard.payload.catalog_indexes) {
       if (!row || typeof row.catalog_id !== 'string' || seenCatalogRows.has(row.catalog_id)) {
