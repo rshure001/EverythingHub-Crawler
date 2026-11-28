@@ -42,6 +42,20 @@ jobs:
     if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: eh_test
+          POSTGRES_PASSWORD: eh_test_password
+          POSTGRES_DB: everythinghub_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U eh_test -d everythinghub_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
         with:
@@ -104,6 +118,21 @@ jobs:
           set -euo pipefail
           python -m unittest database.test_import_page_catalog_memberships -v
           python database/import_page_catalog_memberships.py
+      - name: Exercise both migrations and metadata-only importer in isolated PostgreSQL
+        if: github.event_name != 'pull_request'
+        env:
+          PGPASSWORD: eh_test_password
+          DATABASE_URL: postgresql://eh_test:eh_test_password@localhost:5432/everythinghub_test
+        run: |
+          set -euo pipefail
+          python -m pip install "psycopg[binary]>=3.2,<4"
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "create role service_role"
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f database/002_eh_quad_schema.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f database/003_eh_quad_page_catalog_memberships.sql
+          python database/import_page_catalog_memberships.py --apply
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "select 'staged_candidates=' || count(*) from eh_quad.eh_page_catalog_candidates"
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "select 'staged_memberships=' || count(*) from eh_quad.eh_page_catalog_candidate_memberships"
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "select 'public_documents=' || count(*) from eh_quad.eh_documents"
       - name: Publish metadata-only expansion ledger and membership bridge
         if: github.event_name != 'pull_request'
         run: |
