@@ -14,15 +14,7 @@ on:
     branches:
       - "main"
       - "automation/page-catalog-membership-bridge"
-  workflow_dispatch:
-      - "database/stage_page_catalog_memberships.py"
-      - "database/test_stage_page_catalog_memberships.py"
-      - "database/import_page_catalog_memberships.py"
-      - "database/test_import_page_catalog_memberships.py"
-      - "database/006_eh_quad_page_catalog_memberships.sql"
-      - "data/page-catalog-expansion.json.gz"
-      - ".github/workflows/catalog-membership-bridge-tests.yml"
-
+  workflow_dispatch: {}
 permissions:
   contents: read
 
