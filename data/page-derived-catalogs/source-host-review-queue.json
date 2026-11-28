@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
   "status": "source_review_backlog_not_a_fetch_queue",
-  "generated_at": "2026-11-28T18:14:29Z",
+  "generated_at": "2026-11-28T18:44:17Z",
   "analysis_version": 22,
-  "source_index_pages": 243452,
-  "source_index_updated_at": "2026-11-28T17:41:00Z",
-  "source_index_sha256": "ea53b2fa86076422d349095eb6e8323a56544ea7e0be80c4963bfbb1e5033cd6",
+  "source_index_pages": 243951,
+  "source_index_updated_at": "2026-11-28T17:55:43Z",
+  "source_index_sha256": "74e4c5f2b15b4445ca31a84d5b7b7680d8c0f664095b925955a78c72e2210b99",
   "metrics": {
     "catalog_definition_candidates": 2749,
     "unique_source_hosts": 119,
@@ -17050,10 +17050,10 @@
       "catalog_origin": "content_list_declared_collection",
       "evidence_strength": "medium",
       "catalog_status": "candidate_needs_source_validation",
-      "record_count": 19,
-      "source_page_count": 9,
+      "record_count": 50,
+      "source_page_count": 31,
       "source_host": "dvidshub.net",
-      "source_url": "https://dvidshub.net/unit/C-NRH",
+      "source_url": "https://dvidshub.net/unit/101SB-101ABN",
       "review_status": "policy_review_required",
       "source_access_mode": null,
       "terms_url": null,
@@ -17082,7 +17082,7 @@
       "evidence_strength": "high",
       "catalog_status": "candidate_needs_source_validation",
       "record_count": 16,
-      "source_page_count": 683,
+      "source_page_count": 692,
       "source_host": "dvidshub.net",
       "source_url": "https://dvidshub.net/publication",
       "review_status": "policy_review_required",
@@ -94982,8 +94982,8 @@
       "catalog_origin": "source_declared_collection",
       "evidence_strength": "medium",
       "catalog_status": "candidate_needs_source_validation",
-      "record_count": 22,
-      "source_page_count": 23,
+      "record_count": 23,
+      "source_page_count": 24,
       "source_host": "theguardian.com",
       "source_url": "https://theguardian.com/sport/blog",
       "review_status": "policy_review_required",
@@ -95013,8 +95013,8 @@
       "catalog_origin": "content_list_declared_collection",
       "evidence_strength": "medium",
       "catalog_status": "candidate_needs_source_validation",
-      "record_count": 27,
-      "source_page_count": 11,
+      "record_count": 28,
+      "source_page_count": 12,
       "source_host": "theguardian.com",
       "source_url": "https://theguardian.com/artanddesign/ceramics?page=2",
       "review_status": "policy_review_required",
@@ -117640,7 +117640,7 @@
       "policy_note": null
     },
     {
-      "source_url": "https://dvidshub.net/unit/C-NRH",
+      "source_url": "https://dvidshub.net/unit/101SB-101ABN",
       "source_host": "dvidshub.net",
       "catalog_ids": [
         "catalog:5004f05aa2464c56e96b4fa1"
@@ -193332,7 +193332,7 @@
           "catalog_id": "catalog:5004f05aa2464c56e96b4fa1",
           "title": "DVIDS Articles",
           "catalog_type": "knowledge_base",
-          "source_url": "https://dvidshub.net/unit/C-NRH",
+          "source_url": "https://dvidshub.net/unit/101SB-101ABN",
           "review_status": "policy_review_required"
         },
         {
