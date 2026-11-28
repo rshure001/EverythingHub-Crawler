@@ -13,6 +13,12 @@ const cors = {
 };
 const json = (body: unknown, status = 200, cache = "no-store") =>
   new Response(JSON.stringify(body), { status, headers: { ...cors, "Cache-Control": cache } });
+const cleanPageTitle = (value: unknown) => {
+  let title = String(value || "Untitled page").replace(/\s+/g, " ").trim();
+  title = title.replace(/\s+(?:[A-Za-z0-9&'’-]+\s+){1,5}Logo\s+(?:Desktop|Mobile)\b.*$/i, "");
+  title = title.replace(/\s+(?:Hamburger Menu Icon|Close Button|Account Information|Skip to content)\b.*$/i, "");
+  return title.slice(0, 240);
+};
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -58,8 +64,8 @@ Deno.serve(async (req: Request) => {
       try {
         const indexed = await searchPublicCrawlerIndex(nestedQuery, null, limit, offset);
         const relatedRecords = (indexed.results || []).map((page: any) => {
-          const title = String(page.title || "Untitled page").slice(0, 240);
-          const entryQuery = String(page.title || nestedQuery).trim().slice(0, 120) || nestedQuery.slice(0, 120);
+          const title = cleanPageTitle(page.title);
+          const entryQuery = title.trim().slice(0, 120) || nestedQuery.slice(0, 120);
           const entryId = "query:" + encodeURIComponent(entryQuery);
           return {
             record_id: "page:" + encodeURIComponent(String(page.url || "")).slice(0, 120),
@@ -68,7 +74,7 @@ Deno.serve(async (req: Request) => {
             title,
             record_type: "page",
             source_url: String(page.url || ""),
-            description: String(page.description || page.text || "").slice(0, 700),
+            description: String(page.snippet || page.description || page.text || "").slice(0, 700),
             last_seen_at: page.fetchedAt || page.publishedAt || null,
             source_policy_review_status: "not_reviewed",
             record_level_clearance: "not_reviewed",
