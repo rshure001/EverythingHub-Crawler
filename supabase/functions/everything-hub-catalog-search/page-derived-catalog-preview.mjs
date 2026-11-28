@@ -847,7 +847,7 @@ async function searchPageDerivedCatalogPreviewIndexed(query, network, limit = 5,
   await ensureCatalogsLoaded(network, boundedCandidateIds, fetchImpl);
 
   const contentIntent = terms.some((term) => CONTENT_INTENT.has(term));
-  const productTerms = new Set(["product", "products", "model", "models", "watch", "watches", "buy", "retailer", "retailers", "price", "prices", "reference", "references"]);
+  const productTerms = new Set(["product", "products", "model", "models", "watch", "watches", "camera", "cameras", "diaper", "diapers", "rolex", "buy", "retailer", "retailers", "price", "prices", "reference", "references"]);
   const businessTerms = new Set(["business", "businesses", "restaurant", "restaurants", "hotel", "hotels", "store", "stores", "shop", "shops", "venue", "venues", "dealer", "dealers"]);
   const eventTerms = new Set(["event", "events", "concert", "concerts", "festival", "festivals", "calendar", "schedule", "schedules", "grand", "prix"]);
   const productTermIntent = terms.some((term) => productTerms.has(term));
@@ -928,7 +928,7 @@ function searchCatalogRecords(query, network, limit = 5) {
   if (!terms.length) return [];
   const phrase = terms.join(" ");
   const contentIntent = terms.some((term) => CONTENT_INTENT.has(term));
-  const productTerms = new Set(["product", "products", "model", "models", "watch", "watches", "buy", "retailer", "retailers", "price", "prices", "reference", "references"]);
+  const productTerms = new Set(["product", "products", "model", "models", "watch", "watches", "camera", "cameras", "diaper", "diapers", "rolex", "buy", "retailer", "retailers", "price", "prices", "reference", "references"]);
   const businessTerms = new Set(["business", "businesses", "restaurant", "restaurants", "hotel", "hotels", "store", "stores", "shop", "shops", "venue", "venues", "dealer", "dealers"]);
   const eventTerms = new Set(["event", "events", "concert", "concerts", "festival", "festivals", "calendar", "schedule", "schedules", "grand", "prix"]);
   const businessIntent = terms.some((term) => businessTerms.has(term));
@@ -949,7 +949,7 @@ function searchCatalogRecords(query, network, limit = 5) {
   }
   const geoIntent = queryConceptCount >= 2 && globalPlaceMatch && !contentIntent && !eventIntent && !businessIntent;
   const productIntent = !geoIntent && !eventIntent && !contentIntent && !businessIntent &&
-    (productTermIntent || globalProductMatch);
+    productTermIntent;
   const locationBusinessIntent = businessIntent && !contentIntent;
   const genericTopicIntent = !contentIntent && !productIntent && !geoIntent &&
     !locationBusinessIntent && !eventIntent;
