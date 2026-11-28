@@ -53,8 +53,14 @@ class ReadinessGuardTests(unittest.TestCase):
             conn,
         ])
         delays = []
+        def connect(*_args, **_kwargs):
+            outcome = next(outcomes)
+            if isinstance(outcome, BaseException):
+                raise outcome
+            return outcome
+
         result = probe_until_ready(
-            "postgres://example", lambda *a, **k: next(outcomes),
+            "postgres://example", connect,
             attempts=3, base_delay=2, sleeper=delays.append,
         )
         self.assertTrue(result["ready"])
