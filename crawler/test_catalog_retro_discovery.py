@@ -93,12 +93,12 @@ class RetroCatalogDiscoveryTests(unittest.TestCase):
         self.assertEqual(host_key("https://www.example.com/a"), "example.com")
         self.assertIsNone(host_key("https://user:pass@example.com/"))
 
-    def test_whole_catalog_discovery_does_not_share_the_inventory_concurrency_slot(self):
+    def test_whole_catalog_discovery_serializes_with_main_branch_data_writers(self):
         root = Path(__file__).resolve().parents[1]
         catalog_first = (root / ".github" / "workflows" / "catalog-first-discovery.yml").read_text(encoding="utf-8")
         page_derived = (root / ".github" / "workflows" / "retroactive-catalog-index.yml").read_text(encoding="utf-8")
         self.assertIn("group: catalog-first-discovery-", catalog_first)
-        self.assertRegex(page_derived, r"group: catalog-data-publish-v\d+-")
+        self.assertIn("group: everythinghub-main-writers-${{ github.ref }}", page_derived)
         self.assertIn('      - "crawler/automation-trigger.json"', page_derived)
         self.assertIn("timeout-minutes: 240", page_derived)
         self.assertIn("timeout-minutes: 225", page_derived)
