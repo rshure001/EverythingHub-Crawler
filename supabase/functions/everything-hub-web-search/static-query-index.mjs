@@ -117,7 +117,7 @@ function validateQueryIndexMetadata(manifest) {
       !Number.isSafeInteger(index.compressed_bytes) || index.compressed_bytes < 1 ||
       index.compressed_bytes > 32_000_000 ||
       !Number.isSafeInteger(index.uncompressed_bytes) || index.uncompressed_bytes < 1 ||
-      index.uncompressed_bytes > 64_000_000) {
+      index.uncompressed_bytes > 96_000_000) {
     throw new Error("query_index_manifest_invalid");
   }
 
