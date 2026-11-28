@@ -58,7 +58,7 @@ Deno.serve(async (req: Request) => {
       const previewPages = titleUrlMatches.length ? titleUrlMatches : pages;
       if (previewPages.length) {
         const topicId = "query:" + encodeURIComponent(query.slice(0, 120));
-        const matchedRecords = previewPages.slice(0, 5).map((page: any, index: number) => {
+        const matchedRecords = previewPages.slice(0, 8).map((page: any, index: number) => {
           const title = cleanPageTitle(page.title);
           const entryQuery = title.trim().slice(0, 120) || query.slice(0, 120);
           const entryId = "query:" + encodeURIComponent(entryQuery);
