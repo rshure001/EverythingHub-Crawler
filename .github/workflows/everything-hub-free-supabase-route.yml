@@ -1,4 +1,5 @@
 name: Everything Hub live publishing and search verification
+# Verify the explicit HTML response header on the current homepage deployment.
 on:
   workflow_dispatch:
   push:
