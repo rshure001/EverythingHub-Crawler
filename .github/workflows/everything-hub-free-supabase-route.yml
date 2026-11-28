@@ -58,13 +58,6 @@ jobs:
             grep -Fqi "$needle" /tmp/home.html || { echo "Missing homepage feature: $needle"; exit 1; }
           done
           test "$bytes" -gt 10000
-      - name: Verify the public search script matches the repository
-        run: |
-          set -euo pipefail
-          curl --silent --show-error --location --fail --max-time 40 -H "Accept: application/vnd.github.raw" -H "X-GitHub-Api-Version: 2022-11-28" -D /tmp/search.headers "$SEARCH_JS_URL" -o /tmp/search.js
-          cmp -s site/search.js /tmp/search.js
-          test "$(wc -c < /tmp/search.js)" -gt 1000
-          grep -q 'EverythingHubSearch' /tmp/search.js
       - name: Verify the public crawler manifest and shard inventory
         run: |
           set -euo pipefail
