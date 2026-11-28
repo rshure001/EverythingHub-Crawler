@@ -144,6 +144,8 @@ Deno.serve(async (req: Request) => {
       pageIndexUpdatedAt: dynamicMetrics ? dynamicMetrics.updatedAt : (network?.pageIndexUpdatedAt || null),
       catalogCount: dynamicMetrics ? 1 : (Number(network?.catalogCount) || 0),
       recordCount: dynamicMetrics ? dynamicMetrics.recordCount : (Number(network?.recordCount) || 0),
+      globalCatalogCount: Number(network?.catalogCount) || 0,
+      globalRecordCount: Number(network?.recordCount) || 0,
       recordsPublished: Number(network?.metrics?.records_published) || 0,
       sourceTermsReviewedRecords: Number(network?.metrics?.source_terms_reviewed_records) || 0,
       resultCount: catalogResults.length,
