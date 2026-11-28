@@ -5,6 +5,8 @@ on:
     paths:
       - "crawler/catalog_seed_expansion.py"
       - "crawler/test_catalog_seed_expansion.py"
+      - "database/stage_page_catalog_memberships.py"
+      - "database/test_import_page_catalog_memberships.py"
       - "data/page-derived-catalogs/report.json"
       - "data/page-derived-catalogs/source-host-review-queue.json"
       - "data/catalog-landing-page-robots.json"
@@ -76,12 +78,27 @@ jobs:
       - name: Expand one bounded batch of ten evidence-backed catalog landing pages
         if: github.event_name != 'pull_request'
         run: python crawler/catalog_seed_expansion.py --limit 10
-      - name: Publish metadata-only expansion ledger
+      - name: Build non-public catalog membership bridge from the canonical ledger
+        if: github.event_name != 'pull_request'
+        run: |
+          set -euo pipefail
+          python database/stage_page_catalog_memberships.py
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = json.loads(Path("data/page-catalog-membership-staging.json").read_text(encoding="utf-8"))
+          assert p["production_import_allowed"] is False
+          assert p["public_search_allowed"] is False
+          assert p["rejected_rows"] == 0
+          assert all(r["verified"] is False and r["content_fetched"] is False for r in p["candidates"])
+          print(json.dumps({k:p[k] for k in ("candidate_count","membership_count","rejected_rows","production_import_allowed","public_search_allowed")}, indent=2))
+          PY
+      - name: Publish metadata-only expansion ledger and membership bridge
         if: github.event_name != 'pull_request'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -f data/page-catalog-expansion.json.gz
+          git add -f data/page-catalog-expansion.json.gz data/page-catalog-membership-staging.json
           if git diff --cached --quiet; then
             echo "No expansion ledger changes."
             exit 0
