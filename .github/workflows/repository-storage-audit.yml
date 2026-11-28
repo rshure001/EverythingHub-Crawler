@@ -20,25 +20,35 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Checkout complete Git history
+      - name: Checkout current snapshot only
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
-      - name: Measure Git object storage and largest historical blobs
+          fetch-depth: 1
+      - name: Measure repository metadata and current tracked files
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          echo "## Git object storage" >> "$GITHUB_STEP_SUMMARY"
+          echo "## GitHub repository size metadata" >> "$GITHUB_STEP_SUMMARY"
+          curl --fail --silent --show-error \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY" |
+            python -c 'import json,sys; d=json.load(sys.stdin); print(f"GitHub reported repository size: {d.get('size')} KB")' |
+            tee /tmp/repository-size.txt
+          cat /tmp/repository-size.txt >> "$GITHUB_STEP_SUMMARY"
+          echo >> "$GITHUB_STEP_SUMMARY"
+          echo "## Largest files in current main snapshot (bytes)" >> "$GITHUB_STEP_SUMMARY"
+          git ls-tree -r -l HEAD |
+            awk '$4 != "-" {print $4 "\t" $5}' |
+            sort -nr |
+            head -n 50 |
+            tee /tmp/current-largest-files.txt
+          cat /tmp/current-largest-files.txt >> "$GITHUB_STEP_SUMMARY"
+          echo >> "$GITHUB_STEP_SUMMARY"
+          echo "## Shallow checkout object footprint" >> "$GITHUB_STEP_SUMMARY"
           git count-objects -vH | tee /tmp/git-count-objects.txt
           cat /tmp/git-count-objects.txt >> "$GITHUB_STEP_SUMMARY"
           echo >> "$GITHUB_STEP_SUMMARY"
-          echo "## Largest blobs reachable from repository refs" >> "$GITHUB_STEP_SUMMARY"
-          git rev-list --objects --all |
-            git cat-file --batch-check='%(objecttype) %(objectsize) %(rest)' |
-            awk '$1 == "blob" {print $2 "\t" substr($0, index($0,$3))}' |
-            sort -nr |
-            head -n 30 |
-            tee /tmp/largest-blobs.txt
-          cat /tmp/largest-blobs.txt >> "$GITHUB_STEP_SUMMARY"
-          echo >> "$GITHUB_STEP_SUMMARY"
-          echo "Audit only: no files, refs, history, releases, or production data were changed." >> "$GITHUB_STEP_SUMMARY"
+          echo "This is a bounded current-snapshot audit. It deliberately does not fetch 76+ GB of history or scan historical blobs. No files, refs, history, releases, or production data were changed." >> "$GITHUB_STEP_SUMMARY"
