@@ -149,7 +149,9 @@ async function go(m){
   const freshness=preview?'<p class="rights-note">Catalog inventory: '+Number(preview.catalogCount||0).toLocaleString()+' catalogs · '+Number(preview.recordCount||0).toLocaleString()+' candidate records. Not yet published as verified records.</p>':'';
   const catalogMarkup=catalogs.length?'<h2 class="section-title">Catalogs matching “'+esc(q)+'”</h2>'+catalogs.map(catalogCard).join('')+freshness:'';
   const webMarkup=rows.length?'<h2 class="section-title">Web results</h2>'+rows.map(resultCard).join(''):'';
-  out.innerHTML=catalogMarkup+webMarkup||'<p style="color:#c3d7cc">No indexed results found yet. Try a broader search.</p>';
+
+   const searchMeta=webData&&webData.staticSearch;
+   const staticNote=searchMeta&&searchMeta.candidateTruncated?'<p class="catalog-meta">Bounded crawler search: '+Number(searchMeta.scannedPages||0).toLocaleString()+' candidate pages scanned across '+Number(searchMeta.candidateShardCount||0).toLocaleString()+' of '+Number(searchMeta.totalCandidateShardCount||0).toLocaleString()+' matching shards. Additional indexed candidates may exist.</p>':'';  out.innerHTML=catalogMarkup+staticNote+webMarkup||'<p style="color:#c3d7cc">No indexed results found yet. Try a broader search.</p>';
  }catch(error){if(error.name==='AbortError')return;out.innerHTML='<p style="color:#ffc78b">Search is temporarily unavailable. Please try again.</p>'}
 }
 form.addEventListener('submit',e=>{e.preventDefault();go(mode)});
