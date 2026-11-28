@@ -1,6 +1,6 @@
 (() => {
   "use strict";
-  const endpoint = "https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-web-search";
+  const endpoint = "https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-catalog-search";
   const esc = value => String(value ?? "").replace(/[&<>"']/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
   const safeUrl = value => { try { const u = new URL(String(value || "")); return /^https?:$/.test(u.protocol) ? u.href : ""; } catch { return ""; } };
   const style = document.createElement("style");
