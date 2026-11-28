@@ -15,6 +15,10 @@ on:
         type: string
   schedule:
     - cron: "17 5 * * 1"
+  push:
+    paths:
+      - "crawler/connectors/wikidata_class_discovery.py"
+      - ".github/workflows/wikidata-class-discovery.yml"
 
 permissions:
   contents: read
