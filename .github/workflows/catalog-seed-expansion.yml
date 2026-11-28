@@ -6,6 +6,7 @@ on:
       - "crawler/catalog_seed_expansion.py"
       - "crawler/test_catalog_seed_expansion.py"
       - "database/stage_page_catalog_memberships.py"
+      - "database/import_page_catalog_memberships.py"
       - "database/test_import_page_catalog_memberships.py"
       - "database/003_eh_quad_page_catalog_memberships.sql"
       - "data/page-derived-catalogs/report.json"
@@ -17,6 +18,7 @@ on:
       - "crawler/catalog_seed_expansion.py"
       - "crawler/test_catalog_seed_expansion.py"
       - "database/003_eh_quad_page_catalog_memberships.sql"
+      - "database/import_page_catalog_memberships.py"
       - "database/test_import_page_catalog_memberships.py"
       - ".github/workflows/catalog-seed-expansion.yml"
   workflow_dispatch:
@@ -59,7 +61,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -113,7 +115,6 @@ jobs:
           print(json.dumps({k:p[k] for k in ("candidate_count","membership_count","rejected_rows","production_import_allowed","public_search_allowed")}, indent=2))
           PY
       - name: Validate eh_quad-only membership importer without production writes
-        if: github.event_name != 'pull_request'
         run: |
           set -euo pipefail
           python -m unittest database.test_import_page_catalog_memberships -v
