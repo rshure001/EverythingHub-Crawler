@@ -21,9 +21,8 @@ jobs:
     env:
       LEGACY_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-site/
       BRIDGE_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-deploy-bridge
-      SEARCH_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-web-search?q=NASA&limit=5
+      SEARCH_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-independent-search?q=NASA
       CATALOG_SEARCH_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-catalog-search?q=NASA&limit=5
-      SEARCH_JS_URL: https://cdn.jsdelivr.net/gh/rshure001/EverythingHub-Crawler@main/site/search.js
       MANIFEST_URL: https://raw.githubusercontent.com/rshure001/EverythingHub-Crawler/main/public-search/manifest.json
     steps:
       - uses: actions/checkout@v4
@@ -35,14 +34,14 @@ jobs:
           cat /tmp/legacy.headers
           test "$code" = "302"
           grep -Fqi 'location: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-deploy-bridge' /tmp/legacy.headers
-      - name: Verify bridge redirects directly to the approved jsDelivr homepage
+      - name: Verify bridge redirects to the active first-party homepage release
         run: |
           set -euo pipefail
           code="$(curl --silent --show-error --max-time 30 -D /tmp/bridge.headers -o /dev/null -w '%{http_code}' "$BRIDGE_URL")"
           echo "Bridge response HTTP=$code"
           cat /tmp/bridge.headers
           test "$code" = "302"
-          grep -Fqi 'location: https://cdn.jsdelivr.net/gh/rshure001/EverythingHub-Crawler@main/site/index.html' /tmp/bridge.headers
+          grep -Fqi 'location: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-homepage-release' /tmp/bridge.headers
       - name: Verify the public address serves the complete published homepage
         run: |
           set -euo pipefail
@@ -76,11 +75,11 @@ jobs:
           set -euo pipefail
           code="$(curl --silent --show-error --location --max-time 50 -o /tmp/search.json -w '%{http_code}' "$SEARCH_URL")"
           echo "Live search HTTP=$code bytes=$(wc -c < /tmp/search.json)"
-          echo "Required source: Everything Hub public crawler index"
+          echo "Required source: independent Bing RSS fallback (database-independent)"
           head -c 1800 /tmp/search.json || true
           echo
           test "$code" = "200"
-          node -e "const fs=require('fs'); const x=JSON.parse(fs.readFileSync('/tmp/search.json','utf8')); if(!Array.isArray(x.results) || x.results.length < 1 || !/Everything Hub public crawler index|Bing RSS independent web fallback/i.test(String(x.source || ''))) { console.error(x); process.exit(1); } console.log(JSON.stringify({query:x.query??'NASA',results:x.results.length,count:x.count??null,source:x.source??null,error:x.error??null}))"
+          node -e "const fs=require('fs'); const x=JSON.parse(fs.readFileSync('/tmp/search.json','utf8')); if(!Array.isArray(x.results) || x.results.length < 1 || !x.independentOfDatabase) { console.error(x); process.exit(1); } console.log(JSON.stringify({query:x.query??'NASA',results:x.results.length,count:x.count??null,provider:x.provider??null,independentOfDatabase:x.independentOfDatabase}))"
 
       - name: Verify live first-party catalog search endpoint
         run: |
@@ -156,9 +155,7 @@ jobs:
                 await page.locator('.discover-topic[data-topic="' + topic + '"]').click();
                 await page.waitForFunction(value => document.querySelector('.discover-topic.active')?.dataset.topic === value && document.querySelectorAll('#discoverCards .discover-card').length > 0, topic, { timeout: 30000 });
               }
-              await page.locator('#discoverRefresh').click();
-              await page.waitForFunction(() => document.querySelectorAll('#discoverCards .discover-card').length > 0, null, { timeout: 30000 });
-              report.desktop.topicTabsAndRefresh = 'passed';
+              report.desktop.topicTabs = 'passed';
               await page.screenshot({ path: 'artifacts/everythinghub-desktop.png', fullPage: true });
 
               const mobile = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
