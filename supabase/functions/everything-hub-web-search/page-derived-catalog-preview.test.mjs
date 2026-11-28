@@ -533,7 +533,6 @@ test("per-record related catalogs deduplicate shared records and exclude their o
     description: "Related model",
     catalogId,
     sourceUrl: "https://www.rolex.com/watches/sea-dweller",
-    recordCatalogId: "",
   });
   const relatedB = record({
     id: "record:related-b",
@@ -543,7 +542,6 @@ test("per-record related catalogs deduplicate shared records and exclude their o
     description: "Related model",
     catalogId,
     sourceUrl: "https://www.rolex.com/watches/gmt-master-ii",
-    recordCatalogId: "",
   });
   const records = [owner, relatedA, relatedB];
   const bytes = await gzipJson({
