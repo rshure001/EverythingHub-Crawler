@@ -4,6 +4,7 @@ import { boundedInteger, normalizeLane, normalizeQuery } from "./params.mjs";
 import { createTimedFetch, isTransientDatabaseError } from "./db-fetch.mjs";
 import { loadPageDerivedCatalogPreview, resolveRecordRelatedCatalogPreview } from "./page-derived-catalog-preview.mjs";
 import { searchPublicCrawlerIndex } from "./static-query-index.mjs";
+import { shouldUseDatabaseSearch } from "./search-mode.mjs";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -362,6 +363,12 @@ Deno.serve(async (req: Request) => {
       return unavailable();
     }
   };
+
+  // Keep the verified file index authoritative. PostgreSQL remains optional and
+  // is consulted only when an operator explicitly enables it for a controlled test.
+  if (!shouldUseDatabaseSearch(Deno.env)) {
+    return await staticFallback("static_index_primary");
+  }
 
   try {
     let data: any[] = [];
