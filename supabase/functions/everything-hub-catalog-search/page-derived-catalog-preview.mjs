@@ -851,8 +851,6 @@ async function searchPageDerivedCatalogPreviewIndexed(query, network, limit = 5,
   const productTermIntent = terms.some((term) => productTerms.has(term));
   const businessIntent = terms.some((term) => businessTerms.has(term));
   const eventIntent = terms.some((term) => eventTerms.has(term));
-  // Plain topic searches must resolve to catalogs explicitly named for that topic.
-  const genericTopicIntent = !contentIntent && !productTermIntent && !businessIntent && !eventIntent;
   const candidateCatalogs = boundedCandidateIds
     .map((id) => network.catalogsById.get(id))
     .filter((catalog) => catalog && catalog.record_count > 0);
@@ -866,6 +864,8 @@ async function searchPageDerivedCatalogPreviewIndexed(query, network, limit = 5,
   const productIntent = !geoIntent && !eventIntent && !contentIntent && !businessIntent &&
     (productTermIntent || hasProductCatalog);
   const locationBusinessIntent = businessIntent && !contentIntent;
+  const genericTopicIntent = !contentIntent && !productIntent && !geoIntent &&
+    !locationBusinessIntent && !eventIntent;
 
   const preScore = (catalog) => {
     const catalogTokens = new Set(tokenize([catalog.title, catalog.subject, catalog.source_host].join(" ")));
@@ -948,6 +948,8 @@ function searchCatalogRecords(query, network, limit = 5) {
   const productIntent = !geoIntent && !eventIntent && !contentIntent && !businessIntent &&
     (productTermIntent || globalProductMatch);
   const locationBusinessIntent = businessIntent && !contentIntent;
+  const genericTopicIntent = !contentIntent && !productIntent && !geoIntent &&
+    !locationBusinessIntent && !eventIntent;
   const catalogsById = new Map(network.catalogs.map((catalog) => [catalog.catalog_id, catalog]));
   const groups = new Map();
 
