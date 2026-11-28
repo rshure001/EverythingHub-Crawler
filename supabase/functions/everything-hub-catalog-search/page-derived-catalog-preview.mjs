@@ -862,7 +862,7 @@ async function searchPageDerivedCatalogPreviewIndexed(query, network, limit = 5,
   const hasPlaceCatalog = candidateCatalogs.some((catalog) =>
     catalog.catalog_type === "geographic" || String(catalog.record_type || "").toLowerCase() === "place"
   );
-  const geoIntent = queryConceptCount >= 2 && hasPlaceCatalog && !contentIntent && !eventIntent && !businessIntent;
+  const geoIntent = (queryConceptCount >= 2 || /\\blas\\s+vegas\\b/i.test(text)) && hasPlaceCatalog && !contentIntent && !eventIntent && !businessIntent;
   const productIntent = !geoIntent && !eventIntent && !contentIntent && !businessIntent &&
     productTermIntent;
   const locationBusinessIntent = businessIntent && !contentIntent;
@@ -947,7 +947,7 @@ function searchCatalogRecords(query, network, limit = 5) {
     if (!globalPlaceMatch && type === "place" && allTermsPresent(terms, all)) globalPlaceMatch = true;
     if (globalProductMatch && globalPlaceMatch) break;
   }
-  const geoIntent = queryConceptCount >= 2 && globalPlaceMatch && !contentIntent && !eventIntent && !businessIntent;
+  const geoIntent = (queryConceptCount >= 2 || /\\blas\\s+vegas\\b/i.test(text)) && globalPlaceMatch && !contentIntent && !eventIntent && !businessIntent;
   const productIntent = !geoIntent && !eventIntent && !contentIntent && !businessIntent &&
     productTermIntent;
   const locationBusinessIntent = businessIntent && !contentIntent;
@@ -989,6 +989,8 @@ function searchCatalogRecords(query, network, limit = 5) {
           (!catalogMatch ||
             (catalog.catalog_type !== "subject" &&
              catalog.is_source_declared_catalog !== true &&
+             catalog.catalog_origin !== "source_declared_collection" &&
+             catalog.catalog_origin !== "content_list_declared_collection" &&
              catalog.catalog_origin !== "derived_from_repeated_records"))) continue;
       const searchable = new Set([...item.titleTokens, ...item.attributeTokens, ...catalogTokens]);
       if (!contentRecord || contentIntent) {
