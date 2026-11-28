@@ -83,10 +83,10 @@ test("manifest validation accepts 19,866 per-catalog indexes, 256 search shards,
   assert.equal(metadata.searchIndexFiles.length, 256);
 });
 
-function record({ id, entityId, type, title, description, catalogId, sourceUrl, attributes = {} }) {
+function record({ id, entityId, type, title, description, catalogId, sourceUrl, attributes = {}, recordCatalogId }) {
   return {
     record_id: id,
-    record_catalog_id: "record-catalog:" + id,
+    record_catalog_id: recordCatalogId === undefined ? "record-catalog:" + id : recordCatalogId,
     entity_id: entityId,
     record_type: type,
     title,
@@ -523,6 +523,7 @@ test("per-record related catalogs deduplicate shared records and exclude their o
     description: "Owner record",
     catalogId,
     sourceUrl: "https://www.rolex.com/watches/submariner",
+    recordCatalogId: "",
   });
   const relatedA = record({
     id: "record:related-a",
@@ -569,12 +570,14 @@ test("per-record related catalogs deduplicate shared records and exclude their o
     return new Response(bytes);
   };
   const first = await resolveRecordRelatedCatalogPreview(
-    owner.record_catalog_id, [catalogId], network, 1, 0, fetchImpl,
+    owner.record_id, [catalogId], network, 1, 0, fetchImpl,
   );
   assert.equal(first.owner_record.record_id, owner.record_id);
+  assert.equal(first.owner_record.record_catalog_id, owner.record_id);
   assert.equal(first.related_count, 2);
   assert.equal(first.related_records.length, 1);
   assert.equal(first.related_records[0].record_id, relatedB.record_id);
+  assert.equal(first.related_records[0].record_catalog_id, relatedB.record_id);
   assert.equal(first.has_more, true);
   const second = await resolveRecordRelatedCatalogPreview(
     owner.record_catalog_id, [catalogId], network, 1, 1, fetchImpl,
