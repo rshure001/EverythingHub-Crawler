@@ -93,6 +93,12 @@ jobs:
           assert all(r["verified"] is False and r["content_fetched"] is False for r in p["candidates"])
           print(json.dumps({k:p[k] for k in ("candidate_count","membership_count","rejected_rows","production_import_allowed","public_search_allowed")}, indent=2))
           PY
+      - name: Validate eh_quad-only membership importer without production writes
+        if: github.event_name != 'pull_request'
+        run: |
+          set -euo pipefail
+          python -m unittest database.test_import_page_catalog_memberships -v
+          python database/import_page_catalog_memberships.py
       - name: Publish metadata-only expansion ledger and membership bridge
         if: github.event_name != 'pull_request'
         run: |
