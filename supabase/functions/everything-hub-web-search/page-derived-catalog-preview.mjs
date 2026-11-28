@@ -787,11 +787,11 @@ function singularSearchToken(token) {
 function tokenize(value) {
   const raw = (String(value || "").normalize("NFKC").toLowerCase().match(/[\p{L}\p{N}]+/gu) || [])
     .filter((token) => !SEARCH_STOP_TOKENS.has(token));
-  const tokens = new Set(raw);
-  for (const token of raw) {
-    const singular = singularSearchToken(token);
-    if (singular) tokens.add(singular);
-  }
+  // Normalize inflections to one canonical token. Keeping both plural and
+  // singular forms makes the posting intersection require both variants,
+  // which incorrectly turns searches like "cameras" and "trees" into zero hits.
+  const tokens = new Set();
+  for (const token of raw) tokens.add(singularSearchToken(token) || token);
   return Array.from(tokens);
 }
 
