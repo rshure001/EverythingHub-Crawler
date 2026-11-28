@@ -1,0 +1,39 @@
+name: Camera source import
+on:
+  push:
+    paths:
+      - 'crawler/connectors/**'
+      - '.github/workflows/camera-source-import.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: write
+jobs:
+  stage-camera-source-records:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Import existing camera Wikidata entities
+        run: |
+          mkdir -p data/source-staging
+          args=()
+          while IFS= read -r qid; do
+            [[ "$qid" =~ ^Q[1-9][0-9]*$ ]] && args+=(--qid "$qid")
+          done < crawler/connectors/camera_wikidata_qids.txt
+          python crawler/connectors/wikidata_entity_connector.py \
+            --catalog-id cameras \
+            --output data/source-staging/wikidata-cameras.json \
+            --delay 1 \
+            "${args[@]}"
+      - name: Upload review-only staging artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wikidata-camera-staging
+          path: data/source-staging/wikidata-cameras.json
+          if-no-files-found: error
+          retention-days: 14
