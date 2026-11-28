@@ -75,3 +75,6 @@ jobs:
 
       - name: Search and verify the committed public catalog with production ranking
         run: node supabase/functions/everything-hub-web-search/static-search-catalog-smoke.mjs
+
+      - name: Search the public catalog through the bounded query index
+        run: node supabase/functions/everything-hub-web-search/static-query-index-smoke.mjs
