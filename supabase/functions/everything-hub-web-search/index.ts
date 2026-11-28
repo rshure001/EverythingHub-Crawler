@@ -243,7 +243,7 @@ Deno.serve(async (req: Request) => {
     });
 
     try {
-      let indexed = await searchPublicCrawlerIndex(query, validLane, limit, offset);
+      let indexed: any = await searchPublicCrawlerIndex(query, validLane, limit, offset);
       let laneFallback = false;
       if (validLane && indexed.results.length < 3) {
         const broad = await searchPublicCrawlerIndex(query, null, limit, offset);
