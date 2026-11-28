@@ -5,6 +5,7 @@ on:
     paths:
       - "database/stage_page_catalog_memberships.py"
       - "database/test_stage_page_catalog_memberships.py"
+      - "data/page-catalog-expansion.json.gz"
       - ".github/workflows/catalog-membership-bridge-tests.yml"
   push:
     branches:
@@ -12,6 +13,7 @@ on:
     paths:
       - "database/stage_page_catalog_memberships.py"
       - "database/test_stage_page_catalog_memberships.py"
+      - "data/page-catalog-expansion.json.gz"
       - ".github/workflows/catalog-membership-bridge-tests.yml"
 
 permissions:
@@ -22,9 +24,9 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  unit-tests:
+  unit-tests-and-staging:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -32,3 +34,29 @@ jobs:
           python-version: "3.12"
       - name: Run metadata-only membership bridge tests
         run: python -m unittest database.test_stage_page_catalog_memberships -v
+      - name: Build non-public staging artifact from canonical expansion ledger
+        run: python database/stage_page_catalog_memberships.py
+      - name: Assert staging artifact cannot be imported or publicly searched
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = json.loads(Path("data/page-catalog-membership-staging.json").read_text())
+          assert p["artifact_type"] == "page_catalog_membership_staging"
+          assert p["production_import_allowed"] is False
+          assert p["public_search_allowed"] is False
+          assert all(x["verified"] is False and x["content_fetched"] is False
+                     and x["rights_status"] == "per_record_review_required"
+                     for x in p["candidates"])
+          assert all(x["membership_status"] == "metadata_only_not_public"
+                     for x in p["memberships"])
+          print(json.dumps({k:p[k] for k in ("candidate_count","membership_count","rejected_rows",
+              "production_import_allowed","public_search_allowed")}, indent=2))
+          PY
+      - name: Retain metadata-only staging artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: page-catalog-membership-staging
+          path: data/page-catalog-membership-staging.json
+          if-no-files-found: error
+          retention-days: 7
