@@ -150,12 +150,36 @@ jobs:
             if git push origin HEAD:main; then
               exit 0
             fi
+            echo "Main advanced during checkpoint publication; refreshing the canonical ledger and rebuilding the same bounded batch (attempt $attempt/3)."
             git fetch origin main
-            if ! git rebase origin/main; then
-              git rebase --abort || true
-              echo "Concurrent ledger conflict; leaving the staged checkpoint untouched."
-              exit 1
+            git reset --hard origin/main
+
+            # The expansion ledger and membership bridge are compressed/derived
+            # artifacts. Never text-rebase them. Re-run the idempotent bounded
+            # worker against the newest committed ledger so completed seed URLs
+            # are skipped and stable candidate IDs deduplicate any overlap.
+            python crawler/catalog_seed_expansion.py --limit 10
+            python database/stage_page_catalog_memberships.py
+            python - <<'PY'
+            import json
+            from pathlib import Path
+            p = json.loads(Path("data/page-catalog-membership-staging.json").read_text(encoding="utf-8"))
+            assert p["production_import_allowed"] is False
+            assert p["public_search_allowed"] is False
+            assert p["rejected_rows"] == 0
+            assert p["candidate_count"] > 0
+            assert p["membership_count"] > 0
+            assert all(r["verified"] is False and r["content_fetched"] is False for r in p["candidates"])
+            print(json.dumps({k:p[k] for k in ("candidate_count","membership_count","rejected_rows")}, indent=2))
+            PY
+            python -m unittest database.test_import_page_catalog_memberships -v
+            python database/import_page_catalog_memberships.py
+            git add -f data/page-catalog-expansion.json.gz data/page-catalog-membership-staging.json
+            if git diff --cached --quiet; then
+              echo "Latest main already contains this bounded expansion checkpoint."
+              exit 0
             fi
+            git commit -m "Expand ten evidence-backed catalog landing pages"
           done
-          echo "Unable to publish expansion ledger after three safe rebase attempts."
+          echo "Unable to publish expansion ledger after three bounded rebuild attempts."
           exit 1
