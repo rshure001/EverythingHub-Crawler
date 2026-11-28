@@ -988,6 +988,7 @@ function searchCatalogRecords(query, network, limit = 5) {
       if (genericTopicIntent &&
           (!catalogMatch ||
             (catalog.catalog_type !== "subject" &&
+             catalog.is_source_declared_catalog !== true &&
              catalog.catalog_origin !== "derived_from_repeated_records"))) continue;
       const searchable = new Set([...item.titleTokens, ...item.attributeTokens, ...catalogTokens]);
       if (!contentRecord || contentIntent) {
