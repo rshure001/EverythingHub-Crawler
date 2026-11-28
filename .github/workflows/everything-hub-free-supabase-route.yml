@@ -89,7 +89,7 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Run desktop and mobile browser acceptance
         env:
-          LEGACY_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-new
+          LEGACY_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-deploy-bridge
         run: |
           mkdir -p artifacts
           node <<'NODE'
