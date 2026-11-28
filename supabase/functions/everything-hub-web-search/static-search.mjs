@@ -3,6 +3,12 @@ const FIELD_WEIGHTS = {
   productName: 4.5, productBrand: 3.5, productSku: 3.2,
   productPrice: 1.5, productAvailability: 1.2,
 };
+const cleanPageTitle = (value) => {
+  let title = String(value || "Untitled page").replace(/\s+/g, " ").trim();
+  title = title.replace(/\s+(?:[A-Za-z0-9&'’-]+\s+){1,5}Logo\s+(?:Desktop|Mobile)\b.*$/i, "");
+  title = title.replace(/\s+(?:Hamburger Menu Icon|Close Button|Account Information|Skip to content)\b.*$/i, "");
+  return title.slice(0, 500);
+};
 const MAX_QUERY_CHARS = 240;
 const MAX_TERMS = 12;
 const EVIDENCE_WEIGHTS = { relevance: 0.45, sourceQuality: 0.25, freshness: 0.15, corroboration: 0.15 };
@@ -162,7 +168,7 @@ export function searchStaticPages(pages, query, lane = null, limit = 10, offset 
 
     const candidate = {
       score,
-      title: String(page.title || parsed.href).slice(0, 500),
+      title: cleanPageTitle(page.title || parsed.href),
       url: parsed.href,
       hostname: parsed.hostname,
       description: String(page.description || "").slice(0, 500),

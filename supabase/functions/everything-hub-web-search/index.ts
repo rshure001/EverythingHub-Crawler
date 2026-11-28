@@ -13,6 +13,12 @@ const cors = {
 };
 const json = (body: unknown, status = 200, cache = "no-store") =>
   new Response(JSON.stringify(body), { status, headers: { ...cors, "Cache-Control": cache } });
+const cleanPageTitle = (value: unknown) => {
+  let title = String(value || "Untitled page").replace(/\s+/g, " ").trim();
+  title = title.replace(/\s+(?:[A-Za-z0-9&'’-]+\s+){1,5}Logo\s+(?:Desktop|Mobile)\b.*$/i, "");
+  title = title.replace(/\s+(?:Hamburger Menu Icon|Close Button|Account Information|Skip to content)\b.*$/i, "");
+  return title.slice(0, 240);
+};
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -39,6 +45,83 @@ Deno.serve(async (req: Request) => {
 
   const recordCatalogId = String(url.searchParams.get("record_catalog_id") || "").trim();
   if (recordCatalogId) {
+    if (recordCatalogId.startsWith("query:")) {
+      let nestedQuery = recordCatalogId.slice("query:".length);
+      try { nestedQuery = decodeURIComponent(nestedQuery); } catch { /* keep the already-decoded query */ }
+      nestedQuery = normalizeQuery(nestedQuery).slice(0, 160);
+      if (nestedQuery.length < 2) {
+        return json({
+          status: "query-derived-candidate-preview",
+          preview_only: true,
+          record_catalog_id: recordCatalogId,
+          related_count: 0,
+          related_records: [],
+          offset,
+          limit,
+          has_more: false,
+        }, 200, "public, max-age=15, stale-while-revalidate=30");
+      }
+      try {
+        const indexed: any = await searchPublicCrawlerIndex(nestedQuery, null, limit, offset);
+        const relatedPages = (indexed.results || []).filter((page: any) => cleanPageTitle(page.title).toLowerCase() !== nestedQuery.toLowerCase());
+        const relatedRecords = relatedPages.map((page: any) => {
+          const title = cleanPageTitle(page.title);
+          const entryQuery = title.trim().slice(0, 120) || nestedQuery.slice(0, 120);
+          const entryId = "query:" + encodeURIComponent(entryQuery);
+          return {
+            record_id: "page:" + encodeURIComponent(String(page.url || "")).slice(0, 120),
+            record_catalog_id: entryId,
+            shared_catalog_ids: [entryId, recordCatalogId],
+            title,
+            record_type: "page",
+            source_url: String(page.url || ""),
+            description: String(page.snippet || page.description || page.text || "").slice(0, 700),
+            last_seen_at: page.fetchedAt || page.publishedAt || null,
+            source_policy_review_status: "not_reviewed",
+            record_level_clearance: "not_reviewed",
+            commercial_eligible: false,
+            preview_only: true,
+          };
+        });
+        return json({
+          status: "query-derived-candidate-preview",
+          preview_only: true,
+          record_catalog_id: recordCatalogId,
+          owner_record: {
+            record_id: recordCatalogId,
+            record_catalog_id: recordCatalogId,
+            title: nestedQuery,
+            record_type: "page",
+            description: "On-demand query-indexed page catalog preview",
+            source_urls: [],
+            shared_catalog_ids: [recordCatalogId],
+          },
+          related_count: relatedRecords.length,
+          related_records: relatedRecords,
+          offset,
+          limit,
+          has_more: Boolean(indexed.hasMore && relatedRecords.length >= limit),
+          catalogPreview: {
+            status: "query-derived-candidate-preview",
+            previewOnly: true,
+            query: nestedQuery,
+            indexedPages: indexed.indexedPages || 0,
+            scannedPages: indexed.scannedPages || 0,
+            candidatePageCount: indexed.candidatePageCount || 0,
+            candidateShardCount: indexed.candidateShardCount || 0,
+            candidateTruncated: Boolean(indexed.candidateTruncated),
+            rightsReviewRequired: true,
+            recordsPublished: 0,
+            sourceTermsReviewedRecords: 0,
+            commercialEligibleRecords: 0,
+          },
+        }, 200, "public, max-age=15, stale-while-revalidate=30");
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : String(error);
+        console.error("Query-derived entry catalog unavailable:", detail.slice(0, 160));
+        return json({ error: "query_catalog_temporarily_unavailable" }, 503);
+      }
+    }
     const rawCatalogIds = String(url.searchParams.get("catalog_ids") || "");
     if (rawCatalogIds.length > 4000) return json({ error: "record_catalog_membership_invalid" }, 400);
     const sharedCatalogIds = rawCatalogIds.split(",").map((value) => value.trim()).filter(Boolean);
@@ -170,14 +253,24 @@ Deno.serve(async (req: Request) => {
         }
       }
 
-      const indexedResults = (indexed.results || []).map((item: any) => ({
-        ...item,
-        snippet: String(item.snippet || item.description || item.text || "").replace(/\s+/g, " ").slice(0, 320),
-        source: String(item.hostname || item.source || "Everything Hub index"),
-        origin: "Everything Hub public crawler index",
-        tentacle: item.lane || "general",
-        relevance: Number(item.rankScore || 0),
-      }));
+      const indexedResults = (indexed.results || []).filter((item: any) => Number(item.rankScore || 0) >= 0.15).map((item: any) => {
+        const title = cleanPageTitle(item.title || item.url);
+        const entryQuery = title.trim().slice(0, 120) || query.slice(0, 120);
+        const entryId = "query:" + encodeURIComponent(entryQuery);
+        return {
+          ...item,
+          title,
+          record_id: "page:" + encodeURIComponent(String(item.url || "")).slice(0, 120),
+          record_catalog_id: entryId,
+          shared_catalog_ids: [entryId],
+          record_type: "page",
+          snippet: String(item.snippet || item.description || item.text || "").replace(/\s+/g, " ").slice(0, 320),
+          source: String(item.hostname || item.source || "Everything Hub index"),
+          origin: "Everything Hub public crawler index",
+          tentacle: item.lane || "general",
+          relevance: Number(item.rankScore || 0),
+        };
+      });
 
       let externalPayload: any = null;
       if (indexedResults.length < limit) {
@@ -325,16 +418,25 @@ Deno.serve(async (req: Request) => {
       totalCount = Number(fallback.count ?? data.length);
     }
 
-    const results = data.map((row: any) => ({
-      title: row.title || row.url,
-      url: row.url,
-      snippet: String(row.description || "").replace(/\s+/g, " ").slice(0, 320),
-      source: (() => { try { return new URL(row.url).hostname; } catch { return "Everything Hub index"; } })(),
-      origin: "Everything Hub eh_quad index",
-      tentacle: row.tentacle || "general",
-      fetched_at: row.fetched_at,
-      relevance: row.relevance ?? 0,
-    }));
+    const results = data.map((row: any) => {
+      const title = cleanPageTitle(row.title || row.url);
+      const entryQuery = title.trim().slice(0, 120) || query.slice(0, 120);
+      const entryId = "query:" + encodeURIComponent(entryQuery);
+      return {
+        title,
+        url: row.url,
+        record_id: "page:" + encodeURIComponent(String(row.url || "")).slice(0, 120),
+        record_catalog_id: entryId,
+        shared_catalog_ids: [entryId],
+        record_type: "page",
+        snippet: String(row.description || "").replace(/\s+/g, " ").slice(0, 320),
+        source: (() => { try { return new URL(row.url).hostname; } catch { return "Everything Hub index"; } })(),
+        origin: "Everything Hub eh_quad index",
+        tentacle: row.tentacle || "general",
+        fetched_at: row.fetched_at,
+        relevance: row.relevance ?? 0,
+      };
+    });
 
     if (!results.length) return await staticFallback("database_empty");
 

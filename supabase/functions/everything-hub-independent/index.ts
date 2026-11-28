@@ -75,18 +75,25 @@ function safe(u){try{const x=new URL(u);return ['http:','https:'].includes(x.pro
 function sourceLink(u,label){const href=safe(u);return href==='#'?'':'<a target="_blank" rel="noopener noreferrer" href="'+esc(href)+'">'+esc(label||'Open source')+'</a>'}
 function recordCard(r){
  const id=String(r.record_catalog_id||r.record_id||'');
- const ids=Array.isArray(r.shared_catalog_ids)?r.shared_catalog_ids.slice(0,3):[];
+ const ids=Array.isArray(r.shared_catalog_ids)?r.shared_catalog_ids.slice(0,1):[];
  const target='nested-'+(++nestedCounter);
  const source=Array.isArray(r.source_urls)?r.source_urls[0]:(r.source_url||'');
  const button=id&&ids.length?'<button class="open-record-catalog" data-record-catalog-id="'+esc(id)+'" data-catalog-ids="'+esc(ids.join(','))+'" data-target="'+target+'">Open this entry catalog</button><div class="nested" id="'+target+'"></div>':'';
  return '<div class="matched-record"><strong>'+esc(r.title||'Untitled record')+'</strong> <span>'+esc(r.record_type||'record')+'</span><p>'+esc(r.description||'')+'</p>'+sourceLink(source,'Open source')+button+'</div>';
 }
 function catalogCard(c){
- const records=(c.matched_records||[]).slice(0,3);
+ const records=(c.matched_records||[]).slice(0,8);
  const count=Number(c.record_count||0),pages=Number(c.source_page_count||0);
- return '<article class="result catalog-result"><div class="catalog-heading"><strong>'+esc(c.catalog_title||c.title||'Catalog')+'</strong><span>'+esc(c.catalog_type||'catalog')+'</span></div><p class="catalog-meta">'+count.toLocaleString()+' records · '+pages.toLocaleString()+' source pages · candidate preview only</p><p>'+esc(c.snippet||c.description||'')+'</p>'+sourceLink(c.url,'Open source page')+(records.length?'<div class="matched-records"><h3>Matching entries</h3>'+records.map(recordCard).join('')+'</div>':'')+'<p class="rights-note">Source terms and individual record rights have not been cleared for redistribution.</p></article>';
+ const pageLabel=c.catalog_type==='query-derived page collection'?'candidate pages scanned':'source pages';
+ return '<article class="result catalog-result"><div class="catalog-heading"><strong>'+esc(c.catalog_title||c.title||'Catalog')+'</strong><span>'+esc(c.catalog_type||'catalog')+'</span></div><p class="catalog-meta">'+count.toLocaleString()+' records · '+pages.toLocaleString()+' '+pageLabel+' · candidate preview only</p><p>'+esc(c.snippet||c.description||'')+'</p>'+sourceLink(c.url,'Open source page')+(records.length?'<div class="matched-records"><h3>Matching entries</h3>'+records.map(recordCard).join('')+'</div>':'')+'<p class="rights-note">Source terms and individual record rights have not been cleared for redistribution.</p></article>';
 }
-function resultCard(r){return '<article class="result"><a target="_blank" rel="noopener noreferrer" href="'+esc(safe(r.url||r.pageUrl))+'">'+esc(r.title||'Open result')+'</a><p>'+esc(r.snippet||r.description||'')+'</p><span class="source">'+esc(r.source||r.origin||r.provider||'Search result')+'</span></article>'}
+function resultCard(r){
+ const recordId=String(r.record_catalog_id||'');
+ const ids=Array.isArray(r.shared_catalog_ids)?r.shared_catalog_ids.slice(0,1):[];
+ const target='nested-'+(++nestedCounter);
+ const button=recordId&&ids.length?'<button class="open-record-catalog" data-record-catalog-id="'+esc(recordId)+'" data-catalog-ids="'+esc(ids.join(','))+'" data-target="'+target+'">Open this entry catalog</button><div class="nested" id="'+target+'"></div>':'';
+ return '<article class="result"><a target="_blank" rel="noopener noreferrer" href="'+esc(safe(r.url||r.pageUrl))+'">'+esc(r.title||'Open result')+'</a><p>'+esc(r.snippet||r.description||'')+'</p><span class="source">'+esc(r.source||r.origin||r.provider||'Search result')+'</span>'+button+'</article>';
+}
 async function loadNested(button){
  const target=document.getElementById(button.dataset.target);if(!target)return;
  const recordId=String(button.dataset.recordCatalogId||'');
@@ -139,10 +146,12 @@ async function go(m){
   const catalogs=catalogData&&Array.isArray(catalogData.catalogResults)?catalogData.catalogResults:[];
   const rows=webData&&Array.isArray(webData.results)?webData.results:[];
   const preview=catalogData&&catalogData.catalogPreview;
-  const freshness=preview?'<p class="rights-note">Catalog inventory: '+Number(preview.catalogCount||0).toLocaleString()+' catalogs · '+Number(preview.recordCount||0).toLocaleString()+' candidate records. Not yet published as verified records.</p>':'';
+  const freshness=preview?(preview.queryIndexed?'<p class="rights-note">On-demand collection: '+Number(preview.recordCount||0).toLocaleString()+' matching pages · global inventory: '+Number(preview.globalCatalogCount||0).toLocaleString()+' catalogs and '+Number(preview.globalRecordCount||0).toLocaleString()+' candidate records. Preview only; not published as verified records.</p>':'<p class="rights-note">Catalog inventory: '+Number(preview.catalogCount||0).toLocaleString()+' catalogs · '+Number(preview.recordCount||0).toLocaleString()+' candidate records. Not yet published as verified records.</p>'):'';
   const catalogMarkup=catalogs.length?'<h2 class="section-title">Catalogs matching “'+esc(q)+'”</h2>'+catalogs.map(catalogCard).join('')+freshness:'';
   const webMarkup=rows.length?'<h2 class="section-title">Web results</h2>'+rows.map(resultCard).join(''):'';
-  out.innerHTML=catalogMarkup+webMarkup||'<p style="color:#c3d7cc">No indexed results found yet. Try a broader search.</p>';
+
+   const searchMeta=webData&&webData.staticSearch;
+   const staticNote=searchMeta&&searchMeta.candidateTruncated?'<p class="catalog-meta">Bounded crawler search: '+Number(searchMeta.scannedPages||0).toLocaleString()+' candidate pages scanned across '+Number(searchMeta.candidateShardCount||0).toLocaleString()+' of '+Number(searchMeta.totalCandidateShardCount||0).toLocaleString()+' matching shards. Additional indexed candidates may exist.</p>':'';  out.innerHTML=catalogMarkup+staticNote+webMarkup||'<p style="color:#c3d7cc">No indexed results found yet. Try a broader search.</p>';
  }catch(error){if(error.name==='AbortError')return;out.innerHTML='<p style="color:#ffc78b">Search is temporarily unavailable. Please try again.</p>'}
 }
 form.addEventListener('submit',e=>{e.preventDefault();go(mode)});
