@@ -28,7 +28,7 @@ jobs:
       MANIFEST_URL: https://raw.githubusercontent.com/rshure001/EverythingHub-Crawler/main/public-search/manifest.json
     steps:
       - uses: actions/checkout@v4
-      - name: Verify legacy public address redirects to the active search homepage
+      - name: Verify legacy public address redirects to the approved publishing bridge
         run: |
           set -euo pipefail
           code="$(curl --silent --show-error --max-time 30 -D /tmp/legacy.headers -o /dev/null -w '%{http_code}' "$LEGACY_REDIRECT_URL")"
