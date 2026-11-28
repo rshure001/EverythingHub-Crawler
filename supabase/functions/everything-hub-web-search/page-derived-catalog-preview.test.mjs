@@ -579,7 +579,7 @@ test("per-record related catalogs deduplicate shared records and exclude their o
   assert.equal(first.related_count, 2);
   assert.equal(first.related_records.length, 1);
   assert.equal(first.related_records[0].record_id, relatedB.record_id);
-  assert.equal(first.related_records[0].record_catalog_id, relatedB.record_id);
+  assert.equal(first.related_records[0].record_catalog_id, "record-catalog:" + relatedB.record_id);
   assert.equal(first.has_more, true);
   const second = await resolveRecordRelatedCatalogPreview(
     owner.record_id, [catalogId], network, 1, 1, fetchImpl,
