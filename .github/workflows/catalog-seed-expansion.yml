@@ -119,7 +119,6 @@ jobs:
           python -m unittest database.test_import_page_catalog_memberships -v
           python database/import_page_catalog_memberships.py
       - name: Exercise both migrations and metadata-only importer in isolated PostgreSQL
-        if: github.event_name != 'pull_request'
         env:
           PGPASSWORD: eh_test_password
           DATABASE_URL: postgresql://eh_test:eh_test_password@localhost:5432/everythinghub_test
