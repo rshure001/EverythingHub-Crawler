@@ -62,7 +62,7 @@ Deno.serve(async (req: Request) => {
         }, 200, "public, max-age=15, stale-while-revalidate=30");
       }
       try {
-        const indexed = await searchPublicCrawlerIndex(nestedQuery, null, limit, offset);
+        const indexed: any = await searchPublicCrawlerIndex(nestedQuery, null, limit, offset);
         const relatedPages = (indexed.results || []).filter((page: any) => cleanPageTitle(page.title).toLowerCase() !== nestedQuery.toLowerCase());
         const relatedRecords = relatedPages.map((page: any) => {
           const title = cleanPageTitle(page.title);
