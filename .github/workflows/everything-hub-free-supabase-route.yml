@@ -8,6 +8,7 @@ on:
       - 'supabase/functions/everything-hub-deploy-bridge/index.ts'
       - 'supabase/functions/everything-hub-site/index.ts'
       - 'supabase/functions/everything-hub-homepage-release/index.ts'
+      - 'supabase/functions/everything-hub-homepage-release-v2/index.ts'
       - '.github/workflows/everything-hub-free-supabase-route.yml'
   schedule:
     - cron: '23 * * * *'
@@ -44,16 +45,17 @@ jobs:
           echo "Bridge response HTTP=$code"
           cat /tmp/bridge.headers
           test "$code" = "302"
-          grep -Fqi 'location: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-homepage-release' /tmp/bridge.headers
+          grep -Fqi 'location: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-homepage-release-v2' /tmp/bridge.headers
       - name: Verify active first-party homepage release serves complete HTML
         run: |
           set -euo pipefail
-          code="$(curl --silent --show-error --location --max-time 45 -D /tmp/home.headers -o /tmp/home.html -w '%{http_code}' "https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-homepage-release")"
+          code="$(curl --silent --show-error --location --max-time 45 -D /tmp/home.headers -o /tmp/home.html -w '%{http_code}' "https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-homepage-release-v2")"
           bytes="$(wc -c < /tmp/home.html)"
           content_type="$(grep -i '^content-type:' /tmp/home.headers | tail -1 || true)"
           echo "First-party homepage HTTP=$code bytes=$bytes $content_type"
           test "$code" = "200"
           grep -Eiq '^content-type: *text/html' /tmp/home.headers
+          grep -Fqi 'x-eh-homepage-content-type: html-v2' /tmp/home.headers
           grep -Fqi 'Everything Hub' /tmp/home.html
           grep -Fqi 'Everything within reach' /tmp/home.html
           grep -Fqi 'Explore the Cameras Catalog' /tmp/home.html
