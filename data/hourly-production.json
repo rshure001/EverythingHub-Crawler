@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-11-28T01:58:39.804822+00:00",
+  "updated_at": "2026-11-28T02:12:30.036439+00:00",
   "metric_kind": "pages",
   "target_new_pages_per_hour": 60000,
   "runs": [
@@ -444,27 +444,53 @@
         "wall_clock_pages_per_minute": 5.06,
         "wall_clock_pages_per_hour": 303.9
       }
+    },
+    {
+      "run_id": "46095872539",
+      "run_number": "548",
+      "timestamp": "2026-11-28T02:08:41Z",
+      "indexed_pages_processed": 357,
+      "metric_kind": "pages",
+      "fetch_attempts": 416,
+      "duration_seconds": 420.62,
+      "commit_sha": "ca6dbb9b4c3b",
+      "manifest_interval": {
+        "valid": true,
+        "metric_kind": "pages",
+        "reason": null,
+        "before_pages": 239491,
+        "after_pages": 239834,
+        "before_updated_at": "2026-11-28T01:54:52Z",
+        "after_updated_at": "2026-11-28T02:08:41Z",
+        "elapsed_seconds": 829.0,
+        "run_duration_seconds": 420.62,
+        "new_unique_pages": 343,
+        "pages_per_minute": 48.93,
+        "pages_per_hour": 2935.7,
+        "wall_clock_pages_per_minute": 24.83,
+        "wall_clock_pages_per_hour": 1489.5
+      }
     }
   ],
   "latest_manifest_interval": {
     "valid": true,
     "metric_kind": "pages",
     "reason": null,
-    "before_pages": 239098,
-    "after_pages": 239491,
-    "before_updated_at": "2026-11-28T00:37:16Z",
-    "after_updated_at": "2026-11-28T01:54:52Z",
-    "elapsed_seconds": 4656.0,
-    "run_duration_seconds": 420.55,
-    "new_unique_pages": 393,
-    "pages_per_minute": 56.07,
-    "pages_per_hour": 3364.2,
-    "wall_clock_pages_per_minute": 5.06,
-    "wall_clock_pages_per_hour": 303.9
+    "before_pages": 239491,
+    "after_pages": 239834,
+    "before_updated_at": "2026-11-28T01:54:52Z",
+    "after_updated_at": "2026-11-28T02:08:41Z",
+    "elapsed_seconds": 829.0,
+    "run_duration_seconds": 420.62,
+    "new_unique_pages": 343,
+    "pages_per_minute": 48.93,
+    "pages_per_hour": 2935.7,
+    "wall_clock_pages_per_minute": 24.83,
+    "wall_clock_pages_per_hour": 1489.5
   },
   "recent_run_activity": {
-    "pages_processed": 408,
-    "fetch_attempts": 501,
-    "run_count": 1
+    "pages_processed": 765,
+    "fetch_attempts": 917,
+    "run_count": 2
   }
 }
