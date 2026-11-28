@@ -1,6 +1,9 @@
 name: Repository storage audit
 
 on:
+  push:
+    paths:
+      - ".github/workflows/repository-storage-audit.yml"
   workflow_dispatch:
   schedule:
     - cron: "23 9 * * 1"
