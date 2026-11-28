@@ -3,6 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.49.1";
 import { boundedInteger, normalizeLane, normalizeQuery } from "./params.mjs";
 import { createTimedFetch, isTransientDatabaseError } from "./db-fetch.mjs";
 import { loadPageDerivedCatalogPreview, resolveRecordRelatedCatalogPreview } from "./page-derived-catalog-preview.mjs";
+import { searchPublicCrawlerIndex } from "./static-query-index.mjs";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -12,6 +13,12 @@ const cors = {
 };
 const json = (body: unknown, status = 200, cache = "no-store") =>
   new Response(JSON.stringify(body), { status, headers: { ...cors, "Cache-Control": cache } });
+const cleanPageTitle = (value: unknown) => {
+  let title = String(value || "Untitled page").replace(/\s+/g, " ").trim();
+  title = title.replace(/\s+(?:[A-Za-z0-9&'’-]+\s+){1,5}Logo\s+(?:Desktop|Mobile)\b.*$/i, "");
+  title = title.replace(/\s+(?:Hamburger Menu Icon|Close Button|Account Information|Skip to content)\b.*$/i, "");
+  return title.slice(0, 240);
+};
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -38,6 +45,83 @@ Deno.serve(async (req: Request) => {
 
   const recordCatalogId = String(url.searchParams.get("record_catalog_id") || "").trim();
   if (recordCatalogId) {
+    if (recordCatalogId.startsWith("query:")) {
+      let nestedQuery = recordCatalogId.slice("query:".length);
+      try { nestedQuery = decodeURIComponent(nestedQuery); } catch { /* keep the already-decoded query */ }
+      nestedQuery = normalizeQuery(nestedQuery).slice(0, 160);
+      if (nestedQuery.length < 2) {
+        return json({
+          status: "query-derived-candidate-preview",
+          preview_only: true,
+          record_catalog_id: recordCatalogId,
+          related_count: 0,
+          related_records: [],
+          offset,
+          limit,
+          has_more: false,
+        }, 200, "public, max-age=15, stale-while-revalidate=30");
+      }
+      try {
+        const indexed = await searchPublicCrawlerIndex(nestedQuery, null, limit, offset);
+        const relatedPages = (indexed.results || []).filter((page: any) => cleanPageTitle(page.title).toLowerCase() !== nestedQuery.toLowerCase());
+        const relatedRecords = relatedPages.map((page: any) => {
+          const title = cleanPageTitle(page.title);
+          const entryQuery = title.trim().slice(0, 120) || nestedQuery.slice(0, 120);
+          const entryId = "query:" + encodeURIComponent(entryQuery);
+          return {
+            record_id: "page:" + encodeURIComponent(String(page.url || "")).slice(0, 120),
+            record_catalog_id: entryId,
+            shared_catalog_ids: [entryId, recordCatalogId],
+            title,
+            record_type: "page",
+            source_url: String(page.url || ""),
+            description: String(page.snippet || page.description || page.text || "").slice(0, 700),
+            last_seen_at: page.fetchedAt || page.publishedAt || null,
+            source_policy_review_status: "not_reviewed",
+            record_level_clearance: "not_reviewed",
+            commercial_eligible: false,
+            preview_only: true,
+          };
+        });
+        return json({
+          status: "query-derived-candidate-preview",
+          preview_only: true,
+          record_catalog_id: recordCatalogId,
+          owner_record: {
+            record_id: recordCatalogId,
+            record_catalog_id: recordCatalogId,
+            title: nestedQuery,
+            record_type: "page",
+            description: "On-demand query-indexed page catalog preview",
+            source_urls: [],
+            shared_catalog_ids: [recordCatalogId],
+          },
+          related_count: relatedRecords.length,
+          related_records: relatedRecords,
+          offset,
+          limit,
+          has_more: Boolean(indexed.hasMore && relatedRecords.length >= limit),
+          catalogPreview: {
+            status: "query-derived-candidate-preview",
+            previewOnly: true,
+            query: nestedQuery,
+            indexedPages: indexed.indexedPages || 0,
+            scannedPages: indexed.scannedPages || 0,
+            candidatePageCount: indexed.candidatePageCount || 0,
+            candidateShardCount: indexed.candidateShardCount || 0,
+            candidateTruncated: Boolean(indexed.candidateTruncated),
+            rightsReviewRequired: true,
+            recordsPublished: 0,
+            sourceTermsReviewedRecords: 0,
+            commercialEligibleRecords: 0,
+          },
+        }, 200, "public, max-age=15, stale-while-revalidate=30");
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : String(error);
+        console.error("Query-derived entry catalog unavailable:", detail.slice(0, 160));
+        return json({ error: "query_catalog_temporarily_unavailable" }, 503);
+      }
+    }
     const rawCatalogIds = String(url.searchParams.get("catalog_ids") || "");
     if (rawCatalogIds.length > 4000) return json({ error: "record_catalog_membership_invalid" }, 400);
     const sharedCatalogIds = rawCatalogIds.split(",").map((value) => value.trim()).filter(Boolean);
@@ -143,10 +227,6 @@ Deno.serve(async (req: Request) => {
   };
 
   const staticFallback = async (reason: string) => {
-    // Browser clients load the verified first-party crawler shards directly.
-    // Keep this Edge API path lightweight during PostgreSQL recovery: do not
-    // decompress the public index inside the worker. Use the independent
-    // public-source fallback for non-browser API consumers.
     const attachCatalogPreview = (payload: Record<string, any>) => ({
       ...payload,
       catalogResults: [],
@@ -161,9 +241,126 @@ Deno.serve(async (req: Request) => {
         error: "catalog_preview_deferred_from_search_path",
       },
     });
-    const independent = await independentFallback(reason, null, attachCatalogPreview);
-    if (independent) return independent;
-    return unavailable();
+
+    try {
+      let indexed = await searchPublicCrawlerIndex(query, validLane, limit, offset);
+      let laneFallback = false;
+      if (validLane && indexed.results.length < 3) {
+        const broad = await searchPublicCrawlerIndex(query, null, limit, offset);
+        if (broad.results.length > indexed.results.length) {
+          indexed = broad;
+          laneFallback = true;
+        }
+      }
+
+      const indexedResults = (indexed.results || []).filter((item: any) => Number(item.rankScore || 0) >= 0.15).map((item: any) => {
+        const title = cleanPageTitle(item.title || item.url);
+        const entryQuery = title.trim().slice(0, 120) || query.slice(0, 120);
+        const entryId = "query:" + encodeURIComponent(entryQuery);
+        return {
+          ...item,
+          title,
+          record_id: "page:" + encodeURIComponent(String(item.url || "")).slice(0, 120),
+          record_catalog_id: entryId,
+          shared_catalog_ids: [entryId],
+          record_type: "page",
+          snippet: String(item.snippet || item.description || item.text || "").replace(/\s+/g, " ").slice(0, 320),
+          source: String(item.hostname || item.source || "Everything Hub index"),
+          origin: "Everything Hub public crawler index",
+          tentacle: item.lane || "general",
+          relevance: Number(item.rankScore || 0),
+        };
+      });
+
+      let externalPayload: any = null;
+      if (indexedResults.length < limit) {
+        const externalResponse = await independentFallback(reason, indexed.indexedPages || null, attachCatalogPreview);
+        if (externalResponse) {
+          try { externalPayload = await externalResponse.json(); } catch { externalPayload = null; }
+        }
+      }
+
+      const externalResults = Array.isArray(externalPayload?.results) ? externalPayload.results : [];
+      const seen = new Set<string>();
+      const merged: any[] = [];
+      for (const item of [...indexedResults, ...externalResults]) {
+        const rawUrl = String(item?.url || "");
+        try {
+          const parsed = new URL(rawUrl);
+          if (!["http:", "https:"].includes(parsed.protocol) || parsed.username || parsed.password) continue;
+          if (seen.has(parsed.href)) continue;
+          seen.add(parsed.href);
+          merged.push({ ...item, url: parsed.href });
+        } catch {
+          continue;
+        }
+      }
+
+      if (!merged.length) {
+        if (externalPayload) return json(externalPayload, 200, "public, max-age=15, stale-while-revalidate=30");
+        return unavailable();
+      }
+
+      const externalCount = Number(externalPayload?.count || 0);
+      const duplicateCount = indexedResults.length + externalResults.length - merged.length;
+      const count = Math.max(
+        merged.length,
+        Number(indexed.count || 0) + externalCount - Math.max(0, duplicateCount),
+      );
+      const result = {
+        results: merged.slice(0, limit),
+        count,
+        query,
+        tentacle: laneFallback ? null : validLane,
+        requestedTentacle: validLane,
+        laneFallback,
+        source: externalResults.length
+          ? "Everything Hub crawler index + Bing RSS"
+          : "Everything Hub public crawler index",
+        provider: externalResults.length
+          ? "Everything Hub query index and independent Bing RSS fallback"
+          : "Everything Hub public query index",
+        offset,
+        limit,
+        hasMore: Boolean(indexed.hasMore || externalPayload?.hasMore || merged.length > limit),
+        fallback: true,
+        fallbackReason: reason,
+        independentOfDatabase: true,
+        crawlerIndexCount: indexed.indexedPages || null,
+        indexIntegrity: indexed.manifestSha256 && indexed.commitSha && indexed.transport === "query-indexed-shards" && indexedResults.length > 0 ? "sha256" : null,
+        indexTransport: indexed.transport || null,
+        indexManifestSha256: indexed.manifestSha256 || null,
+        indexCommitSha: indexed.commitSha || null,
+        staticSearch: {
+          updatedAt: indexed.updatedAt || null,
+          scannedPages: indexed.scannedPages || 0,
+          candidatePageCount: indexed.candidatePageCount || 0,
+          candidateShardCount: indexed.candidateShardCount || 0,
+          totalCandidateShardCount: indexed.totalCandidateShardCount || 0,
+          candidateTruncated: Boolean(indexed.candidateTruncated),
+          queryIndexTokensUsed: indexed.queryIndexTokensUsed || 0,
+          queryIndexPostingCount: indexed.queryIndexPostingCount || 0,
+        },
+        catalogResults: [],
+        catalogPreview: {
+          status: "deferred",
+          previewOnly: true,
+          resultCount: 0,
+          recordsPublished: 0,
+          sourceTermsReviewedRecords: 0,
+          commercialEligibleRecords: 0,
+          rightsReviewRequired: true,
+          error: "catalog_preview_deferred_from_search_path",
+        },
+      };
+      return json(result, 200, "public, max-age=15, stale-while-revalidate=30");
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      console.error("Verified static crawler search unavailable:", detail.slice(0, 180));
+      const independent = await independentFallback(reason, null, attachCatalogPreview);
+      if (independent) return independent;
+      return unavailable();
+    }
   };
 
   try {
@@ -225,16 +422,25 @@ Deno.serve(async (req: Request) => {
       totalCount = Number(fallback.count ?? data.length);
     }
 
-    const results = data.map((row: any) => ({
-      title: row.title || row.url,
-      url: row.url,
-      snippet: String(row.description || "").replace(/\s+/g, " ").slice(0, 320),
-      source: (() => { try { return new URL(row.url).hostname; } catch { return "Everything Hub index"; } })(),
-      origin: "Everything Hub eh_quad index",
-      tentacle: row.tentacle || "general",
-      fetched_at: row.fetched_at,
-      relevance: row.relevance ?? 0,
-    }));
+    const results = data.map((row: any) => {
+      const title = cleanPageTitle(row.title || row.url);
+      const entryQuery = title.trim().slice(0, 120) || query.slice(0, 120);
+      const entryId = "query:" + encodeURIComponent(entryQuery);
+      return {
+        title,
+        url: row.url,
+        record_id: "page:" + encodeURIComponent(String(row.url || "")).slice(0, 120),
+        record_catalog_id: entryId,
+        shared_catalog_ids: [entryId],
+        record_type: "page",
+        snippet: String(row.description || "").replace(/\s+/g, " ").slice(0, 320),
+        source: (() => { try { return new URL(row.url).hostname; } catch { return "Everything Hub index"; } })(),
+        origin: "Everything Hub eh_quad index",
+        tentacle: row.tentacle || "general",
+        fetched_at: row.fetched_at,
+        relevance: row.relevance ?? 0,
+      };
+    });
 
     if (!results.length) return await staticFallback("database_empty");
 
