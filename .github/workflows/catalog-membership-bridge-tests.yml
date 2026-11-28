@@ -15,7 +15,6 @@ on:
       - "main"
       - "automation/page-catalog-membership-bridge"
   workflow_dispatch:
-    paths:
       - "database/stage_page_catalog_memberships.py"
       - "database/test_stage_page_catalog_memberships.py"
       - "database/import_page_catalog_memberships.py"
