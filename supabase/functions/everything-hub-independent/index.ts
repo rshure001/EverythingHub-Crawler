@@ -75,7 +75,7 @@ function safe(u){try{const x=new URL(u);return ['http:','https:'].includes(x.pro
 function sourceLink(u,label){const href=safe(u);return href==='#'?'':'<a target="_blank" rel="noopener noreferrer" href="'+esc(href)+'">'+esc(label||'Open source')+'</a>'}
 function recordCard(r){
  const id=String(r.record_catalog_id||r.record_id||'');
- const ids=Array.isArray(r.shared_catalog_ids)?r.shared_catalog_ids.slice(0,3):[];
+ const ids=Array.isArray(r.shared_catalog_ids)?r.shared_catalog_ids.slice(0,1):[];
  const target='nested-'+(++nestedCounter);
  const source=Array.isArray(r.source_urls)?r.source_urls[0]:(r.source_url||'');
  const button=id&&ids.length?'<button class="open-record-catalog" data-record-catalog-id="'+esc(id)+'" data-catalog-ids="'+esc(ids.join(','))+'" data-target="'+target+'">Open this entry catalog</button><div class="nested" id="'+target+'"></div>':'';
