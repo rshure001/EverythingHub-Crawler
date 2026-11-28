@@ -1,6 +1,12 @@
+import sys
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
+# The connector lives under crawler/connectors; make it available to the
+# repository-wide unittest discovery command, which adds crawler/ to sys.path.
+CONNECTORS_DIR = Path(__file__).resolve().parent / "connectors"
+sys.path.insert(0, str(CONNECTORS_DIR))
 import wikidata_entity_connector as connector
 
 
