@@ -90,6 +90,8 @@ jobs:
           assert p["production_import_allowed"] is False
           assert p["public_search_allowed"] is False
           assert p["rejected_rows"] == 0
+          assert p["candidate_count"] > 0, "empty catalog bridge: no metadata-only candidates were staged"
+          assert p["membership_count"] > 0, "empty catalog bridge: no catalog relationships were staged"
           assert all(r["verified"] is False and r["content_fetched"] is False for r in p["candidates"])
           print(json.dumps({k:p[k] for k in ("candidate_count","membership_count","rejected_rows","production_import_allowed","public_search_allowed")}, indent=2))
           PY
