@@ -1,0 +1,54 @@
+name: Wikidata class discovery (staging only)
+
+on:
+  workflow_dispatch:
+    inputs:
+      max_items:
+        description: Maximum entity IDs to stage in one run (1-5000)
+        required: true
+        default: "500"
+        type: string
+      cursor:
+        description: Resume after this QID (leave blank for the first page)
+        required: false
+        default: ""
+        type: string
+  schedule:
+    - cron: "17 5 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wikidata-class-discovery
+  cancel-in-progress: false
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Discover camera subject IDs
+        env:
+          MAX_ITEMS: ${{ inputs.max_items || '500' }}
+          CURSOR: ${{ inputs.cursor || '' }}
+        run: |
+          python crawler/connectors/wikidata_class_discovery.py \
+            --root-qid Q15328 \
+            --max-items "$MAX_ITEMS" \
+            --page-size 100 \
+            --delay 2 \
+            --cursor "$CURSOR" \
+            --output data/source-staging/wikidata-camera-discovery.json
+      - name: Upload review-only discovery artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wikidata-camera-discovery
+          path: data/source-staging/wikidata-camera-discovery.json
+          retention-days: 14
