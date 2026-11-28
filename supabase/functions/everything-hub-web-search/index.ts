@@ -39,6 +39,82 @@ Deno.serve(async (req: Request) => {
 
   const recordCatalogId = String(url.searchParams.get("record_catalog_id") || "").trim();
   if (recordCatalogId) {
+    if (recordCatalogId.startsWith("query:")) {
+      let nestedQuery = recordCatalogId.slice("query:".length);
+      try { nestedQuery = decodeURIComponent(nestedQuery); } catch { /* keep the already-decoded query */ }
+      nestedQuery = normalizeQuery(nestedQuery).slice(0, 160);
+      if (nestedQuery.length < 2) {
+        return json({
+          status: "query-derived-candidate-preview",
+          preview_only: true,
+          record_catalog_id: recordCatalogId,
+          related_count: 0,
+          related_records: [],
+          offset,
+          limit,
+          has_more: false,
+        }, 200, "public, max-age=15, stale-while-revalidate=30");
+      }
+      try {
+        const indexed = await searchPublicCrawlerIndex(nestedQuery, null, limit, offset);
+        const relatedRecords = (indexed.results || []).map((page: any) => {
+          const title = String(page.title || "Untitled page").slice(0, 240);
+          const entryQuery = String(page.title || nestedQuery).trim().slice(0, 120) || nestedQuery.slice(0, 120);
+          const entryId = "query:" + encodeURIComponent(entryQuery);
+          return {
+            record_id: "page:" + encodeURIComponent(String(page.url || "")).slice(0, 120),
+            record_catalog_id: entryId,
+            shared_catalog_ids: [entryId, recordCatalogId],
+            title,
+            record_type: "page",
+            source_url: String(page.url || ""),
+            description: String(page.description || page.text || "").slice(0, 700),
+            last_seen_at: page.fetchedAt || page.publishedAt || null,
+            source_policy_review_status: "not_reviewed",
+            record_level_clearance: "not_reviewed",
+            commercial_eligible: false,
+            preview_only: true,
+          };
+        });
+        return json({
+          status: "query-derived-candidate-preview",
+          preview_only: true,
+          record_catalog_id: recordCatalogId,
+          owner_record: {
+            record_id: recordCatalogId,
+            record_catalog_id: recordCatalogId,
+            title: nestedQuery,
+            record_type: "page",
+            description: "On-demand query-indexed page catalog preview",
+            source_urls: [],
+            shared_catalog_ids: [recordCatalogId],
+          },
+          related_count: Number(indexed.count) || relatedRecords.length,
+          related_records: relatedRecords,
+          offset,
+          limit,
+          has_more: Boolean(indexed.hasMore && relatedRecords.length >= limit),
+          catalogPreview: {
+            status: "query-derived-candidate-preview",
+            previewOnly: true,
+            query: nestedQuery,
+            indexedPages: indexed.indexedPages || 0,
+            scannedPages: indexed.scannedPages || 0,
+            candidatePageCount: indexed.candidatePageCount || 0,
+            candidateShardCount: indexed.candidateShardCount || 0,
+            candidateTruncated: Boolean(indexed.candidateTruncated),
+            rightsReviewRequired: true,
+            recordsPublished: 0,
+            sourceTermsReviewedRecords: 0,
+            commercialEligibleRecords: 0,
+          },
+        }, 200, "public, max-age=15, stale-while-revalidate=30");
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : String(error);
+        console.error("Query-derived entry catalog unavailable:", detail.slice(0, 160));
+        return json({ error: "query_catalog_temporarily_unavailable" }, 503);
+      }
+    }
     const rawCatalogIds = String(url.searchParams.get("catalog_ids") || "");
     if (rawCatalogIds.length > 4000) return json({ error: "record_catalog_membership_invalid" }, 400);
     const sharedCatalogIds = rawCatalogIds.split(",").map((value) => value.trim()).filter(Boolean);
