@@ -923,6 +923,8 @@ function searchCatalogRecords(query, network, limit = 5) {
   if (!text || text.length > 160 || !network ||
       !Array.isArray(network.catalogs) || !Array.isArray(network.records)) return [];
   const terms = Array.from(new Set(tokenize(text))).slice(0, 12);
+  const queryConceptCount = (text.normalize("NFKC").toLowerCase().match(/[\\p{L}\\p{N}]+/gu) || [])
+    .filter((token) => !SEARCH_STOP_TOKENS.has(token)).length;
   if (!terms.length) return [];
   const phrase = terms.join(" ");
   const contentIntent = terms.some((term) => CONTENT_INTENT.has(term));
@@ -981,8 +983,9 @@ function searchCatalogRecords(query, network, limit = 5) {
       const catalogMatch = allTermsPresent(terms, genericTopicIntent ? topicCatalogTokens : catalogTokens);
       // Plain topics only match a dedicated subject catalog or a source-declared catalog.
       if (genericTopicIntent &&
-          (!catalogMatch || (!catalog.is_source_declared_catalog &&
-            catalog.catalog_origin !== "derived_from_repeated_records"))) continue;
+          (!catalogMatch ||
+            (catalog.catalog_type !== "subject" &&
+             catalog.catalog_origin !== "derived_from_repeated_records"))) continue;
       const searchable = new Set([...item.titleTokens, ...item.attributeTokens, ...catalogTokens]);
       if (!contentRecord || contentIntent) {
         for (const token of item.descriptionTokens) searchable.add(token);
