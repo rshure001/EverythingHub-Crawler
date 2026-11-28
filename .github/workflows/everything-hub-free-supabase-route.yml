@@ -35,7 +35,7 @@ jobs:
           echo "Legacy response HTTP=$code"
           cat /tmp/legacy.headers
           test "$code" = "302"
-          grep -Fqi 'location: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-new' /tmp/legacy.headers
+          grep -Fqi 'location: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-deploy-bridge' /tmp/legacy.headers
       - name: Verify bridge redirects to the active first-party homepage release
         run: |
           set -euo pipefail
