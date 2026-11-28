@@ -58,7 +58,7 @@ async function fetchBytes(url, maxBytes, timeoutMs, fetchImpl) {
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetchImpl(url, {
-      headers: { Accept: "*/*", "User-Agent": "EverythingHub-StaticSearch/1.0" },
+      headers: { Accept: "*/*" },
       signal: controller.signal,
     });
     if (!response.ok) throw new Error("upstream_http_" + response.status);
