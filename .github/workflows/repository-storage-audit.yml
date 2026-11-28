@@ -35,7 +35,7 @@ jobs:
             -H "Authorization: Bearer $GH_TOKEN" \
             -H "Accept: application/vnd.github+json" \
             "https://api.github.com/repos/$GITHUB_REPOSITORY" |
-            python -c 'import json,sys; d=json.load(sys.stdin); print(f"GitHub reported repository size: {d.get("size")} KB")' |
+            python -c 'import json,sys; d=json.load(sys.stdin); print("GitHub reported repository size: {} KB".format(d.get("size")))' |
             tee /tmp/repository-size.txt
           cat /tmp/repository-size.txt >> "$GITHUB_STEP_SUMMARY"
           echo >> "$GITHUB_STEP_SUMMARY"
