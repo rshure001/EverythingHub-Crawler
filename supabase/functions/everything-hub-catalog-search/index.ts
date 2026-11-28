@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { boundedInteger, normalizeQuery } from "./params.mjs";
-import { loadPageDerivedCatalogPreview, searchPageDerivedCatalogPreview } from "./page-derived-catalog-preview.mjs";
+import { loadPageDerivedCatalogPreview, searchPageDerivedCatalogPreview, resolveRecordRelatedCatalogPreview } from "./page-derived-catalog-preview.mjs";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -18,6 +18,35 @@ Deno.serve(async (req: Request) => {
   const url = new URL(req.url);
   const query = normalizeQuery(url.searchParams.get("q"));
   const limit = boundedInteger(url.searchParams.get("limit"), 5, 1, 8);
+  const recordCatalogId = String(url.searchParams.get("record_catalog_id") || "").trim();
+  if (recordCatalogId) {
+    const sharedCatalogIds = String(url.searchParams.get("catalog_ids") || "")
+      .split(",").map((id) => id.trim()).filter(Boolean);
+    const relatedLimit = boundedInteger(url.searchParams.get("limit"), 20, 1, 50);
+    const offset = boundedInteger(url.searchParams.get("offset"), 0, 0, 5000);
+    try {
+      const network = await loadPageDerivedCatalogPreview();
+      const recordCatalog = await resolveRecordRelatedCatalogPreview(
+        recordCatalogId, sharedCatalogIds, network, relatedLimit, offset,
+      );
+      if (!recordCatalog) return json({ error: "record_catalog_not_found" }, 404);
+      return json({
+        ...recordCatalog,
+        catalogPreview: {
+          status: network.freshnessMatch ? "candidate-preview" : "stale-candidate-preview",
+          previewOnly: true,
+          generatedAt: network.generatedAt || null,
+          recordCount: Number(network.recordCount) || 0,
+          recordsPublished: Number(network.metrics?.records_published) || 0,
+          rightsReviewRequired: true,
+        },
+      }, 200, "public, max-age=15, stale-while-revalidate=30");
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      console.error("Record catalog preview unavailable:", detail.slice(0, 180));
+      return json({ error: "record_catalog_preview_temporarily_unavailable" }, 503);
+    }
+  }
   if (query.length < 2) {
     return json({
       catalogResults: [],
