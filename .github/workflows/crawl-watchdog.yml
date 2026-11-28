@@ -8,6 +8,7 @@ on:
       - "crawler/test_schedule_watchdog.py"
       - "crawler/pipeline_health.py"
       - "crawler/test_pipeline_health.py"
+      - "crawler/test_wikidata_entity_connector.py"
   schedule:
     # Run lightweight checks every five minutes, two minutes after each staggered crawl slot, away from the top-of-hour Actions load peak.
     # Keep the watchdog as the bounded recovery path when scheduled crawl delivery goes stale.
