@@ -930,7 +930,6 @@ function searchCatalogRecords(query, network, limit = 5) {
   const businessIntent = terms.some((term) => businessTerms.has(term));
   const eventIntent = terms.some((term) => eventTerms.has(term));
   const productTermIntent = terms.some((term) => productTerms.has(term));
-  const genericTopicIntent = !contentIntent && !productTermIntent && !businessIntent && !eventIntent;
 
   // Determine typed intent in a lightweight pass without retaining token sets
   // for the entire record corpus in the Edge isolate.
