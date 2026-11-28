@@ -82,7 +82,7 @@ function recordCard(r){
  return '<div class="matched-record"><strong>'+esc(r.title||'Untitled record')+'</strong> <span>'+esc(r.record_type||'record')+'</span><p>'+esc(r.description||'')+'</p>'+sourceLink(source,'Open source')+button+'</div>';
 }
 function catalogCard(c){
- const records=(c.matched_records||[]).slice(0,3);
+ const records=(c.matched_records||[]).slice(0,8);
  const count=Number(c.record_count||0),pages=Number(c.source_page_count||0);
  const pageLabel=c.catalog_type==='query-derived page collection'?'candidate pages scanned':'source pages';
  return '<article class="result catalog-result"><div class="catalog-heading"><strong>'+esc(c.catalog_title||c.title||'Catalog')+'</strong><span>'+esc(c.catalog_type||'catalog')+'</span></div><p class="catalog-meta">'+count.toLocaleString()+' records · '+pages.toLocaleString()+' '+pageLabel+' · candidate preview only</p><p>'+esc(c.snippet||c.description||'')+'</p>'+sourceLink(c.url,'Open source page')+(records.length?'<div class="matched-records"><h3>Matching entries</h3>'+records.map(recordCard).join('')+'</div>':'')+'<p class="rights-note">Source terms and individual record rights have not been cleared for redistribution.</p></article>';
