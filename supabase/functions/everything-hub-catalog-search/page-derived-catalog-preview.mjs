@@ -823,6 +823,8 @@ async function searchPageDerivedCatalogPreviewIndexed(query, network, limit = 5,
   if (!text || text.length > 160 || !network || !Array.isArray(network.catalogs) ||
       !network.catalogsById || !network.filesByPath || typeof fetchImpl !== "function") return [];
   const terms = Array.from(new Set(tokenize(text))).slice(0, 12);
+  const queryConceptCount = (text.normalize("NFKC").toLowerCase().match(/[\\p{L}\\p{N}]+/gu) || [])
+    .filter((token) => !SEARCH_STOP_TOKENS.has(token)).length;
   if (!terms.length) return [];
 
   const prefixes = new Set();
@@ -860,7 +862,7 @@ async function searchPageDerivedCatalogPreviewIndexed(query, network, limit = 5,
   const hasPlaceCatalog = candidateCatalogs.some((catalog) =>
     catalog.catalog_type === "geographic" || String(catalog.record_type || "").toLowerCase() === "place"
   );
-  const geoIntent = terms.length >= 2 && hasPlaceCatalog && !contentIntent && !eventIntent && !businessIntent;
+  const geoIntent = queryConceptCount >= 2 && hasPlaceCatalog && !contentIntent && !eventIntent && !businessIntent;
   const productIntent = !geoIntent && !eventIntent && !contentIntent && !businessIntent &&
     (productTermIntent || hasProductCatalog);
   const locationBusinessIntent = businessIntent && !contentIntent;
@@ -943,7 +945,7 @@ function searchCatalogRecords(query, network, limit = 5) {
     if (!globalPlaceMatch && type === "place" && allTermsPresent(terms, all)) globalPlaceMatch = true;
     if (globalProductMatch && globalPlaceMatch) break;
   }
-  const geoIntent = terms.length >= 2 && globalPlaceMatch && !contentIntent && !eventIntent && !businessIntent;
+  const geoIntent = queryConceptCount >= 2 && globalPlaceMatch && !contentIntent && !eventIntent && !businessIntent;
   const productIntent = !geoIntent && !eventIntent && !contentIntent && !businessIntent &&
     (productTermIntent || globalProductMatch);
   const locationBusinessIntent = businessIntent && !contentIntent;
@@ -974,10 +976,13 @@ function searchCatalogRecords(query, network, limit = 5) {
         const subjectTokens = new Set(tokenize(String(catalog.subject || "")));
         if (!terms.some((term) => subjectTokens.has(term))) continue;
       }
+      const topicCatalogTokens = new Set(tokenize([catalog.title, catalog.subject].join(" ")));
       const catalogTokens = new Set(tokenize([catalog.title, catalog.subject, catalog.source_host].join(" ")));
-      const catalogMatch = allTermsPresent(terms, catalogTokens);
-      // Reject incidental mentions in broad global directories for plain topics.
-      if (genericTopicIntent && !catalogMatch) continue;
+      const catalogMatch = allTermsPresent(terms, genericTopicIntent ? topicCatalogTokens : catalogTokens);
+      // Plain topics only match a dedicated subject catalog or a source-declared catalog.
+      if (genericTopicIntent &&
+          (!catalogMatch || (!catalog.is_source_declared_catalog &&
+            catalog.catalog_origin !== "derived_from_repeated_records"))) continue;
       const searchable = new Set([...item.titleTokens, ...item.attributeTokens, ...catalogTokens]);
       if (!contentRecord || contentIntent) {
         for (const token of item.descriptionTokens) searchable.add(token);
