@@ -1554,7 +1554,7 @@ class CatalogInventoryTriggerTests(unittest.TestCase):
         self.assertIn('    - cron: "23 * * * *"', workflow)
         self.assertIn("  workflow_dispatch:", workflow)
         self.assertIn('".github/workflows/retroactive-catalog-index.yml"', push_paths)
-        self.assertRegex(workflow, r"group: catalog-data-publish-v\d+-\$\{\{ github\.ref \}\}")
+        self.assertIn("group: everythinghub-main-writers-${{ github.ref }}", workflow)
         self.assertIn("cancel-in-progress: false", workflow)
         self.assertIn("Save resumable per-host catalog cache checkpoint", workflow)
         self.assertIn("if: always()", workflow)
