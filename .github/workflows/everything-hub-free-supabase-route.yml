@@ -19,7 +19,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 12
     env:
-      LEGACY_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-site/
+      LEGACY_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-new
+      LEGACY_REDIRECT_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-site/
       BRIDGE_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-deploy-bridge
       SEARCH_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-independent-search?q=NASA
       CATALOG_SEARCH_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-catalog-search?q=NASA&limit=5
@@ -29,7 +30,7 @@ jobs:
       - name: Verify legacy public address redirects to the active search homepage
         run: |
           set -euo pipefail
-          code="$(curl --silent --show-error --max-time 30 -D /tmp/legacy.headers -o /dev/null -w '%{http_code}' "$LEGACY_URL")"
+          code="$(curl --silent --show-error --max-time 30 -D /tmp/legacy.headers -o /dev/null -w '%{http_code}' "$LEGACY_REDIRECT_URL")"
           echo "Legacy response HTTP=$code"
           cat /tmp/legacy.headers
           test "$code" = "302"
@@ -87,7 +88,7 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Run desktop and mobile browser acceptance
         env:
-          LEGACY_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-site/
+          LEGACY_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-new
         run: |
           mkdir -p artifacts
           node <<'NODE'
