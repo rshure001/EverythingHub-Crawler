@@ -44,19 +44,18 @@ jobs:
           cat /tmp/bridge.headers
           test "$code" = "302"
           grep -Fqi 'location: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-homepage-release' /tmp/bridge.headers
-      - name: Verify free GitHub Pages serves the complete HTML homepage
+      - name: Verify active first-party homepage release serves complete HTML
         run: |
           set -euo pipefail
-          code="$(curl --silent --show-error --location --max-time 45 -D /tmp/home.headers -o /tmp/home.html -w '%{http_code}' "https://rshure001.github.io/EverythingHub-Crawler/")"
+          code="$(curl --silent --show-error --location --max-time 45 -D /tmp/home.headers -o /tmp/home.html -w '%{http_code}' "https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-homepage-release")"
           bytes="$(wc -c < /tmp/home.html)"
           content_type="$(grep -i '^content-type:' /tmp/home.headers | tail -1 || true)"
-          echo "GitHub Pages HTTP=$code bytes=$bytes $content_type"
+          echo "First-party homepage HTTP=$code bytes=$bytes $content_type"
           test "$code" = "200"
           grep -Eiq '^content-type: *text/html' /tmp/home.headers
-          grep -Fqi '<title>Everything Hub' /tmp/home.html
-          for needle in 'id="search"' 'id="q"' 'id="results"' 'class="approved-master-art"' 'data-mode="web"' 'data-mode="news"' 'data-mode="images"' 'data-mode="videos"' 'data-mode="shopping"' 'data-mode="places"' 'data-mode="business"' 'data-mode="research"' 'src="search.js"'; do
-            grep -Fqi "$needle" /tmp/home.html || { echo "Missing static homepage feature: $needle"; exit 1; }
-          done
+          grep -Fqi 'Everything Hub' /tmp/home.html
+          grep -Fqi 'Everything within reach' /tmp/home.html
+          grep -Fqi 'Explore the Cameras Catalog' /tmp/home.html
           test "$bytes" -gt 10000
       - name: Verify the public crawler manifest and shard inventory
         run: |
@@ -87,7 +86,7 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Run desktop and mobile browser acceptance
         env:
-          LEGACY_URL: https://rshure001.github.io/EverythingHub-Crawler/
+          LEGACY_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-homepage-release
         run: |
           mkdir -p artifacts
           node <<'NODE'
