@@ -33,7 +33,7 @@ jobs:
           echo "Legacy response HTTP=$code"
           cat /tmp/legacy.headers
           test "$code" = "302"
-          grep -Fqi 'location: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-deploy-bridge' /tmp/legacy.headers
+          grep -Fqi 'location: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-new' /tmp/legacy.headers
       - name: Verify bridge redirects to the active first-party homepage release
         run: |
           set -euo pipefail
@@ -107,17 +107,15 @@ jobs:
               assert.ok(await page.locator('img[alt*="octopus" i]').count(), 'approved octopus artwork is missing');
               const modes = ['web','news','images','videos','shopping','places','business','research'];
               for (const mode of modes) {
-                const button = page.locator('.eh-mode[data-mode="' + mode + '"]');
-                assert.equal(await button.count(), 1, 'missing search category: ' + mode);
-                await button.click();
-                await page.waitForFunction(value => document.querySelector('.eh-mode.active')?.dataset.mode === value, mode);
+                const tile = page.locator('.tile[href="?mode=' + mode + '"]');
+                assert.equal(await tile.count(), 1, 'missing search category: ' + mode);
               }
               report.desktop.categories = modes;
 
               async function search(mode, query) {
-                await page.locator('.eh-mode[data-mode="' + mode + '"]').click();
-                await page.locator('#q').fill(query);
-                await page.locator('#search button[type="submit"]').click();
+                const target = process.env.LEGACY_URL + '?mode=' + encodeURIComponent(mode) + '&q=' + encodeURIComponent(query);
+                await page.goto(target, { waitUntil: 'domcontentloaded', timeout: 60000 });
+                await page.waitForSelector('#q', { timeout: 30000 });
                 await page.waitForFunction(() => {
                   const root = document.querySelector('#results');
                   return !!root && (root.querySelectorAll('.result').length > 0 || /No .* results found|temporarily unavailable/i.test(root.innerText));
@@ -142,13 +140,10 @@ jobs:
               assert.ok(videoCount > 0, 'Videos search returned no visible video cards');
               report.desktop.videoCards = videoCount;
 
-              await page.waitForFunction(() => document.querySelectorAll('#discoverCards .discover-card').length > 0, null, { timeout: 35000 });
-              report.desktop.topStories = await page.locator('#discoverCards .discover-card').count();
-              for (const topic of ['technology','sports','entertainment','business']) {
-                await page.locator('.discover-topic[data-topic="' + topic + '"]').click();
-                await page.waitForFunction(value => document.querySelector('.discover-topic.active')?.dataset.topic === value && document.querySelectorAll('#discoverCards .discover-card').length > 0, topic, { timeout: 30000 });
-              }
-              report.desktop.topicTabs = 'passed';
+              await page.waitForSelector('.live-media', { timeout: 30000 });
+              report.desktop.liveMediaPanels = await page.locator('.live-media-block').count();
+              assert.ok(report.desktop.liveMediaPanels >= 2, 'live image/video discovery panels are missing');
+              assert.ok(await page.locator('.tile[href*="everything-hub-cameras"]').count(), 'camera catalog link is missing');
               await page.screenshot({ path: 'artifacts/everythinghub-desktop.png', fullPage: true });
 
               const mobile = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
