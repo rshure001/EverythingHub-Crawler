@@ -1,6 +1,10 @@
 -- Metadata-only child-link staging. This is deliberately separate from public records.
--- Apply only in eh_quad after review; no public-search objects are created here.
+-- PostgreSQL-portable staging schema for Supabase or a standalone PostgreSQL host (for example Neon).
+-- Metadata-only child-link staging. No public-search objects or verified records are created here.
+-- RLS remains enabled; only an explicitly provisioned service_role receives grants.
 begin;
+
+create schema if not exists eh_quad;
 
 create table if not exists eh_quad.eh_page_catalog_candidates (
   candidate_id text primary key,
@@ -38,8 +42,14 @@ create index if not exists eh_page_catalog_candidates_target
 
 alter table eh_quad.eh_page_catalog_candidates enable row level security;
 alter table eh_quad.eh_page_catalog_candidate_memberships enable row level security;
-grant usage on schema eh_quad to service_role;
-grant select, insert, update on eh_quad.eh_page_catalog_candidates,
-  eh_quad.eh_page_catalog_candidate_memberships to service_role;
+do $
+begin
+  if exists (select 1 from pg_roles where rolname = 'service_role') then
+    grant usage on schema eh_quad to service_role;
+    grant select, insert, update on eh_quad.eh_page_catalog_candidates,
+      eh_quad.eh_page_catalog_candidate_memberships to service_role;
+  end if;
+end
+$;
 
 commit;
