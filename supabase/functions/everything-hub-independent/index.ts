@@ -87,7 +87,13 @@ function catalogCard(c){
  const pageLabel=c.catalog_type==='query-derived page collection'?'candidate pages scanned':'source pages';
  return '<article class="result catalog-result"><div class="catalog-heading"><strong>'+esc(c.catalog_title||c.title||'Catalog')+'</strong><span>'+esc(c.catalog_type||'catalog')+'</span></div><p class="catalog-meta">'+count.toLocaleString()+' records · '+pages.toLocaleString()+' '+pageLabel+' · candidate preview only</p><p>'+esc(c.snippet||c.description||'')+'</p>'+sourceLink(c.url,'Open source page')+(records.length?'<div class="matched-records"><h3>Matching entries</h3>'+records.map(recordCard).join('')+'</div>':'')+'<p class="rights-note">Source terms and individual record rights have not been cleared for redistribution.</p></article>';
 }
-function resultCard(r){return '<article class="result"><a target="_blank" rel="noopener noreferrer" href="'+esc(safe(r.url||r.pageUrl))+'">'+esc(r.title||'Open result')+'</a><p>'+esc(r.snippet||r.description||'')+'</p><span class="source">'+esc(r.source||r.origin||r.provider||'Search result')+'</span></article>'}
+function resultCard(r){
+ const recordId=String(r.record_catalog_id||'');
+ const ids=Array.isArray(r.shared_catalog_ids)?r.shared_catalog_ids.slice(0,1):[];
+ const target='nested-'+(++nestedCounter);
+ const button=recordId&&ids.length?'<button class="open-record-catalog" data-record-catalog-id="'+esc(recordId)+'" data-catalog-ids="'+esc(ids.join(','))+'" data-target="'+target+'">Open this entry catalog</button><div class="nested" id="'+target+'"></div>':'';
+ return '<article class="result"><a target="_blank" rel="noopener noreferrer" href="'+esc(safe(r.url||r.pageUrl))+'">'+esc(r.title||'Open result')+'</a><p>'+esc(r.snippet||r.description||'')+'</p><span class="source">'+esc(r.source||r.origin||r.provider||'Search result')+'</span>'+button+'</article>';
+}
 async function loadNested(button){
  const target=document.getElementById(button.dataset.target);if(!target)return;
  const recordId=String(button.dataset.recordCatalogId||'');
