@@ -21,6 +21,8 @@ on:
       - "supabase/functions/everything-hub-web-search/static-search-catalog-smoke.mjs"
       - "supabase/functions/everything-hub-web-search/page-derived-catalog-preview.mjs"
       - "supabase/functions/everything-hub-web-search/page-derived-catalog-preview.test.mjs"
+      - "supabase/functions/everything-hub-web-search/static-query-index.mjs"
+      - "supabase/functions/everything-hub-web-search/static-query-index-smoke.mjs"
       - ".github/workflows/independent-search-tests.yml"
   workflow_dispatch:
 
