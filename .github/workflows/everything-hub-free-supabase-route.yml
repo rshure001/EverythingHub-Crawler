@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 12
     env:
-      LEGACY_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-new
+      LEGACY_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-deploy-bridge
       LEGACY_REDIRECT_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-site/
       BRIDGE_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-deploy-bridge
       SEARCH_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-independent-search?q=NASA
