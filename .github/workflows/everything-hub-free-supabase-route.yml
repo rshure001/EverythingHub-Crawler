@@ -26,7 +26,7 @@ jobs:
       MANIFEST_URL: https://raw.githubusercontent.com/rshure001/EverythingHub-Crawler/main/public-search/manifest.json
     steps:
       - uses: actions/checkout@v4
-      - name: Verify legacy address redirects to the approved bridge
+      - name: Verify legacy public address redirects to the active search homepage
         run: |
           set -euo pipefail
           code="$(curl --silent --show-error --max-time 30 -D /tmp/legacy.headers -o /dev/null -w '%{http_code}' "$LEGACY_URL")"
@@ -54,7 +54,7 @@ jobs:
           test "$code" = "200"
           grep -Eiq '^content-type: *text/html' /tmp/home.headers
           grep -Eiq '^<!doctype html|^<!--' /tmp/home.html
-          for needle in 'Everything Hub' 'id="search"' 'id="q"' '/functions/v1/everything-hub-homepage-release/media-preview-policy.js' 'data-mode="web"' 'data-mode="news"' 'data-mode="images"' 'data-mode="videos"' 'data-mode="shopping"' 'data-mode="places"' 'data-mode="business"' 'data-mode="research"'; do
+          for needle in 'Everything Hub' 'id="search"' 'id="q"' 'id="results"' 'alt="Realistic emerald octopus with a glowing gold brain and eight detailed tentacles"' 'href="?mode=web"' 'href="?mode=news"' 'href="?mode=images"' 'href="?mode=videos"' 'href="?mode=shopping"' 'href="?mode=places"' 'href="?mode=business"' 'href="?mode=research"'; do
             grep -Fqi "$needle" /tmp/home.html || { echo "Missing homepage feature: $needle"; exit 1; }
           done
           test "$bytes" -gt 10000
