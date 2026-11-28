@@ -5,6 +5,15 @@ begin;
 
 create schema if not exists eh_quad;
 
+-- Stock PostgreSQL lacks Supabase's service_role; add a compatible non-login role.
+do $
+begin
+  if not exists (select 1 from pg_roles where rolname = 'service_role') then
+    create role service_role nologin;
+  end if;
+end
+$;
+
 create table if not exists eh_quad.eh_documents (
   id bigserial primary key,
   canonical_url text not null unique,
