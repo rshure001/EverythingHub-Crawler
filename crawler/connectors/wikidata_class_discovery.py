@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import random
 import re
 import sys
 import time
@@ -18,7 +17,7 @@ import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
-ENDPOINT = "https://query.wikidata.org/sparql"
+ENDPOINT = "https://query-next.wikidata.org/sparql"
 QID_RE = re.compile(r"^Q[1-9][0-9]*$")
 RETRYABLE = {429, 500, 502, 503, 504}
 
@@ -59,7 +58,9 @@ LIMIT {limit}
         except urllib.error.HTTPError as exc:
             if exc.code not in RETRYABLE or attempt == retries - 1:
                 raise
-            time.sleep(min(60, (2 ** attempt) + random.random()))
+            retry_after = exc.headers.get("Retry-After")
+            wait = int(retry_after) if retry_after and retry_after.isdigit() else min(60, 2 ** attempt)
+            time.sleep(wait)
         except (urllib.error.URLError, TimeoutError):
             if attempt == retries - 1:
                 raise
