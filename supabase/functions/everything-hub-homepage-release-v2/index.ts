@@ -23,7 +23,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    if (!/<!doctype html|<html[\\s>]/i.test(html)) {
+    if (!/<!doctype html|<html[\s>]/i.test(html)) {
       return new Response("Homepage source did not return an HTML document", {
         status: 502,
         headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" },
