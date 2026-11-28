@@ -385,8 +385,14 @@ class CatalogSeedExpansionTests(unittest.TestCase):
         self.assertIn("_queue_snapshot_compatible_with_current_index", workflow)
         self.assertNotIn("page-catalog-seeds.json.gz", workflow)
         retry_block = workflow.split("for attempt in 1 2 3", 1)[1]
-        self.assertIn("git rebase origin/main", retry_block)
-        self.assertNotIn("python crawler/catalog_seed_expansion.py --limit 10", retry_block)
+        # Binary checkpoints cannot be text-rebased. Rebuild the same bounded,
+        # idempotent batch from the newest main ledger after a push race.
+        self.assertIn("git reset --hard origin/main", retry_block)
+        self.assertIn("python crawler/catalog_seed_expansion.py --limit 10", retry_block)
+        self.assertIn("python database/stage_page_catalog_memberships.py", retry_block)
+        self.assertIn("python -m unittest database.test_import_page_catalog_memberships -v", retry_block)
+        self.assertIn("git push origin HEAD:main", retry_block)
+        self.assertNotIn("git rebase origin/main", retry_block)
 
     def test_batch_limit_cannot_exceed_ten(self):
         with self.assertRaisesRegex(ValueError, "between 1 and 10"):
