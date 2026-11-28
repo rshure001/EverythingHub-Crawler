@@ -1,0 +1,70 @@
+name: Self-hosted PostgreSQL replacement smoke test
+
+on:
+  pull_request:
+    paths:
+      - "database/**"
+      - ".github/workflows/self-hosted-postgres-smoke.yml"
+  push:
+    branches: [main, fix/windows-self-hosted-postgres-launcher]
+    paths:
+      - "database/**"
+      - ".github/workflows/self-hosted-postgres-smoke.yml"
+
+jobs:
+  windows-script-parse:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse Windows launcher without executing it
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Join-Path $PWD "database/start-windows.ps1"),
+            [ref]$tokens,
+            [ref]$errors
+          ) | Out-Null
+          if ($errors.Count -gt 0) {
+            $errors | ForEach-Object { Write-Error $_.Message }
+            exit 1
+          }
+          Write-Host "PowerShell 5.1-compatible launcher syntax parsed."
+
+  postgres-compose-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create temporary test-only credentials
+        working-directory: database
+        run: |
+          {
+            echo "EH_DB_PASSWORD=$(openssl rand -hex 32)"
+            echo "EH_SEARCH_DB_PASSWORD=$(openssl rand -hex 32)"
+            echo "EH_SEARCH_API_TOKEN=$(openssl rand -hex 32)"
+          } > .env
+      - name: Build and start the exact self-hosted stack
+        working-directory: database
+        run: docker compose up -d --build
+      - name: Verify database health and authenticated search
+        working-directory: database
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 36); do
+            if curl --fail --silent http://127.0.0.1:58080/healthz >/tmp/eh-health.json; then
+              break
+            fi
+            sleep 5
+          done
+          grep -q '"database": "connected"' /tmp/eh-health.json
+          TOKEN="$(sed -n 's/^EH_SEARCH_API_TOKEN=//p' .env)"
+          curl --fail --silent             -H "Authorization: Bearer $TOKEN"             "http://127.0.0.1:58080/search?q=EverythingHub&limit=1"             | python -c "import json,sys; d=json.load(sys.stdin); assert isinstance(d.get('total'), int); assert isinstance(d.get('results'), list)"
+      - name: Show service state on failure
+        if: failure()
+        working-directory: database
+        run: docker compose logs --no-color --tail=150
+      - name: Stop test containers but preserve runner data
+        if: always()
+        working-directory: database
+        run: docker compose down
