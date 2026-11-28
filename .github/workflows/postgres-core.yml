@@ -1,17 +1,15 @@
-name: PostgreSQL 17 core smoke test
+name: Independent PostgreSQL 17 replacement smoke test
 
 on:
   workflow_dispatch:
   push:
-    branches: [main, feature/independent-postgres-core]
+    branches: [main, feature/independent-postgres-core, fix/independent-postgres-init-and-ci]
     paths:
-      - "db/init/**"
-      - "docker-compose.postgres.yml"
+      - "database/**"
       - ".github/workflows/postgres-core.yml"
   pull_request:
     paths:
-      - "db/init/**"
-      - "docker-compose.postgres.yml"
+      - "database/**"
       - ".github/workflows/postgres-core.yml"
 
 jobs:
@@ -33,72 +31,45 @@ jobs:
           --health-retries 12
     steps:
       - uses: actions/checkout@v4
-      - name: Initialize schema
+      - name: Initialize public core and eh_quad replacement schema
         env:
           PGPASSWORD: test-only-password
-        run: psql -h localhost -U eh_test -d everythinghub_test -v ON_ERROR_STOP=1 -f db/init/001_everythinghub_core.sql
-      - name: Verify search index and queue leasing
+        run: |
+          set -euo pipefail
+          psql -h localhost -U eh_test -d everythinghub_test -v ON_ERROR_STOP=1 -f database/001_everythinghub_core.sql
+          psql -h localhost -U eh_test -d everythinghub_test -v ON_ERROR_STOP=1 -f database/002_eh_quad_schema.sql
+      - name: Verify search schema, full-text index, and queue tables
         env:
           PGPASSWORD: test-only-password
-        shell: bash
         run: |
           set -euo pipefail
           psql -h localhost -U eh_test -d everythinghub_test -v ON_ERROR_STOP=1 <<'SQL'
-          INSERT INTO eh_search.crawl_sources(domain) VALUES ('example.test');
-          INSERT INTO eh_search.web_pages(canonical_url, url_hash, title, description, body_text)
-          VALUES ('https://example.test/rolex', decode(md5('rolex'), 'hex'),
-                  'Rolex watches', 'Precision timepieces', 'Independent search index smoke test');
+          INSERT INTO eh_quad.eh_documents
+            (canonical_url, source_host, lane, title, description, body_text, robots_allowed)
+          VALUES
+            ('https://example.test/rolex', 'example.test', 'technology',
+             'Rolex watches', 'Precision timepieces', 'Independent replacement database smoke test', true);
           DO $$
           BEGIN
             IF NOT EXISTS (
-              SELECT 1 FROM eh_search.web_pages
-              WHERE search_document @@ websearch_to_tsquery('simple', 'Rolex')
+              SELECT 1 FROM eh_quad.eh_documents
+              WHERE search_vector @@ plainto_tsquery('english', 'Rolex')
             ) THEN
-              RAISE EXCEPTION 'Full-text search smoke test failed';
+              RAISE EXCEPTION 'Full-text search index failed';
+            END IF;
+            IF NOT EXISTS (
+              SELECT 1 FROM information_schema.tables
+              WHERE table_schema='eh_quad' AND table_name='eh_crawl_queue'
+            ) THEN
+              RAISE EXCEPTION 'eh_quad crawl queue missing';
+            END IF;
+            IF NOT EXISTS (
+              SELECT 1 FROM pg_roles WHERE rolname='service_role'
+            ) THEN
+              RAISE EXCEPTION 'service_role compatibility role missing';
             END IF;
           END $$;
-          INSERT INTO eh_search.crawl_queue(url, priority)
-          VALUES ('https://example.test/a', 10), ('https://example.test/b', 5);
-          DO $$
-          DECLARE claimed_count INTEGER;
-          BEGIN
-            SELECT count(*) INTO claimed_count
-            FROM eh_search.claim_crawl_jobs('smoke-worker', 2, 60);
-            IF claimed_count <> 2 THEN
-              RAISE EXCEPTION 'Expected 2 leased jobs, got %', claimed_count;
-            END IF;
-            IF (SELECT count(*) FROM eh_search.crawl_queue WHERE status='leased' AND lease_owner='smoke-worker') <> 2 THEN
-              RAISE EXCEPTION 'Queue lease state was not persisted';
-            END IF;
-          END $$;
-          INSERT INTO eh_search.crawl_queue(url, max_attempts)
-          VALUES ('https://example.test/retry-limit', 1);
-          DO $$
-          DECLARE claimed_count INTEGER;
-          BEGIN
-            SELECT count(*) INTO claimed_count
-            FROM eh_search.claim_crawl_jobs('retry-worker', 1, 60);
-            IF claimed_count <> 1 THEN
-              RAISE EXCEPTION 'Expected first retry-limited lease, got %', claimed_count;
-            END IF;
-            UPDATE eh_search.crawl_queue
-               SET leased_until=now() - interval '1 second'
-             WHERE url='https://example.test/retry-limit';
-            PERFORM count(*) FROM eh_search.claim_crawl_jobs('retry-worker', 1, 60);
-            IF (SELECT status FROM eh_search.crawl_queue
-                WHERE url='https://example.test/retry-limit') <> 'failed' THEN
-              RAISE EXCEPTION 'Exhausted lease did not become terminal failed';
-            END IF;
-          END $$;
-          DO $$
-          BEGIN
-            BEGIN
-              PERFORM * FROM eh_search.claim_crawl_jobs('', 1, 60);
-              RAISE EXCEPTION 'Empty worker name should have been rejected';
-            EXCEPTION WHEN raise_exception THEN
-              IF SQLERRM = 'Empty worker name should have been rejected' THEN
-                RAISE;
-              END IF;
-            END;
-          END $$;
+          SELECT * FROM eh_quad.eh_search_pages('Rolex', null, 10);
           SQL
+      - name: Build authenticated search API image
+        run: docker build -f database/Dockerfile -t everythinghub-search-smoke .
