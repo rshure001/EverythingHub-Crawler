@@ -42,7 +42,7 @@ create index if not exists eh_page_catalog_candidates_target
 
 alter table eh_quad.eh_page_catalog_candidates enable row level security;
 alter table eh_quad.eh_page_catalog_candidate_memberships enable row level security;
-do $
+do $grant$
 begin
   if exists (select 1 from pg_roles where rolname = 'service_role') then
     grant usage on schema eh_quad to service_role;
@@ -50,6 +50,6 @@ begin
       eh_quad.eh_page_catalog_candidate_memberships to service_role;
   end if;
 end
-$;
+$grant$;
 
 commit;
