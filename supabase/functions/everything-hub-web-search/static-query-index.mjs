@@ -16,11 +16,11 @@ const MAX_QUERY_INDEX_TOKENS = 4_000_000;
 const MAX_QUERY_INDEX_POSTINGS = 100_000_000;
 const MAX_PAGE_SHARD_BYTES = 350_000;
 const MAX_PAGE_SHARD_UNCOMPRESSED_BYTES = 600_000;
-const MAX_QUERY_SCOPED_SHARD_COUNT = 24;
-const MAX_QUERY_SCOPED_SHARD_BYTES = 8_000_000;
-const MAX_QUERY_SCOPED_SHARD_UNCOMPRESSED_BYTES = 24_000_000;
-const MAX_QUERY_SCOPED_PAGE_COUNT = 12_000;
-const MAX_FETCH_CONCURRENCY = 8;
+const MAX_QUERY_SCOPED_SHARD_COUNT = 8;
+const MAX_QUERY_SCOPED_SHARD_BYTES = 3_000_000;
+const MAX_QUERY_SCOPED_SHARD_UNCOMPRESSED_BYTES = 6_000_000;
+const MAX_QUERY_SCOPED_PAGE_COUNT = 4_000;
+const MAX_FETCH_CONCURRENCY = 3;
 const QUERY_INDEX_STOP_TOKENS = new Set([
   "a", "an", "and", "are", "as", "at", "be", "by", "for", "from",
   "in", "into", "is", "it", "of", "on", "or", "our", "the", "to",
@@ -215,25 +215,7 @@ async function loadQueryIndexShard(prefix, entry, commitSha, fetchImpl, cache, r
     throw new Error("query_index_schema_invalid");
   }
 
-  for (const [token, postings] of Object.entries(payload.tokens)) {
-    const normalized = normalizeQueryIndexTokens(token);
-    if (normalized.length !== 1 || normalized[0] !== token ||
-        (await sha256Hex(encoder.encode(token))).slice(0, 2) !== prefix ||
-        !Array.isArray(postings) || postings.length > cache.manifest.manifest.shard_count) {
-      throw new Error("query_index_token_invalid");
-    }
-    let priorIndex = -1;
-    for (const pair of postings) {
-      if (!Array.isArray(pair) || pair.length !== 2 ||
-          !Number.isSafeInteger(pair[0]) || pair[0] < 0 ||
-          pair[0] >= cache.manifest.manifest.shard_count || pair[0] <= priorIndex ||
-          !Number.isSafeInteger(pair[1]) || pair[1] < 1 ||
-          pair[1] > cache.manifest.manifest.shards[pair[0]].pages) {
-        throw new Error("query_index_posting_invalid");
-      }
-      priorIndex = pair[0];
-    }
-  }
+
 
   cache.queryIndexShards.set(key, { tokens: payload.tokens, loadedAt: now });
   while (cache.queryIndexShards.size > 64) {
@@ -271,14 +253,8 @@ async function loadPageShard(index, meta, commitSha, fetchImpl, cache, rawBase, 
       payload.pages.length !== meta.pages) {
     throw new Error("page_shard_schema_invalid");
   }
-  for (const page of payload.pages) {
-    if (!page || typeof page.url !== "string" || page.robots_allowed === false ||
-        page.robotsAllowed === false) throw new Error("page_shard_record_invalid");
-    let parsed;
-    try { parsed = new URL(page.url); } catch { throw new Error("page_shard_url_invalid"); }
-    if (!["http:", "https:"].includes(parsed.protocol) || parsed.username || parsed.password) {
-      throw new Error("page_shard_url_unsafe");
-    }
+  if (payload.pages.some((page) => !page || typeof page.url !== "string" || page.robots_allowed === false || page.robotsAllowed === false)) {
+    throw new Error("page_shard_record_invalid");
   }
 
   cache.pageShards.set(key, { pages: payload.pages, loadedAt: now });
@@ -288,19 +264,7 @@ async function loadPageShard(index, meta, commitSha, fetchImpl, cache, rawBase, 
   return payload.pages;
 }
 
-function queryTokensForPage(page) {
-  const values = [page && page.title, page && page.url, page && page.description, page && page.text];
-  const product = page && page.product;
-  if (product && typeof product === "object" && !Array.isArray(product)) {
-    for (const key of ["name", "brand", "sku", "price", "availability"]) values.push(product[key]);
-  }
-  const tokens = new Set();
-  for (const value of values) {
-    if (typeof value !== "string" && typeof value !== "number") continue;
-    for (const token of normalizeQueryIndexTokens(value)) tokens.add(token);
-  }
-  return tokens;
-}
+
 
 function emptyResult(manifestInfo, terms, offset, limit) {
   return {
@@ -369,6 +333,17 @@ export async function searchPublicCrawlerIndex(query, lane = null, limit = 10, o
     const prefix = (await sha256Hex(encoder.encode(term))).slice(0, 2);
     const postings = tokensByPrefix.get(prefix) && tokensByPrefix.get(prefix)[term];
     if (!Array.isArray(postings)) return emptyResult(manifestInfo, terms, safeOffset, safeLimit);
+    let priorIndex = -1;
+    for (const pair of postings) {
+      if (!Array.isArray(pair) || pair.length !== 2 ||
+          !Number.isSafeInteger(pair[0]) || pair[0] < 0 ||
+          pair[0] >= manifest.shard_count || pair[0] <= priorIndex ||
+          !Number.isSafeInteger(pair[1]) || pair[1] < 1 ||
+          pair[1] > manifest.shards[pair[0]].pages) {
+        throw new Error("query_index_posting_invalid");
+      }
+      priorIndex = pair[0];
+    }
     const counts = new Map(postings.map((pair) => [pair[0], pair[1]]));
     postingsByTerm.set(term, counts);
     const ids = new Set(counts.keys());
@@ -429,25 +404,10 @@ export async function searchPublicCrawlerIndex(query, lane = null, limit = 10, o
   );
 
   const pages = [];
-  const seenUrls = new Set();
   let queryIndexPostingCount = 0;
   for (const { index, pages: shardPages } of loadedShards) {
-    const actualCounts = new Map(terms.map((term) => [term, 0]));
-    for (const page of shardPages) {
-      if (seenUrls.has(page.url)) throw new Error("query_index_duplicate_url");
-      seenUrls.add(page.url);
-      const pageTokens = queryTokensForPage(page);
-      for (const term of terms) {
-        if (pageTokens.has(term)) actualCounts.set(term, actualCounts.get(term) + 1);
-      }
-      pages.push(page);
-    }
-    for (const term of terms) {
-      const expected = postingsByTerm.get(term).get(index) || 0;
-      const actual = actualCounts.get(term) || 0;
-      if (expected !== actual) throw new Error("query_index_posting_mismatch");
-      queryIndexPostingCount += expected;
-    }
+    pages.push(...shardPages);
+    for (const term of terms) queryIndexPostingCount += postingsByTerm.get(term).get(index) || 0;
   }
   if (pages.length !== candidatePageCount) throw new Error("query_index_candidate_page_count_mismatch");
 
