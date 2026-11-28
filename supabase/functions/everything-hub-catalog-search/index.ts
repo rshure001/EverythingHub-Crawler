@@ -11,6 +11,12 @@ const cors = {
 };
 const json = (body: unknown, status = 200, cache = "no-store") =>
   new Response(JSON.stringify(body), { status, headers: { ...cors, "Cache-Control": cache } });
+const cleanPageTitle = (value: unknown) => {
+  let title = String(value || "Untitled page").replace(/\s+/g, " ").trim();
+  title = title.replace(/\s+(?:[A-Za-z0-9&'’-]+\s+){1,5}Logo\s+(?:Desktop|Mobile)\b.*$/i, "");
+  title = title.replace(/\s+(?:Hamburger Menu Icon|Close Button|Account Information|Skip to content)\b.*$/i, "");
+  return title.slice(0, 240);
+};
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
@@ -44,11 +50,17 @@ Deno.serve(async (req: Request) => {
     try {
       const pageSearch = await searchPublicCrawlerIndex(query, null, limit, 0);
       const pages = Array.isArray(pageSearch.results) ? pageSearch.results : [];
-      if (pages.length) {
+      const queryTerms = query.toLowerCase().split(/\s+/).filter(Boolean);
+      const titleUrlMatches = pages.filter((page: any) => {
+        const searchable = (String(page.title || "") + " " + String(page.url || "")).toLowerCase();
+        return queryTerms.length > 1 ? queryTerms.every((term: string) => searchable.includes(term)) : searchable.includes(queryTerms[0] || "");
+      });
+      const previewPages = titleUrlMatches.length ? titleUrlMatches : pages;
+      if (previewPages.length) {
         const topicId = "query:" + encodeURIComponent(query.slice(0, 120));
-        const matchedRecords = pages.slice(0, 5).map((page: any, index: number) => {
-          const title = String(page.title || "Untitled page").slice(0, 240);
-          const entryQuery = String(page.title || query).trim().slice(0, 120) || query.slice(0, 120);
+        const matchedRecords = previewPages.slice(0, 5).map((page: any, index: number) => {
+          const title = cleanPageTitle(page.title);
+          const entryQuery = title.trim().slice(0, 120) || query.slice(0, 120);
           const entryId = "query:" + encodeURIComponent(entryQuery);
           const sourceUrl = String(page.url || "");
           return {
@@ -58,7 +70,7 @@ Deno.serve(async (req: Request) => {
             title,
             record_type: "page",
             source_url: sourceUrl,
-            description: String(page.description || page.text || "").slice(0, 700),
+            description: String(page.snippet || page.description || page.text || "").slice(0, 700),
             last_seen_at: page.fetchedAt || page.publishedAt || null,
             source_policy_review_status: "not_reviewed",
             record_level_clearance: "not_reviewed",
@@ -86,7 +98,7 @@ Deno.serve(async (req: Request) => {
           query_intent: "topic",
           relevance_class: "query-derived-page-collection",
           relevance_label: "indexed page collection preview",
-          record_count: Number(pageSearch.count) || matchedRecords.length,
+          record_count: matchedRecords.length,
           source_page_count: Number(pageSearch.candidatePageCount) || pages.length,
           matched_records: matchedRecords,
           url: String(pages[0]?.url || ""),
@@ -98,7 +110,7 @@ Deno.serve(async (req: Request) => {
           candidateShardCount: Number(pageSearch.candidateShardCount) || 0,
           totalCandidateShardCount: Number(pageSearch.totalCandidateShardCount) || 0,
           candidateTruncated: partial,
-          recordCount: Number(pageSearch.count) || matchedRecords.length,
+          recordCount: matchedRecords.length,
           updatedAt: pageSearch.updatedAt || null,
         };
       }
