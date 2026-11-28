@@ -253,7 +253,7 @@ Deno.serve(async (req: Request) => {
         }
       }
 
-      const indexedResults = (indexed.results || []).map((item: any) => {
+      const indexedResults = (indexed.results || []).filter((item: any) => Number(item.rankScore || 0) >= 0.15).map((item: any) => {
         const title = cleanPageTitle(item.title || item.url);
         const entryQuery = title.trim().slice(0, 120) || query.slice(0, 120);
         const entryId = "query:" + encodeURIComponent(entryQuery);
