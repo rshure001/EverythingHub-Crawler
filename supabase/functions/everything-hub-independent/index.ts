@@ -84,7 +84,8 @@ function recordCard(r){
 function catalogCard(c){
  const records=(c.matched_records||[]).slice(0,3);
  const count=Number(c.record_count||0),pages=Number(c.source_page_count||0);
- return '<article class="result catalog-result"><div class="catalog-heading"><strong>'+esc(c.catalog_title||c.title||'Catalog')+'</strong><span>'+esc(c.catalog_type||'catalog')+'</span></div><p class="catalog-meta">'+count.toLocaleString()+' records · '+pages.toLocaleString()+' source pages · candidate preview only</p><p>'+esc(c.snippet||c.description||'')+'</p>'+sourceLink(c.url,'Open source page')+(records.length?'<div class="matched-records"><h3>Matching entries</h3>'+records.map(recordCard).join('')+'</div>':'')+'<p class="rights-note">Source terms and individual record rights have not been cleared for redistribution.</p></article>';
+ const pageLabel=c.catalog_type==='query-derived page collection'?'candidate pages scanned':'source pages';
+ return '<article class="result catalog-result"><div class="catalog-heading"><strong>'+esc(c.catalog_title||c.title||'Catalog')+'</strong><span>'+esc(c.catalog_type||'catalog')+'</span></div><p class="catalog-meta">'+count.toLocaleString()+' records · '+pages.toLocaleString()+' '+pageLabel+' · candidate preview only</p><p>'+esc(c.snippet||c.description||'')+'</p>'+sourceLink(c.url,'Open source page')+(records.length?'<div class="matched-records"><h3>Matching entries</h3>'+records.map(recordCard).join('')+'</div>':'')+'<p class="rights-note">Source terms and individual record rights have not been cleared for redistribution.</p></article>';
 }
 function resultCard(r){return '<article class="result"><a target="_blank" rel="noopener noreferrer" href="'+esc(safe(r.url||r.pageUrl))+'">'+esc(r.title||'Open result')+'</a><p>'+esc(r.snippet||r.description||'')+'</p><span class="source">'+esc(r.source||r.origin||r.provider||'Search result')+'</span></article>'}
 async function loadNested(button){
