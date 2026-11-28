@@ -63,7 +63,8 @@ Deno.serve(async (req: Request) => {
       }
       try {
         const indexed = await searchPublicCrawlerIndex(nestedQuery, null, limit, offset);
-        const relatedRecords = (indexed.results || []).map((page: any) => {
+        const relatedPages = (indexed.results || []).filter((page: any) => cleanPageTitle(page.title).toLowerCase() !== nestedQuery.toLowerCase());
+        const relatedRecords = relatedPages.map((page: any) => {
           const title = cleanPageTitle(page.title);
           const entryQuery = title.trim().slice(0, 120) || nestedQuery.slice(0, 120);
           const entryId = "query:" + encodeURIComponent(entryQuery);
@@ -95,7 +96,7 @@ Deno.serve(async (req: Request) => {
             source_urls: [],
             shared_catalog_ids: [recordCatalogId],
           },
-          related_count: Number(indexed.count) || relatedRecords.length,
+          related_count: relatedRecords.length,
           related_records: relatedRecords,
           offset,
           limit,
