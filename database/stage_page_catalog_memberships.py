@@ -35,6 +35,8 @@ def build_membership_staging(ledger):
     by_record = {}
     memberships = {}
     rejected = 0
+    source_record_count = len(ledger["records"])
+    page_child_input_count = sum(1 for row in ledger["records"] if isinstance(row, dict) and isinstance(row.get("record_id"), str) and row["record_id"].startswith("page-child:"))
     for row in ledger["records"]:
         if not isinstance(row, dict):
             rejected += 1; continue
@@ -97,6 +99,8 @@ def build_membership_staging(ledger):
         "production_import_allowed": False,
         "public_search_allowed": False,
         "source_ledger": "data/page-catalog-expansion.json.gz",
+        "source_record_count": source_record_count,
+        "page_child_input_count": page_child_input_count,
         "candidate_count": len(candidates),
         "membership_count": len(links),
         "rejected_rows": rejected,
@@ -116,11 +120,13 @@ def main():
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     args = parser.parse_args()
     result = build_membership_staging(read_json_or_gzip(args.input))
+    if result["candidate_count"] == 0 or result["membership_count"] == 0:
+        raise SystemExit("Refusing to replace the staging artifact with an empty bridge: " + json.dumps({k: result[k] for k in ("source_record_count", "page_child_input_count", "candidate_count", "membership_count", "rejected_rows")}))
     args.output.parent.mkdir(parents=True, exist_ok=True)
     temp = args.output.with_suffix(args.output.suffix + ".tmp")
     temp.write_text(json.dumps(result, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
     temp.replace(args.output)
-    print(json.dumps({k: result[k] for k in ("artifact_type","candidate_count","membership_count","rejected_rows","production_import_allowed","public_search_allowed")}, indent=2))
+    print(json.dumps({k: result[k] for k in ("artifact_type","source_record_count","page_child_input_count","candidate_count","membership_count","rejected_rows","production_import_allowed","public_search_allowed")}, indent=2))
 
 if __name__ == "__main__":
     main()
