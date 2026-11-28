@@ -864,7 +864,7 @@ async function searchPageDerivedCatalogPreviewIndexed(query, network, limit = 5,
   );
   const geoIntent = queryConceptCount >= 2 && hasPlaceCatalog && !contentIntent && !eventIntent && !businessIntent;
   const productIntent = !geoIntent && !eventIntent && !contentIntent && !businessIntent &&
-    (productTermIntent || hasProductCatalog);
+    productTermIntent;
   const locationBusinessIntent = businessIntent && !contentIntent;
   const genericTopicIntent = !contentIntent && !productIntent && !geoIntent &&
     !locationBusinessIntent && !eventIntent;
