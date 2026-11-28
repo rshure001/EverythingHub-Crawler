@@ -34,7 +34,7 @@ for (const query of ['NASA', 'Las Vegas', 'Rolex']) {
   assert.ok(Array.isArray(data.catalogResults), 'catalogResults must be an array on normal search responses');
   const preview = data.catalogPreview;
   assert.ok(preview && typeof preview === 'object', 'catalog preview metadata is required on normal search responses');
-  assert.ok(['candidate-preview', 'stale-candidate-preview'].includes(preview.status),
+  assert.ok(['candidate-preview', 'stale-candidate-preview', 'query-derived-candidate-preview'].includes(preview.status),
     `candidate catalog snapshot unavailable: ${preview.status || preview.error || 'missing status'}`);
   assert.equal(preview.previewOnly, true);
   assert.ok(Number.isInteger(preview.pageIndexPages) && preview.pageIndexPages > 0,
