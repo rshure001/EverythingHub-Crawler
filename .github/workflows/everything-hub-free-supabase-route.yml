@@ -16,7 +16,7 @@ permissions:
   contents: read
 concurrency:
   group: everything-hub-live-acceptance
-  cancel-in-progress: false
+  cancel-in-progress: true
 jobs:
   verify:
     runs-on: ubuntu-latest
