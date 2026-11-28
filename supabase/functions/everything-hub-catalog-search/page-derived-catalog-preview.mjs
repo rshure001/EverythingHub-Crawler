@@ -960,6 +960,9 @@ function searchCatalogRecords(query, network, limit = 5) {
     const item = recordTokens(record);
     if (!record || !Array.isArray(record.catalog_ids) || !record.catalog_ids.length) continue;
     const type = String(record.record_type || "").toLowerCase();
+    // Product-intent queries must not leak people, events, datasets, or businesses
+    // merely because their descriptions happen to mention the requested noun.
+    if (productIntent && !PRODUCT_TYPES.has(type)) continue;
     const title = String(record.title || "").toLowerCase();
     const titleMatch = allTermsPresent(terms, item.titleTokens);
     const attributeMatch = allTermsPresent(terms, item.attributeTokens);
