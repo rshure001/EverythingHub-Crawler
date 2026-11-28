@@ -47,7 +47,6 @@ jobs:
       - name: Verify free GitHub Pages serves the complete HTML homepage
         run: |
           set -euo pipefail
-          TARGET_URL: https://rshure001.github.io/EverythingHub-Crawler/
           code="$(curl --silent --show-error --location --max-time 45 -D /tmp/home.headers -o /tmp/home.html -w '%{http_code}' "https://rshure001.github.io/EverythingHub-Crawler/")"
           bytes="$(wc -c < /tmp/home.html)"
           content_type="$(grep -i '^content-type:' /tmp/home.headers | tail -1 || true)"
