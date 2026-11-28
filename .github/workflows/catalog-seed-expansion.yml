@@ -7,6 +7,7 @@ on:
       - "crawler/test_catalog_seed_expansion.py"
       - "database/stage_page_catalog_memberships.py"
       - "database/test_import_page_catalog_memberships.py"
+      - "database/003_eh_quad_page_catalog_memberships.sql"
       - "data/page-derived-catalogs/report.json"
       - "data/page-derived-catalogs/source-host-review-queue.json"
       - "data/catalog-landing-page-robots.json"
@@ -15,6 +16,8 @@ on:
     paths:
       - "crawler/catalog_seed_expansion.py"
       - "crawler/test_catalog_seed_expansion.py"
+      - "database/003_eh_quad_page_catalog_memberships.sql"
+      - "database/test_import_page_catalog_memberships.py"
       - ".github/workflows/catalog-seed-expansion.yml"
   workflow_dispatch:
   workflow_run:
