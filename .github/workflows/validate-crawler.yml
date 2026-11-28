@@ -13,33 +13,30 @@ on:
       - "project/**"
       - ".github/workflows/retroactive-catalog-index.yml"
       - ".github/workflows/catalog-first-discovery.yml"
-      - "README.md"
-      - "SCALABLE-ARCHITECTURE.md"
+      - ".github/workflows/validate-crawler.yml"
       - ".github/workflows/crawl.yml"
       - ".github/workflows/crawl-watchdog.yml"
-      - ".github/workflows/validate-crawler.yml"
       - ".github/workflows/search-api-smoke.yml"
       - ".github/workflows/recovery-search-check.yml"
       - ".github/workflows/validate-vercel-search.yml"
       - ".github/workflows/eh-free-fallback-acceptance.yml"
       - ".github/workflows/everything-hub-production-browser-check.yml"
       - ".github/workflows/windows-local-build.yml"
+      - "README.md"
+      - "SCALABLE-ARCHITECTURE.md"
   pull_request:
     paths:
       - "crawler/**"
+      - "database/**"
       - "publisher/**"
       - "site/**"
       - "vercel-search-backend/**"
-      - "database/**"
       - "supabase/functions/**"
       - "vercel-homepage/**"
       - "project/**"
-      - ".github/workflows/retroactive-catalog-index.yml"
-      - "README.md"
-      - "SCALABLE-ARCHITECTURE.md"
-      - ".github/workflows/crawl-watchdog.yml"
       - ".github/workflows/validate-crawler.yml"
       - ".github/workflows/crawl.yml"
+      - ".github/workflows/crawl-watchdog.yml"
       - ".github/workflows/publish-site.yml"
       - ".github/workflows/search-api-smoke.yml"
       - ".github/workflows/everything-hub-live-diagnostics.yml"
@@ -47,14 +44,76 @@ on:
       - ".github/workflows/validate-vercel-search.yml"
       - ".github/workflows/eh-free-fallback-acceptance.yml"
       - ".github/workflows/windows-local-build.yml"
+      - "README.md"
+      - "SCALABLE-ARCHITECTURE.md"
   workflow_dispatch:
+
 permissions:
   contents: read
+
 concurrency:
   group: eh-crawler-validation-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: false
+
 jobs:
-  validate:
+  workflow-and-python-compile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate workflow YAML
+        run: |
+          ruby -e 'require "yaml"; ARGV.each { |path| YAML.load_file(path, aliases: true); puts "YAML-valid #{path}" }' \
+            .github/workflows/crawl.yml .github/workflows/crawl-watchdog.yml \
+            .github/workflows/publish-site.yml .github/workflows/search-api-smoke.yml \
+            .github/workflows/everything-hub-live-diagnostics.yml \
+            .github/workflows/recovery-search-check.yml .github/workflows/validate-vercel-search.yml \
+            .github/workflows/everything-hub-production-browser-check.yml \
+            .github/workflows/retroactive-catalog-index.yml \
+            .github/workflows/catalog-first-discovery.yml .github/workflows/eh-free-fallback-acceptance.yml
+      - name: Compile crawler, database, and publisher modules
+        run: |
+          python -m py_compile crawler/*.py database/*.py publisher/*.py
+
+  crawler-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run crawler tests
+        run: python -m unittest discover -s crawler -p 'test_*.py' -v
+
+  database-and-project-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run database tests
+        run: python -m unittest discover -s database -p 'test_*.py' -v
+      - name: Run project contract tests
+        run: python -m unittest discover -s project -p 'test_*.py' -v
+
+  publisher-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run publisher tests
+        run: python -m unittest discover -s publisher -p 'test_*.py' -v
+
+  edge-and-frontend-tests:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -62,42 +121,61 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "26"
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: Validate crawler, watchdog, and publisher workflow YAML
+      - name: Check backend and homepage JavaScript
         run: |
-          ruby -e 'require "yaml"; ARGV.each { |path| YAML.load_file(path, aliases: true); puts "YAML-valid #{path}" }' .github/workflows/crawl.yml .github/workflows/crawl-watchdog.yml .github/workflows/publish-site.yml .github/workflows/search-api-smoke.yml .github/workflows/everything-hub-live-diagnostics.yml .github/workflows/recovery-search-check.yml .github/workflows/validate-vercel-search.yml .github/workflows/everything-hub-production-browser-check.yml .github/workflows/retroactive-catalog-index.yml .github/workflows/catalog-first-discovery.yml \
-            .github/workflows/eh-free-fallback-acceptance.yml
-      - name: Compile crawler and database tools
-        run: |
-          python -m py_compile crawler/index_store.py crawler/validate_index_migration.py crawler/crawl.py crawler/report.py crawler/build_search_shards.py crawler/validate_public_index.py crawler/publish_catalog_snapshot.py crawler/validate_media_catalog.py crawler/schedule_watchdog.py crawler/pipeline_health.py database/import_repository_index.py database/crawl_worker.py database/crawl_worker_smoke.py publisher/release_health.py publisher/stage_search_catalog.py
-      - name: Run crawler, schema-isolation, and edge-search tests
-        run: |
-          python -m unittest discover -s crawler -p 'test_*.py' -v
-          python -m unittest discover -s database -p 'test_*.py' -v
-          python -m unittest discover -s publisher -p 'test_*.py' -v
-          python -m unittest discover -s project -p 'test_*.py' -v
           node --check vercel-search-backend/src/api/search.js
           node --check vercel-search-backend/src/api/health.js
           node --test vercel-search-backend/test/*.test.js
           node --test vercel-homepage/media-preview-policy.test.js vercel-homepage/homepage-contract.test.js vercel-homepage/fallback-contract.test.js
           node --check vercel-homepage/fallback/inline-script.js
-          node --test supabase/functions/everything-hub-web-search/search-mode.test.mjs supabase/functions/everything-hub-web-search/params.test.mjs supabase/functions/everything-hub-web-search/db-fetch.test.mjs supabase/functions/everything-hub-web-search/static-search.test.mjs supabase/functions/everything-hub-web-search/static-manifest.test.mjs supabase/functions/everything-hub-web-search/page-derived-catalog-preview.test.mjs supabase/functions/everything-hub-web-search/bounded-stream.test.mjs supabase/functions/everything-hub-web-search/manifest-time.test.mjs supabase/functions/everything-hub-web-search/vercel-fallback.test.mjs supabase/functions/everything-hub-media-search/merge-results.test.mjs
+      - name: Test static-primary search, database circuit breaker, catalog index, and media policy
+        run: |
+          node --test \
+            supabase/functions/everything-hub-web-search/search-mode.test.mjs \
+            supabase/functions/everything-hub-web-search/params.test.mjs \
+            supabase/functions/everything-hub-web-search/db-fetch.test.mjs \
+            supabase/functions/everything-hub-web-search/static-search.test.mjs \
+            supabase/functions/everything-hub-web-search/static-manifest.test.mjs \
+            supabase/functions/everything-hub-web-search/page-derived-catalog-preview.test.mjs \
+            supabase/functions/everything-hub-web-search/bounded-stream.test.mjs \
+            supabase/functions/everything-hub-web-search/manifest-time.test.mjs \
+            supabase/functions/everything-hub-web-search/vercel-fallback.test.mjs \
+            supabase/functions/everything-hub-media-search/merge-results.test.mjs
+
+  index-integrity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "26"
+      - name: Validate canonical index, shards, media, and static catalog search
+        run: |
           python crawler/validate_index_migration.py
           python crawler/build_search_shards.py
           python crawler/validate_public_index.py
           python crawler/validate_media_catalog.py
           node supabase/functions/everything-hub-web-search/static-search-catalog-smoke.mjs
-      - name: Set up Deno for Edge Function type checking
-        uses: denoland/setup-deno@v2
+
+  edge-typecheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
-      - name: Type-check Everything Hub media discovery Edge Function
+      - name: Type-check media discovery Edge Function
         run: deno check supabase/functions/everything-hub-media-search/index.ts
-      - name: Type-check Everything Hub web search Edge Function
+      - name: Type-check web search Edge Function
         run: deno check supabase/functions/everything-hub-web-search/index.ts
-      - name: Type-check Everything Hub catalog search Edge Function
+      - name: Type-check catalog search Edge Function
         run: deno check supabase/functions/everything-hub-catalog-search/index.ts
       - name: Validate static release manifest
-        run: python publisher/publish.py --check
+        run: |
+          python -m pip install --disable-pip-version-check pyyaml
+          python publisher/publish.py --check
