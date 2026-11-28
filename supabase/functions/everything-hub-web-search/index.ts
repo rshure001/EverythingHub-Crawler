@@ -62,7 +62,7 @@ Deno.serve(async (req: Request) => {
         }, 200, "public, max-age=15, stale-while-revalidate=30");
       }
       try {
-        const indexed = await searchPublicCrawlerIndex(nestedQuery, null, limit, offset);
+        const indexed: any = await searchPublicCrawlerIndex(nestedQuery, null, limit, offset);
         const relatedPages = (indexed.results || []).filter((page: any) => cleanPageTitle(page.title).toLowerCase() !== nestedQuery.toLowerCase());
         const relatedRecords = relatedPages.map((page: any) => {
           const title = cleanPageTitle(page.title);
@@ -243,10 +243,10 @@ Deno.serve(async (req: Request) => {
     });
 
     try {
-      let indexed = await searchPublicCrawlerIndex(query, validLane, limit, offset);
+      let indexed: any = await searchPublicCrawlerIndex(query, validLane, limit, offset);
       let laneFallback = false;
       if (validLane && indexed.results.length < 3) {
-        const broad = await searchPublicCrawlerIndex(query, null, limit, offset);
+        const broad: any = await searchPublicCrawlerIndex(query, null, limit, offset);
         if (broad.results.length > indexed.results.length) {
           indexed = broad;
           laneFallback = true;
