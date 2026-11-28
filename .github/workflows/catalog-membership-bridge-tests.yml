@@ -1,0 +1,34 @@
+name: Catalog membership bridge tests
+
+on:
+  pull_request:
+    paths:
+      - "database/stage_page_catalog_memberships.py"
+      - "database/test_stage_page_catalog_memberships.py"
+      - ".github/workflows/catalog-membership-bridge-tests.yml"
+  push:
+    branches:
+      - "automation/page-catalog-membership-bridge"
+    paths:
+      - "database/stage_page_catalog_memberships.py"
+      - "database/test_stage_page_catalog_memberships.py"
+      - ".github/workflows/catalog-membership-bridge-tests.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: catalog-membership-bridge-tests-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run metadata-only membership bridge tests
+        run: python -m unittest database.test_stage_page_catalog_memberships -v
