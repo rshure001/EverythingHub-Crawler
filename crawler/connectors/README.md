@@ -16,7 +16,7 @@ Run from the repository root:
 python crawler/connectors/wikidata_entity_connector.py \
   --catalog-id cameras \
   --output data/source-staging/wikidata-cameras.json \
-  $(sed 's/^/--qid /' crawler/connectors/camera_wikidata_qids.txt)
+  $(awk '/^Q[1-9][0-9]*$/ { printf "--qid %s ", $0 }' crawler/connectors/camera_wikidata_qids.txt)
 ```
 
 The QID list is an initial seed list, not a claim of complete camera coverage.
