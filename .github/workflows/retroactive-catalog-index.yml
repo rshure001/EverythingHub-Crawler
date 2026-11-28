@@ -1,7 +1,7 @@
 name: Retroactive catalog inventory
 # Rebuild catalog coverage against the current crawler manifest; keep source-rights gates intact.
 # A reviewed workflow-file update also serves as a safe wake-up when scheduled delivery is stale.
-# Wake-up checkpoint 2026-11-28 18:10Z: rebuild against the current 243951-page public index; retain all source-rights gates.
+# Wake-up checkpoint 2026-11-28 21:03Z: rebuild against the current 244696-page public index; retain all source-rights gates.
 
 on:
   push:
