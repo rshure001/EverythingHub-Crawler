@@ -286,7 +286,8 @@ function emptyResult(manifestInfo, terms, offset, limit) {
   };
 }
 
-export async function searchPublicCrawlerIndex(query, lane: string | null = null, limit = 10, offset = 0, options = {}): Promise<any> {
+/** @param {string | null} [lane=null] @returns {Promise<any>} */
+export async function searchPublicCrawlerIndex(query, lane = null, limit = 10, offset = 0, options = {}) {
   const fetchImpl = options.fetchImpl || fetch;
   const cache = options.cache || defaultCache;
   const refUrl = options.refUrl || REF_URL;
