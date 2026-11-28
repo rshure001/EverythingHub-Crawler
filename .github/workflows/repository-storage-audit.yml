@@ -43,7 +43,7 @@ jobs:
           git ls-tree -r -l HEAD |
             awk '$4 != "-" {print $4 "\t" $5}' |
             sort -nr |
-            head -n 50 |
+            sed -n '1,50p' |
             tee /tmp/current-largest-files.txt
           cat /tmp/current-largest-files.txt >> "$GITHUB_STEP_SUMMARY"
           echo >> "$GITHUB_STEP_SUMMARY"
