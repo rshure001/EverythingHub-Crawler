@@ -54,7 +54,7 @@ jobs:
           test "$code" = "200"
           grep -Eiq '^content-type: *text/html' /tmp/home.headers
           grep -Eiq '^<!doctype html|^<!--' /tmp/home.html
-          for needle in 'Everything Hub' 'id="search"' 'id="q"' 'src="search.js"' 'data-mode="web"' 'data-mode="news"' 'data-mode="images"' 'data-mode="videos"' 'data-mode="shopping"' 'data-mode="places"' 'data-mode="business"' 'data-mode="research"'; do
+          for needle in 'Everything Hub' 'id="search"' 'id="q"' '/functions/v1/everything-hub-homepage-release/media-preview-policy.js' 'data-mode="web"' 'data-mode="news"' 'data-mode="images"' 'data-mode="videos"' 'data-mode="shopping"' 'data-mode="places"' 'data-mode="business"' 'data-mode="research"'; do
             grep -Fqi "$needle" /tmp/home.html || { echo "Missing homepage feature: $needle"; exit 1; }
           done
           test "$bytes" -gt 10000
