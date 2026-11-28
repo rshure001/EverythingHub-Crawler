@@ -7,6 +7,7 @@ on:
     paths:
       - 'supabase/functions/everything-hub-deploy-bridge/index.ts'
       - 'supabase/functions/everything-hub-site/index.ts'
+      - 'supabase/functions/everything-hub-homepage-release/index.ts'
       - '.github/workflows/everything-hub-free-supabase-route.yml'
   schedule:
     - cron: '23 * * * *'
