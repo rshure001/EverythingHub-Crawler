@@ -43,10 +43,10 @@ jobs:
           cat /tmp/bridge.headers
           test "$code" = "302"
           grep -Fqi 'location: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-homepage-release' /tmp/bridge.headers
-      - name: Verify the public address serves the complete published homepage
+      - name: Verify the approved homepage release serves the complete published homepage
         run: |
           set -euo pipefail
-          code="$(curl --silent --show-error --location --max-time 45 -D /tmp/home.headers -o /tmp/home.html -w '%{http_code}' "$LEGACY_URL")"
+          code="$(curl --silent --show-error --location --max-time 45 -D /tmp/home.headers -o /tmp/home.html -w '%{http_code}' "$BRIDGE_URL")"
           bytes="$(wc -c < /tmp/home.html)"
           content_type="$(grep -i '^content-type:' /tmp/home.headers | tail -1 || true)"
           echo "Public route HTTP=$code bytes=$bytes $content_type"
