@@ -146,7 +146,7 @@ async function go(m){
   const catalogs=catalogData&&Array.isArray(catalogData.catalogResults)?catalogData.catalogResults:[];
   const rows=webData&&Array.isArray(webData.results)?webData.results:[];
   const preview=catalogData&&catalogData.catalogPreview;
-  const freshness=preview?'<p class="rights-note">Catalog inventory: '+Number(preview.catalogCount||0).toLocaleString()+' catalogs · '+Number(preview.recordCount||0).toLocaleString()+' candidate records. Not yet published as verified records.</p>':'';
+  const freshness=preview?(preview.queryIndexed?'<p class="rights-note">On-demand collection: '+Number(preview.recordCount||0).toLocaleString()+' matching pages · global inventory: '+Number(preview.globalCatalogCount||0).toLocaleString()+' catalogs and '+Number(preview.globalRecordCount||0).toLocaleString()+' candidate records. Preview only; not published as verified records.</p>':'<p class="rights-note">Catalog inventory: '+Number(preview.catalogCount||0).toLocaleString()+' catalogs · '+Number(preview.recordCount||0).toLocaleString()+' candidate records. Not yet published as verified records.</p>'):'';
   const catalogMarkup=catalogs.length?'<h2 class="section-title">Catalogs matching “'+esc(q)+'”</h2>'+catalogs.map(catalogCard).join('')+freshness:'';
   const webMarkup=rows.length?'<h2 class="section-title">Web results</h2>'+rows.map(resultCard).join(''):'';
 
