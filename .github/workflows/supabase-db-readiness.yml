@@ -1,6 +1,11 @@
 name: Supabase Postgres readiness guard
 
 on:
+  pull_request:
+    paths:
+      - "tools/supabase_db_readiness.py"
+      - "tools/test_supabase_db_readiness.py"
+      - ".github/workflows/supabase-db-readiness.yml"
   workflow_dispatch:
     inputs:
       attempts:
@@ -29,10 +34,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install pinned PostgreSQL driver
-        run: python -m pip install "psycopg[binary]==3.2.13"
       - name: Test readiness guard
         working-directory: tools
         run: python -m unittest test_supabase_db_readiness.py -v
+      - name: Install pinned PostgreSQL driver
+        if: github.event_name == 'workflow_dispatch'
+        run: python -m pip install "psycopg[binary]==3.2.13"
       - name: Wait for managed Postgres to accept read-only queries
+        if: github.event_name == 'workflow_dispatch'
         run: python tools/supabase_db_readiness.py --attempts "${{ inputs.attempts || '5' }}"
