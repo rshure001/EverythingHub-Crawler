@@ -125,6 +125,8 @@ jobs:
           DATABASE_URL: postgresql://eh_test:eh_test_password@localhost:5432/everythinghub_test
         run: |
           set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
           python -m pip install "psycopg[binary]>=3.2,<4"
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "create role service_role"
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f database/002_eh_quad_schema.sql
