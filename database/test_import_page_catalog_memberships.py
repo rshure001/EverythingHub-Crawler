@@ -1,5 +1,5 @@
 import unittest
-from import_page_catalog_memberships import build_rows, target_schema
+from database.import_page_catalog_memberships import build_rows, target_schema
 
 def payload():
     c={"candidate_id":"page-child:1","title":"Link metadata","target_url":"https://example.org/a",
