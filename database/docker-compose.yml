@@ -12,6 +12,7 @@ services:
     volumes:
       - everythinghub_pgdata:/var/lib/postgresql/data
       - ./001_everythinghub_core.sql:/docker-entrypoint-initdb.d/001_everythinghub_core.sql:ro
+      - ./002_eh_quad_schema.sql:/docker-entrypoint-initdb.d/002_eh_quad_schema.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U everythinghub -d everythinghub"]
       interval: 10s
