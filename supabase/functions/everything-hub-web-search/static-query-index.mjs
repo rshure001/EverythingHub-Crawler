@@ -218,6 +218,7 @@ async function loadQueryIndexShard(prefix, entry, commitSha, fetchImpl, cache, r
   for (const [token, postings] of Object.entries(payload.tokens)) {
     const normalized = normalizeQueryIndexTokens(token);
     if (normalized.length !== 1 || normalized[0] !== token ||
+        (await sha256Hex(encoder.encode(token))).slice(0, 2) !== prefix ||
         !Array.isArray(postings) || postings.length > cache.manifest.manifest.shard_count) {
       throw new Error("query_index_token_invalid");
     }
@@ -250,7 +251,7 @@ async function loadPageShard(index, meta, commitSha, fetchImpl, cache, rawBase, 
       !Number.isSafeInteger(meta.bytes) || meta.bytes < 1 || meta.bytes > MAX_PAGE_SHARD_BYTES ||
       !Number.isSafeInteger(meta.uncompressed_bytes) || meta.uncompressed_bytes < 1 ||
       meta.uncompressed_bytes > MAX_PAGE_SHARD_UNCOMPRESSED_BYTES ||
-      !Number.isSafeInteger(meta.pages) || meta.pages < 1 ||
+      !Number.isSafeInteger(meta.pages) || meta.pages < 1 || meta.pages > 2000 ||
       typeof meta.sha256 !== "string" || !/^[a-f0-9]{64}$/i.test(meta.sha256)) {
     throw new Error("page_shard_metadata_invalid");
   }
