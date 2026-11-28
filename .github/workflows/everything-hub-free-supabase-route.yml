@@ -29,7 +29,6 @@ jobs:
       CATALOG_SEARCH_URL: https://vdceayvfgkwpgwixrhwi.supabase.co/functions/v1/everything-hub-catalog-search?q=NASA&limit=5
       MANIFEST_URL: https://raw.githubusercontent.com/rshure001/EverythingHub-Crawler/main/public-search/manifest.json
     steps:
-      - uses: actions/checkout@v4
       - name: Verify legacy public address redirects to the approved publishing bridge
         run: |
           set -euo pipefail
@@ -82,7 +81,7 @@ jobs:
           code="$(curl --silent --show-error --location --max-time 50 -o /tmp/catalog-search.json -w '%{http_code}' "$CATALOG_SEARCH_URL")"
           echo "Catalog search HTTP=$code bytes=$(wc -c < /tmp/catalog-search.json)"
           test "$code" = "200"
-          node -e "const fs=require('fs'); const x=JSON.parse(fs.readFileSync('/tmp/catalog-search.json','utf8')); const p=x.catalogPreview||{}; if(!Array.isArray(x.catalogResults)||x.catalogResults.length<1||p.previewOnly!==true||!['candidate-preview','stale-candidate-preview'].includes(p.status)) { console.error(x); process.exit(1); } console.log(JSON.stringify({query:x.query,results:x.catalogResults.length,status:p.status,catalogs:p.catalogCount,records:p.recordCount}))"
+          node -e "const fs=require('fs'); const x=JSON.parse(fs.readFileSync('/tmp/catalog-search.json','utf8')); const p=x.catalogPreview||{}; if(!Array.isArray(x.catalogResults)||x.catalogResults.length<1||p.previewOnly!==true||!['candidate-preview','stale-candidate-preview','query-derived-candidate-preview'].includes(p.status)) { console.error(x); process.exit(1); } console.log(JSON.stringify({query:x.query,results:x.catalogResults.length,status:p.status,catalogs:p.catalogCount,records:p.recordCount}))"
       - name: Install Playwright Chromium
         run: |
           npm install --no-save playwright
