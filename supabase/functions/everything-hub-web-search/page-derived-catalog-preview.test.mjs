@@ -8,6 +8,7 @@ import {
   validateManifest,
   isValidCatalogIndexManifestEntry,
 } from "./page-derived-catalog-preview.mjs";
+import { searchPageDerivedCatalogPreview as searchCatalogEdgePreview } from "../everything-hub-catalog-search/page-derived-catalog-preview.mjs";
 
 const encoder = new TextEncoder();
 const commit = "a".repeat(40);
@@ -584,3 +585,57 @@ test("per-record related catalogs deduplicate shared records and exclude their o
   clearPageDerivedCatalogPreviewCache();
 });
 
+
+
+function pluralTopicFixture(kind) {
+  const cases = {
+    cameras: { title: "Digital Cameras", catalogTitle: "Camera Catalog", subject: "cameras", type: "product", catalogType: "commerce" },
+    trees: { title: "Trees of North America", catalogTitle: "Trees Catalog", subject: "trees", type: "subject", catalogType: "subject" },
+    diapers: { title: "Disposable Diapers", catalogTitle: "Diapers Catalog", subject: "diapers", type: "product", catalogType: "commerce" },
+  };
+  const item = cases[kind];
+  const catalogId = "catalog:" + kind;
+  return {
+    catalogs: [{
+      catalog_id: catalogId,
+      title: item.catalogTitle,
+      subject: item.subject,
+      source_host: "example.org",
+      source_url: "https://example.org/catalog/" + kind,
+      catalog_type: item.catalogType,
+      record_type: item.type,
+      catalog_origin: "source_declared_collection",
+      is_source_declared_catalog: true,
+      record_count: 1,
+      source_page_count: 1,
+      commercial_eligible: false,
+      source_terms_status: "not_reviewed",
+      record_level_clearance: "not_reviewed",
+    }],
+    records: [{
+      record_id: "record:" + kind,
+      record_catalog_id: "record-catalog:" + kind,
+      entity_id: "entity:" + kind,
+      record_type: item.type,
+      title: item.title,
+      description: item.title + " reference entry",
+      attributes: {},
+      catalog_ids: [catalogId],
+      source_urls: ["https://example.org/" + kind],
+      source_page_ids: ["page:" + kind],
+      last_seen_at: "2026-11-28T00:00:00Z",
+      commercial_eligible: false,
+      source_terms_status: "not_reviewed",
+      record_level_clearance: "not_reviewed",
+    }],
+  };
+}
+
+test("plural topic searches normalize to canonical singular tokens in both Edge search paths", () => {
+  for (const search of [searchPageDerivedCatalogPreview, searchCatalogEdgePreview]) {
+    for (const topic of ["cameras", "trees", "diapers"]) {
+      const results = search(topic, pluralTopicFixture(topic), 5);
+      assert.equal(results[0]?.catalog_id, "catalog:" + topic, topic + " should find its matching catalog");
+    }
+  }
+});
