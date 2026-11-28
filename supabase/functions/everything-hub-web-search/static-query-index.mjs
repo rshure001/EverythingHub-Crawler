@@ -451,7 +451,7 @@ export async function searchPublicCrawlerIndex(query, lane = null, limit = 10, o
   }
   if (pages.length !== candidatePageCount) throw new Error("query_index_candidate_page_count_mismatch");
 
-  const searched = searchStaticPages(pages, query, lane, safeLimit, safeOffset, now);
+  const searched = searchStaticPages(pages, terms.join(" "), lane, safeLimit, safeOffset, now);
   return {
     ...searched,
     queryScoped: true,
