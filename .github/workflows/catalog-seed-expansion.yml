@@ -25,7 +25,7 @@ on:
     branches:
       - main
   schedule:
-    - cron: "*/5 * * * *"
+    - cron: "7,27,47 * * * *"
 
 permissions:
   contents: write
