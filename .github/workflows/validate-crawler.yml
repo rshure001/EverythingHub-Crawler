@@ -169,6 +169,9 @@ jobs:
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
       - name: Type-check media discovery Edge Function
         run: deno check supabase/functions/everything-hub-media-search/index.ts
       - name: Type-check web search Edge Function
@@ -176,6 +179,4 @@ jobs:
       - name: Type-check catalog search Edge Function
         run: deno check supabase/functions/everything-hub-catalog-search/index.ts
       - name: Validate static release manifest
-        run: |
-          python -m pip install --disable-pip-version-check pyyaml
-          python publisher/publish.py --check
+        run: python publisher/publish.py --check
