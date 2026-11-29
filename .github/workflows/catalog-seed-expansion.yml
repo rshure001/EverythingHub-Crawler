@@ -161,7 +161,6 @@ jobs:
             python crawler/catalog_seed_expansion.py --limit 10
             python database/stage_page_catalog_memberships.py
             python -m unittest database.test_import_page_catalog_memberships -v
-            python -m unittest database.test_import_page_catalog_memberships -v
             python database/import_page_catalog_memberships.py
             git add -f data/page-catalog-expansion.json.gz data/page-catalog-membership-staging.json
             if git diff --cached --quiet; then
